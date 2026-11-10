@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="status-title status-desc">
+  <title id="status-title">页面状态</title>
+  <desc id="status-desc">需求从等待处理进入正在做，做完后待验收并完成。执行中报告卡点则等你补充；继续可以回到正在做或重新匹配，停止则已经停住。</desc>
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+    <marker id="status-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#506078"/>
+    </marker>
+    <marker id="status-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="status-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1d4ed8"/>
+    </marker>
+  </defs>
+  <rect width="960" height="640" fill="#f6f8fc"/>
+
+  <line x1="136" y1="104" x2="200" y2="104" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="144" y="84" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="164" y="92" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">提交</text>
+
+  <line x1="280" y1="136" x2="280" y2="200" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="288" y="156" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="308" y="164" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">领走</text>
+
+  <line x1="280" y1="264" x2="280" y2="328" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="288" y="284" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="308" y="292" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">做完</text>
+
+  <line x1="280" y1="392" x2="280" y2="456" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="288" y="412" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="308" y="420" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">验收</text>
+
+  <line x1="360" y1="216" x2="480" y2="216" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="396" y="196" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="420" y="204" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">卡点</text>
+
+  <line x1="480" y1="248" x2="360" y2="248" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="384" y="256" width="72" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="420" y="264" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">继续执行</text>
+
+  <line x1="640" y1="232" x2="760" y2="232" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="676" y="212" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="700" y="220" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">停止</text>
+
+  <path d="M360,104 H592 Q600,104 600,112 V200" fill="none" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="608" y="148" width="56" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="636" y="156" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">没命中</text>
+
+  <path d="M520,200 V48 Q520,40 512,40 H288 Q280,40 280,48 V72" fill="none" stroke="#506078" stroke-width="1.2" marker-end="url(#status-arrow)"/>
+  <rect x="360" y="20" width="72" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="396" y="28" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">重新匹配</text>
+
+  <line x1="360" y1="488" x2="408" y2="488" stroke="#506078" stroke-width="1.2"/>
+  <circle cx="128" cy="104" r="6" fill="#172033"/>
+  <circle cx="416" cy="488" r="8" fill="none" stroke="#172033" stroke-width="1.2"/>
+  <circle cx="416" cy="488" r="4" fill="#172033"/>
+
+  <rect x="200" y="72" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="200" y="72" width="160" height="64" rx="8" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="280" y="108" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">等待处理</text>
+
+  <rect x="200" y="200" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="200" y="200" width="160" height="64" rx="8" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="280" y="236" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">正在做</text>
+
+  <rect x="200" y="328" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="200" y="328" width="160" height="64" rx="8" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="280" y="364" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">待验收</text>
+
+  <rect x="200" y="456" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="200" y="456" width="160" height="64" rx="8" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="280" y="492" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">已完成</text>
+
+  <rect x="480" y="200" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="480" y="200" width="160" height="64" rx="8" fill="#e9f2ff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="560" y="236" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">等你补充</text>
+
+  <rect x="760" y="200" width="160" height="64" rx="8" fill="#f6f8fc"/>
+  <rect x="760" y="200" width="160" height="64" rx="8" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="840" y="236" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">已经停住</text>
+
+  <line x1="32" y1="572" x2="928" y2="572" stroke="rgba(23,32,51,0.12)" stroke-width="0.8"/>
+  <text x="32" y="596" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+  <circle cx="140" cy="592" r="6" fill="#172033"/>
+  <text x="156" y="596" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">开始</text>
+  <rect x="220" y="584" width="16" height="12" rx="2" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="244" y="596" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">状态</text>
+  <rect x="320" y="584" width="16" height="12" rx="2" fill="#e9f2ff" stroke="#2563eb" stroke-width="1"/>
+  <text x="344" y="596" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">要人决定</text>
+  <circle cx="460" cy="592" r="8" fill="none" stroke="#172033" stroke-width="1.2"/>
+  <circle cx="460" cy="592" r="4" fill="#172033"/>
+  <text x="476" y="596" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">结束</text>
+</svg>

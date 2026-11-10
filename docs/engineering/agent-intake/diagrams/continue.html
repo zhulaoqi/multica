@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>继续</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f6f8fc; color: #172033; font-family: "Geist", sans-serif; padding: 48px 40px 64px; }
+  header { max-width: 880px; margin: 0 auto 28px; }
+  .eyebrow { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #506078; margin-bottom: 8px; }
+  h1 { font-family: "Instrument Serif", serif; font-size: 28px; font-weight: 400; line-height: 1.15; }
+  .subtitle { margin-top: 8px; font-size: 16px; line-height: 1.5; color: #506078; max-width: 680px; }
+  .frame { max-width: 880px; margin: 0 auto; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  footer { max-width: 880px; margin: 28px auto 0; padding-top: 16px; border-top: 1px solid rgba(23,32,51,0.12); font-family: "Geist Mono", monospace; font-size: 12px; color: #5b6c84; }
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Flowchart · doc-inline</p>
+  <h1>继续</h1>
+  <p class="subtitle">补偿说明先写回同一条需求。接着跑的方式取决于有没有执行人，以及那次运行还在不在。</p>
+</header>
+<div class="frame">
+<svg viewBox="0 0 880 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="continue-title continue-desc">
+  <title id="continue-title">继续</title>
+  <desc id="continue-desc">提出人写下补偿说明后，若还没有执行人就重新匹配。若原运行还在，就把说明送进同一次运行；运行已结束或送入失败，则恢复同一 Agent 的会话，不换机器。</desc>
+  <defs>
+    <marker id="continue-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#506078"/>
+    </marker>
+    <marker id="continue-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="continue-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1d4ed8"/>
+    </marker>
+  </defs>
+  <rect width="880" height="700" fill="#f6f8fc"/>
+
+  <line x1="440" y1="104" x2="440" y2="128" stroke="#506078" stroke-width="1.2" marker-end="url(#continue-arrow)"/>
+
+  <line x1="512" y1="200" x2="640" y2="200" stroke="#506078" stroke-width="1.2" marker-end="url(#continue-arrow)"/>
+  <rect x="548" y="180" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="572" y="188" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">没有</text>
+
+  <line x1="440" y1="272" x2="440" y2="320" stroke="#506078" stroke-width="1.2" marker-end="url(#continue-arrow)"/>
+  <rect x="448" y="284" width="32" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="464" y="292" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">有</text>
+
+  <line x1="368" y1="392" x2="200" y2="392" stroke="#506078" stroke-width="1.2" marker-end="url(#continue-arrow)"/>
+  <rect x="252" y="372" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="276" y="380" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">还在</text>
+
+  <line x1="440" y1="464" x2="440" y2="520" stroke="#2563eb" stroke-width="1.2" marker-end="url(#continue-arrow-accent)"/>
+  <rect x="448" y="480" width="56" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="476" y="488" fill="#2563eb" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">已结束</text>
+
+  <path d="M120,424 V544 Q120,552 128,552 H360" fill="none" stroke="#506078" stroke-width="1.2" marker-end="url(#continue-arrow)"/>
+  <rect x="196" y="532" width="72" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="232" y="540" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">送入失败</text>
+
+  <rect x="360" y="40" width="160" height="64" rx="20" fill="#f6f8fc"/>
+  <rect x="360" y="40" width="160" height="64" rx="20" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="440" y="76" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">继续</text>
+
+  <polygon points="440,128 512,200 440,272 368,200" fill="#f6f8fc"/>
+  <polygon points="440,128 512,200 440,272 368,200" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="440" y="204" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">有执行人</text>
+
+  <rect x="640" y="168" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="640" y="168" width="160" height="64" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="720" y="204" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">重新匹配</text>
+
+  <polygon points="440,320 512,392 440,464 368,392" fill="#f6f8fc"/>
+  <polygon points="440,320 512,392 440,464 368,392" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="440" y="396" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">运行还在</text>
+
+  <rect x="40" y="360" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="40" y="360" width="160" height="64" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="120" y="396" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">送进原运行</text>
+
+  <rect x="360" y="520" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="360" y="520" width="160" height="64" rx="6" fill="#e9f2ff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="440" y="556" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">恢复原会话</text>
+
+  <line x1="24" y1="632" x2="856" y2="632" stroke="rgba(23,32,51,0.12)" stroke-width="0.8"/>
+  <text x="24" y="656" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+  <rect x="120" y="644" width="16" height="12" rx="2" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="144" y="656" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">步骤</text>
+  <rect x="220" y="644" width="16" height="12" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="244" y="656" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">起止</text>
+  <polygon points="336,650 344,642 352,650 344,658" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="364" y="656" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">判断</text>
+  <rect x="440" y="644" width="16" height="12" rx="2" fill="#e9f2ff" stroke="#2563eb" stroke-width="1"/>
+  <text x="464" y="656" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">不换机器</text>
+</svg>
+</div>
+<footer>恢复原会话仍绑定该 Agent 原来的运行时。入队失败时行内重试，不打回卡点。停止不经过这张图。</footer>
+</body>
+</html>

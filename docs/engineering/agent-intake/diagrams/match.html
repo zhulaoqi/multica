@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命中</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f6f8fc; color: #172033; font-family: "Geist", sans-serif; padding: 48px 40px 64px; }
+  header { max-width: 960px; margin: 0 auto 28px; }
+  .eyebrow { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #506078; margin-bottom: 8px; }
+  h1 { font-family: "Instrument Serif", serif; font-size: 28px; font-weight: 400; line-height: 1.15; }
+  .subtitle { margin-top: 8px; font-size: 16px; line-height: 1.5; color: #506078; max-width: 680px; }
+  .frame { max-width: 960px; margin: 0 auto; overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  footer { max-width: 960px; margin: 28px auto 0; padding-top: 16px; border-top: 1px solid rgba(23,32,51,0.12); font-family: "Geist Mono", monospace; font-size: 12px; color: #5b6c84; }
+</style>
+</head>
+<body>
+<header>
+  <p class="eyebrow">Flowchart · doc-inline</p>
+  <h1>命中</h1>
+  <p class="subtitle">人先选项目里的模块。系统把需求派给这个模块的主责。主责不在线才看备责。不改派到别的模块。</p>
+</header>
+<div class="frame">
+<svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="match-title match-desc">
+  <title id="match-title">命中</title>
+  <desc id="match-desc">不在项目里则看不见。在项目里必须选择模块。主责在线则入队给主责。主责不在线且备责在线则入队给备责。都不在线则留下等待。不把需求派到别的模块。</desc>
+  <defs>
+    <marker id="match-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#506078"/>
+    </marker>
+    <marker id="match-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="960" height="700" fill="#f6f8fc"/>
+
+  <line x1="320" y1="104" x2="320" y2="128" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+
+  <line x1="248" y1="200" x2="184" y2="200" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+  <rect x="192" y="180" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="212" y="188" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">未选</text>
+
+  <line x1="320" y1="272" x2="320" y2="312" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+  <rect x="328" y="280" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="348" y="288" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">已选</text>
+
+  <line x1="392" y1="200" x2="640" y2="200" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+  <rect x="488" y="180" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="512" y="188" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">接着</text>
+
+  <line x1="720" y1="232" x2="720" y2="276" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+
+  <line x1="720" y1="420" x2="720" y2="456" stroke="#506078" stroke-width="1.2" marker-end="url(#match-arrow)"/>
+  <rect x="728" y="428" width="40" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="748" y="436" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">在线</text>
+
+  <path d="M648,348 H520 Q512,348 512,356 V488 Q512,496 504,496 H400" fill="none" stroke="#2563eb" stroke-width="1.2" marker-end="url(#match-arrow-accent)"/>
+  <rect x="520" y="400" width="48" height="12" rx="2" fill="#f6f8fc"/>
+  <text x="544" y="408" fill="#2563eb" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">不在线</text>
+
+  <rect x="240" y="40" width="160" height="64" rx="20" fill="#f6f8fc"/>
+  <rect x="240" y="40" width="160" height="64" rx="20" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="320" y="76" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">提交</text>
+
+  <polygon points="320,128 392,200 320,272 248,200" fill="#f6f8fc"/>
+  <polygon points="320,128 392,200 320,272 248,200" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="320" y="204" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">选模块</text>
+
+  <rect x="24" y="168" width="160" height="64" rx="20" fill="#f6f8fc"/>
+  <rect x="24" y="168" width="160" height="64" rx="20" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="104" y="204" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">不能提交</text>
+
+  <rect x="240" y="312" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="240" y="312" width="160" height="64" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="320" y="348" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">交给主责</text>
+
+  <rect x="640" y="168" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="640" y="168" width="160" height="64" rx="6" fill="#e9f2ff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="720" y="204" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">模块主责</text>
+
+  <polygon points="720,276 792,348 720,420 648,348" fill="#f6f8fc"/>
+  <polygon points="720,276 792,348 720,420 648,348" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="720" y="352" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">在线吗</text>
+
+  <rect x="640" y="456" width="160" height="64" rx="6" fill="#f6f8fc"/>
+  <rect x="640" y="456" width="160" height="64" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="720" y="492" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">主责入队</text>
+
+  <rect x="240" y="456" width="160" height="64" rx="20" fill="#f6f8fc"/>
+  <rect x="240" y="456" width="160" height="64" rx="20" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="320" y="492" fill="#172033" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">留下等待</text>
+
+  <line x1="24" y1="584" x2="936" y2="584" stroke="rgba(23,32,51,0.12)" stroke-width="0.8"/>
+  <text x="24" y="608" fill="#506078" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+  <rect x="120" y="596" width="16" height="12" rx="2" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="144" y="608" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">步骤</text>
+  <rect x="220" y="596" width="16" height="12" rx="6" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="244" y="608" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">起止</text>
+  <polygon points="336,602 344,594 352,602 344,610" fill="#ffffff" stroke="#172033" stroke-width="1"/>
+  <text x="364" y="608" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">判断</text>
+  <rect x="440" y="596" width="16" height="12" rx="2" fill="#e9f2ff" stroke="#2563eb" stroke-width="1"/>
+  <text x="464" y="608" fill="#506078" font-size="8" font-family="'Geist Mono', monospace">模块主责</text>
+</svg>
+</div>
+<footer>不在线时先看该模块的备责。备责也不在线就留下等待。不派到别的模块。</footer>
+</body>
+</html>
