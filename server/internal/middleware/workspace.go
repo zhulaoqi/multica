@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -237,13 +238,22 @@ func buildMiddleware(queries *db.Queries, resolve workspaceResolver, roles []str
 				writeError(w, http.StatusBadRequest, "invalid workspace_id")
 				return
 			}
-			member, err := queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-				UserID:      userUUID,
-				WorkspaceID: wsUUID,
-			})
-			if err != nil {
-				writeError(w, http.StatusNotFound, "workspace not found")
-				return
+			var member db.Member
+			if r.Header.Get(auth.OperatorHeader) == "1" {
+				if _, err := queries.GetWorkspace(r.Context(), wsUUID); err != nil {
+					writeError(w, http.StatusNotFound, "workspace not found")
+					return
+				}
+				member = db.Member{ID: userUUID, WorkspaceID: wsUUID, UserID: userUUID, Role: "owner"}
+			} else {
+				member, err = queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+					UserID:      userUUID,
+					WorkspaceID: wsUUID,
+				})
+				if err != nil {
+					writeError(w, http.StatusNotFound, "workspace not found")
+					return
+				}
 			}
 
 			if len(roles) > 0 {

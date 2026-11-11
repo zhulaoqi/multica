@@ -1320,6 +1320,40 @@ func (s *IssueWakeupService) dispatch(ctx context.Context, prev db.IssueWakeup) 
 	if taskExists {
 		task, err = q.ReplaceWakeupEvidence(ctx, db.ReplaceWakeupEvidenceParams{ID: task.ID, HandoffNote: pgtype.Text{String: noteText, Valid: true}, WakeupEvidence: evidence})
 	} else {
+		if w.Kind == "at" && strings.TrimSpace(w.Instruction) == IntakeRedispatchInstruction {
+			if err = q.ConsumeWakeupReceipts(ctx, db.ConsumeWakeupReceiptsParams{Ids: ids}); err != nil {
+				return err
+			}
+			if err = q.AdvanceIssueWakeup(ctx, db.AdvanceIssueWakeupParams{ID: w.ID, Enabled: false}); err != nil {
+				return err
+			}
+			if err = commit(); err != nil {
+				return err
+			}
+			if s.Tasks != nil {
+				s.Tasks.RedispatchIntake(ctx, issue)
+			}
+			return nil
+		}
+		if w.Kind == "at" {
+			held, notify, holdErr := holdOfflineIntakeWakeup(ctx, q, issue, agent.RuntimeID, now)
+			if holdErr != nil {
+				return holdErr
+			}
+			if held {
+				if err = q.ConsumeWakeupReceipts(ctx, db.ConsumeWakeupReceiptsParams{Ids: ids}); err != nil {
+					return err
+				}
+				if err = q.AdvanceIssueWakeup(ctx, db.AdvanceIssueWakeupParams{ID: w.ID, Enabled: false}); err != nil {
+					return err
+				}
+				if err = commit(); err != nil {
+					return err
+				}
+				notify()
+				return nil
+			}
+		}
 		if err = guardIssueNotInTriage(ctx, q, issue.ID, OriginNamed); err != nil {
 			return err
 		}

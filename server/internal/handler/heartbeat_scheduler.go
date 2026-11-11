@@ -74,6 +74,7 @@ func (p *PassthroughHeartbeatScheduler) Schedule(ctx context.Context, runtimeID,
 	}
 	if flipped > 0 {
 		p.notifyRuntimeRecovered(ctx, workspaceID)
+		service.AnnounceIntakeRuntimes(ctx, p.queries, []pgtype.UUID{runtimeID}, true)
 		return nil
 	}
 	_, err = p.queries.MarkAgentRuntimeOnline(ctx, runtimeID)
@@ -281,6 +282,7 @@ func (b *BatchedHeartbeatScheduler) flushOnce(ctx context.Context) {
 		}
 		recovered++
 		b.notifyRuntimeRecovered(ctx, state.WorkspaceID)
+		service.AnnounceIntakeRuntimes(ctx, b.queries, []pgtype.UUID{state.ID}, true)
 	}
 
 	for _, id := range omitted {

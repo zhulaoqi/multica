@@ -183,7 +183,7 @@ describe("RuntimesPage", () => {
     await user.click(screen.getByRole("button", { name: "Add runtime" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).getByText("Machines")).toBeInTheDocument();
-    expect(within(menu).getByText("This computer")).toBeInTheDocument();
+    expect(within(menu).queryByText("This computer")).not.toBeInTheDocument();
     expect(within(menu).getByText("Other machine or server")).toBeInTheDocument();
     expect(within(menu).getByText("Cloud services")).toBeInTheDocument();
     expect(within(menu).getByText("Qoder Cloud Agents")).toBeInTheDocument();
@@ -224,10 +224,7 @@ describe("RuntimesPage", () => {
     const intro = screen.getByRole("region", {
       name: "Give your agents a computer to work on",
     });
-    expect(within(intro).getByRole("link", { name: /Download desktop/ })).toHaveAttribute(
-      "href",
-      "/download",
-    );
+    expect(within(intro).queryByRole("link", { name: /Download desktop/ })).not.toBeInTheDocument();
     expect(screen.queryByText("Machines")).not.toBeInTheDocument();
     expect(within(intro).getAllByRole("button", { name: /^Go to slide/ })).toHaveLength(2);
 

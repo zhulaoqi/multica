@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
 import type { WorkspaceWakeupPage, WorkspaceWakeupFilters } from "../types/issue-wakeup";
@@ -5597,5 +5598,95 @@ export class ApiClient {
       EMPTY_REDEEM_TELEGRAM_BINDING_TOKEN_RESPONSE,
       { endpoint: "POST /api/telegram/binding/redeem" },
     );
+  }
+
+  async listMaintainProjects(): Promise<IntakeMaintainProject[]> {
+    const raw = await this.fetch<unknown>("/api/intake/maintain-projects");
+    return parseWithFallback(raw, IntakeMaintainProjectSchema.array(), [], { endpoint: "GET /api/intake/maintain-projects" });
+  }
+
+  async listAssignableAgents(): Promise<IntakeAgent[]> {
+    const raw = await this.fetch<unknown>("/api/intake/assignable-agents");
+    return parseWithFallback(raw, IntakeAgentSchema.array(), [], { endpoint: "GET /api/intake/assignable-agents" });
+  }
+
+  async patchIntakeAgent(agentId: string, input: { name: string; can: string; cannot?: string; runtime_mode: "local" | "cloud" }): Promise<void> {
+    await this.fetch(`/api/intake/agents/${encodeURIComponent(agentId)}`, { method: "PATCH", body: JSON.stringify(input) });
+  }
+
+  async listIntakeAgents(): Promise<IntakeAgent[]> {
+    const raw = await this.fetch<unknown>("/api/intake/agents");
+    return parseWithFallback(raw, IntakeAgentSchema.array(), [], { endpoint: "GET /api/intake/agents" });
+  }
+
+  async listIntakeModules(projectId: string): Promise<IntakeModule[]> {
+    const raw = await this.fetch<unknown>(`/api/intake/modules?project_id=${encodeURIComponent(projectId)}`);
+    return parseWithFallback(raw, IntakeModuleSchema.array(), [], { endpoint: "GET /api/intake/modules" });
+  }
+
+  async intakeSession(): Promise<IntakeSession> {
+    const raw = await this.fetch<unknown>("/api/intake/session");
+    return parseWithFallback(raw, IntakeSessionSchema, { id: "", name: "" }, { endpoint: "GET /api/intake/session" });
+  }
+
+  async registerIntakeAgent(input: { name: string; can: string; cannot?: string; runtime_mode: "local" | "cloud" }): Promise<void> {
+    await this.fetch("/api/intake/agents", { method: "POST", body: JSON.stringify(input) });
+  }
+
+  async setIntakeTestEnvironment(projectId: string, url: string): Promise<void> {
+    await this.fetch(`/api/intake/projects/${encodeURIComponent(projectId)}/test-environment`, {
+      method: "PUT",
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  async replaceIntakeMembers(projectId: string, userIDs: string[]): Promise<void> {
+    await this.fetch(`/api/intake/projects/${encodeURIComponent(projectId)}/members`, {
+      method: "PUT",
+      body: JSON.stringify({ user_ids: userIDs }),
+    });
+  }
+
+  async logout(): Promise<void> {
+    await this.fetch("/auth/logout", { method: "POST" });
+  }
+
+  async decideIntake(issueId: string, action: "continue" | "stop" | "accept" | "cancel" | "resume" | "match", body?: string): Promise<void> {
+    await this.fetch(`/api/intake/requests/${encodeURIComponent(issueId)}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ body: body ?? "" }),
+    });
+  }
+
+  async listScheduledIntake(): Promise<IntakeListItem[]> {
+    const raw = await this.fetch<unknown>("/api/intake/scheduled");
+    return parseWithFallback(raw, IntakeListItemSchema.array(), [], { endpoint: "GET /api/intake/scheduled" });
+  }
+
+  async listMyIntake(): Promise<IntakeListItem[]> {
+    const raw = await this.fetch<unknown>("/api/intake/requests?mine=1");
+    return parseWithFallback(raw, IntakeListItemSchema.array(), [], { endpoint: "GET /api/intake/requests?mine=1" });
+  }
+
+  async listProjectIntake(): Promise<IntakeProjectItem[]> {
+    const raw = await this.fetch<unknown>("/api/intake/requests");
+    return parseWithFallback(raw, IntakeProjectItemSchema.array(), [], { endpoint: "GET /api/intake/requests" });
+  }
+
+  async submitIntake(input: { body: string; client_request_id: string; start_at?: string }): Promise<IntakeSubmitResponse> {
+    const raw = await this.fetch<unknown>("/api/intake/requests", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return parseWithFallback(raw, IntakeSubmitResponseSchema, EMPTY_INTAKE_SUBMIT_RESPONSE, {
+      endpoint: "POST /api/intake/requests",
+    });
+  }
+
+  async replaceIntakeModules(input: {
+    project_id: string;
+    modules: Array<{ product: string; module: string; scope: string; agent_id: string; backup_agent_id?: string; position?: number }>;
+  }): Promise<void> {
+    await this.fetch("/api/intake/modules", { method: "PUT", body: JSON.stringify(input) });
   }
 }

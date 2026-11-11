@@ -99,6 +99,20 @@ describe("LoginPage", () => {
     mockListMyInvitations.mockResolvedValue([]);
   });
 
+  it("offers Feishu sign-in and no email form", () => {
+    render(<LoginPage />, { wrapper: createWrapper() });
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
+      "href",
+      "/auth/feishu/start",
+    );
+    expect(screen.getByRole("link", { name: "开发者入口" })).toHaveAttribute(
+      "href",
+      "/login/operator",
+    );
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument();
+  });
+
   it.each([null, { id: "u1", email: "test@multica.ai" }])(
     "blocks invalid CLI callbacks even with an existing session: %j",
     (user) => {
@@ -123,48 +137,12 @@ describe("LoginPage", () => {
     expect(screen.getByText("CLI authorization incomplete")).toBeInTheDocument();
   });
 
-  // Shared LoginPage behavior is canonical in
-  // packages/views/auth/login-page.test.tsx. This wrapper suite only owns web
-  // platform handoff and redirect behavior.
-
-  // Regression: MUL-1080 — if the user is already authenticated on the web
-  // and the Desktop app redirects them to /login?platform=desktop, the web
-  // must exchange the cookie session for a bearer token and hand it off via
-  // the multica:// deep link, not silently redirect to the workspace page.
-  it("mints a token and deep-links to Desktop when already logged in with platform=desktop", async () => {
+  it("stays on Feishu sign-in when a desktop handoff is requested", () => {
     searchParamsState.params = new URLSearchParams({ platform: "desktop" });
     authStateRef.state.user = { id: "u1", email: "test@multica.ai" };
-    mockIssueCliToken.mockImplementation(() =>
-      Promise.resolve({ token: "handoff-jwt" }),
-    );
-
-    const hrefSetter = vi.fn();
-    const originalLocation = window.location;
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: { ...originalLocation, set href(value: string) { hrefSetter(value); } },
-    });
-
-    try {
-      render(<LoginPage />, { wrapper: createWrapper() });
-
-      await waitFor(() => {
-        expect(mockIssueCliToken).toHaveBeenCalledTimes(1);
-      });
-      await waitFor(() => {
-        expect(hrefSetter).toHaveBeenCalledWith(
-          "multica://auth/callback?token=handoff-jwt",
-        );
-      });
-      expect(
-        await screen.findByRole("button", { name: "Open Multica Desktop" }),
-      ).toBeInTheDocument();
-    } finally {
-      Object.defineProperty(window, "location", {
-        configurable: true,
-        value: originalLocation,
-      });
-    }
+    render(<LoginPage />, { wrapper: createWrapper() });
+    expect(screen.getByRole("link", { name: "飞书登录" })).toBeInTheDocument();
+    expect(mockIssueCliToken).not.toHaveBeenCalled();
   });
 
   // Regression: #5009 — the "already authenticated on arrival" effect used to

@@ -55,6 +55,11 @@ type RoutePattern = readonly string[];
 const WORKSPACE_ROUTES: readonly RoutePattern[] = [
   ["issues"],
   ["issues", ":id"],
+  ["intake"],
+  ["intake", "scheduled"],
+  ["intake", "agents"],
+  ["intake", "routes"],
+  ["intake", ":id"],
   ["projects"],
   ["projects", ":id"],
   ["autopilots"],

@@ -116,16 +116,22 @@ describe("proxy legacy workspace route redirects", () => {
 
   it("redirects app-host root URLs to the last workspace", () => {
     expect(redirectLocation("/", sessionCookies)).toBe(
-      "https://app.multica.test/acme/issues",
+      "https://app.multica.test/acme/intake",
     );
   });
 
   it.each(["multica.ai", "www.multica.ai"])(
-    "does not redirect public marketing root on %s",
+    "redirects the former marketing root on %s into the last workspace",
     (host) => {
-      expect(redirectLocation("/", sessionCookies, host)).toBeNull();
+      expect(redirectLocation("/", sessionCookies, host)).toBe(
+        `https://${host}/acme/intake`,
+      );
     },
   );
+
+  it("sends a logged-out root visit to login", () => {
+    expect(redirectLocation("/")).toBe("https://app.multica.test/login");
+  });
 
   it("still redirects explicit legacy app routes on the public marketing host", () => {
     expect(redirectLocation("/issues/ABC-123", sessionCookies, "multica.ai")).toBe(
@@ -275,7 +281,7 @@ describe("proxy root and locale handling", () => {
 
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe(
-      "https://app.multica.test/acme/issues",
+      "https://app.multica.test/acme/intake",
     );
   });
 

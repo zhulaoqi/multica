@@ -64,6 +64,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"dingtalk_bot_identity":              workspaceDelete,
 	"dingtalk_group_route":               workspaceDelete,
 	"feedback":                           workspaceDeleteDetach,
+	"feishu_identity":                    workspaceDeleteKeep, // user-scoped login identity, no workspace_id
 	"github_installation":                workspaceDelete,
 	"github_pending_check_suite":         workspaceDelete,
 	"github_pending_installation":        workspaceDeleteKeep,
@@ -72,6 +73,10 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"github_pull_request_check_suite":    workspaceDelete,
 	"inbox_item":                         workspaceDelete,
 	"instance_telemetry_state":           workspaceDeleteKeep,
+	"intake_blocker":                     workspaceDelete,
+	"intake_module":                      workspaceDelete,
+	"intake_project_member":              workspaceDelete,
+	"intake_request":                     workspaceDelete,
 	"issue":                              workspaceDelete,
 	"issue_wakeup":                       workspaceDelete,
 	"issue_wakeup_receipt":               workspaceDelete,

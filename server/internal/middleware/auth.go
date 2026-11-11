@@ -289,8 +289,12 @@ func Auth(queries *db.Queries, patCache *auth.PATCache, cloudPAT *auth.CloudPATV
 				return
 			}
 			r.Header.Set("X-User-ID", sub)
+			r.Header.Del(auth.OperatorHeader)
 			if email != "" {
 				r.Header.Set("X-User-Email", email)
+			}
+			if auth.IsOperatorEmail(email) {
+				r.Header.Set(auth.OperatorHeader, "1")
 			}
 
 			// Sliding session: a browser that keeps using the app keeps its

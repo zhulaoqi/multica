@@ -375,6 +375,46 @@ func (c *httpAPIClient) SendInteractiveCard(ctx context.Context, p SendCardParam
 	return resp.Data.MessageID, nil
 }
 
+// SendPersonalInteractiveCard posts one interactive card to a person's open_id.
+func (c *httpAPIClient) SendPersonalInteractiveCard(ctx context.Context, creds InstallationCredentials, openID, cardJSON string) (string, error) {
+	if openID == "" || cardJSON == "" {
+		return "", errors.New("lark http client: missing personal card target")
+	}
+	q := url.Values{}
+	q.Set("receive_id_type", "open_id")
+	path := "/open-apis/im/v1/messages?" + q.Encode()
+	body := map[string]any{"receive_id": openID, "msg_type": "interactive", "content": cardJSON}
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID string `json:"message_id"`
+		} `json:"data"`
+	}
+	if err := c.doAuthedJSON(ctx, creds, http.MethodPost, path, body, &resp); err != nil {
+		return "", fmt.Errorf("lark http client: send personal card: %w", err)
+	}
+	if resp.Code != 0 || resp.Data.MessageID == "" {
+		if isTokenError(resp.Code) {
+			c.invalidateToken(creds.AppID)
+		}
+		return "", &APIError{Op: "send personal card", Code: resp.Code, Msg: resp.Msg}
+	}
+	return resp.Data.MessageID, nil
+}
+
+// SendPersonalCard sends when the concrete client supports personal delivery.
+func SendPersonalCard(client APIClient, ctx context.Context, creds InstallationCredentials, openID, cardJSON string) error {
+	sender, ok := client.(interface {
+		SendPersonalInteractiveCard(context.Context, InstallationCredentials, string, string) (string, error)
+	})
+	if !ok {
+		return errors.New("lark client cannot send a personal card")
+	}
+	_, err := sender.SendPersonalInteractiveCard(ctx, creds, openID, cardJSON)
+	return err
+}
+
 // SendTextMessage posts a plain text IM message into a Lark chat.
 // This is the Patcher's primary outbound for agent chat replies —
 // using a normal text bubble instead of an interactive card makes

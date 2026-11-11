@@ -170,6 +170,7 @@ func runRuntimeSweeper(ctx context.Context, queries *db.Queries, liveness handle
 		sweepStaleTasks(ctx, queries, taskSvc, bus, reconnectGrace)
 		sweepExpiredQueuedTasks(ctx, queries, taskSvc, reconnectGrace)
 		sweepDeferredChatFinalizations(ctx, queries, taskSvc)
+		_, _ = service.SweepIntakeProgress(ctx, queries, taskSvc, time.Now())
 	})
 }
 
@@ -282,6 +283,11 @@ func sweepStaleRuntimes(ctx context.Context, queries *db.Queries, liveness handl
 	}
 
 	slog.Info("runtime sweeper: marked stale runtimes offline", "count", len(staleRows), "workspaces", len(workspaces))
+	offlineIDs := make([]pgtype.UUID, 0, len(staleRows))
+	for _, row := range staleRows {
+		offlineIDs = append(offlineIDs, row.ID)
+	}
+	service.AnnounceIntakeRuntimes(ctx, queries, offlineIDs, false)
 
 	// Notify frontend clients so they re-fetch runtime list.
 	for wsID := range workspaces {

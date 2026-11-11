@@ -453,6 +453,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		GitExtraCACerts:                gitca.Load(slog.Default()),
 	}
 	h := handler.New(queries, pool, hub, bus, emailSvc, store, cfSigner, analyticsClient, signupConfig, daemonHub)
+	h.FeishuLoginExchanger = handler.NewFeishuOAuthFromEnv()
 	invitationRateLimits := handler.DefaultInvitationRateLimits()
 	invitationRateLimits.Actor.Limit = envNonNegativeInt("RATE_LIMIT_INVITATION_ACTOR_10M", invitationRateLimits.Actor.Limit)
 	invitationRateLimits.Workspace.Limit = envNonNegativeInt("RATE_LIMIT_INVITATION_WORKSPACE_24H", invitationRateLimits.Workspace.Limit)
@@ -612,6 +613,53 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					Logger:  slog.Default(),
 				})
 				h.LarkAPIClient = larkClient
+				service.DeliverIntakeCard = func(ctx context.Context, workspaceID, userID, issueID pgtype.UUID, title, text string) error {
+					binding, err := queries.FindLarkOpenIDForUser(ctx, db.FindLarkOpenIDForUserParams{
+						WorkspaceID: workspaceID, MulticaUserID: userID,
+					})
+					if err != nil {
+						return nil
+					}
+					inst, err := installSvc.GetInWorkspace(ctx, binding.InstallationID, workspaceID)
+					if err != nil {
+						return err
+					}
+					secret, err := installSvc.DecryptAppSecret(inst)
+					if err != nil {
+						return err
+					}
+					template, button := "blue", "打开对话"
+					switch title {
+					case "Agent 不在线", "还没开始", "需要维护", "还没做完", "等你补充":
+						template = "orange"
+					case "待验收":
+						template = "green"
+					}
+					if title == "Agent 不在线" || title == "需要维护" || (title == "已恢复" && strings.Contains(text, "机器")) {
+						button = "去维护"
+					}
+					link := appURLFromEnv()
+					slug := ""
+					if ws, err := queries.GetWorkspace(ctx, workspaceID); err == nil {
+						slug = ws.Slug
+					}
+					if slug != "" {
+						link = strings.TrimRight(link, "/") + "/" + slug + "/intake"
+					}
+					if issueID.Valid {
+						link += "/" + util.UUIDToString(issueID)
+					}
+					if button == "去维护" && slug != "" {
+						link = strings.TrimRight(appURLFromEnv(), "/") + "/" + slug + "/intake?mode=manage"
+					}
+					card, err := lark.IntakeCard(template, title, text, button, link)
+					if err != nil {
+						return err
+					}
+					return lark.SendPersonalCard(larkClient, ctx, lark.InstallationCredentials{
+						AppID: inst.AppID, AppSecret: secret, TenantKey: inst.TenantKey.String, Region: lark.Region(inst.Region),
+					}, binding.LarkOpenID, card)
+				}
 
 				// Channel-backed store: routes the lark package's DB seams
 				// onto the channel_* tables (MUL-3515). Interface-wired
@@ -1574,6 +1622,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	r.With(authRL).Post("/auth/send-code", h.SendCode)
 	r.With(authVerifyRL).Post("/auth/verify-code", h.VerifyCode)
 	r.With(authRL).Post("/auth/google", h.GoogleLogin)
+	r.With(authRL).Post("/auth/feishu", h.FeishuLogin)
+	r.With(authRL).Post("/auth/operator", h.OperatorLogin)
+	r.With(authRL).Get("/auth/feishu/start", h.FeishuLoginStart)
+	r.With(authRL).Get("/auth/feishu/callback", h.FeishuLoginCallback)
 	r.Post("/auth/logout", h.Logout)
 
 	// Public API
@@ -2489,6 +2541,30 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/nodes/status", h.GetCloudRuntimeNodeStatus)
 				r.Post("/nodes/exec", h.ExecCloudRuntimeNode)
 			})
+
+			r.Route("/api/intake", func(r chi.Router) {
+				r.Get("/agents", h.ListIntakeAgents)
+				r.Get("/assignable-agents", h.ListIntakeAssignableAgents)
+				r.Get("/maintain-projects", h.ListIntakeMaintainProjects)
+				r.Post("/agents", h.CreateIntakeAgent)
+				r.Patch("/agents/{agentId}", h.PatchIntakeAgent)
+				r.Get("/session", h.IntakeSession)
+				r.Get("/requests", h.ListMyIntakeRequests)
+				r.Get("/project-requests", h.ListProjectIntakeRequests)
+				r.Get("/scheduled", h.ListMyScheduledIntake)
+				r.Post("/requests", h.CreateIntakeRequest)
+				r.Get("/modules", h.ListIntakeModules)
+				r.Put("/modules", h.ReplaceIntakeModules)
+				r.Put("/projects/{projectId}/members", h.ReplaceIntakeMembers)
+				r.Put("/projects/{projectId}/test-environment", h.SetIntakeTestEnvironment)
+				r.Post("/requests/{issueId}/continue", h.ContinueIntakeRequest)
+				r.Post("/requests/{issueId}/stop", h.StopIntakeRequest)
+				r.Post("/requests/{issueId}/accept", h.AcceptIntakeRequest)
+				r.Post("/requests/{issueId}/cancel", h.CancelIntakeRequest)
+				r.Post("/requests/{issueId}/match", h.MatchIntakeRequest)
+				r.Post("/requests/{issueId}/resume", h.ResumeIntakeRequest)
+			})
+			r.Post("/api/issues/{id}/intake-blocker", h.CreateIntakeBlocker)
 
 			// Tasks (user-facing, with ownership check)
 			r.Post("/api/tasks/{taskId}/cancel", h.CancelTaskByUser)

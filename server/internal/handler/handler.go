@@ -305,6 +305,9 @@ type Handler struct {
 	// UI consults IsConfigured() to decide whether to surface install
 	// entry points.
 	LarkAPIClient lark.APIClient
+	// FeishuLoginExchanger exchanges a Feishu authorization code for a profile.
+	// Nil means Feishu login is not configured.
+	FeishuLoginExchanger FeishuExchanger
 	// Composio integration (MUL-3720). Nil when COMPOSIO_API_KEY is unset;
 	// the composio HTTP handlers return 403 in that case. Wired in
 	// cmd/server/router.go after handler.New.
@@ -1025,6 +1028,14 @@ func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 	userID, ok := requireUserID(w, r)
 	if !ok {
 		return db.Member{}, false
+	}
+
+	if requestIsOperator(r) {
+		if _, err := h.Queries.GetWorkspace(r.Context(), parseUUID(workspaceID)); err != nil {
+			writeError(w, http.StatusNotFound, notFoundMsg)
+			return db.Member{}, false
+		}
+		return operatorMember(userID, workspaceID), true
 	}
 
 	member, err := h.getWorkspaceMember(r.Context(), userID, workspaceID)

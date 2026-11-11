@@ -1151,6 +1151,12 @@ func taskErrorType(reason string) string {
 // EnqueueTaskForIssue creates a queued task for an agent-assigned issue.
 // No context snapshot is stored — the agent fetches all data it needs at
 // runtime via the multica CLI.
+// EnqueueIntakeTask queues one intake run. fresh is true when the assignee
+// changed, so the new agent starts a session instead of resuming the previous one.
+func (s *TaskService) EnqueueIntakeTask(ctx context.Context, issue db.Issue, fresh bool) (db.AgentTaskQueue, error) {
+	return s.enqueueIssueTask(ctx, issue, pgtype.UUID{}, fresh, "", pgtype.UUID{}, pgtype.UUID{}, pgtype.Timestamptz{}, OriginDerived)
+}
+
 func (s *TaskService) EnqueueTaskForIssue(ctx context.Context, issue db.Issue, triggerCommentID ...pgtype.UUID) (db.AgentTaskQueue, error) {
 	var commentID pgtype.UUID
 	if len(triggerCommentID) > 0 {
@@ -5115,7 +5121,7 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 		if parent, perr := s.Queries.GetAgentTask(ctx, taskID); perr != nil {
 			slog.Warn("fail task auto-retry: load parent failed",
 				"task_id", util.UUIDToString(taskID), "error", perr)
-		} else if retryEligible(failureReason, parent) {
+		} else if retryEligible(failureReason, parent) && !s.intakeOwnsRetry(ctx, parent, failureReason) {
 			wantRetry = true
 			// Persist the reason-aware effective budget into the child so the
 			// retry chain self-describes (e.g. provider_network → max_attempts=3),
@@ -5399,6 +5405,7 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 	// ordering rationale. A deferred child (backoff armed via fire_at) is NOT
 	// queued yet: PromoteDueDeferredTasksForRuntime emits its queued event and
 	// daemon wakeup when fire_at arrives, so announcing it here would be wrong.
+	s.scheduleIntakeRetry(ctx, task, failureReason, retried != nil)
 	if retried != nil {
 		slog.Info("task auto-retry enqueued",
 			"parent_task_id", util.UUIDToString(task.ID),
@@ -5711,7 +5718,7 @@ func (s *TaskService) MaybeRetryFailedTask(ctx context.Context, parent db.AgentT
 	// Autopilot has its own retry semantics (don't double-trigger) and a task
 	// with no issue/chat link has nowhere to report its retry — retryEligible
 	// covers both, keeping this sweeper path in sync with FailTask's in-tx retry.
-	if !retryEligible(reason, parent) {
+	if !retryEligible(reason, parent) || s.intakeOwnsRetry(ctx, parent, reason) {
 		return nil, nil
 	}
 

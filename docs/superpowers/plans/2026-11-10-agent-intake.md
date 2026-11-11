@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the phase-1 intake product: a colleague writes a few sentences, the server turns them into one ordered task on one module's agent, one branch, and one deploy, then reports progress until acceptance.
+**Goal:** Ship the phase-1 intake product: a colleague signs in with Feishu, writes a few sentences, and the server turns them into one ordered task on one module's agent, one branch, and one deploy, then reports progress until acceptance.
+
+**Identity:** Feishu login stores name, email, avatar, open_id, and union_id on `user`. Only the signed-in person's own menu receives id and name. Email, avatar URL, and Feishu ids are not returned on intake lists or cards. Progress is stored on `intake_request`, not on issue comments. Whether the comment system stays is undecided and is out of phase 1.
 
 **Architecture:** Keep the existing Go API, PostgreSQL, sqlc, daemon queue, and issue model. Add intake tables and a single in-process `server/pkg/llm` call that returns one module plus an ordered task list. The web client is a chat at `/{workspaceSlug}/intake`; requesters never see the executor. Management of modules, members, and the test environment stays on a separate mode for leads, owners, and admins.
 

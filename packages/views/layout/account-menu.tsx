@@ -3,7 +3,6 @@
 import {
   ArrowUpRight,
   BookOpen,
-  Download,
   History,
   Keyboard,
   Globe,
@@ -40,9 +39,8 @@ import { docsLocalePrefix } from "../common/docs-locale";
 import { useLanguageSwitch } from "../common/use-language-switch";
 import { useT } from "../i18n";
 import { AppLink } from "../navigation";
-import { isDesktopShell } from "../platform/local-directory";
 import { DISCORD_URL, DiscordIcon } from "./discord";
-import { CHANGELOG_URL, DOCS_URL, DOWNLOAD_URL } from "./help-links";
+import { CHANGELOG_URL, DOCS_URL } from "./help-links";
 import { RAIL_ICON_BUTTON_CLASS } from "./rail-styles";
 
 const THEMES = [
@@ -169,13 +167,6 @@ export function AccountMenu() {
           />
           <ExternalItem href={CHANGELOG_URL} icon={<History />} label={t(($) => $.help.changelog)} />
           <ExternalItem href={DISCORD_URL} icon={<DiscordIcon />} label={t(($) => $.help.discord)} />
-          {!isDesktopShell() && (
-            <ExternalItem
-              href={DOWNLOAD_URL}
-              icon={<Download />}
-              label={t(($) => $.help.download_desktop)}
-            />
-          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

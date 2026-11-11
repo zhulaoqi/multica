@@ -11,7 +11,6 @@ import {
 import {
   Check,
   Cloud,
-  Download,
   Laptop,
   Loader2,
   Plus,
@@ -46,7 +45,7 @@ import {
 import type { AgentRuntime, MemberWithUser } from "@multica/core/types";
 import type { QoderConnection } from "@multica/core/runtimes/qoder";
 import { Badge } from "@multica/ui/components/ui/badge";
-import { Button, buttonVariants } from "@multica/ui/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -297,8 +296,6 @@ export function RuntimesPage({
     (statusFilter === "all" ||
       (qoderConfigured && matchesStatus(qoderIsOnline(qoder))));
   const visibleComingSoon = statusFilter === "all" ? COMING_SOON_SERVICES : [];
-  const showThisComputerRow =
-    !filtering && !isDesktop && machineList.length === 0;
   const showAddMachineRow = !filtering && machineList.length === 0;
   const showIntro =
     !listLoading &&
@@ -407,26 +404,6 @@ export function RuntimesPage({
       0,
     ),
   }));
-  if (showThisComputerRow) {
-    machineRows.push({
-      kind: "action",
-      id: "action:this-computer",
-      icon: Laptop,
-      title: t(($) => $.page.rows.this_computer_title),
-      description: t(($) => $.page.rows.this_computer_hint),
-      action: (
-        <a
-          href="/download"
-          target="_blank"
-          rel="noreferrer"
-          className={buttonVariants({ variant: "outline", size: "xs" })}
-        >
-          <Download aria-hidden="true" className="size-3.5" />
-          {t(($) => $.page.rows.download_desktop)}
-        </a>
-      ),
-    });
-  }
   if (showAddMachineRow) {
     machineRows.push({
       kind: "action",
@@ -618,14 +595,7 @@ function AddRuntimeMenu({
               trailing={<Check className="size-4 text-muted-foreground" />}
               disabled
             />
-          ) : (
-            <AddMenuItem
-              icon={<Laptop className="size-4 text-muted-foreground" />}
-              title={t(($) => $.page.add_menu.this_computer)}
-              description={t(($) => $.page.add_menu.this_computer_download)}
-              render={<a href="/download" target="_blank" rel="noreferrer" />}
-            />
-          )}
+          ) : null}
           <AddMenuItem
             icon={<SquareTerminal className="size-4 text-muted-foreground" />}
             title={t(($) => $.page.add_menu.other_machine)}

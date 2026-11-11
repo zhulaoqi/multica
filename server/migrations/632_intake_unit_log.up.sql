@@ -1,0 +1,1 @@
+ALTER TABLE intake_request ADD COLUMN IF NOT EXISTS unit_log TEXT NOT NULL DEFAULT '';

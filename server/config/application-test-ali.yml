@@ -1,0 +1,17 @@
+# Test profile, Apollo env DEV. Start with PROFILE=test-ali.
+# Meta: http://172.30.10.48:8080. App multica, namespace application.
+# The password is empty. Apollo values with the same keys replace these.
+app:
+  id: multica
+apollo:
+  meta: http://172.30.10.48:8080
+  bootstrap:
+    enabled: true
+    eagerLoad:
+      enabled: true
+    namespaces: application
+redis:
+  host: 172.30.11.78
+  port: 6379
+  password: ""
+  db: 0

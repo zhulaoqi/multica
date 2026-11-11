@@ -163,7 +163,13 @@ func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaces, err := h.Queries.ListWorkspaces(r.Context(), parseUUID(userID))
+	var workspaces []db.Workspace
+	var err error
+	if requestIsOperator(r) {
+		workspaces, err = h.listOperatorWorkspaces(r)
+	} else {
+		workspaces, err = h.Queries.ListWorkspaces(r.Context(), parseUUID(userID))
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list workspaces")
 		return

@@ -1,0 +1,2 @@
+ALTER TABLE intake_request ADD COLUMN IF NOT EXISTS retry_passes INT NOT NULL DEFAULT 0;
+ALTER TABLE intake_request ADD COLUMN IF NOT EXISTS redispatch_used BOOLEAN NOT NULL DEFAULT false;

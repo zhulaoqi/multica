@@ -360,7 +360,16 @@ Query 失效集中在 intake 的 websocket 处理里，一处订阅 issue 与 ta
 
 ## 13. 实时和 Redis
 
-公司进程的 `start.sh` 导出 `REDIS_URL`，并设置 `MULTICA_REQUIRE_REDIS=1`。服务启动时若该变量为 `1` 且 `REDIS_URL` 为空，进程拒绝启动。本地 `make up` 不设这个变量，保持现在的可选行为。
+公司进程用 `PROFILE` 选择配置文件，不把测试和线上写在同一个文件里。
+
+| `PROFILE` | 文件 | Apollo |
+| --- | --- | --- |
+| `test-ali` | `server/config/application-test-ali.yml` | `http://172.30.10.48:8080`，环境 DEV |
+| `prod-ali` | `server/config/application-prod-ali.yml` | `http://confcenter.spellso.com`，环境 PRO |
+
+两份都声明应用 `multica`、命名空间 `application`。进程启动时先读文件，再拉配置中心；同名键以配置中心为准。拉不到配置中心时，测试环境还能用文件里的 Redis，线上没有 `redis.host` 则拒绝启动。
+
+Redis 键是 `redis.host`、`redis.port`、`redis.password`、`redis.db`。测试文件写的是 `172.30.11.78`、`6379`、空口令、库号 `0`。线上文件不写主机和口令。合并结果写成 `REDIS_URL`。已有的 `REDIS_URL` 不被覆盖。`MULTICA_REQUIRE_REDIS=1` 且最终没有 `REDIS_URL` 时，进程拒绝启动。本地 `make up` 不设 `PROFILE`，不连 Apollo，Redis 仍可缺省。
 
 200 个浏览器看这一页，仍是一台 Go 服务。每个打开的页面一条用户 WebSocket。执行并发仍是守护进程默认 20、Agent 默认 6。
 
@@ -411,11 +420,11 @@ Query 失效集中在 intake 的 websocket 处理里，一处订阅 issue 与 ta
 
 上一条消息包括开始执行、换单位、夜间自动继续、卡点、进展、待验收、还没做完。发出之后重新计时。发送失败不更新 `last_user_notice_at`，下一轮 30 秒再发，所以白天不会拖过一小时，夜里不会拖过三小时。
 
-多实例同时扫到同一条时，只允许一个成功：`UPDATE intake_request SET last_user_notice_at = now() WHERE id = $1 AND (last_user_notice_at IS NULL OR last_user_notice_at <= 门槛)`。更新到行的那个实例才写气泡、才发卡片。
+多实例同时扫到同一条时，只允许一个成功：`UPDATE intake_request SET last_user_notice_at = now() WHERE id = $1 AND (last_user_notice_at IS NULL OR last_user_notice_at <= 门槛)`。更新到行的那个实例才把「做到」「还剩」写进 `intake_request.progress_done` 和 `progress_remain`，并按这两列发卡片。不写 issue 评论。
 
 这些状态不再发进展：待验收、已完成、已经停住、`cancelled`、还有未关闭卡点、行内已经是「执行没有进展」。进入待验收的那张卡片就是做到成功的最后一条。卡点被继续之后，计时从继续成功时重新开始。
 
-正文用执行 Agent 在本轮运行里最新的一条两行评论。任务说明要求它每完成一步写一次，两行分别以「做到：」「还剩：」开头。守护进程现有的启动、收尾进度只有两步，不拿来当作还剩多少。
+进度正文存在这条收口记录上，不读 issue 评论。执行过程里如果 Agent 另行提交了「做到：」「还剩：」，服务把这两句抄进 `progress_done` 和 `progress_remain`。守护进程现有的启动、收尾进度只有两步，不拿来当作还剩多少。一期不把收口进度做在评论上。评论表是否继续保留，留到后面再定。
 
 没有这两行时仍然发，避免沉默：
 
@@ -424,7 +433,7 @@ Query 失效集中在 intake 的 websocket 处理里，一处订阅 issue 与 ta
 - 正在匹配：做到写「正在匹配」，还剩写「匹配完就开始」。
 - 本轮被空闲看门狗结束、同一单位正在重试：做到写「这一轮没有新输出，正在同一台重试」，还剩写「重试之后继续」。
 
-聊天里用同样两句写成一条系统气泡。飞书用第 17 节的「做到这里」卡片。没有 `open_id` 时只写气泡，运行照旧。
+聊天里用这两列显示进度。飞书用第 17 节的「做到这里」卡片。没有 `open_id` 时只更新网页上的这两列，运行照旧。卡片和列表都不带邮箱、`open_id` 或头像地址。
 
 ## 17. 飞书卡片
 
@@ -434,7 +443,9 @@ Query 失效集中在 intake 的 websocket 处理里，一处订阅 issue 与 ta
 
 收口不使用现有飞书机器人。不订阅 `im.message.receive_v1`，不把机器人拉进群，也不把私聊或 @ 收成需求。现有机器人的绑定卡片、`/issue` 和对话保持原样，与收口无关。
 
-飞书侧是企业自建应用里的网页应用。工作区所有者在飞书管理后台安装一次，把应用主页指到收口地址。同事从工作台打开，就是同一套聊天和管理开关。第一次打开时用飞书免登换出这个人的 `open_id`，记在工作区成员上。不要求他先跟一个机器人说话。
+网页登录走飞书。登录页链到 `GET /auth/feishu/start`，跳到飞书授权。回调 `GET /auth/feishu/callback` 用授权码换用户资料。环境变量是 `MULTICA_FEISHU_APP_ID`、`MULTICA_FEISHU_APP_SECRET`、`MULTICA_FEISHU_REDIRECT_URI`。资料写入 `feishu_identity` 和现有 `user` 的姓名、邮箱、头像。已有同一 `open_id` 或同一邮箱时更新，不新建第二个用户。响应和头像菜单只返回本人的 `id` 和姓名。邮箱、头像地址、`open_id`、`union_id` 不出现在需求列表、卡片和其他人的接口里。
+
+飞书侧是企业自建应用里的网页应用。同事从工作台打开，用上面的登录进入同一套聊天。不要求他先跟一个机器人说话。
 
 需要通知时，用这个应用的身份发交互卡片，`msg_type = interactive`。不发纯文本。飞书接口把发送方叫做应用机器人，产品里没有对话框。卡片结构沿用现有卡片：`config.wide_screen_mode`、`header`、一段 `lark_md`、一个 `action` 按钮。按钮文案「打开对话」，链到飞书内这套页面并带上 `issueId`。在浏览器里使用时，同一按钮打开网页上的这条聊天。不处理 `card.action.trigger`。成员还没有 `open_id` 时跳过发送，任务照常执行。
 
@@ -495,7 +506,7 @@ Agent 所有者登记身份。模块上的主责和备责由项目负责人、�
 7. issue 进入 `in_review` 后，提出人验收，状态变为已完成。
 8. 一句涉及两个模块的话，只创建一条 issue，只进入承接模块的主责队列。任务清单里按顺序写清这两件事，并要求同一个分支、只部署一次。另一个模块的 Agent 没有队列行。提出人的对话里仍是他的原文和一条进度，没有执行人。用同一个 `client_request_id` 再次提交，仍是这一条，不重新拆分。模型不可用或拆不出任务时返回 422，不创建需求。
 9. 普通成员打不开名单页的保存，也不能对别人的卡点点继续。
-10. `MULTICA_REQUIRE_REDIS=1` 且没有 `REDIS_URL` 时，Go 进程不起。
+10. `PROFILE=test-ali` 使用 `172.30.11.78:6379`，空口令。`PROFILE=prod-ali` 的 Redis 只来自 Apollo，配置中心没有 `redis.host` 时进程不起。未设置 `PROFILE` 时，`MULTICA_REQUIRE_REDIS=1` 且没有 `REDIS_URL`，进程不起。
 11. 提交时填写一个将来的开始时间，到点前列表是等待处理并写明该时刻，执行 Agent 没有运行。到点后机器在线则入队，不在线则不入队并收到「需要维护」。到点前取消则不再入队。
 12. 成员在个人管理的「定时执行」里，只看到自己创建且还没到点的需求，按约定时刻从早到晚排列。另一名成员创建的不在其中。到点后这条从这里消失，并出现在聊天里。
 13. 提出人在执行进行时只看见「正在做」和从 `started_at` 算起的时长，看不见执行人。排队中显示「等待处理」。管理页能看见执行人名字。

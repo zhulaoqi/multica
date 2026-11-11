@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Cloud,
-  Download,
   Laptop,
   Loader2,
   Lock,
@@ -15,7 +14,7 @@ import {
   TriangleAlert,
 } from "@multica/ui/icons";
 import type { QoderConnection } from "@multica/core/runtimes/qoder";
-import { Button, buttonVariants } from "@multica/ui/components/ui/button";
+import { Button } from "@multica/ui/components/ui/button";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../../i18n";
 import { ProviderLogo } from "../../runtimes/components/provider-logo";
@@ -527,7 +526,6 @@ export interface RuntimeChoiceListProps {
  */
 export function RuntimeChoiceList({
   local,
-  localAvailable,
   localStarting,
   remotes,
   hiddenRemoteCount,
@@ -560,13 +558,11 @@ export function RuntimeChoiceList({
         .map((device) => filterDevice(device, query))
         .filter((device): device is DeviceOption => device !== null)
     : devices;
-  const showWebRow = !localAvailable && !searching;
-
   const showQoder = !!qoder && !!qoderState && (!q || QODER_NAME.toLowerCase().includes(q));
   const matchedCloud = cloud.filter((option) => harnessMatches(option, "", query));
   const soon = COMING_SOON.filter((item) => !q || item.name.toLowerCase().includes(q));
 
-  const showMachines = matchedDevices.length > 0 || showWebRow || !searching;
+  const showMachines = matchedDevices.length > 0 || !searching;
   const showCloud = showQoder || matchedCloud.length > 0 || soon.length > 0;
 
   if (!showMachines && !showCloud) {
@@ -605,25 +601,6 @@ export function RuntimeChoiceList({
             title={t(($) => $.creation_studio.runtime_step.groups.machines)}
             count={matchedDevices.length}
           />
-          {showWebRow ? (
-            <div className={cn(ROW, "min-h-12 py-2")}>
-              <Tile>
-                <Laptop aria-hidden="true" className="size-3.5 text-muted-foreground" />
-              </Tile>
-              <span className="min-w-0 flex-1 text-label text-muted-foreground">
-                {t(($) => $.creation_studio.runtime_step.web_local_title)}
-              </span>
-              <a
-                href="/download"
-                target="_blank"
-                rel="noreferrer"
-                className={buttonVariants({ size: "sm", variant: "outline" })}
-              >
-                <Download aria-hidden="true" className="size-3.5" />
-                {t(($) => $.creation_studio.runtime_step.download_desktop)}
-              </a>
-            </div>
-          ) : null}
           {matchedDevices.map((device) => {
             const id = device.machine.id;
             const ownerId = device.harnesses[0]?.runtime.owner_id ?? null;

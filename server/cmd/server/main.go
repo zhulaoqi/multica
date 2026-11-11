@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/auth"
+	appconfig "github.com/multica-ai/multica/server/internal/config"
 	"github.com/multica-ai/multica/server/internal/daemonws"
 	"github.com/multica-ai/multica/server/internal/database"
 	"github.com/multica-ai/multica/server/internal/dbreader"
@@ -326,11 +327,19 @@ func newMainHTTPServer(addr string, handler http.Handler) *http.Server {
 
 func main() {
 	logger.Init()
+	if err := appconfig.ApplyProfile(os.Getenv("PROFILE"), ""); err != nil {
+		slog.Error("refusing to start: " + err.Error())
+		os.Exit(1)
+	}
 	// Read the opt-out before constructing any telemetry dependency. In the
 	// disabled case no collector or HTTP client is ever created.
 	telemetryConfig := selfhosttelemetry.ConfigFromDoNotTrack(os.Getenv("DO_NOT_TRACK"))
 	selfhosttelemetry.LogStartupStatus(slog.Default(), telemetryConfig)
 	// Warn about missing configuration
+	if os.Getenv("MULTICA_REQUIRE_REDIS") == "1" && strings.TrimSpace(os.Getenv("REDIS_URL")) == "" {
+		slog.Error("refusing to start: MULTICA_REQUIRE_REDIS=1 but REDIS_URL is empty")
+		os.Exit(1)
+	}
 	if err := jwtSecretBootError(os.Getenv("JWT_SECRET"), os.Getenv("APP_ENV")); err != nil {
 		slog.Error(
 			"refusing to start: "+err.Error()+

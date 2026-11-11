@@ -104,13 +104,10 @@ describe("HelpLauncher", () => {
     expect(screen.getByText("Server version 1.2.3")).toBeInTheDocument();
   });
 
-  // MUL-6462: after web onboarding the desktop download CTA was unreachable —
-  // no entry anywhere in the app, so users had to remember the URL or detour
-  // through the marketing site. The Help menu is the persistent home for it.
-  it("links to the download page on web", () => {
+  it("does not offer the desktop app", () => {
     render(<HelpLauncher />);
-    const link = screen.getByRole("link", { name: /Desktop app/ });
-    expect(link).toHaveAttribute("href", "https://multica.ai/download");
+    expect(screen.queryByText("Desktop app")).not.toBeInTheDocument();
+    expect(screen.getByText("Docs")).toBeInTheDocument();
   });
 
   it.each([
@@ -127,13 +124,4 @@ describe("HelpLauncher", () => {
     );
   });
 
-  // AppSidebar is shared: apps/desktop renders the same component tree. Without
-  // this gate the desktop app would offer to download the desktop app.
-  it("hides the download entry inside the desktop shell", () => {
-    vi.mocked(isDesktopShell).mockReturnValue(true);
-    render(<HelpLauncher />);
-    expect(screen.queryByText("Desktop app")).not.toBeInTheDocument();
-    // The rest of the menu is unaffected by the gate.
-    expect(screen.getByText("Docs")).toBeInTheDocument();
-  });
 });

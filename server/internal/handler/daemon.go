@@ -1717,6 +1717,10 @@ func (h *Handler) recordHeartbeatState(
 		if flipped > 0 {
 			// Reuse daemon:register so web and mobile invalidate both runtime and
 			// agent projections. Ordinary online heartbeats stay silent.
+			// A runtime that has never reported a heartbeat is not a recovery.
+			if state.LastSeenAtValid {
+				service.AnnounceIntakeRuntimes(ctx, h.Queries, []pgtype.UUID{runtimeUUID}, true)
+			}
 			if state.WorkspaceID.Valid {
 				h.PublishRuntimeRefresh(uuidToString(state.WorkspaceID), "system", "", "heartbeat_recovery")
 			}
@@ -6547,6 +6551,17 @@ func (h *Handler) ListTaskMessagesByUser(w http.ResponseWriter, r *http.Request)
 	if task.ChatSessionID.Valid && (scope.ChatSessionOwnerID == "" || scope.ChatSessionOwnerID != requestUserID(r)) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
+	}
+	if task.IssueID.Valid {
+		allowed, allowErr := h.intakeTranscriptAllowed(r, parseUUID(scope.WorkspaceID), task)
+		if allowErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load task")
+			return
+		}
+		if !allowed {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
 	}
 
 	var (

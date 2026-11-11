@@ -158,3 +158,8 @@ export function useWS() {
   if (!ctx) throw new Error("useWS must be used within WSProvider");
   return ctx;
 }
+
+/** Null outside WSProvider so surfaces can refresh live without requiring the provider in tests. */
+export function useOptionalWS() {
+  return use(WSContext);
+}

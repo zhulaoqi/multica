@@ -233,7 +233,11 @@ func (q *Queries) DeleteWorkspaceConnections(ctx context.Context, workspaceID pg
 }
 
 const deleteWorkspaceIssueRoots = `-- name: DeleteWorkspaceIssueRoots :exec
-WITH deleted_wakeup_receipts AS (
+WITH deleted_intake_blockers AS (
+ DELETE FROM intake_blocker WHERE workspace_id=$1
+), deleted_intake_requests AS (
+ DELETE FROM intake_request WHERE workspace_id=$1
+), deleted_wakeup_receipts AS (
  DELETE FROM issue_wakeup_receipt WHERE wakeup_id IN (SELECT id FROM issue_wakeup WHERE workspace_id=$1)
 ), deleted_wakeups AS (
  DELETE FROM issue_wakeup WHERE workspace_id=$1
@@ -606,6 +610,12 @@ func (q *Queries) DeleteWorkspacePullRequests(ctx context.Context, workspaceID p
 
 const deleteWorkspaceRuntimesAndProjects = `-- name: DeleteWorkspaceRuntimesAndProjects :exec
 WITH
+deleted_intake_modules AS (
+    DELETE FROM intake_module WHERE intake_module.workspace_id = $1
+),
+deleted_intake_members AS (
+    DELETE FROM intake_project_member WHERE intake_project_member.workspace_id = $1
+),
 deleted_runtimes AS (
     DELETE FROM agent_runtime WHERE agent_runtime.workspace_id = $1
 ),

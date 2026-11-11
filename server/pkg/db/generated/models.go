@@ -54,6 +54,8 @@ type Agent struct {
 	DisabledRuntimeSkills []byte      `json:"disabled_runtime_skills"`
 	ServiceTier           pgtype.Text `json:"service_tier"`
 	ConversationStarters  []byte      `json:"conversation_starters"`
+	IntakeCan             pgtype.Text `json:"intake_can"`
+	IntakeCannot          pgtype.Text `json:"intake_cannot"`
 }
 
 type AgentBuilderDraft struct {
@@ -717,6 +719,17 @@ type Feedback struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type FeishuIdentity struct {
+	UserID    pgtype.UUID        `json:"user_id"`
+	OpenID    string             `json:"open_id"`
+	UnionID   pgtype.Text        `json:"union_id"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GithubInstallation struct {
 	ID               pgtype.UUID        `json:"id"`
 	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
@@ -833,6 +846,65 @@ type InstanceTelemetryState struct {
 	NextAttemptAt     pgtype.Timestamptz `json:"next_attempt_at"`
 	AttemptCount      int32              `json:"attempt_count"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntakeBlocker struct {
+	ID                pgtype.UUID        `json:"id"`
+	WorkspaceID       pgtype.UUID        `json:"workspace_id"`
+	IssueID           pgtype.UUID        `json:"issue_id"`
+	TaskID            pgtype.UUID        `json:"task_id"`
+	AgentID           pgtype.UUID        `json:"agent_id"`
+	DoneText          string             `json:"done_text"`
+	MissingText       string             `json:"missing_text"`
+	ConsequenceText   string             `json:"consequence_text"`
+	State             string             `json:"state"`
+	DecisionCommentID pgtype.UUID        `json:"decision_comment_id"`
+	DecidedBy         pgtype.UUID        `json:"decided_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	DecidedAt         pgtype.Timestamptz `json:"decided_at"`
+}
+
+type IntakeModule struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ProjectID     pgtype.UUID        `json:"project_id"`
+	Product       string             `json:"product"`
+	Module        string             `json:"module"`
+	Scope         string             `json:"scope"`
+	AgentID       pgtype.UUID        `json:"agent_id"`
+	BackupAgentID pgtype.UUID        `json:"backup_agent_id"`
+	Position      int32              `json:"position"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntakeProjectMember struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	ProjectID   pgtype.UUID        `json:"project_id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type IntakeRequest struct {
+	ID                 pgtype.UUID        `json:"id"`
+	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
+	IssueID            pgtype.UUID        `json:"issue_id"`
+	ProjectID          pgtype.UUID        `json:"project_id"`
+	ModuleID           pgtype.UUID        `json:"module_id"`
+	RequesterID        pgtype.UUID        `json:"requester_id"`
+	ClientRequestID    pgtype.UUID        `json:"client_request_id"`
+	SourceBody         string             `json:"source_body"`
+	StartAt            pgtype.Timestamptz `json:"start_at"`
+	LastUserNoticeAt   pgtype.Timestamptz `json:"last_user_notice_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	ProgressDone       pgtype.Text        `json:"progress_done"`
+	ProgressRemain     pgtype.Text        `json:"progress_remain"`
+	StartNoticeAgentID pgtype.UUID        `json:"start_notice_agent_id"`
+	UnitSwitches       int32              `json:"unit_switches"`
+	UnitLog            string             `json:"unit_log"`
+	RetryPasses        int32              `json:"retry_passes"`
+	RedispatchUsed     bool               `json:"redispatch_used"`
 }
 
 type Issue struct {

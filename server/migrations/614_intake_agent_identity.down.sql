@@ -1,0 +1,2 @@
+ALTER TABLE agent DROP COLUMN IF EXISTS intake_cannot;
+ALTER TABLE agent DROP COLUMN IF EXISTS intake_can;

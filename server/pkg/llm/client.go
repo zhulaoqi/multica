@@ -44,6 +44,10 @@
 //     Sends the tail of the conversation: up to 6 messages, the reply being
 //     answered capped at 3000 runes (2000 head + 1000 tail) and each older
 //     message at 800.
+//   - Intake split — server/internal/service/intake_split.go. Sends the
+//     caller's project module catalog (id, product, module, scope) and the
+//     utterance. Agent names are not included. A disabled client or a failed
+//     call creates no issue.
 //
 // Request shape beyond the prompts is deployment-controlled and lives in
 // Config: MaxRetries (transport budget) and DisableThinking, which appends

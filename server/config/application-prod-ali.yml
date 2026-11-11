@@ -1,0 +1,12 @@
+# Production profile, Apollo env PRO. Start with PROFILE=prod-ali.
+# Meta: http://confcenter.spellso.com. App multica, namespace application.
+# Redis and other secrets stay in Apollo. This file has no host or password.
+app:
+  id: multica
+apollo:
+  meta: http://confcenter.spellso.com
+  bootstrap:
+    enabled: true
+    eagerLoad:
+      enabled: true
+    namespaces: application
