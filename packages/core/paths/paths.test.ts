@@ -13,6 +13,7 @@ describe("paths.workspace(slug)", () => {
     expect(ws.intakeScheduled()).toBe("/acme/intake/scheduled");
     expect(ws.intakeAgents()).toBe("/acme/intake/agents");
     expect(ws.intakeRoutes()).toBe("/acme/intake/routes");
+    expect(ws.intakeOrg()).toBe("/acme/intake/org");
     expect(ws.projects()).toBe("/acme/projects");
     expect(ws.projectDetail("p1")).toBe("/acme/projects/p1");
     expect(ws.autopilots()).toBe("/acme/autopilots");

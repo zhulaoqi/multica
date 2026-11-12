@@ -11,6 +11,7 @@ import { HelpPanel } from "./help-panel";
 import { IntakeBar } from "./intake-bar";
 import { ScheduledList } from "./scheduled-page";
 import { RoutesHeading } from "./routes-page";
+import { OrgPage } from "./org-page";
 
 export function IntakePage({
   focusIssueId,
@@ -21,7 +22,7 @@ export function IntakePage({
   focusIssueId?: string;
   workspaceName?: string;
   initialMode?: "chat" | "manage";
-  screen?: "all" | "scheduled" | "agents" | "routes";
+  screen?: "all" | "scheduled" | "agents" | "routes" | "org";
 } = {}) {
   const [mode, setMode] = useState<"chat" | "manage">(initialMode);
   const [text, setText] = useState("");
@@ -270,8 +271,17 @@ export function IntakePage({
       />
       {help ? <HelpPanel canMaintain={canMaintain} onClose={() => setHelp(false)} /> : null}
       <div key={mode} className="intake-mode flex flex-col gap-4">
-      {screen === "scheduled" || screen === "agents" || screen === "routes" || mode === "manage" ? (
+      {screen === "scheduled" || screen === "agents" || screen === "routes" || screen === "org" || mode === "manage" ? (
         <div className="flex flex-col gap-2">
+          {wsKey !== "session" ? (
+            <div className="flex gap-3 text-sm">
+              {screen !== "all" ? <AppLink href={`/${wsKey}/intake`}>聊天</AppLink> : null}
+              {screen !== "scheduled" ? <AppLink href={`/${wsKey}/intake/scheduled`}>已排期</AppLink> : null}
+              {screen !== "agents" ? <AppLink href={`/${wsKey}/intake/agents`}>我的 Agent</AppLink> : null}
+              {screen !== "routes" ? <AppLink href={`/${wsKey}/intake/routes`}>模块分工</AppLink> : null}
+              {screen !== "org" ? <AppLink href={`/${wsKey}/intake/org`}>组织架构</AppLink> : null}
+            </div>
+          ) : null}
           {screen === "all" || screen === "scheduled" ? (
           <ScheduledList items={scheduled.data ?? []} onCancel={(issueId) => void decide(issueId, "cancel")} />
           ) : null}
@@ -301,6 +311,7 @@ export function IntakePage({
           ))}
             </>
           ) : null}
+          {screen === "org" ? <OrgPage /> : null}
           {screen === "routes" && sessionReady && !canMaintain ? <div className="text-sm">没有权限</div> : null}
           {(screen === "all" || screen === "routes") && canMaintain ? (
             <>

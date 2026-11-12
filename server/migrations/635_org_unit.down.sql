@@ -1,0 +1,2 @@
+ALTER TABLE agent DROP COLUMN IF EXISTS org_unit_id;
+DROP TABLE IF EXISTS org_unit;

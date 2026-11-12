@@ -47,6 +47,7 @@ function workspaceScoped(slug: string) {
     intakeScheduled: () => `${ws}/intake/scheduled`,
     intakeAgents: () => `${ws}/intake/agents`,
     intakeRoutes: () => `${ws}/intake/routes`,
+    intakeOrg: () => `${ws}/intake/org`,
     projects: () => `${ws}/projects`,
     projectDetail: (id: string) => `${ws}/projects/${encode(id)}`,
     autopilots: () => `${ws}/autopilots`,

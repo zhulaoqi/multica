@@ -1,4 +1,5 @@
 import type { ZodType } from "zod";
+import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_TREE, OrgImportResultSchema, OrgTreeSchema, type OrgImportResult, type OrgImportRow, type OrgTree } from "./org-schema";
 import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
@@ -5684,5 +5685,20 @@ export class ApiClient {
     modules: Array<{ product: string; module: string; scope: string; agent_id: string; backup_agent_id?: string; position?: number }>;
   }): Promise<void> {
     await this.fetch("/api/intake/modules", { method: "PUT", body: JSON.stringify(input) });
+  }
+
+  async listOrgUnits(): Promise<OrgTree> {
+    const raw = await this.fetch<unknown>("/api/org/units");
+    return parseWithFallback(raw, OrgTreeSchema, EMPTY_ORG_TREE, { endpoint: "GET /api/org/units" });
+  }
+
+  async importOrgUnits(rows: OrgImportRow[]): Promise<OrgImportResult> {
+    const raw = await this.fetch<unknown>("/api/org/units/import", {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    });
+    return parseWithFallback(raw, OrgImportResultSchema, EMPTY_ORG_IMPORT_RESULT, {
+      endpoint: "POST /api/org/units/import",
+    });
   }
 }

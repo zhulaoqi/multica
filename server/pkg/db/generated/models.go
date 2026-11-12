@@ -56,6 +56,7 @@ type Agent struct {
 	ConversationStarters  []byte      `json:"conversation_starters"`
 	IntakeCan             pgtype.Text `json:"intake_can"`
 	IntakeCannot          pgtype.Text `json:"intake_cannot"`
+	OrgUnitID             pgtype.UUID `json:"org_unit_id"`
 }
 
 type AgentBuilderDraft struct {
@@ -1314,6 +1315,18 @@ type NotificationPreference struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	UserID      pgtype.UUID        `json:"user_id"`
 	Preferences []byte             `json:"preferences"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgUnit struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	Name        string             `json:"name"`
+	LeadUserID  pgtype.UUID        `json:"lead_user_id"`
+	Description string             `json:"description"`
+	Position    int32              `json:"position"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 

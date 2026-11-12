@@ -2567,6 +2567,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			})
 			r.Post("/api/issues/{id}/intake-blocker", h.CreateIntakeBlocker)
 
+			r.Route("/api/org", func(r chi.Router) {
+				r.Get("/units", h.ListOrgUnits)
+				r.Post("/units/import", h.ImportOrgUnits)
+			})
+
 			// Tasks (user-facing, with ownership check)
 			r.Post("/api/tasks/{taskId}/cancel", h.CancelTaskByUser)
 			r.Post("/api/tasks/{taskId}/rerun", h.RerunTaskByUser)

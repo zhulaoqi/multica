@@ -691,6 +691,11 @@ deleted_packages AS (
 DELETE FROM plugin_installation WHERE id IN (SELECT id FROM installations);
 
 -- name: DeleteWorkspaceAgents :exec
+-- org_unit has no foreign key to agent; both are deleted from the same
+-- snapshot so a teardown cannot leave units behind for removed agents.
+WITH deleted_org_units AS (
+    DELETE FROM org_unit WHERE org_unit.workspace_id = $1
+)
 DELETE FROM agent WHERE agent.workspace_id = $1;
 
 -- name: DeleteWorkspaceRuntimesAndProjects :exec
