@@ -21,8 +21,10 @@ type OrgUnitRef struct {
 }
 
 const (
-	orgPathMaxDepth     = 8
-	orgPathSegmentRunes = 100
+	orgPathMaxDepth = 8
+	// OrgUnitNameMaxRunes bounds one unit name, including names created from a
+	// path segment or by the unit editor.
+	OrgUnitNameMaxRunes = 100
 	orgImportMaxRows    = 500
 	orgAgentNameRunes   = 200
 )
@@ -80,7 +82,7 @@ func ParseOrgPath(raw string) ([]string, error) {
 		if part == "" {
 			return nil, errors.New("organisation path has an empty segment")
 		}
-		if len([]rune(part)) > orgPathSegmentRunes {
+		if len([]rune(part)) > OrgUnitNameMaxRunes {
 			return nil, errors.New("organisation name too long")
 		}
 		path = append(path, part)

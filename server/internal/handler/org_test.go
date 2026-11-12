@@ -223,11 +223,15 @@ func TestImportOrgUnits_RejectsBadRows(t *testing.T) {
 	}
 }
 
-func orgRequestWithAgent(userID, method, path, agentID string, body any) *http.Request {
+func orgRequestWithParam(userID, method, path, name, value string, body any) *http.Request {
 	req := newRequestAs(userID, method, path, body)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("agentId", agentID)
+	rctx.URLParams.Add(name, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
+func orgRequestWithAgent(userID, method, path, agentID string, body any) *http.Request {
+	return orgRequestWithParam(userID, method, path, "agentId", agentID, body)
 }
 
 func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
@@ -306,6 +310,131 @@ func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 		}
 		if tree.CanManage != want {
 			t.Fatalf("can_manage = %v, want %v", tree.CanManage, want)
+		}
+	}
+}
+
+func TestOrgUnitCrud_CreateRenameLeadDelete(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-crud-admin@example.com")
+	member := createPermissionTestMember(t, "org-crud-member@example.com")
+	agentID := insertIntakeDutyAgent(t, "org-crud-agent", admin)
+
+	create := func(body map[string]any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", body))
+		return rec
+	}
+
+	rootRec := create(map[string]any{"name": " 研发中心 "})
+	if rootRec.Code != http.StatusCreated {
+		t.Fatalf("create root status = %d: %s", rootRec.Code, rootRec.Body.String())
+	}
+	var root struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rootRec.Body.Bytes(), &root); err != nil || root.ID == "" {
+		t.Fatalf("decode created root: %v %s", err, rootRec.Body.String())
+	}
+
+	childRec := create(map[string]any{"name": "支付组", "parent_id": root.ID, "lead_user_id": member})
+	if childRec.Code != http.StatusCreated {
+		t.Fatalf("create child status = %d: %s", childRec.Code, childRec.Body.String())
+	}
+	var child struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(childRec.Body.Bytes(), &child); err != nil || child.ID == "" {
+		t.Fatalf("decode created child: %v %s", err, childRec.Body.String())
+	}
+
+	if dup := create(map[string]any{"name": "支付组", "parent_id": root.ID}); dup.Code != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want 409: %s", dup.Code, dup.Body.String())
+	}
+	if bad := create(map[string]any{"name": "  "}); bad.Code != http.StatusBadRequest {
+		t.Fatalf("blank name status = %d, want 400", bad.Code)
+	}
+	if missing := create(map[string]any{"name": "孤儿组", "parent_id": "00000000-0000-0000-0000-000000000000"}); missing.Code != http.StatusNotFound {
+		t.Fatalf("unknown parent status = %d, want 404", missing.Code)
+	}
+
+	patch := func(unitID string, body map[string]any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.UpdateOrgUnit(rec, orgRequestWithParam(admin, "PATCH", "/api/org/units/x", "unitId", unitID, body))
+		return rec
+	}
+	if rec := patch(child.ID, map[string]any{"name": "结算组"}); rec.Code != http.StatusNoContent {
+		t.Fatalf("rename status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := patch(child.ID, map[string]any{}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty patch status = %d, want 400", rec.Code)
+	}
+
+	var strangerID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO "user" (name, email) VALUES ('stranger', 'org-crud-stranger@example.com') RETURNING id
+	`).Scan(&strangerID); err != nil {
+		t.Fatalf("create stranger: %v", err)
+	}
+	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, strangerID) })
+	if rec := patch(child.ID, map[string]any{"lead_user_id": strangerID}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("non-member lead status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if rec := patch(child.ID, map[string]any{"lead_user_id": ""}); rec.Code != http.StatusNoContent {
+		t.Fatalf("clear lead status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// A parent with children cannot disappear; the child can, and its agents
+	// become unassigned rather than losing their workspace membership.
+	del := func(unitID string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		return rec
+	}
+	if rec := del(root.ID); rec.Code != http.StatusConflict {
+		t.Fatalf("delete parent with child status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	move := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(move, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": child.ID}))
+	if move.Code != http.StatusNoContent {
+		t.Fatalf("place agent status = %d: %s", move.Code, move.Body.String())
+	}
+	if rec := del(child.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete child status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var placed string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM agent WHERE id = $1
+	`, agentID).Scan(&placed); err != nil {
+		t.Fatalf("load agent unit after delete: %v", err)
+	}
+	if placed != "" {
+		t.Fatalf("agent unit after unit delete = %q, want empty", placed)
+	}
+	if rec := del(root.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete root status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	for name, call := range map[string]func() *httptest.ResponseRecorder{
+		"create": func() *httptest.ResponseRecorder {
+			rec := httptest.NewRecorder()
+			testHandler.CreateOrgUnit(rec, newRequestAs(member, "POST", "/api/org/units", map[string]any{"name": "成员建的组"}))
+			return rec
+		},
+		"update": func() *httptest.ResponseRecorder {
+			rec := httptest.NewRecorder()
+			testHandler.UpdateOrgUnit(rec, orgRequestWithParam(member, "PATCH", "/api/org/units/x", "unitId", "00000000-0000-0000-0000-000000000000", map[string]any{"name": "x"}))
+			return rec
+		},
+		"delete": func() *httptest.ResponseRecorder {
+			rec := httptest.NewRecorder()
+			testHandler.DeleteOrgUnit(rec, orgRequestWithParam(member, "DELETE", "/api/org/units/x", "unitId", "00000000-0000-0000-0000-000000000000", nil))
+			return rec
+		},
+	} {
+		if rec := call(); rec.Code != http.StatusForbidden {
+			t.Fatalf("member %s status = %d, want 403", name, rec.Code)
 		}
 	}
 }

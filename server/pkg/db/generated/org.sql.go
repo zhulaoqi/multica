@@ -11,6 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearOrgUnitAgents = `-- name: ClearOrgUnitAgents :exec
+UPDATE agent
+SET org_unit_id = NULL, updated_at = now()
+WHERE workspace_id = $1 AND org_unit_id = $2
+`
+
+type ClearOrgUnitAgentsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) ClearOrgUnitAgents(ctx context.Context, arg ClearOrgUnitAgentsParams) error {
+	_, err := q.db.Exec(ctx, clearOrgUnitAgents, arg.WorkspaceID, arg.OrgUnitID)
+	return err
+}
+
+const countOrgUnitChildren = `-- name: CountOrgUnitChildren :one
+SELECT count(*)::int
+FROM org_unit
+WHERE workspace_id = $1 AND parent_id = $2
+`
+
+type CountOrgUnitChildrenParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+}
+
+func (q *Queries) CountOrgUnitChildren(ctx context.Context, arg CountOrgUnitChildrenParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countOrgUnitChildren, arg.WorkspaceID, arg.ParentID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createOrgUnit = `-- name: CreateOrgUnit :one
 INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, position)
 VALUES ($1, $2, $3, $4, $5)
@@ -36,6 +70,21 @@ func (q *Queries) CreateOrgUnit(ctx context.Context, arg CreateOrgUnitParams) (p
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const deleteOrgUnit = `-- name: DeleteOrgUnit :exec
+DELETE FROM org_unit
+WHERE id = $1 AND workspace_id = $2
+`
+
+type DeleteOrgUnitParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) DeleteOrgUnit(ctx context.Context, arg DeleteOrgUnitParams) error {
+	_, err := q.db.Exec(ctx, deleteOrgUnit, arg.ID, arg.WorkspaceID)
+	return err
 }
 
 const findAgentByName = `-- name: FindAgentByName :one
@@ -198,6 +247,23 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const renameOrgUnit = `-- name: RenameOrgUnit :exec
+UPDATE org_unit
+SET name = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+`
+
+type RenameOrgUnitParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+}
+
+func (q *Queries) RenameOrgUnit(ctx context.Context, arg RenameOrgUnitParams) error {
+	_, err := q.db.Exec(ctx, renameOrgUnit, arg.ID, arg.WorkspaceID, arg.Name)
+	return err
 }
 
 const setAgentOrgUnit = `-- name: SetAgentOrgUnit :exec

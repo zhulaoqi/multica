@@ -2569,7 +2569,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 
 			r.Route("/api/org", func(r chi.Router) {
 				r.Get("/units", h.ListOrgUnits)
+				r.Post("/units", h.CreateOrgUnit)
 				r.Post("/units/import", h.ImportOrgUnits)
+				r.Patch("/units/{unitId}", h.UpdateOrgUnit)
+				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
 			})
 

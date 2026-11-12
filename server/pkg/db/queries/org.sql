@@ -49,3 +49,21 @@ FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
 ORDER BY name ASC;
+-- name: RenameOrgUnit :exec
+UPDATE org_unit
+SET name = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2;
+
+-- name: CountOrgUnitChildren :one
+SELECT count(*)::int
+FROM org_unit
+WHERE workspace_id = $1 AND parent_id = $2;
+
+-- name: ClearOrgUnitAgents :exec
+UPDATE agent
+SET org_unit_id = NULL, updated_at = now()
+WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: DeleteOrgUnit :exec
+DELETE FROM org_unit
+WHERE id = $1 AND workspace_id = $2;

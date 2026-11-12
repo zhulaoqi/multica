@@ -43,6 +43,12 @@ type orgAgentUnitBody struct {
 	UnitID string `json:"unit_id"`
 }
 
+type orgUnitBody struct {
+	Name       string  `json:"name"`
+	ParentID   string  `json:"parent_id"`
+	LeadUserID *string `json:"lead_user_id"`
+}
+
 type orgImportBody struct {
 	Rows []service.OrgImportRow `json:"rows"`
 }
@@ -246,6 +252,207 @@ func (h *Handler) upsertOrgUnitPath(
 		leafID = id
 	}
 	return leafID, true
+}
+
+// CreateOrgUnit adds one unit, optionally under a parent and with a lead.
+func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
+	wsUUID, ok := h.orgManageWorkspace(w, r)
+	if !ok {
+		return
+	}
+	var body orgUnitBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	name, ok := h.orgUnitName(w, body.Name)
+	if !ok {
+		return
+	}
+	parent := pgtype.UUID{}
+	if body.ParentID != "" {
+		parent, ok = h.orgUnitRef(w, r, wsUUID, body.ParentID)
+		if !ok {
+			return
+		}
+	}
+	lead := pgtype.UUID{}
+	if body.LeadUserID != nil && *body.LeadUserID != "" {
+		lead, ok = h.orgLeadRef(w, r, wsUUID, *body.LeadUserID)
+		if !ok {
+			return
+		}
+	}
+	id, err := h.Queries.CreateOrgUnit(r.Context(), db.CreateOrgUnitParams{
+		WorkspaceID: wsUUID,
+		ParentID:    parent,
+		Name:        name,
+		LeadUserID:  lead,
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			writeError(w, http.StatusConflict, "同级的部门已有同名")
+			return
+		}
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, http.StatusCreated, map[string]string{"id": uuidToString(id)})
+}
+
+// UpdateOrgUnit renames a unit and/or sets its lead; an empty lead clears it.
+func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
+	wsUUID, ok := h.orgManageWorkspace(w, r)
+	if !ok {
+		return
+	}
+	unitID, ok := h.orgUnitRef(w, r, wsUUID, chi.URLParam(r, "unitId"))
+	if !ok {
+		return
+	}
+	var body orgUnitBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if strings.TrimSpace(body.Name) == "" && body.LeadUserID == nil {
+		writeError(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	if strings.TrimSpace(body.Name) != "" {
+		name, ok := h.orgUnitName(w, body.Name)
+		if !ok {
+			return
+		}
+		if err := h.Queries.RenameOrgUnit(r.Context(), db.RenameOrgUnitParams{
+			ID:          unitID,
+			WorkspaceID: wsUUID,
+			Name:        name,
+		}); err != nil {
+			if isUniqueViolation(err) {
+				writeError(w, http.StatusConflict, "同级的部门已有同名")
+				return
+			}
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	}
+	if body.LeadUserID != nil {
+		lead := pgtype.UUID{}
+		if *body.LeadUserID != "" {
+			lead, ok = h.orgLeadRef(w, r, wsUUID, *body.LeadUserID)
+			if !ok {
+				return
+			}
+		}
+		if err := h.Queries.SetOrgUnitLead(r.Context(), db.SetOrgUnitLeadParams{
+			ID:          unitID,
+			WorkspaceID: wsUUID,
+			LeadUserID:  lead,
+		}); err != nil {
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteOrgUnit removes an empty-leaved unit: agents in it become unassigned,
+// while units below it must be moved or deleted first.
+func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
+	wsUUID, ok := h.orgManageWorkspace(w, r)
+	if !ok {
+		return
+	}
+	unitID, ok := h.orgUnitRef(w, r, wsUUID, chi.URLParam(r, "unitId"))
+	if !ok {
+		return
+	}
+	children, err := h.Queries.CountOrgUnitChildren(r.Context(), db.CountOrgUnitChildrenParams{
+		WorkspaceID: wsUUID,
+		ParentID:    unitID,
+	})
+	if err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	if children > 0 {
+		writeError(w, http.StatusConflict, "先移走或删除下级部门")
+		return
+	}
+	if err := h.Queries.ClearOrgUnitAgents(r.Context(), db.ClearOrgUnitAgentsParams{
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitID,
+	}); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	if err := h.Queries.DeleteOrgUnit(r.Context(), db.DeleteOrgUnitParams{
+		ID:          unitID,
+		WorkspaceID: wsUUID,
+	}); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// orgManageWorkspace gates unit editing to workspace owners and admins.
+func (h *Handler) orgManageWorkspace(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	workspaceID := h.resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+		return pgtype.UUID{}, false
+	}
+	return parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+}
+
+func (h *Handler) orgUnitName(w http.ResponseWriter, raw string) (string, bool) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return "", false
+	}
+	if len([]rune(name)) > service.OrgUnitNameMaxRunes {
+		writeError(w, http.StatusBadRequest, "name is too long")
+		return "", false
+	}
+	return name, true
+}
+
+func (h *Handler) orgUnitRef(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, raw string) (pgtype.UUID, bool) {
+	id, ok := parseUUIDOrBadRequest(w, raw, "unit id")
+	if !ok {
+		return pgtype.UUID{}, false
+	}
+	if _, err := h.Queries.GetOrgUnit(r.Context(), db.GetOrgUnitParams{ID: id, WorkspaceID: wsUUID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "organisation unit not found")
+			return pgtype.UUID{}, false
+		}
+		h.importOrgFailed(w, r, err)
+		return pgtype.UUID{}, false
+	}
+	return id, true
+}
+
+func (h *Handler) orgLeadRef(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, raw string) (pgtype.UUID, bool) {
+	userID, ok := parseUUIDOrBadRequest(w, raw, "lead user id")
+	if !ok {
+		return pgtype.UUID{}, false
+	}
+	if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+		UserID:      userID,
+		WorkspaceID: wsUUID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusBadRequest, "lead is not a member of this workspace")
+			return pgtype.UUID{}, false
+		}
+		h.importOrgFailed(w, r, err)
+		return pgtype.UUID{}, false
+	}
+	return userID, true
 }
 
 // SetOrgAgentUnit places an agent in a unit, or clears its unit when unit_id
