@@ -8,7 +8,7 @@ Multica is a task management platform where people and agents collaborate on iss
 
 ## 双仓库
 
-这个检出同时对应两个远程，提交后两边都要有同一批提交。
+这个检出同时对应两个远程。日常开发使用 `release`。提交并推送后，GitHub 和 GitLab 的 `release` 都要有同一批提交。
 
 | 远程 | 地址 |
 | --- | --- |
@@ -16,9 +16,9 @@ Multica is a task management platform where people and agents collaborate on iss
 | `gitlab` | `git@gitlab.yeahmobi.com:yeahcloudadrd/multica.git` |
 
 - 缺少 `gitlab` 远程时执行 `git remote add gitlab git@gitlab.yeahmobi.com:yeahcloudadrd/multica.git`。不要改写已有的 `origin`。
-- 用户要求提交并推送时，先推 `origin`，再推 `gitlab`，使用同一分支名。只提交不推送时，两个远程都不要推。
-- 不使用 `--force`，除非用户在当次对话里明确要求，并且目标不是 `main` 或 `master`。
-- 两个远程出现分叉时，先说明哪一边超前，再问用户怎么处理。不要自行覆盖另一边。
+- 新提交放在 `release`。用户要求提交并推送时，先推 `origin release`，再推 `gitlab release`。只提交不推送时，两个远程都不要推。
+- GitLab 的 `main` 受保护。不要向 `main` 或 `master` 强制推送。
+- 两个远程的 `release` 出现分叉时，先说明哪一边超前，再问用户怎么处理。不要自行覆盖另一边。
 
 ## Scope and Reading Order
 
