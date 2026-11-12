@@ -12,6 +12,15 @@ interface OrgNode {
   children: OrgNode[];
 }
 
+interface Manage {
+  members: Array<{ user_id: string; label: string }>;
+  unitChoices: Array<{ id: string; path: string }>;
+  rename: (unitId: string, name: string) => void;
+  setLead: (unitId: string, userId: string) => void;
+  remove: (unitId: string) => void;
+  moveAgent: (agentId: string, unitId: string) => void;
+}
+
 function unitPaths(units: OrgUnit[]): Map<string, string> {
   const byID = new Map(units.map((unit) => [unit.id, unit]));
   const paths = new Map<string, string>();
@@ -81,50 +90,160 @@ function AgentLine({
   );
 }
 
+function UnitHeader({
+  unit,
+  leadNames,
+  manage,
+  depth,
+}: {
+  unit: OrgUnit;
+  leadNames: Map<string, string>;
+  manage?: Manage;
+  depth: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(unit.name);
+  const [confirming, setConfirming] = useState(false);
+  const leadLabel = unit.lead_user_id
+    ? leadNames.get(unit.lead_user_id) ?? unit.lead_user_id.slice(0, 8)
+    : "";
+
+  if (!manage) {
+    return (
+      <div className="flex items-center gap-2 text-sm" style={{ paddingLeft: depth * 16 }}>
+        <span className="font-medium">{unit.name}</span>
+        {leadLabel ? <span className="text-[var(--text-secondary)]">{leadLabel}</span> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm" style={{ paddingLeft: depth * 16 }}>
+      {editing ? (
+        <>
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            className="h-7 w-40 rounded-md border px-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (!draft.trim()) return;
+              manage.rename(unit.id, draft.trim());
+              setEditing(false);
+            }}
+          >
+            保存
+          </button>
+          <button type="button" onClick={() => { setDraft(unit.name); setEditing(false); }}>取消</button>
+        </>
+      ) : (
+        <>
+          <span className="font-medium">{unit.name}</span>
+          <button type="button" className="text-[var(--text-secondary)]" onClick={() => setEditing(true)}>改名</button>
+        </>
+      )}
+      <select
+        value={unit.lead_user_id ?? ""}
+        onChange={(event) => manage.setLead(unit.id, event.target.value)}
+        className="h-7 rounded-md border px-2 text-sm text-[var(--text-secondary)]"
+      >
+        <option value="">负责人</option>
+        {manage.members.map((member) => (
+          <option key={member.user_id} value={member.user_id}>{member.label}</option>
+        ))}
+      </select>
+      {confirming ? (
+        <>
+          <button type="button" className="text-red-600" onClick={() => manage.remove(unit.id)}>确认删除</button>
+          <button type="button" onClick={() => setConfirming(false)}>取消</button>
+        </>
+      ) : (
+        <button type="button" className="text-[var(--text-secondary)]" onClick={() => setConfirming(true)}>删除</button>
+      )}
+    </div>
+  );
+}
+
 function OrgRows({
   nodes,
   leadNames,
+  manage,
   unitChoices,
-  onMove,
   depth = 0,
 }: {
   nodes: OrgNode[];
   leadNames: Map<string, string>;
+  manage?: Manage;
   unitChoices: Array<{ id: string; path: string }>;
-  onMove?: (agentId: string, unitId: string) => void;
   depth?: number;
 }) {
   return (
     <>
       {nodes.map((node) => (
         <div key={node.unit.id} className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-sm" style={{ paddingLeft: depth * 16 }}>
-            <span className="font-medium">{node.unit.name}</span>
-            {node.unit.lead_user_id ? (
-              <span className="text-[var(--text-secondary)]">
-                {leadNames.get(node.unit.lead_user_id) ?? node.unit.lead_user_id.slice(0, 8)}
-              </span>
-            ) : null}
-          </div>
+          <UnitHeader unit={node.unit} leadNames={leadNames} manage={manage} depth={depth} />
           {node.agents.map((agent) => (
             <AgentLine
               key={agent.id}
               agent={agent}
               unitChoices={unitChoices}
               depth={depth}
-              onChange={onMove ? (unitId) => onMove(agent.id, unitId) : undefined}
+              onChange={manage ? (unitId) => manage.moveAgent(agent.id, unitId) : undefined}
             />
           ))}
           <OrgRows
             nodes={node.children}
             leadNames={leadNames}
+            manage={manage}
             unitChoices={unitChoices}
-            onMove={onMove}
             depth={depth + 1}
           />
         </div>
       ))}
     </>
+  );
+}
+
+function UnitCreator({
+  unitChoices,
+  onCreate,
+}: {
+  unitChoices: Array<{ id: string; path: string }>;
+  onCreate: (name: string, parentId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [parentId, setParentId] = useState("");
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="新部门名称"
+        className="h-9 w-48 rounded-md border px-3 text-sm"
+      />
+      <select
+        value={parentId}
+        onChange={(event) => setParentId(event.target.value)}
+        className="h-9 rounded-md border px-3 text-sm"
+      >
+        <option value="">挂在根上</option>
+        {unitChoices.map((unit) => (
+          <option key={unit.id} value={unit.id}>{unit.path}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={!name.trim()}
+        onClick={() => {
+          onCreate(name.trim(), parentId);
+          setName("");
+        }}
+        className="h-9 w-fit rounded-md border px-4 text-sm disabled:opacity-50"
+      >
+        新建部门
+      </button>
+    </div>
   );
 }
 
@@ -161,7 +280,12 @@ export function OrgPage() {
   });
   const data: OrgTree = tree.data ?? { units: [], agents: [], can_manage: false };
   const leadNames = new Map<string, string>();
-  for (const member of members.data ?? []) leadNames.set(member.user_id, member.name || member.email);
+  const memberChoices: Array<{ user_id: string; label: string }> = [];
+  for (const member of members.data ?? []) {
+    const label = member.name || member.email;
+    leadNames.set(member.user_id, label);
+    memberChoices.push({ user_id: member.user_id, label });
+  }
   const parsed = parseOrgImportText(text);
   const paths = unitPaths(data.units);
   const unitChoices = data.units
@@ -170,15 +294,26 @@ export function OrgPage() {
   const { roots, unassigned } = buildTree(data.units, data.agents);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["org"] });
-  const moveAgent = async (agentId: string, unitId: string) => {
+  const run = async (action: () => Promise<unknown>, failureText: string) => {
     setFailure("");
     try {
-      await api.setOrgAgentUnit(agentId, unitId);
+      await action();
       await refresh();
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : "调整归属失败");
+      setFailure(error instanceof Error ? error.message : failureText);
     }
   };
+  const manage: Manage | undefined = data.can_manage
+    ? {
+        members: memberChoices,
+        unitChoices,
+        rename: (unitId, name) => void run(() => api.updateOrgUnit(unitId, { name }), "改名失败"),
+        setLead: (unitId, userId) => void run(() => api.updateOrgUnit(unitId, { lead_user_id: userId }), "设置负责人失败"),
+        remove: (unitId) => void run(() => api.deleteOrgUnit(unitId), "删除部门失败"),
+        moveAgent: (agentId, unitId) => void run(() => api.setOrgAgentUnit(agentId, unitId), "调整归属失败"),
+      }
+    : undefined;
+
   const runImport = async () => {
     if (parsed.rows.length === 0 || parsed.errors.length > 0) return;
     setBusy(true);
@@ -194,32 +329,43 @@ export function OrgPage() {
       setBusy(false);
     }
   };
-  const canManage = data.can_manage;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="text-sm">组织架构</div>
       {failure ? <div className="text-sm text-red-600">{failure}</div> : null}
-      <textarea
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder={ORG_IMPORT_PLACEHOLDER}
-        rows={6}
-        className="w-full rounded-md border p-3 text-sm"
-      />
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => void runImport()}
-          disabled={busy || parsed.rows.length === 0 || parsed.errors.length > 0}
-          className="h-9 w-fit rounded-md bg-[var(--primary)] px-4 text-sm text-[var(--primary-foreground)] disabled:opacity-50"
-        >
-          {busy ? "导入中" : `导入 ${parsed.rows.length} 行`}
-        </button>
-        {parsed.errors.map((error) => (
-          <div key={error} className="text-sm text-red-600">{error}</div>
-        ))}
-      </div>
+      {manage ? (
+        <UnitCreator
+          unitChoices={unitChoices}
+          onCreate={(name, parentId) =>
+            void run(() => api.createOrgUnit({ name, parent_id: parentId || undefined }), "新建部门失败")
+          }
+        />
+      ) : null}
+      {manage ? (
+        <>
+          <textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder={ORG_IMPORT_PLACEHOLDER}
+            rows={4}
+            className="w-full rounded-md border p-3 text-sm"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void runImport()}
+              disabled={busy || parsed.rows.length === 0 || parsed.errors.length > 0}
+              className="h-9 w-fit rounded-md bg-[var(--primary)] px-4 text-sm text-[var(--primary-foreground)] disabled:opacity-50"
+            >
+              {busy ? "导入中" : `导入 ${parsed.rows.length} 行`}
+            </button>
+            {parsed.errors.map((error) => (
+              <div key={error} className="text-sm text-red-600">{error}</div>
+            ))}
+          </div>
+        </>
+      ) : null}
       {result ? (
         <div className="flex flex-col gap-1 text-sm text-[var(--text-secondary)]">
           {resultLines(result).map((line) => <div key={line}>{line}</div>)}
@@ -231,12 +377,7 @@ export function OrgPage() {
         <div className="text-sm text-[var(--text-secondary)]">还没有组织</div>
       ) : null}
       <div className="flex flex-col gap-2">
-        <OrgRows
-          nodes={roots}
-          leadNames={leadNames}
-          unitChoices={unitChoices}
-          onMove={canManage ? (agentId, unitId) => void moveAgent(agentId, unitId) : undefined}
-        />
+        <OrgRows nodes={roots} leadNames={leadNames} manage={manage} unitChoices={unitChoices} />
         {unassigned.length > 0 ? (
           <div className="flex flex-col gap-1">
             <div className="text-sm font-medium">未分配</div>
@@ -246,7 +387,7 @@ export function OrgPage() {
                 agent={agent}
                 unitChoices={unitChoices}
                 depth={0}
-                onChange={canManage ? (unitId) => void moveAgent(agent.id, unitId) : undefined}
+                onChange={manage ? (unitId) => manage.moveAgent(agent.id, unitId) : undefined}
               />
             ))}
           </div>

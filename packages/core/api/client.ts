@@ -1,5 +1,5 @@
 import type { ZodType } from "zod";
-import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_TREE, OrgImportResultSchema, OrgTreeSchema, type OrgImportResult, type OrgImportRow, type OrgTree } from "./org-schema";
+import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_TREE, OrgImportResultSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgTree, type OrgUnitCreated } from "./org-schema";
 import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
@@ -5700,6 +5700,25 @@ export class ApiClient {
     return parseWithFallback(raw, OrgImportResultSchema, EMPTY_ORG_IMPORT_RESULT, {
       endpoint: "POST /api/org/units/import",
     });
+  }
+
+  async createOrgUnit(input: { name: string; parent_id?: string; lead_user_id?: string }): Promise<OrgUnitCreated> {
+    const raw = await this.fetch<unknown>("/api/org/units", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return parseWithFallback(raw, OrgUnitCreatedSchema, { id: "" }, { endpoint: "POST /api/org/units" });
+  }
+
+  async updateOrgUnit(unitId: string, input: { name?: string; lead_user_id?: string }): Promise<void> {
+    await this.fetch(`/api/org/units/${encodeURIComponent(unitId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async deleteOrgUnit(unitId: string): Promise<void> {
+    await this.fetch(`/api/org/units/${encodeURIComponent(unitId)}`, { method: "DELETE" });
   }
 
   /** Places an agent in a unit; an empty id clears its unit. */

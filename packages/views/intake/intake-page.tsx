@@ -42,6 +42,7 @@ export function IntakePage({
   const [agentName, setAgentName] = useState("");
   const [agentCan, setAgentCan] = useState("");
   const [agentCannot, setAgentCannot] = useState("");
+  const [agentDept, setAgentDept] = useState("");
   const [memberIDs, setMemberIDs] = useState("");
   const [testURL, setTestURL] = useState("");
   const [person, setPerson] = useState("");
@@ -256,6 +257,22 @@ export function IntakePage({
     window.location.href = "/login";
   }
 
+  const agentPaths = new Set<string>();
+  for (const agent of agents) {
+    if (!agent.org_path) continue;
+    const segments = agent.org_path.split("/");
+    for (let depth = 1; depth <= segments.length; depth += 1) {
+      agentPaths.add(segments.slice(0, depth).join("/"));
+    }
+  }
+  const agentDepts = [...agentPaths].sort((a, b) => a.localeCompare(b));
+  const visibleAgents = agents.filter((agent) => {
+    if (agentDept === "") return true;
+    if (agentDept === "__none") return !agent.org_path;
+    const path = agent.org_path ?? "";
+    return path === agentDept || path.startsWith(`${agentDept}/`);
+  });
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
       <IntakeBar
@@ -293,12 +310,19 @@ export function IntakePage({
           ) : null}
           {screen === "all" || screen === "agents" ? (
             <>
+          <div className="flex items-center gap-3">
           <div className="text-sm">我的 Agent</div>
+          <select value={agentDept} onChange={(event) => setAgentDept(event.target.value)} className="h-9 rounded-md border px-3 text-sm">
+            <option value="">全部部门</option>
+            {agentDepts.map((path) => <option key={path} value={path}>{path}</option>)}
+            <option value="__none">未分配</option>
+          </select>
+          </div>
           <input value={agentName} onChange={(event) => setAgentName(event.target.value)} placeholder="Agent 名称" className="h-9 rounded-md border px-3 text-sm" />
           <input value={agentCan} onChange={(event) => setAgentCan(event.target.value)} placeholder="负责什么" className="h-9 rounded-md border px-3 text-sm" />
           <input value={agentCannot} onChange={(event) => setAgentCannot(event.target.value)} placeholder="不接什么" className="h-9 rounded-md border px-3 text-sm" />
           <button type="button" onClick={() => void registerAgent()} className="h-9 w-fit rounded-md border px-4 text-sm">登记 Agent</button>
-          {[...agents].sort((a, b) => (a.org_path ?? "").localeCompare(b.org_path ?? "") || a.name.localeCompare(b.name)).map((agent) => (
+          {[...visibleAgents].sort((a, b) => (a.org_path ?? "").localeCompare(b.org_path ?? "") || a.name.localeCompare(b.name)).map((agent) => (
             <OwnAgent key={agent.id} agent={agent} slug={wsKey === "session" ? "" : wsKey} onSave={async (can, cannot) => {
               await api.patchIntakeAgent(agent.id, {
                 name: agent.name,

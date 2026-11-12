@@ -23,6 +23,10 @@ export const OrgTreeSchema = z.object({
   can_manage: z.boolean().optional().default(false),
 });
 
+export const OrgUnitCreatedSchema = z.object({ id: z.string() });
+
+export type OrgUnitCreated = z.infer<typeof OrgUnitCreatedSchema>;
+
 export const OrgImportRowSchema = z.object({
   path: z.string(),
   lead_email: z.string().optional().default(""),
