@@ -210,6 +210,43 @@ func TestIntakeDecision_BlockerContinueStopAcceptCancelResume(t *testing.T) {
 	}
 }
 
+func TestIntakeDecision_ContinueReturnsToBlockedStep(t *testing.T) {
+	requireDB(t)
+	lead := createPermissionTestMember(t, "intake-resume-step-lead@example.com")
+	owner := createPermissionTestMember(t, "intake-resume-step-owner@example.com")
+	projectID := insertIntakeProject(t, lead)
+	agentID := insertIntakeDutyAgent(t, "intake-resume-step-agent", owner)
+	issueID := insertIntakeIssue(t, projectID, agentID, lead)
+	moduleID := insertPlainModule(t, projectID, agentID, "")
+	if _, err := testHandler.Queries.CreateIntakeRequest(context.Background(), db.CreateIntakeRequestParams{
+		WorkspaceID: parseUUID(testWorkspaceID), IssueID: parseUUID(issueID), ProjectID: parseUUID(projectID),
+		ModuleID: parseUUID(moduleID), RequesterID: parseUUID(lead), ClientRequestID: parseUUID(uuid.NewString()),
+		SourceBody: "测到一半要问人",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A workflow step past development, e.g. the reviewer's column.
+	if _, err := testPool.Exec(context.Background(), `UPDATE issue SET status = 'in_progress' WHERE id = $1`, issueID); err != nil {
+		t.Fatal(err)
+	}
+	taskID := insertIntakeTask(t, agentID, issueID, "running")
+	openRec := httptest.NewRecorder()
+	testHandler.CreateIntakeBlocker(openRec, intakeAgentRequest(t, issueID, "id", lead, agentID, taskID, map[string]any{
+		"task_id": taskID, "done": "测了列表", "missing": "测试账号", "consequence": "测不了导出",
+	}))
+	if openRec.Code != http.StatusCreated || intakeIssueStatus(t, issueID) != "blocked" {
+		t.Fatalf("open blocker = %d status %s: %s", openRec.Code, intakeIssueStatus(t, issueID), openRec.Body.String())
+	}
+	rec := httptest.NewRecorder()
+	testHandler.ContinueIntakeRequest(rec, intakeDecisionRequest(t, "POST", "/continue", issueID, "issueId", lead, map[string]any{"body": "账号是 qa01"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("continue = %d: %s", rec.Code, rec.Body.String())
+	}
+	if status := intakeIssueStatus(t, issueID); status != "in_progress" {
+		t.Fatalf("status after continue = %s, want in_progress", status)
+	}
+}
+
 func intakeAgentRequest(t *testing.T, issueID, param, userID, agentID, taskID string, body any) *http.Request {
 	t.Helper()
 	req := intakeDecisionRequest(t, "POST", "/blocker", issueID, param, userID, body)

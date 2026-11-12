@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -123,15 +125,17 @@ func (h *Handler) ListMyIntakeRequests(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: parseUUID(workspaceID), RequesterID: parseUUID(userID),
 	})
 	if err != nil {
+		slog.Error("list my intake requests failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "could not list requests")
 		return
 	}
 	now := time.Now()
 	prefix := h.getIssuePrefix(r.Context(), parseUUID(workspaceID))
+	approvals := h.newIntakeApprovalLookup(r, parseUUID(workspaceID))
 	out := make([]intakeListItem, 0, len(rows))
 	for _, row := range rows {
 		item := intakeListItem{IssueID: uuidToString(row.IssueID), Body: row.SourceBody}
-		fillIntakeItem(&item, row.Status, row.ProgressDone.String, row.ProgressRemain.String, row.RunStatus, row.DoneText.Valid)
+		fillIntakeItem(&item, row.Status, row.ProgressDone.String, row.ProgressRemain.String, row.RunStatus, row.DoneText.Valid, approvals.awaits(row.ProjectID, row.Status))
 		placeIntake(&item, prefix, row.Number, row.ProjectID, row.ProjectTitle, row.ModuleID, row.Product, row.Module)
 		item.ModuleID, item.Product, item.Module = "", "", ""
 		item.Run = intakeRunFrom(row.RunStatus, row.RunStartedAt)
@@ -154,7 +158,7 @@ func (h *Handler) ListMyIntakeRequests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func intakeDisplayStatus(status string, openBlocker bool, runStatus, done, remain string) string {
+func intakeDisplayStatus(status string, openBlocker, awaitingApproval bool, runStatus, done, remain string) string {
 	switch {
 	case openBlocker:
 		return "等你补充"
@@ -164,6 +168,8 @@ func intakeDisplayStatus(status string, openBlocker bool, runStatus, done, remai
 		return "待验收"
 	case status == "done":
 		return "已完成"
+	case awaitingApproval:
+		return "待审批"
 	case remain == "重试之后继续" || remain == "十五分钟后再分一次" || done == "正在换注册单位":
 		return "正在做"
 	case runStatus == "queued":
@@ -220,8 +226,8 @@ func truncateIntakeSummary(text string, limit int) string {
 	return string(runes[:limit])
 }
 
-func fillIntakeItem(item *intakeListItem, status, done, remain, runStatus string, openBlocker bool) {
-	item.Status = intakeDisplayStatus(status, openBlocker, runStatus, done, remain)
+func fillIntakeItem(item *intakeListItem, status, done, remain, runStatus string, openBlocker, awaitingApproval bool) {
+	item.Status = intakeDisplayStatus(status, openBlocker, awaitingApproval, runStatus, done, remain)
 	if done != "" || remain != "" {
 		item.Progress = &intakeProgress{Done: done, Remain: remain}
 	}
@@ -291,6 +297,7 @@ func (h *Handler) ListProjectIntakeRequests(w http.ResponseWriter, r *http.Reque
 	}
 	now := time.Now()
 	prefix := h.getIssuePrefix(r.Context(), parseUUID(workspaceID))
+	approvals := h.newIntakeApprovalLookup(r, parseUUID(workspaceID))
 	out := make([]intakeProjectItem, 0, len(rows))
 	for _, row := range rows {
 		item := intakeProjectItem{
@@ -299,7 +306,7 @@ func (h *Handler) ListProjectIntakeRequests(w http.ResponseWriter, r *http.Reque
 			ProjectTitle:   row.ProjectTitle,
 			Mine:           uuidToString(row.RequesterID) == userID,
 		}
-		fillIntakeItem(&item.intakeListItem, row.Status, row.ProgressDone.String, row.ProgressRemain.String, row.RunStatus, row.DoneText.Valid)
+		fillIntakeItem(&item.intakeListItem, row.Status, row.ProgressDone.String, row.ProgressRemain.String, row.RunStatus, row.DoneText.Valid, approvals.awaits(row.ProjectID, row.Status))
 		placeIntake(&item.intakeListItem, prefix, row.Number, row.ProjectID, row.ProjectTitle, row.ModuleID, row.Product, row.Module)
 		item.ProjectID = item.intakeListItem.ProjectID
 		item.ProjectTitle = item.intakeListItem.ProjectTitle

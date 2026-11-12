@@ -24,4 +24,11 @@ describe("intake response schemas", () => {
       }),
     ).toEqual([]);
   });
+
+  it("keeps the approval status and folds unknown statuses into waiting", () => {
+    const parse = (status: string) =>
+      IntakeListItemSchema.parse({ issue_id: "i", body: "b", display_status: status }).display_status;
+    expect(parse("待审批")).toBe("待审批");
+    expect(parse("未来的新状态")).toBe("等待处理");
+  });
 });

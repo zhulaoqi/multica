@@ -68,6 +68,18 @@ func intakeRetryReason(reason string) bool {
 	}
 }
 
+// intakeModuleUnit reports that agentID is the module's primary or backup.
+// Intake retries only cover the module's own development run; an agent a
+// project workflow handed the issue to (tester, releaser) keeps the generic
+// task retry, so a failed QA run never pulls the issue back to development.
+func intakeModuleUnit(agentID, primaryID, backupID pgtype.UUID) bool {
+	if !agentID.Valid {
+		return false
+	}
+	return (primaryID.Valid && agentID.Bytes == primaryID.Bytes) ||
+		(backupID.Valid && agentID.Bytes == backupID.Bytes)
+}
+
 // intakeOwnsRetry reports that this failure belongs to an intake request, so
 // the generic task retry must not create a child. The intake plan waits one
 // minute, then five, then switches unit. A generic child would consume the
@@ -80,8 +92,15 @@ func (s *TaskService) intakeOwnsRetry(ctx context.Context, task db.AgentTaskQueu
 	if err != nil {
 		return false
 	}
-	_, err = s.Queries.GetIntakeRequestByIssue(ctx, db.GetIntakeRequestByIssueParams{WorkspaceID: issue.WorkspaceID, IssueID: issue.ID})
-	return err == nil
+	req, err := s.Queries.GetIntakeRequestByIssue(ctx, db.GetIntakeRequestByIssueParams{WorkspaceID: issue.WorkspaceID, IssueID: issue.ID})
+	if err != nil {
+		return false
+	}
+	module, err := s.Queries.GetIntakeModuleByID(ctx, db.GetIntakeModuleByIDParams{WorkspaceID: issue.WorkspaceID, ID: req.ModuleID})
+	if err != nil {
+		return false
+	}
+	return intakeModuleUnit(task.AgentID, module.AgentID, module.BackupAgentID)
 }
 
 // scheduleIntakeRetry applies the intake retry plan when the generic task
@@ -100,7 +119,7 @@ func (s *TaskService) scheduleIntakeRetry(ctx context.Context, task db.AgentTask
 		return
 	}
 	module, err := s.Queries.GetIntakeModuleByID(ctx, db.GetIntakeModuleByIDParams{WorkspaceID: issue.WorkspaceID, ID: req.ModuleID})
-	if err != nil {
+	if err != nil || !intakeModuleUnit(task.AgentID, module.AgentID, module.BackupAgentID) {
 		return
 	}
 	backupOnline := module.BackupAgentID.Valid && s.intakeAgentOnline(ctx, module.BackupAgentID)

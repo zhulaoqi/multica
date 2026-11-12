@@ -75,8 +75,17 @@ func SweepIntakeProgress(ctx context.Context, q *db.Queries, tasks *TaskService,
 		return 0, err
 	}
 	sent := 0
+	approvals := NewIntakeApprovals(q)
 	for _, row := range rows {
 		if IntakeProgressStopped(row.Status, false, row.ProgressRemain.String == "执行没有进展") || !row.CreatedAt.Valid {
+			continue
+		}
+		awaiting, err := approvals.Awaits(ctx, row.WorkspaceID, row.ProjectID, row.Status)
+		if err != nil {
+			slog.Warn("intake progress workflow lookup failed", "error", err, "issue_id", row.IssueID)
+		}
+		if awaiting {
+			// The step waits for a person; "做到这里" would report no progress.
 			continue
 		}
 		var start time.Time
@@ -319,7 +328,7 @@ func autoContinueIntakeBlockers(ctx context.Context, q *db.Queries, tasks *TaskS
 		}); err != nil {
 			continue
 		}
-		_ = q.SetIntakeIssueStatus(ctx, db.SetIntakeIssueStatusParams{ID: row.IssueID, WorkspaceID: row.WorkspaceID, Status: "todo"})
+		_ = q.SetIntakeIssueStatus(ctx, db.SetIntakeIssueStatusParams{ID: row.IssueID, WorkspaceID: row.WorkspaceID, Status: IntakeResumeStatus(row.ResumeStatus)})
 		_ = q.SetIntakeProgress(ctx, intakeProgress(row.RequestID, "按已有信息继续", IntakeAutoContinueText))
 		_ = q.TouchIntakeNotice(ctx, row.RequestID)
 		if DeliverIntakeCard != nil {

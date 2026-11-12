@@ -862,6 +862,7 @@ type IntakeBlocker struct {
 	DecidedBy         pgtype.UUID        `json:"decided_by"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	DecidedAt         pgtype.Timestamptz `json:"decided_at"`
+	ResumeStatus      pgtype.Text        `json:"resume_status"`
 }
 
 type IntakeModule struct {

@@ -416,7 +416,7 @@ func (q *Queries) GetIntakeRequestByIssue(ctx context.Context, arg GetIntakeRequ
 }
 
 const getOpenIntakeBlocker = `-- name: GetOpenIntakeBlocker :one
-SELECT id, done_text, missing_text, consequence_text, state
+SELECT id, done_text, missing_text, consequence_text, state, resume_status
 FROM intake_blocker
 WHERE issue_id = $1 AND state = 'open'
 `
@@ -427,6 +427,7 @@ type GetOpenIntakeBlockerRow struct {
 	MissingText     string      `json:"missing_text"`
 	ConsequenceText string      `json:"consequence_text"`
 	State           string      `json:"state"`
+	ResumeStatus    pgtype.Text `json:"resume_status"`
 }
 
 func (q *Queries) GetOpenIntakeBlocker(ctx context.Context, issueID pgtype.UUID) (GetOpenIntakeBlockerRow, error) {
@@ -438,15 +439,16 @@ func (q *Queries) GetOpenIntakeBlocker(ctx context.Context, issueID pgtype.UUID)
 		&i.MissingText,
 		&i.ConsequenceText,
 		&i.State,
+		&i.ResumeStatus,
 	)
 	return i, err
 }
 
 const insertIntakeBlocker = `-- name: InsertIntakeBlocker :one
 INSERT INTO intake_blocker (
-    workspace_id, issue_id, task_id, agent_id, done_text, missing_text, consequence_text, state
+    workspace_id, issue_id, task_id, agent_id, done_text, missing_text, consequence_text, state, resume_status
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, 'open'
+    $1, $2, $3, $4, $5, $6, $7, 'open', $8
 )
 RETURNING id
 `
@@ -459,6 +461,7 @@ type InsertIntakeBlockerParams struct {
 	DoneText        string      `json:"done_text"`
 	MissingText     string      `json:"missing_text"`
 	ConsequenceText string      `json:"consequence_text"`
+	ResumeStatus    pgtype.Text `json:"resume_status"`
 }
 
 func (q *Queries) InsertIntakeBlocker(ctx context.Context, arg InsertIntakeBlockerParams) (pgtype.UUID, error) {
@@ -470,6 +473,7 @@ func (q *Queries) InsertIntakeBlocker(ctx context.Context, arg InsertIntakeBlock
 		arg.DoneText,
 		arg.MissingText,
 		arg.ConsequenceText,
+		arg.ResumeStatus,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
@@ -986,12 +990,12 @@ func (q *Queries) ListIntakePlacements(ctx context.Context, arg ListIntakePlacem
 const listIntakeProgressCandidates = `-- name: ListIntakeProgressCandidates :many
 SELECT r.id, r.issue_id, r.workspace_id, r.requester_id, r.created_at, r.start_at, r.last_user_notice_at,
        r.progress_done, r.progress_remain, i.status,
-       (
+       COALESCE((
          SELECT t.status FROM agent_task_queue t
          WHERE t.issue_id = r.issue_id AND t.status IN ('queued', 'dispatched', 'running')
          ORDER BY t.created_at DESC
          LIMIT 1
-       ) AS run_status,
+       ), '')::text AS run_status,
        (
          SELECT tm.content FROM task_message tm
          JOIN agent_task_queue t ON t.id = tm.task_id
@@ -999,7 +1003,8 @@ SELECT r.id, r.issue_id, r.workspace_id, r.requester_id, r.created_at, r.start_a
          ORDER BY tm.created_at DESC
          LIMIT 1
        ) AS latest_line,
-       r.source_body
+       r.source_body,
+       r.project_id
 FROM intake_request r
 JOIN issue i ON i.id = r.issue_id AND i.workspace_id = r.workspace_id
 WHERE i.status IN ('todo', 'in_progress')
@@ -1025,6 +1030,7 @@ type ListIntakeProgressCandidatesRow struct {
 	RunStatus        string             `json:"run_status"`
 	LatestLine       pgtype.Text        `json:"latest_line"`
 	SourceBody       string             `json:"source_body"`
+	ProjectID        pgtype.UUID        `json:"project_id"`
 }
 
 func (q *Queries) ListIntakeProgressCandidates(ctx context.Context) ([]ListIntakeProgressCandidatesRow, error) {
@@ -1050,6 +1056,7 @@ func (q *Queries) ListIntakeProgressCandidates(ctx context.Context) ([]ListIntak
 			&i.RunStatus,
 			&i.LatestLine,
 			&i.SourceBody,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -1210,7 +1217,7 @@ func (q *Queries) ListIntakeStartNotices(ctx context.Context) ([]ListIntakeStart
 const listMyIntakeRequests = `-- name: ListMyIntakeRequests :many
 SELECT r.issue_id, r.source_body, r.progress_done, r.progress_remain, r.start_at, i.status,
        b.done_text, b.missing_text, b.consequence_text,
-       run.status AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
+       COALESCE(run.status, '')::text AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
        i.number, p.id AS project_id, p.title AS project_title, m.id AS module_id, m.product, m.module,
        COALESCE(
          rt.status = 'online'
@@ -1350,7 +1357,7 @@ func (q *Queries) ListMyScheduledIntake(ctx context.Context, arg ListMyScheduled
 }
 
 const listStaleOpenIntakeBlockers = `-- name: ListStaleOpenIntakeBlockers :many
-SELECT b.id AS blocker_id, r.id AS request_id, b.issue_id, b.workspace_id, r.requester_id, r.source_body, i.assignee_id
+SELECT b.id AS blocker_id, r.id AS request_id, b.issue_id, b.workspace_id, r.requester_id, r.source_body, i.assignee_id, b.resume_status
 FROM intake_blocker b
 JOIN issue i ON i.id = b.issue_id AND i.workspace_id = b.workspace_id
 JOIN intake_request r ON r.issue_id = b.issue_id AND r.workspace_id = b.workspace_id
@@ -1364,13 +1371,14 @@ LIMIT 50
 `
 
 type ListStaleOpenIntakeBlockersRow struct {
-	BlockerID   pgtype.UUID `json:"blocker_id"`
-	RequestID   pgtype.UUID `json:"request_id"`
-	IssueID     pgtype.UUID `json:"issue_id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	RequesterID pgtype.UUID `json:"requester_id"`
-	SourceBody  string      `json:"source_body"`
-	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	BlockerID    pgtype.UUID `json:"blocker_id"`
+	RequestID    pgtype.UUID `json:"request_id"`
+	IssueID      pgtype.UUID `json:"issue_id"`
+	WorkspaceID  pgtype.UUID `json:"workspace_id"`
+	RequesterID  pgtype.UUID `json:"requester_id"`
+	SourceBody   string      `json:"source_body"`
+	AssigneeID   pgtype.UUID `json:"assignee_id"`
+	ResumeStatus pgtype.Text `json:"resume_status"`
 }
 
 func (q *Queries) ListStaleOpenIntakeBlockers(ctx context.Context) ([]ListStaleOpenIntakeBlockersRow, error) {
@@ -1390,6 +1398,7 @@ func (q *Queries) ListStaleOpenIntakeBlockers(ctx context.Context) ([]ListStaleO
 			&i.RequesterID,
 			&i.SourceBody,
 			&i.AssigneeID,
+			&i.ResumeStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -1406,7 +1415,7 @@ SELECT r.issue_id, r.source_body, r.progress_done, r.progress_remain, r.start_at
        i.status, p.id AS project_id, p.title AS project_title, p.lead_id,
        b.done_text, b.missing_text, b.consequence_text, b.created_at AS blocker_at,
        a.name AS assignee_name, a.id AS agent_id,
-       run.status AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
+       COALESCE(run.status, '')::text AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
        i.number, m.id AS module_id, m.product, m.module,
        COALESCE(
          rt.status = 'online'

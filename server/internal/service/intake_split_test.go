@@ -89,8 +89,18 @@ func TestDispatchIntake_OneAssignee(t *testing.T) {
 }
 
 func TestIntakeTaskDescription_OneBranchOneDeploy(t *testing.T) {
-	got := IntakeTaskDescription([]string{"写退款接口", "补对账备注"})
+	got := IntakeTaskDescription([]string{"写退款接口", "补对账备注"}, false)
 	if !strings.Contains(got, "1. 写退款接口\n2. 补对账备注\n在同一个分支上按顺序做完，只部署一次。") || !strings.Contains(got, "intake-blocker") {
+		t.Fatalf("description = %q", got)
+	}
+}
+
+func TestIntakeTaskDescription_WorkflowHandsOffRelease(t *testing.T) {
+	got := IntakeTaskDescription([]string{"写退款接口"}, true)
+	if strings.Contains(got, "只部署一次") {
+		t.Fatalf("a workflow project must not ask the developer to deploy: %q", got)
+	}
+	if !strings.Contains(got, "在同一个分支上按顺序做完，按项目工作流移交，不要自己上线。") || !strings.Contains(got, "intake-blocker") {
 		t.Fatalf("description = %q", got)
 	}
 }

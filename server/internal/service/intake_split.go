@@ -123,9 +123,11 @@ func ParseIntakeSplit(raw string, allowed map[string]struct{}) (IntakeSplit, err
 	return IntakeSplit{ModuleID: parsed.ModuleID, Tasks: tasks}, nil
 }
 
-// IntakeTaskDescription is the single issue body: ordered tasks, one branch,
-// one deploy.
-func IntakeTaskDescription(tasks []string) string {
+// IntakeTaskDescription is the single issue body: ordered tasks on one branch.
+// Without a workflow the developer deploys once. When the project workflow
+// hands the issue off (test, release approval, deploy), the developer stops at
+// its own step and leaves release to the workflow.
+func IntakeTaskDescription(tasks []string, workflowHandsOff bool) string {
 	var b strings.Builder
 	for i, task := range tasks {
 		b.WriteString(strconv.Itoa(i + 1))
@@ -133,7 +135,11 @@ func IntakeTaskDescription(tasks []string) string {
 		b.WriteString(task)
 		b.WriteByte('\n')
 	}
-	b.WriteString("在同一个分支上按顺序做完，只部署一次。\n")
+	if workflowHandsOff {
+		b.WriteString("在同一个分支上按顺序做完，按项目工作流移交，不要自己上线。\n")
+	} else {
+		b.WriteString("在同一个分支上按顺序做完，只部署一次。\n")
+	}
 	b.WriteString("要停下来问人，必须调用 intake-blocker，三句都要写：已经做了什么、缺什么、不补会怎样。")
 	return b.String()
 }

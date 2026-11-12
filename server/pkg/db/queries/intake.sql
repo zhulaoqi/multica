@@ -121,9 +121,9 @@ WHERE workspace_id = $1 AND id = $2;
 
 -- name: InsertIntakeBlocker :one
 INSERT INTO intake_blocker (
-    workspace_id, issue_id, task_id, agent_id, done_text, missing_text, consequence_text, state
+    workspace_id, issue_id, task_id, agent_id, done_text, missing_text, consequence_text, state, resume_status
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, 'open'
+    $1, $2, $3, $4, $5, $6, $7, 'open', sqlc.narg(resume_status)
 )
 RETURNING id;
 
@@ -131,7 +131,7 @@ RETURNING id;
 SELECT count(*)::int FROM intake_blocker WHERE issue_id = $1 AND state = 'continued';
 
 -- name: GetOpenIntakeBlocker :one
-SELECT id, done_text, missing_text, consequence_text, state
+SELECT id, done_text, missing_text, consequence_text, state, resume_status
 FROM intake_blocker
 WHERE issue_id = $1 AND state = 'open';
 
@@ -191,12 +191,12 @@ LIMIT 20;
 -- name: ListIntakeProgressCandidates :many
 SELECT r.id, r.issue_id, r.workspace_id, r.requester_id, r.created_at, r.start_at, r.last_user_notice_at,
        r.progress_done, r.progress_remain, i.status,
-       (
+       COALESCE((
          SELECT t.status FROM agent_task_queue t
          WHERE t.issue_id = r.issue_id AND t.status IN ('queued', 'dispatched', 'running')
          ORDER BY t.created_at DESC
          LIMIT 1
-       ) AS run_status,
+       ), '')::text AS run_status,
        (
          SELECT tm.content FROM task_message tm
          JOIN agent_task_queue t ON t.id = tm.task_id
@@ -204,7 +204,8 @@ SELECT r.id, r.issue_id, r.workspace_id, r.requester_id, r.created_at, r.start_a
          ORDER BY tm.created_at DESC
          LIMIT 1
        ) AS latest_line,
-       r.source_body
+       r.source_body,
+       r.project_id
 FROM intake_request r
 JOIN issue i ON i.id = r.issue_id AND i.workspace_id = r.workspace_id
 WHERE i.status IN ('todo', 'in_progress')
@@ -224,7 +225,7 @@ SET last_user_notice_at = sqlc.arg(next_notice_at)
 WHERE id = sqlc.arg(id) AND last_user_notice_at IS NOT DISTINCT FROM sqlc.arg(previous_notice_at);
 
 -- name: ListStaleOpenIntakeBlockers :many
-SELECT b.id AS blocker_id, r.id AS request_id, b.issue_id, b.workspace_id, r.requester_id, r.source_body, i.assignee_id
+SELECT b.id AS blocker_id, r.id AS request_id, b.issue_id, b.workspace_id, r.requester_id, r.source_body, i.assignee_id, b.resume_status
 FROM intake_blocker b
 JOIN issue i ON i.id = b.issue_id AND i.workspace_id = b.workspace_id
 JOIN intake_request r ON r.issue_id = b.issue_id AND r.workspace_id = b.workspace_id
@@ -254,7 +255,7 @@ ORDER BY r.start_at ASC, r.id ASC;
 -- name: ListMyIntakeRequests :many
 SELECT r.issue_id, r.source_body, r.progress_done, r.progress_remain, r.start_at, i.status,
        b.done_text, b.missing_text, b.consequence_text,
-       run.status AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
+       COALESCE(run.status, '')::text AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
        i.number, p.id AS project_id, p.title AS project_title, m.id AS module_id, m.product, m.module,
        COALESCE(
          rt.status = 'online'
@@ -285,7 +286,7 @@ SELECT r.issue_id, r.source_body, r.progress_done, r.progress_remain, r.start_at
        i.status, p.id AS project_id, p.title AS project_title, p.lead_id,
        b.done_text, b.missing_text, b.consequence_text, b.created_at AS blocker_at,
        a.name AS assignee_name, a.id AS agent_id,
-       run.status AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
+       COALESCE(run.status, '')::text AS run_status, run.started_at AS run_started_at, run.dispatched_at AS run_dispatched_at,
        i.number, m.id AS module_id, m.product, m.module,
        COALESCE(
          rt.status = 'online'

@@ -9,7 +9,7 @@ export type IntakeSubmitResponse = z.infer<typeof IntakeSubmitResponseSchema>;
 
 export const EMPTY_INTAKE_SUBMIT_RESPONSE: IntakeSubmitResponse = { issue_id: "" };
 
-const intakeStatuses = ["等你补充", "已经停住", "待验收", "已完成", "正在做", "等待处理"] as const;
+const intakeStatuses = ["等你补充", "已经停住", "待验收", "待审批", "已完成", "正在做", "等待处理"] as const;
 
 export const IntakeListItemSchema = z.object({
   issue_id: z.string(),

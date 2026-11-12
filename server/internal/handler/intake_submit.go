@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/issueworkflow"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -122,7 +124,8 @@ func (h *Handler) CreateIntakeRequest(w http.ResponseWriter, r *http.Request) {
 		backupOnline = h.intakeAgentOnline(r.Context(), chosen.BackupAgentID, now)
 	}
 	plan := service.DispatchIntake(uuidToString(chosen.AgentID), backupID, primaryOnline, backupOnline, future)
-	description := chosen.Product + " / " + chosen.Module + "\n" + chosen.Scope + "\n" + service.IntakeTaskDescription(split.Tasks)
+	description := chosen.Product + " / " + chosen.Module + "\n" + chosen.Scope + "\n" +
+		service.IntakeTaskDescription(split.Tasks, h.intakeWorkflowHandsOff(r.Context(), wsUUID, chosen.ProjectID))
 	description += h.intakeTestEnvironmentLine(r.Context(), wsUUID, chosen.ProjectID)
 	if plan.SwitchedToBackup {
 		description += "\n主责不在线，所以交给备责。"
@@ -192,6 +195,18 @@ func (h *Handler) CreateIntakeRequest(w http.ResponseWriter, r *http.Request) {
 		_ = h.Queries.SetIntakeProgress(r.Context(), setIntakeProgress(stored.ID, "还没排上", "入队没有成功"))
 	}
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// intakeWorkflowHandsOff reports whether the project's workflow hands issues
+// to someone else after development. A lookup failure keeps the original
+// one-deploy instruction rather than blocking the request.
+func (h *Handler) intakeWorkflowHandsOff(ctx context.Context, workspaceID, projectID pgtype.UUID) bool {
+	def, _, err := issueworkflow.ForProject(ctx, h.Queries, workspaceID, projectID)
+	if err != nil {
+		slog.Warn("load intake project workflow failed", "error", err, "project_id", uuidToString(projectID))
+		return false
+	}
+	return def != nil && def.HandsOffAnywhere()
 }
 
 func (h *Handler) intakeAgentOnline(ctx context.Context, agentID pgtype.UUID, now time.Time) bool {

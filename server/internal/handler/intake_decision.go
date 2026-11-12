@@ -71,6 +71,7 @@ func (h *Handler) CreateIntakeBlocker(w http.ResponseWriter, r *http.Request) {
 	blockerID, err := h.Queries.InsertIntakeBlocker(r.Context(), db.InsertIntakeBlockerParams{
 		WorkspaceID: parseUUID(workspaceID), IssueID: issueID, TaskID: taskID, AgentID: parseUUID(actorID),
 		DoneText: done, MissingText: missing, ConsequenceText: consequence,
+		ResumeStatus: service.IntakeBlockerResumeStatus(issue.Status),
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -159,7 +160,7 @@ func (h *Handler) decideIntake(w http.ResponseWriter, r *http.Request, state str
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	text := strings.TrimSpace(body.Body)
 	if state == "continued" && text == "" && reqRow.ProgressRemain.String == "执行没有进展" {
-		h.enqueueIntakeContinuation(w, r, reqRow, issue)
+		h.enqueueIntakeContinuation(w, r, reqRow, issue, "todo")
 		return
 	}
 	blocker, err := h.Queries.GetOpenIntakeBlocker(r.Context(), issue.ID)
@@ -201,16 +202,16 @@ func (h *Handler) decideIntake(w http.ResponseWriter, r *http.Request, state str
 			AuthorID: parseUUID(userID), Content: text, ClientRequestID: parseUUID(uuid.NewString()),
 		})
 		if supplementErr == nil {
-			_ = h.Queries.SetIntakeIssueStatus(r.Context(), db.SetIntakeIssueStatusParams{ID: issue.ID, WorkspaceID: issue.WorkspaceID, Status: "todo"})
+			_ = h.Queries.SetIntakeIssueStatus(r.Context(), db.SetIntakeIssueStatusParams{ID: issue.ID, WorkspaceID: issue.WorkspaceID, Status: service.IntakeResumeStatus(blocker.ResumeStatus)})
 			writeJSON(w, http.StatusOK, map[string]string{"state": "continued"})
 			return
 		}
 	}
-	h.enqueueIntakeContinuation(w, r, reqRow, issue)
+	h.enqueueIntakeContinuation(w, r, reqRow, issue, service.IntakeResumeStatus(blocker.ResumeStatus))
 }
 
-func (h *Handler) enqueueIntakeContinuation(w http.ResponseWriter, r *http.Request, reqRow db.GetIntakeRequestByIssueRow, issue db.Issue) {
-	_ = h.Queries.SetIntakeIssueStatus(r.Context(), db.SetIntakeIssueStatusParams{ID: issue.ID, WorkspaceID: issue.WorkspaceID, Status: "todo"})
+func (h *Handler) enqueueIntakeContinuation(w http.ResponseWriter, r *http.Request, reqRow db.GetIntakeRequestByIssueRow, issue db.Issue, resumeStatus string) {
+	_ = h.Queries.SetIntakeIssueStatus(r.Context(), db.SetIntakeIssueStatusParams{ID: issue.ID, WorkspaceID: issue.WorkspaceID, Status: resumeStatus})
 	_ = h.Queries.TouchIntakeNotice(r.Context(), reqRow.ID)
 	updated, err := h.Queries.GetIssue(r.Context(), issue.ID)
 	if err != nil || h.TaskService == nil {

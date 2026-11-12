@@ -1,7 +1,28 @@
 package service
 
-import "testing"
-import "time"
+import (
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+func TestIntakeModuleUnit_OnlyPrimaryOrBackup(t *testing.T) {
+	id := func(b byte) pgtype.UUID { return pgtype.UUID{Bytes: [16]byte{b}, Valid: true} }
+	primary, backup, tester := id(1), id(2), id(3)
+	if !intakeModuleUnit(primary, primary, backup) || !intakeModuleUnit(backup, primary, backup) {
+		t.Fatal("primary and backup are the module's units")
+	}
+	if intakeModuleUnit(tester, primary, backup) {
+		t.Fatal("a workflow step agent is not a module unit")
+	}
+	if intakeModuleUnit(pgtype.UUID{}, primary, pgtype.UUID{}) {
+		t.Fatal("a task without an agent is not a module unit")
+	}
+	if intakeModuleUnit(tester, primary, pgtype.UUID{}) {
+		t.Fatal("no backup does not admit other agents")
+	}
+}
 
 func TestPlanIntakeRetry_SamePrimaryThenBackupThenRoster(t *testing.T) {
 	if got := PlanIntakeRetry(1, true, true, false); got.Wait != time.Minute || got.SwitchToBackup || got.Redispatch {

@@ -59,6 +59,37 @@ func TestIntakeSubmit_OfflinePrimaryUsesOnlineBackup(t *testing.T) {
 	}
 }
 
+func TestIntakeSubmit_WorkflowProjectHandsOffRelease(t *testing.T) {
+	requireDB(t)
+	seedTestCatalog(t)
+	lead := createPermissionTestMember(t, "intake-workflow-lead@example.com")
+	owner := createPermissionTestMember(t, "intake-workflow-owner@example.com")
+	projectID := insertIntakeProject(t, lead)
+	agentID := insertIntakeDutyAgent(t, "intake-workflow-dev", owner)
+	attachOnlineRuntime(t, agentID)
+	wf := createTestWorkflow(t, "Intake handoff "+workflowTestSuffix(), "in_progress", "in_review")
+	setWorkflowHandoff(t, wf.ID, "in_review", map[string]any{
+		"handler": map[string]any{"type": "member", "id": owner}, "instructions": "测完再交回",
+	}).Want(http.StatusOK)
+	setProjectWorkflow(t, projectID, map[string]any{"workflow_id": wf.ID}).Want(http.StatusOK)
+	h := intakeHandlerWithModel(t, insertPlainModule(t, projectID, agentID, ""))
+
+	code, raw, issueID := postIntake(t, h, lead, "工作流项目里提需求")
+	if code != http.StatusCreated {
+		t.Fatalf("create = %d %s", code, raw)
+	}
+	if assignee, _ := intakeAssigneeAndQueue(t, issueID); assignee != agentID {
+		t.Fatalf("assignee = %s, want module agent %s", assignee, agentID)
+	}
+	if status := intakeIssueStatus(t, issueID); status != "todo" {
+		t.Fatalf("status = %s, want todo", status)
+	}
+	description := intakeDescription(t, issueID)
+	if !containsAll(description, "按项目工作流移交") || containsAll(description, "只部署一次") {
+		t.Fatalf("description = %q", description)
+	}
+}
+
 func attachOnlineRuntime(t *testing.T, agentID string) {
 	t.Helper()
 	var runtimeID string
