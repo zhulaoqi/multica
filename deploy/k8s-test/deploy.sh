@@ -123,13 +123,20 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
   docker image prune -f
 fi
 
+# The image tag stays multica/agent-*:test and pull policy is Never, so a
+# plain apply sees an unchanged Deployment and leaves the old process running.
+# A new publish time changes the pod template and forces that process to exit.
+published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "更换正在运行的容器（${published_at}）"
 sed \
   -e "s#API_IMAGE#${api_image}#g" \
   -e "s#NODE_NAME#${node}#g" \
+  -e "s#PUBLISHED_AT#${published_at}#g" \
   "${root}/agent-api.yaml" | kubectl apply -f -
 sed \
   -e "s#WEB_IMAGE#${web_image}#g" \
   -e "s#NODE_NAME#${node}#g" \
+  -e "s#PUBLISHED_AT#${published_at}#g" \
   "${root}/agent-web.yaml" | kubectl apply -f -
 
 if [ -n "${ingress_host}" ]; then

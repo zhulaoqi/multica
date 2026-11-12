@@ -88,6 +88,7 @@ import { QODER_RUNTIME_LOCATOR } from "./qoder-detail-page";
 import { RemoteRuntimeDialog } from "./remote-runtime-dialog";
 import { ConnectRemoteDialog } from "./connect-remote-dialog";
 import { CloudRuntimeDialog } from "./cloud-runtime-dialog";
+import { showVendorCloudRuntimes } from "../vendor-cloud";
 import { ProviderLogo } from "./provider-logo";
 import { RuntimeList, buildWorkloadIndex } from "./runtime-list";
 import { RuntimesIntro } from "./runtimes-intro";
@@ -290,12 +291,13 @@ export function RuntimesPage({
   const visibleMachines = machineList.filter((machine) =>
     matchesStatus(machine.health === "online"),
   );
-  const qoderConfigured = qoder?.configured === true;
+  const qoderConfigured = showVendorCloudRuntimes && qoder?.configured === true;
   const showQoderRow =
+    showVendorCloudRuntimes &&
     qoder !== null &&
     (statusFilter === "all" ||
       (qoderConfigured && matchesStatus(qoderIsOnline(qoder))));
-  const visibleComingSoon = statusFilter === "all" ? COMING_SOON_SERVICES : [];
+  const visibleComingSoon = showVendorCloudRuntimes && statusFilter === "all" ? COMING_SOON_SERVICES : [];
   const showAddMachineRow = !filtering && machineList.length === 0;
   const showIntro =
     !listLoading &&
@@ -439,12 +441,16 @@ export function RuntimesPage({
           count: machineList.length,
           rows: machineRows,
         },
-        {
-          key: "cloud",
-          label: t(($) => $.page.groups.cloud.title),
-          count: configuredCloudCount,
-          rows: cloudRows,
-        },
+        ...(showVendorCloudRuntimes && cloudRows.length > 0
+          ? [
+              {
+                key: "cloud",
+                label: t(($) => $.page.groups.cloud.title),
+                count: configuredCloudCount,
+                rows: cloudRows,
+              },
+            ]
+          : []),
       ];
   const rowHref = (row: RuntimeRow) =>
     row.kind === "machine"
@@ -603,6 +609,8 @@ function AddRuntimeMenu({
             onClick={onAddMachine}
           />
         </DropdownMenuGroup>
+        {showVendorCloudRuntimes ? (
+          <>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t(($) => $.page.add_menu.cloud_services)}</DropdownMenuLabel>
@@ -648,6 +656,8 @@ function AddRuntimeMenu({
             />
           ))}
         </DropdownMenuGroup>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

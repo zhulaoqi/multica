@@ -137,6 +137,19 @@ describe("LoginPage", () => {
     expect(screen.getByText("CLI authorization incomplete")).toBeInTheDocument();
   });
 
+  it("hands an existing session back to the waiting CLI", async () => {
+    searchParamsState.params = new URLSearchParams({
+      cli_callback: "http://172.30.137.125:64854/callback",
+      cli_state: "test-state",
+    });
+    authStateRef.state.user = { id: "u1", email: "admin@operator.local" };
+    mockIssueCliToken.mockResolvedValue({ token: "cli-token" });
+    render(<LoginPage />, { wrapper: createWrapper() });
+    await waitFor(() => {
+      expect(mockIssueCliToken).toHaveBeenCalledOnce();
+    });
+  });
+
   it("stays on Feishu sign-in when a desktop handoff is requested", () => {
     searchParamsState.params = new URLSearchParams({ platform: "desktop" });
     authStateRef.state.user = { id: "u1", email: "test@multica.ai" };

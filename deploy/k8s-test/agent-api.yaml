@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: agent-api
+      annotations:
+        multica.ai/published-at: PUBLISHED_AT
     spec:
       nodeName: NODE_NAME
       containers:
@@ -69,6 +71,7 @@ metadata:
   name: agent-api
   namespace: multica-test
 spec:
+  type: NodePort
   selector:
     app: agent-api
   ports:

@@ -16,6 +16,7 @@ import {
 import type { QoderConnection } from "@multica/core/runtimes/qoder";
 import { Button } from "@multica/ui/components/ui/button";
 import { cn } from "@multica/ui/lib/utils";
+import { showVendorCloudRuntimes } from "../../runtimes/vendor-cloud";
 import { useT } from "../../i18n";
 import { ProviderLogo } from "../../runtimes/components/provider-logo";
 import { HealthDot, useHealthLabel } from "../../runtimes/components/shared";
@@ -558,9 +559,17 @@ export function RuntimeChoiceList({
         .map((device) => filterDevice(device, query))
         .filter((device): device is DeviceOption => device !== null)
     : devices;
-  const showQoder = !!qoder && !!qoderState && (!q || QODER_NAME.toLowerCase().includes(q));
-  const matchedCloud = cloud.filter((option) => harnessMatches(option, "", query));
-  const soon = COMING_SOON.filter((item) => !q || item.name.toLowerCase().includes(q));
+  const showQoder =
+    showVendorCloudRuntimes &&
+    !!qoder &&
+    !!qoderState &&
+    (!q || QODER_NAME.toLowerCase().includes(q));
+  const matchedCloud = showVendorCloudRuntimes
+    ? cloud.filter((option) => harnessMatches(option, "", query))
+    : [];
+  const soon = showVendorCloudRuntimes
+    ? COMING_SOON.filter((item) => !q || item.name.toLowerCase().includes(q))
+    : [];
 
   const showMachines = matchedDevices.length > 0 || !searching;
   const showCloud = showQoder || matchedCloud.length > 0 || soon.length > 0;

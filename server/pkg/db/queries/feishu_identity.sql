@@ -2,6 +2,10 @@
 SELECT * FROM feishu_identity
 WHERE open_id = $1;
 
+-- name: GetFeishuIdentityByUserID :one
+SELECT * FROM feishu_identity
+WHERE user_id = $1;
+
 -- name: SaveFeishuIdentity :exec
 INSERT INTO feishu_identity (user_id, open_id, union_id, email, name, avatar_url, updated_at)
 VALUES (

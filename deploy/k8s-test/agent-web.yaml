@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: agent-web
+      annotations:
+        multica.ai/published-at: PUBLISHED_AT
     spec:
       nodeName: NODE_NAME
       containers:

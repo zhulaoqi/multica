@@ -157,27 +157,17 @@ describe("RuntimeChoiceList", () => {
     expect(screen.getByText(/Tasks run on Bohan's machine/)).toBeInTheDocument();
   });
 
-  it("lets an admin connect Qoder in place, and tells a member to ask an admin", () => {
+  it("hides Qoder Cloud Agents from the runtime picker", () => {
     const props = mount();
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    expect(props.onConnectQoder).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: /Qoder Cloud Agents/ })).toBeNull();
+    expect(screen.queryByText("Qoder Cloud Agents")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+    expect(props.onConnectQoder).not.toHaveBeenCalled();
 
     cleanup();
-    mount({ canManage: false });
-    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
-    expect(screen.getByText("Ask an admin to connect")).toBeInTheDocument();
-  });
-
-  it("keeps Qoder discoverable but unselectable without server encryption setup", () => {
-    const qoder = { ...unconnectedQoder, available: false };
-    const props = mount({ qoder, qoderState: qoderChoiceState(qoder, false) });
-    expect(screen.getByText("Qoder Cloud Agents")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    expect(props.onConnectQoder).toHaveBeenCalledOnce();
-    expect(props.onSelectQoder).not.toHaveBeenCalled();
-    expect(qoderChoiceState({ ...qoder, configured: true, enabled: true, status: "online" }, true))
-      .toBe("not_configured");
+    const unavailable = { ...unconnectedQoder, available: false };
+    mount({ qoder: unavailable, qoderState: qoderChoiceState(unavailable, false) });
+    expect(screen.queryByText("Qoder Cloud Agents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cursor Cloud Agents")).not.toBeInTheDocument();
   });
 
   it("says so when nothing matches the search", () => {

@@ -17,7 +17,7 @@ import {
 import { api } from "@multica/core/api";
 import type { Workspace } from "@multica/core/types";
 import { CliCallbackError } from "@/features/auth/cli-callback-error";
-import { validateCliCallback } from "@multica/views/auth";
+import { redirectToCliCallback, validateCliCallback } from "@multica/views/auth";
 
 /**
  * Pick where a logged-in user with no explicit `?next=` should land.
@@ -62,6 +62,8 @@ function LoginPageContent() {
   const nextUrl = sanitizeNextUrl(searchParams.get("next"));
 
   const hasOnboarded = useHasOnboarded();
+  const cliState = searchParams.get("cli_state") ?? "";
+  const authorizingCli = cliCallbackRaw !== null && !invalidCliCallback && !!user;
 
   // Latched once auth has been observed settled as logged-out on this page.
   // Any `user` that appears afterwards came from the login form in this
@@ -98,12 +100,39 @@ function LoginPageContent() {
       .then((dest) => router.replace(dest));
   }, [isLoading, user, router, nextUrl, cliCallbackRaw, hasOnboarded, qc]);
 
+  // The CLI is waiting on a local callback. A session that already exists
+  // must hand it a token; showing the login form again never completes setup.
+  useEffect(() => {
+    if (isLoading || !user || !cliCallbackRaw || invalidCliCallback) return;
+    let cancelled = false;
+    void api
+      .issueCliToken()
+      .then((res) => {
+        if (!cancelled) redirectToCliCallback(cliCallbackRaw, res.token, cliState);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, user, cliCallbackRaw, invalidCliCallback, cliState]);
+
   if (invalidCliCallback) return <CliCallbackError />;
 
-  return <FeishuSignIn />;
+  return (
+    <FeishuSignIn
+      operatorHref={`/login/operator${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+      authorizingCli={authorizingCli}
+    />
+  );
 }
 
-function FeishuSignIn() {
+function FeishuSignIn({
+  operatorHref,
+  authorizingCli,
+}: {
+  operatorHref: string;
+  authorizingCli: boolean;
+}) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05070b] text-white">
       <Image
@@ -119,15 +148,21 @@ function FeishuSignIn() {
         <h1 className="landing-serif mt-3 text-[3.2rem] leading-none tracking-[-0.04em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)]">
           登录
         </h1>
-        <a
-          href="/auth/feishu/start"
-          className="mt-10 inline-flex h-12 w-full items-center justify-center bg-white text-body font-semibold text-[#0a0d12] transition-colors hover:bg-white/92"
-        >
-          飞书登录
-        </a>
-        <a href="/login/operator" className="mt-6 inline-block text-body text-white/70 underline underline-offset-4">
-          开发者入口
-        </a>
+        {authorizingCli ? (
+          <p className="mt-10 text-body text-white/80">正在把登录交给这台电脑</p>
+        ) : (
+          <>
+            <a
+              href="/auth/feishu/start"
+              className="mt-10 inline-flex h-12 w-full items-center justify-center bg-white text-body font-semibold text-[#0a0d12] transition-colors hover:bg-white/92"
+            >
+              飞书登录
+            </a>
+            <a href={operatorHref} className="mt-6 inline-block text-body text-white/70 underline underline-offset-4">
+              开发者入口
+            </a>
+          </>
+        )}
       </div>
     </div>
   );

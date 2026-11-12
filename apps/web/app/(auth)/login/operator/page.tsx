@@ -27,7 +27,7 @@ export default function OperatorLoginPage() {
         return;
       }
       setLoggedInCookie();
-      window.location.assign("/login");
+      window.location.assign(`/login${window.location.search}`);
     } catch {
       setError("登录没有发出去");
     } finally {

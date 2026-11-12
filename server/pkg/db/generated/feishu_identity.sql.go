@@ -32,6 +32,27 @@ func (q *Queries) GetFeishuIdentityByOpenID(ctx context.Context, openID string) 
 	return i, err
 }
 
+const getFeishuIdentityByUserID = `-- name: GetFeishuIdentityByUserID :one
+SELECT user_id, open_id, union_id, email, name, avatar_url, created_at, updated_at FROM feishu_identity
+WHERE user_id = $1
+`
+
+func (q *Queries) GetFeishuIdentityByUserID(ctx context.Context, userID pgtype.UUID) (FeishuIdentity, error) {
+	row := q.db.QueryRow(ctx, getFeishuIdentityByUserID, userID)
+	var i FeishuIdentity
+	err := row.Scan(
+		&i.UserID,
+		&i.OpenID,
+		&i.UnionID,
+		&i.Email,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const saveFeishuIdentity = `-- name: SaveFeishuIdentity :exec
 INSERT INTO feishu_identity (user_id, open_id, union_id, email, name, avatar_url, updated_at)
 VALUES (

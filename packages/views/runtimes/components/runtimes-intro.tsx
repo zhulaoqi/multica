@@ -12,6 +12,7 @@ import {
   type FeatureIntroSlide,
 } from "../../layout/feature-intro";
 import { useT } from "../../i18n";
+import { showVendorCloudRuntimes } from "../vendor-cloud";
 import { ProviderLogo } from "./provider-logo";
 
 const MACHINE = "studio-mbp";
@@ -50,7 +51,7 @@ export function RuntimesIntro({
       art: <RemoteArt />,
     },
   ];
-  if (cloudRuntimeEnabled) {
+  if (showVendorCloudRuntimes && cloudRuntimeEnabled) {
     slides.push({
       id: "cloud",
       title: t(($) => $.intro.slides.cloud.title),
