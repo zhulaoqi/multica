@@ -4,6 +4,8 @@ node_modules
 
 # Build outputs
 .next
+!**/.next
+!**/.next/**
 dist
 server/bin
 server/tmp

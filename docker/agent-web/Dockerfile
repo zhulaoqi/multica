@@ -1,6 +1,6 @@
 # Runtime only. build.sh produces the Next standalone output before this image is built.
 # This is the Node 22 runtime, not common/nginx.
-ARG NODE_RUNTIME=172.30.10.185:15000/common/node:22
+ARG NODE_RUNTIME=172.30.10.185:15000/common/node:22-chrome
 FROM ${NODE_RUNTIME}
 
 ENV DEPLOY_DIR=/dianyi/app/agent-web

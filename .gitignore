@@ -42,6 +42,8 @@ coverage
 
 # Go
 server/bin/
+docker/agent-api/out/
+deploy/k8s-test/multica-images.tar
 server/tmp/
 server/migrate
 server/daemon

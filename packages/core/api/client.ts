@@ -5647,10 +5647,6 @@ export class ApiClient {
     });
   }
 
-  async logout(): Promise<void> {
-    await this.fetch("/auth/logout", { method: "POST" });
-  }
-
   async decideIntake(issueId: string, action: "continue" | "stop" | "accept" | "cancel" | "resume" | "match", body?: string): Promise<void> {
     await this.fetch(`/api/intake/requests/${encodeURIComponent(issueId)}/${action}`, {
       method: "POST",

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-api
+  namespace: multica-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-api
+  template:
+    metadata:
+      labels:
+        app: agent-api
+    spec:
+      nodeName: NODE_NAME
+      containers:
+        - name: agent-api
+          image: API_IMAGE
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PROFILE
+              value: test-ali
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: multica-postgres
+                  key: DATABASE_URL
+            - name: HOSTIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: docker-log
+              mountPath: /docker/log
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: docker-log
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-api
+  namespace: multica-test
+spec:
+  selector:
+    app: agent-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
