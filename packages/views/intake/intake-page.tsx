@@ -12,6 +12,7 @@ import { IntakeBar } from "./intake-bar";
 import { ScheduledList } from "./scheduled-page";
 import { RoutesHeading } from "./routes-page";
 import { OrgPage } from "./org-page";
+import { newRequestID } from "./request-id";
 
 export function IntakePage({
   focusIssueId,
@@ -29,7 +30,7 @@ export function IntakePage({
   const [startAt, setStartAt] = useState("");
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
-  const [requestID, setRequestID] = useState(() => crypto.randomUUID());
+  const [requestID, setRequestID] = useState(() => newRequestID());
   const [canMaintain, setCanMaintain] = useState(false);
   const [maintainProjects, setMaintainProjects] = useState<IntakeMaintainProject[]>([]);
   const [catalog, setCatalog] = useState<IntakeAgent[]>([]);
