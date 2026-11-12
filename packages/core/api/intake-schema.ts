@@ -92,6 +92,7 @@ export const IntakeAgentSchema = z.object({
   name: z.string(),
   can: z.string().optional(),
   cannot: z.string().optional(),
+  org_path: z.string().optional(),
   runtime_mode: z.string().optional(),
   online: z.boolean().optional(),
   active_count: z.number().optional(),

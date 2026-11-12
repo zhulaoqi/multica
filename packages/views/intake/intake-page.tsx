@@ -298,7 +298,7 @@ export function IntakePage({
           <input value={agentCan} onChange={(event) => setAgentCan(event.target.value)} placeholder="负责什么" className="h-9 rounded-md border px-3 text-sm" />
           <input value={agentCannot} onChange={(event) => setAgentCannot(event.target.value)} placeholder="不接什么" className="h-9 rounded-md border px-3 text-sm" />
           <button type="button" onClick={() => void registerAgent()} className="h-9 w-fit rounded-md border px-4 text-sm">登记 Agent</button>
-          {agents.map((agent) => (
+          {[...agents].sort((a, b) => (a.org_path ?? "").localeCompare(b.org_path ?? "") || a.name.localeCompare(b.name)).map((agent) => (
             <OwnAgent key={agent.id} agent={agent} slug={wsKey === "session" ? "" : wsKey} onSave={async (can, cannot) => {
               await api.patchIntakeAgent(agent.id, {
                 name: agent.name,
@@ -331,7 +331,7 @@ export function IntakePage({
               <input value={scope} onChange={(event) => setScope(event.target.value)} placeholder="边界" className="h-9 rounded-md border px-3 text-sm" />
               <select value={agentId} onChange={(event) => setAgentId(event.target.value)} className="h-9 rounded-md border px-3 text-sm">
                 <option value="">主责</option>
-                {catalog.map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.online ? "在线" : "不在线"}</option>)}
+                {catalog.map((agent) => <option key={agent.id} value={agent.id}>{agent.org_path ? `${agent.org_path} · ` : ""}{agent.name} · {agent.online ? "在线" : "不在线"}</option>)}
               </select>
               <button type="button" onClick={() => void saveModule()} className="h-9 w-fit rounded-md bg-[var(--primary)] px-4 text-sm text-[var(--primary-foreground)]">加上这个模块</button>
               <input value={memberIDs} onChange={(event) => setMemberIDs(event.target.value)} placeholder="成员用户 ID，用逗号分开" className="h-9 rounded-md border px-3 text-sm" />
@@ -506,7 +506,7 @@ function OwnAgent({
   const where = agent.runtime_mode === "cloud" ? "云上" : "本机";
   return (
     <div className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm">
-      <div>{agent.name} · {where} · {agent.online ? "在线" : "不在线"} · 正在做 {agent.active_count ?? 0} 条</div>
+      <div>{agent.name}{agent.org_path ? ` · ${agent.org_path}` : ""} · {where} · {agent.online ? "在线" : "不在线"} · 正在做 {agent.active_count ?? 0} 条</div>
       {(agent.placements ?? []).map((place) => (
         <div key={`${place.project}-${place.product}-${place.module}-${place.role}`}>{place.project} / {place.product} / {place.module} · {place.role}</div>
       ))}
@@ -548,14 +548,14 @@ function CapabilityMap({
             return (
               <div key={`${module.product}-${module.module}`} className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm">
                 <div>{module.module} · {module.scope}</div>
-                <div>主责 {primary?.name ?? "未指定"} · {primary?.online ? "在线" : "不在线"} · 正在做 {primary?.active_count ?? 0} 条</div>
-                <div>备责 {backup?.name ?? "没有"}{backup ? ` · ${backup.online ? "在线" : "不在线"} · 正在做 ${backup.active_count ?? 0} 条` : ""}</div>
+                <div>主责 {primary?.name ?? "未指定"}{primary?.org_path ? ` · ${primary.org_path}` : ""} · {primary?.online ? "在线" : "不在线"} · 正在做 {primary?.active_count ?? 0} 条</div>
+                <div>备责 {backup?.name ?? "没有"}{backup ? ` · ${backup.org_path ?? ""} · ${backup.online ? "在线" : "不在线"} · 正在做 ${backup.active_count ?? 0} 条` : ""}</div>
                 <select
                   value={module.agent_id}
                   onChange={(event) => onChange(modules.map((row) => row.product === module.product && row.module === module.module ? { ...row, agent_id: event.target.value } : row))}
                   className="h-9 rounded-md border px-3 text-sm"
                 >
-                  {catalog.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                  {catalog.map((agent) => <option key={agent.id} value={agent.id}>{agent.org_path ? `${agent.org_path} · ` : ""}{agent.name}</option>)}
                 </select>
                 <select
                   value={module.backup_agent_id ?? ""}
@@ -563,7 +563,7 @@ function CapabilityMap({
                   className="h-9 rounded-md border px-3 text-sm"
                 >
                   <option value="">不设备责</option>
-                  {catalog.filter((agent) => agent.id !== module.agent_id).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                  {catalog.filter((agent) => agent.id !== module.agent_id).map((agent) => <option key={agent.id} value={agent.id}>{agent.org_path ? `${agent.org_path} · ` : ""}{agent.name}</option>)}
                 </select>
               </div>
             );

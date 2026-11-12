@@ -21,6 +21,16 @@ WHERE id = $1
 RETURNING *;
 
 -- name: ListIntakeAgentsForOwner :many
+WITH RECURSIVE unit_tree AS (
+    SELECT o.id, o.name::text AS path, 1 AS depth
+    FROM org_unit o
+    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    UNION ALL
+    SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
+    FROM org_unit o
+    JOIN unit_tree ON o.parent_id = unit_tree.id
+    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+)
 SELECT
     a.id,
     a.name,
@@ -28,6 +38,7 @@ SELECT
     a.runtime_mode,
     a.intake_can,
     a.intake_cannot,
+    COALESCE(unit_tree.path, '')::text AS org_path,
     (
         r.id IS NOT NULL
         AND r.status = 'online'
@@ -39,6 +50,7 @@ SELECT
     ) AS active_count
 FROM agent a
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN unit_tree ON unit_tree.id = a.org_unit_id
 WHERE a.workspace_id = $1
   AND a.owner_id = $2
   AND a.archived_at IS NULL
@@ -381,7 +393,17 @@ WHERE m.workspace_id = $1
   AND (m.agent_id = ANY($2::uuid[]) OR m.backup_agent_id = ANY($2::uuid[]));
 
 -- name: ListIntakeAssignableAgents :many
-SELECT a.id, a.name, a.intake_can,
+WITH RECURSIVE unit_tree AS (
+    SELECT o.id, o.name::text AS path, 1 AS depth
+    FROM org_unit o
+    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    UNION ALL
+    SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
+    FROM org_unit o
+    JOIN unit_tree ON o.parent_id = unit_tree.id
+    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+)
+SELECT a.id, a.name, a.intake_can, COALESCE(unit_tree.path, '')::text AS org_path,
     (
         r.id IS NOT NULL
         AND r.status = 'online'
@@ -393,6 +415,7 @@ SELECT a.id, a.name, a.intake_can,
     ) AS active_count
 FROM agent a
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN unit_tree ON unit_tree.id = a.org_unit_id
 WHERE a.workspace_id = $1
   AND a.archived_at IS NULL
   AND a.kind = 'user'

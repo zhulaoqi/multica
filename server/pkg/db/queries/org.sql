@@ -11,6 +11,11 @@ WHERE workspace_id = $1
   AND parent_id IS NOT DISTINCT FROM sqlc.narg(parent_id)
   AND name = $2;
 
+-- name: GetOrgUnit :one
+SELECT id
+FROM org_unit
+WHERE id = $1 AND workspace_id = $2;
+
 -- name: CreateOrgUnit :one
 INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, position)
 VALUES ($1, $2, $3, $4, $5)
@@ -38,9 +43,9 @@ JOIN member m ON m.user_id = u.id AND m.workspace_id = $1
 WHERE lower(u.email) = lower($2);
 
 -- name: ListAgentsInOrgUnits :many
+-- Includes agents with an empty unit so the org page can place them.
 SELECT id, name, org_unit_id, intake_can, intake_cannot
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
-  AND org_unit_id IS NOT NULL
 ORDER BY name ASC;

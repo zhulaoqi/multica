@@ -610,6 +610,16 @@ func (q *Queries) ListIntakeAgentsByRuntimes(ctx context.Context, dollar_1 []pgt
 }
 
 const listIntakeAgentsForOwner = `-- name: ListIntakeAgentsForOwner :many
+WITH RECURSIVE unit_tree AS (
+    SELECT o.id, o.name::text AS path, 1 AS depth
+    FROM org_unit o
+    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    UNION ALL
+    SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
+    FROM org_unit o
+    JOIN unit_tree ON o.parent_id = unit_tree.id
+    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+)
 SELECT
     a.id,
     a.name,
@@ -617,6 +627,7 @@ SELECT
     a.runtime_mode,
     a.intake_can,
     a.intake_cannot,
+    COALESCE(unit_tree.path, '')::text AS org_path,
     (
         r.id IS NOT NULL
         AND r.status = 'online'
@@ -628,6 +639,7 @@ SELECT
     ) AS active_count
 FROM agent a
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN unit_tree ON unit_tree.id = a.org_unit_id
 WHERE a.workspace_id = $1
   AND a.owner_id = $2
   AND a.archived_at IS NULL
@@ -648,6 +660,7 @@ type ListIntakeAgentsForOwnerRow struct {
 	RuntimeMode  string      `json:"runtime_mode"`
 	IntakeCan    pgtype.Text `json:"intake_can"`
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
+	OrgPath      string      `json:"org_path"`
 	Online       pgtype.Bool `json:"online"`
 	ActiveCount  int32       `json:"active_count"`
 }
@@ -668,6 +681,7 @@ func (q *Queries) ListIntakeAgentsForOwner(ctx context.Context, arg ListIntakeAg
 			&i.RuntimeMode,
 			&i.IntakeCan,
 			&i.IntakeCannot,
+			&i.OrgPath,
 			&i.Online,
 			&i.ActiveCount,
 		); err != nil {
@@ -682,7 +696,17 @@ func (q *Queries) ListIntakeAgentsForOwner(ctx context.Context, arg ListIntakeAg
 }
 
 const listIntakeAssignableAgents = `-- name: ListIntakeAssignableAgents :many
-SELECT a.id, a.name, a.intake_can,
+WITH RECURSIVE unit_tree AS (
+    SELECT o.id, o.name::text AS path, 1 AS depth
+    FROM org_unit o
+    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    UNION ALL
+    SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
+    FROM org_unit o
+    JOIN unit_tree ON o.parent_id = unit_tree.id
+    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+)
+SELECT a.id, a.name, a.intake_can, COALESCE(unit_tree.path, '')::text AS org_path,
     (
         r.id IS NOT NULL
         AND r.status = 'online'
@@ -694,6 +718,7 @@ SELECT a.id, a.name, a.intake_can,
     ) AS active_count
 FROM agent a
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN unit_tree ON unit_tree.id = a.org_unit_id
 WHERE a.workspace_id = $1
   AND a.archived_at IS NULL
   AND a.kind = 'user'
@@ -711,6 +736,7 @@ type ListIntakeAssignableAgentsRow struct {
 	ID          pgtype.UUID `json:"id"`
 	Name        string      `json:"name"`
 	IntakeCan   pgtype.Text `json:"intake_can"`
+	OrgPath     string      `json:"org_path"`
 	Online      pgtype.Bool `json:"online"`
 	ActiveCount int32       `json:"active_count"`
 }
@@ -728,6 +754,7 @@ func (q *Queries) ListIntakeAssignableAgents(ctx context.Context, arg ListIntake
 			&i.ID,
 			&i.Name,
 			&i.IntakeCan,
+			&i.OrgPath,
 			&i.Online,
 			&i.ActiveCount,
 		); err != nil {

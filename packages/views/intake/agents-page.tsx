@@ -13,7 +13,7 @@ export function AgentRoster({
   return (
     <div className="flex flex-col gap-2">
       <div className="text-sm">我的 Agent</div>
-      {agents.map((agent) => (
+      {[...agents].sort((a, b) => (a.org_path ?? "").localeCompare(b.org_path ?? "") || a.name.localeCompare(b.name)).map((agent) => (
         <AgentRow key={agent.id} agent={agent} slug={slug} onSave={(can, cannot) => onSave(agent, can, cannot)} />
       ))}
     </div>
@@ -32,7 +32,7 @@ function AgentRow({
   const where = agent.runtime_mode === "cloud" ? "云上" : "本机";
   return (
     <div className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm">
-      <div>{agent.name} · {where} · {agent.online ? "在线" : "不在线"} · 正在做 {agent.active_count ?? 0} 条</div>
+      <div>{agent.name}{agent.org_path ? ` · ${agent.org_path}` : ""} · {where} · {agent.online ? "在线" : "不在线"} · 正在做 {agent.active_count ?? 0} 条</div>
       {(agent.placements ?? []).map((place) => (
         <div key={`${place.project}-${place.module}-${place.role}`}>{place.project} / {place.product} / {place.module} · {place.role}</div>
       ))}

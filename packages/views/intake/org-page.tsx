@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type OrgAgent, type OrgImportResult, type OrgUnit } from "@multica/core/api";
+import { api, type OrgAgent, type OrgImportResult, type OrgTree, type OrgUnit } from "@multica/core/api";
 import { useCurrentWorkspace, useWorkspaceSlug } from "@multica/core/paths";
 import { ORG_IMPORT_PLACEHOLDER, parseOrgImportText } from "./org-import";
 
@@ -12,7 +12,24 @@ interface OrgNode {
   children: OrgNode[];
 }
 
-function buildTree(units: OrgUnit[], agents: OrgAgent[]): OrgNode[] {
+function unitPaths(units: OrgUnit[]): Map<string, string> {
+  const byID = new Map(units.map((unit) => [unit.id, unit]));
+  const paths = new Map<string, string>();
+  const resolve = (unit: OrgUnit, seen: Set<string>): string => {
+    const known = paths.get(unit.id);
+    if (known) return known;
+    if (seen.has(unit.id)) return unit.name;
+    seen.add(unit.id);
+    const parent = unit.parent_id ? byID.get(unit.parent_id) : undefined;
+    const path = parent ? `${resolve(parent, seen)}/${unit.name}` : unit.name;
+    paths.set(unit.id, path);
+    return path;
+  };
+  for (const unit of units) resolve(unit, new Set());
+  return paths;
+}
+
+function buildTree(units: OrgUnit[], agents: OrgAgent[]): { roots: OrgNode[]; unassigned: OrgAgent[] } {
   const nodes = new Map<string, OrgNode>();
   for (const unit of units) {
     const own = agents.filter((agent) => agent.unit_id === unit.id);
@@ -24,10 +41,59 @@ function buildTree(units: OrgUnit[], agents: OrgAgent[]): OrgNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
-  return roots;
+  const unassigned = agents.filter((agent) => !agent.unit_id || !nodes.has(agent.unit_id));
+  return { roots, unassigned };
 }
 
-function OrgRows({ nodes, leadNames, depth = 0 }: { nodes: OrgNode[]; leadNames: Map<string, string>; depth?: number }) {
+function AgentLine({
+  agent,
+  unitChoices,
+  depth,
+  onChange,
+}: {
+  agent: OrgAgent;
+  unitChoices: Array<{ id: string; path: string }>;
+  depth: number;
+  onChange?: (unitId: string) => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"
+      style={{ paddingLeft: depth * 16 + 16 }}
+    >
+      <span>
+        {agent.name}
+        {agent.can ? ` · ${agent.can}` : ""}
+      </span>
+      {onChange ? (
+        <select
+          value={agent.unit_id ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-7 rounded-md border px-2 text-sm"
+        >
+          <option value="">未分配</option>
+          {unitChoices.map((unit) => (
+            <option key={unit.id} value={unit.id}>{unit.path}</option>
+          ))}
+        </select>
+      ) : null}
+    </div>
+  );
+}
+
+function OrgRows({
+  nodes,
+  leadNames,
+  unitChoices,
+  onMove,
+  depth = 0,
+}: {
+  nodes: OrgNode[];
+  leadNames: Map<string, string>;
+  unitChoices: Array<{ id: string; path: string }>;
+  onMove?: (agentId: string, unitId: string) => void;
+  depth?: number;
+}) {
   return (
     <>
       {nodes.map((node) => (
@@ -41,16 +107,21 @@ function OrgRows({ nodes, leadNames, depth = 0 }: { nodes: OrgNode[]; leadNames:
             ) : null}
           </div>
           {node.agents.map((agent) => (
-            <div
+            <AgentLine
               key={agent.id}
-              className="text-sm text-[var(--text-secondary)]"
-              style={{ paddingLeft: depth * 16 + 16 }}
-            >
-              {agent.name}
-              {agent.can ? ` · ${agent.can}` : ""}
-            </div>
+              agent={agent}
+              unitChoices={unitChoices}
+              depth={depth}
+              onChange={onMove ? (unitId) => onMove(agent.id, unitId) : undefined}
+            />
           ))}
-          <OrgRows nodes={node.children} leadNames={leadNames} depth={depth + 1} />
+          <OrgRows
+            nodes={node.children}
+            leadNames={leadNames}
+            unitChoices={unitChoices}
+            onMove={onMove}
+            depth={depth + 1}
+          />
         </div>
       ))}
     </>
@@ -88,11 +159,26 @@ export function OrgPage() {
     queryFn: () => api.listMembers(workspaceId),
     enabled: workspaceId !== "",
   });
+  const data: OrgTree = tree.data ?? { units: [], agents: [], can_manage: false };
   const leadNames = new Map<string, string>();
   for (const member of members.data ?? []) leadNames.set(member.user_id, member.name || member.email);
   const parsed = parseOrgImportText(text);
-  const nodes = buildTree(tree.data?.units ?? [], tree.data?.agents ?? []);
+  const paths = unitPaths(data.units);
+  const unitChoices = data.units
+    .map((unit) => ({ id: unit.id, path: paths.get(unit.id) ?? unit.name }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const { roots, unassigned } = buildTree(data.units, data.agents);
 
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["org"] });
+  const moveAgent = async (agentId: string, unitId: string) => {
+    setFailure("");
+    try {
+      await api.setOrgAgentUnit(agentId, unitId);
+      await refresh();
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "调整归属失败");
+    }
+  };
   const runImport = async () => {
     if (parsed.rows.length === 0 || parsed.errors.length > 0) return;
     setBusy(true);
@@ -100,7 +186,7 @@ export function OrgPage() {
     try {
       const next = await api.importOrgUnits(parsed.rows);
       setResult(next);
-      await queryClient.invalidateQueries({ queryKey: ["org"] });
+      await refresh();
     } catch (error) {
       setResult(null);
       setFailure(error instanceof Error ? error.message : "导入失败");
@@ -108,6 +194,7 @@ export function OrgPage() {
       setBusy(false);
     }
   };
+  const canManage = data.can_manage;
 
   return (
     <div className="flex flex-col gap-3">
@@ -140,11 +227,30 @@ export function OrgPage() {
       ) : null}
       {tree.isLoading ? <div className="text-sm text-[var(--text-secondary)]">加载中</div> : null}
       {tree.isError ? <div className="text-sm text-red-600">组织架构加载失败</div> : null}
-      {!tree.isLoading && !tree.isError && nodes.length === 0 ? (
+      {!tree.isLoading && !tree.isError && data.units.length === 0 ? (
         <div className="text-sm text-[var(--text-secondary)]">还没有组织</div>
       ) : null}
       <div className="flex flex-col gap-2">
-        <OrgRows nodes={nodes} leadNames={leadNames} />
+        <OrgRows
+          nodes={roots}
+          leadNames={leadNames}
+          unitChoices={unitChoices}
+          onMove={canManage ? (agentId, unitId) => void moveAgent(agentId, unitId) : undefined}
+        />
+        {unassigned.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            <div className="text-sm font-medium">未分配</div>
+            {unassigned.map((agent) => (
+              <AgentLine
+                key={agent.id}
+                agent={agent}
+                unitChoices={unitChoices}
+                depth={0}
+                onChange={canManage ? (unitId) => void moveAgent(agent.id, unitId) : undefined}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -2570,6 +2570,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Route("/api/org", func(r chi.Router) {
 				r.Get("/units", h.ListOrgUnits)
 				r.Post("/units/import", h.ImportOrgUnits)
+				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
 			})
 
 			// Tasks (user-facing, with ownership check)

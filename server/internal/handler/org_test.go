@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func createOrgTestAdmin(t *testing.T, email string) string {
@@ -134,6 +136,23 @@ func TestImportOrgUnits_CreatesTreeAssignsLeadAndAgents(t *testing.T) {
 		t.Fatalf("settle agent unit = %q, want %q", agentUnits["org-settle-agent"], byName["结算组"].ID)
 	}
 
+	roster := httptest.NewRecorder()
+	testHandler.ListIntakeAgents(roster, newRequestAs(admin, "GET", "/api/intake/agents", nil))
+	if roster.Code != http.StatusOK {
+		t.Fatalf("roster status = %d: %s", roster.Code, roster.Body.String())
+	}
+	var listed []intakeAgentResponse
+	if err := json.Unmarshal(roster.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode roster: %v", err)
+	}
+	rosterPaths := map[string]string{}
+	for _, agent := range listed {
+		rosterPaths[agent.Name] = agent.OrgPath
+	}
+	if rosterPaths["org-pay-agent"] != "平台部/支付组" {
+		t.Fatalf("pay agent org_path = %q, want 平台部/支付组", rosterPaths["org-pay-agent"])
+	}
+
 	// Re-running the same import must not duplicate units, and moving an agent
 	// must land it in the new unit.
 	body["rows"] = []map[string]any{
@@ -201,5 +220,92 @@ func TestImportOrgUnits_RejectsBadRows(t *testing.T) {
 	}
 	if unitCount != 0 {
 		t.Fatalf("org_unit rows = %d, want 0 after rejected imports", unitCount)
+	}
+}
+
+func orgRequestWithAgent(userID, method, path, agentID string, body any) *http.Request {
+	req := newRequestAs(userID, method, path, body)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("agentId", agentID)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
+func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-move-admin@example.com")
+	member := createPermissionTestMember(t, "org-move-member@example.com")
+	agentID := insertIntakeDutyAgent(t, "org-move-agent", admin)
+
+	rec := httptest.NewRecorder()
+	testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+		"rows": []map[string]any{{"path": "平台部/支付组"}},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var unitID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT id FROM org_unit WHERE workspace_id = $1 AND name = '支付组'
+	`, testWorkspaceID).Scan(&unitID); err != nil {
+		t.Fatalf("load 支付组: %v", err)
+	}
+
+	memberRec := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(memberRec, orgRequestWithAgent(member, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
+	if memberRec.Code != http.StatusForbidden {
+		t.Fatalf("member status = %d, want 403: %s", memberRec.Code, memberRec.Body.String())
+	}
+
+	moveRec := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(moveRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
+	if moveRec.Code != http.StatusNoContent {
+		t.Fatalf("move status = %d, want 204: %s", moveRec.Code, moveRec.Body.String())
+	}
+	var placed string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM agent WHERE id = $1
+	`, agentID).Scan(&placed); err != nil {
+		t.Fatalf("load agent unit: %v", err)
+	}
+	if placed != unitID {
+		t.Fatalf("agent unit = %q, want %q", placed, unitID)
+	}
+
+	clearRec := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(clearRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": ""}))
+	if clearRec.Code != http.StatusNoContent {
+		t.Fatalf("clear status = %d, want 204: %s", clearRec.Code, clearRec.Body.String())
+	}
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM agent WHERE id = $1
+	`, agentID).Scan(&placed); err != nil {
+		t.Fatalf("load cleared agent unit: %v", err)
+	}
+	if placed != "" {
+		t.Fatalf("agent unit after clear = %q, want empty", placed)
+	}
+
+	missingRec := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(missingRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{
+		"unit_id": "00000000-0000-0000-0000-000000000000",
+	}))
+	if missingRec.Code != http.StatusNotFound {
+		t.Fatalf("unknown unit status = %d, want 404: %s", missingRec.Code, missingRec.Body.String())
+	}
+
+	for user, want := range map[string]bool{admin: true, member: false} {
+		list := httptest.NewRecorder()
+		testHandler.ListOrgUnits(list, newRequestAs(user, "GET", "/api/org/units", nil))
+		if list.Code != http.StatusOK {
+			t.Fatalf("list status = %d: %s", list.Code, list.Body.String())
+		}
+		var tree orgTreeResponse
+		if err := json.Unmarshal(list.Body.Bytes(), &tree); err != nil {
+			t.Fatalf("decode tree: %v", err)
+		}
+		if tree.CanManage != want {
+			t.Fatalf("can_manage = %v, want %v", tree.CanManage, want)
+		}
 	}
 }

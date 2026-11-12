@@ -31,6 +31,7 @@ type intakeAgentResponse struct {
 	Name        string            `json:"name"`
 	Can         string            `json:"can"`
 	Cannot      string            `json:"cannot"`
+	OrgPath     string            `json:"org_path"`
 	RuntimeMode string            `json:"runtime_mode"`
 	Online      bool              `json:"online"`
 	ActiveCount int               `json:"active_count"`
@@ -138,8 +139,8 @@ func (h *Handler) ListIntakeAgents(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, intakeAgentResponse{
 			ID: id, Name: row.Name, Can: row.IntakeCan.String, Cannot: row.IntakeCannot.String,
-			RuntimeMode: row.RuntimeMode, Online: row.Online.Bool, ActiveCount: int(row.ActiveCount),
-			Placements: found, OwnerID: uuidToString(row.OwnerID),
+			OrgPath: row.OrgPath, RuntimeMode: row.RuntimeMode, Online: row.Online.Bool,
+			ActiveCount: int(row.ActiveCount), Placements: found, OwnerID: uuidToString(row.OwnerID),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -178,12 +179,13 @@ func (h *Handler) ListIntakeAssignableAgents(w http.ResponseWriter, r *http.Requ
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Can         string `json:"can"`
+		OrgPath     string `json:"org_path"`
 		Online      bool   `json:"online"`
 		ActiveCount int    `json:"active_count"`
 	}
 	out := make([]item, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, item{ID: uuidToString(row.ID), Name: row.Name, Can: row.IntakeCan.String, Online: row.Online.Bool, ActiveCount: int(row.ActiveCount)})
+		out = append(out, item{ID: uuidToString(row.ID), Name: row.Name, Can: row.IntakeCan.String, OrgPath: row.OrgPath, Online: row.Online.Bool, ActiveCount: int(row.ActiveCount)})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -5701,4 +5701,12 @@ export class ApiClient {
       endpoint: "POST /api/org/units/import",
     });
   }
+
+  /** Places an agent in a unit; an empty id clears its unit. */
+  async setOrgAgentUnit(agentId: string, unitId: string): Promise<void> {
+    await this.fetch(`/api/org/agents/${encodeURIComponent(agentId)}/unit`, {
+      method: "PUT",
+      body: JSON.stringify({ unit_id: unitId }),
+    });
+  }
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -33,8 +34,13 @@ type orgAgentResponse struct {
 }
 
 type orgTreeResponse struct {
-	Units  []orgUnitResponse  `json:"units"`
-	Agents []orgAgentResponse `json:"agents"`
+	Units     []orgUnitResponse  `json:"units"`
+	Agents    []orgAgentResponse `json:"agents"`
+	CanManage bool               `json:"can_manage"`
+}
+
+type orgAgentUnitBody struct {
+	UnitID string `json:"unit_id"`
 }
 
 type orgImportBody struct {
@@ -53,7 +59,8 @@ type orgImportResponse struct {
 // unit. Clients assemble the tree; the payload stays stable when units move.
 func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.workspaceMember(w, r, workspaceID); !ok {
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
 		return
 	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
@@ -73,8 +80,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := orgTreeResponse{
-		Units:  make([]orgUnitResponse, 0, len(units)),
-		Agents: make([]orgAgentResponse, 0, len(agents)),
+		Units:     make([]orgUnitResponse, 0, len(units)),
+		Agents:    make([]orgAgentResponse, 0, len(agents)),
+		CanManage: roleAllowed(member.Role, "owner", "admin"),
 	}
 	for _, unit := range units {
 		resp.Units = append(resp.Units, orgUnitResponse{
@@ -238,6 +246,60 @@ func (h *Handler) upsertOrgUnitPath(
 		leafID = id
 	}
 	return leafID, true
+}
+
+// SetOrgAgentUnit places an agent in a unit, or clears its unit when unit_id
+// is empty. Agents stay in the workspace either way.
+func (h *Handler) SetOrgAgentUnit(w http.ResponseWriter, r *http.Request) {
+	workspaceID := h.resolveWorkspaceID(r)
+	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+		return
+	}
+	var body orgAgentUnitBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+	if !ok {
+		return
+	}
+	agentUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "agentId"), "agent id")
+	if !ok {
+		return
+	}
+	agent, err := h.Queries.GetAgent(r.Context(), agentUUID)
+	if err != nil || agent.WorkspaceID != wsUUID {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	unitUUID := pgtype.UUID{}
+	if body.UnitID != "" {
+		unitUUID, ok = parseUUIDOrBadRequest(w, body.UnitID, "unit id")
+		if !ok {
+			return
+		}
+		if _, err := h.Queries.GetOrgUnit(r.Context(), db.GetOrgUnitParams{
+			ID:          unitUUID,
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusNotFound, "organisation unit not found")
+				return
+			}
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	}
+	if err := h.Queries.SetAgentOrgUnit(r.Context(), db.SetAgentOrgUnitParams{
+		ID:          agentUUID,
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitUUID,
+	}); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) importOrgFailed(w http.ResponseWriter, r *http.Request, err error) {

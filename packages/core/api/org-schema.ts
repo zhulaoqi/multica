@@ -20,6 +20,7 @@ export const OrgAgentSchema = z.object({
 export const OrgTreeSchema = z.object({
   units: OrgUnitSchema.array().default([]),
   agents: OrgAgentSchema.array().default([]),
+  can_manage: z.boolean().optional().default(false),
 });
 
 export const OrgImportRowSchema = z.object({
@@ -42,7 +43,7 @@ export type OrgTree = z.infer<typeof OrgTreeSchema>;
 export type OrgImportRow = z.infer<typeof OrgImportRowSchema>;
 export type OrgImportResult = z.infer<typeof OrgImportResultSchema>;
 
-export const EMPTY_ORG_TREE: OrgTree = { units: [], agents: [] };
+export const EMPTY_ORG_TREE: OrgTree = { units: [], agents: [], can_manage: false };
 export const EMPTY_ORG_IMPORT_RESULT: OrgImportResult = {
   created_units: 0,
   existing_units: 0,

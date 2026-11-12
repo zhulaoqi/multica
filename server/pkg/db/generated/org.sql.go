@@ -75,6 +75,24 @@ func (q *Queries) FindWorkspaceMemberByEmail(ctx context.Context, arg FindWorksp
 	return id, err
 }
 
+const getOrgUnit = `-- name: GetOrgUnit :one
+SELECT id
+FROM org_unit
+WHERE id = $1 AND workspace_id = $2
+`
+
+type GetOrgUnitParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetOrgUnit(ctx context.Context, arg GetOrgUnitParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getOrgUnit, arg.ID, arg.WorkspaceID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getOrgUnitByParentAndName = `-- name: GetOrgUnitByParentAndName :one
 SELECT id
 FROM org_unit
@@ -101,7 +119,6 @@ SELECT id, name, org_unit_id, intake_can, intake_cannot
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
-  AND org_unit_id IS NOT NULL
 ORDER BY name ASC
 `
 
@@ -113,6 +130,7 @@ type ListAgentsInOrgUnitsRow struct {
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
 }
 
+// Includes agents with an empty unit so the org page can place them.
 func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentsInOrgUnitsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsInOrgUnits, workspaceID)
 	if err != nil {
