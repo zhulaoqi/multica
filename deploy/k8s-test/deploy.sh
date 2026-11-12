@@ -10,6 +10,7 @@ namespace="${NAMESPACE:-multica-test}"
 api_image="${API_IMAGE:-multica/agent-api:test}"
 web_image="${WEB_IMAGE:-multica/agent-web:test}"
 postgres_image="${POSTGRES_IMAGE:-postgres:17}"
+postgres_storage_class="${POSTGRES_STORAGE_CLASS:-csi-disk}"
 go_runtime="${GO_RUNTIME:-172.30.10.185:15000/common/golang:1.27.0}"
 node_runtime="${NODE_RUNTIME:-172.30.10.185:15000/common/node:22-chrome}"
 ingress_host="${INGRESS_HOST:-}"
@@ -63,7 +64,11 @@ EOF
   kubectl -n "${namespace}" wait --for=condition=Ready pod/image-loader --timeout=180s
   kubectl -n "${namespace}" cp "${tar}" image-loader:/images/multica.tar
   kubectl -n "${namespace}" exec image-loader -- \
-    chroot /host ctr -n k8s.io images import /tmp/multica-images/multica.tar
+    chroot /host sh -c 'if [ -S /run/k3s/containerd/containerd.sock ]; then
+      ctr --address /run/k3s/containerd/containerd.sock -n k8s.io images import /tmp/multica-images/multica.tar
+    else
+      ctr -n k8s.io images import /tmp/multica-images/multica.tar
+    fi'
   kubectl -n "${namespace}" exec image-loader -- \
     chroot /host rm -f /tmp/multica-images/multica.tar
   kubectl -n "${namespace}" delete pod image-loader --wait=true >/dev/null
@@ -100,6 +105,7 @@ fi
 
 sed \
   -e "s#POSTGRES_IMAGE#${postgres_image}#g" \
+  -e "s#STORAGE_CLASS#${postgres_storage_class}#g" \
   "${root}/postgres.yaml" | kubectl apply -f -
 kubectl -n "${namespace}" rollout status deployment/postgres --timeout=300s
 
