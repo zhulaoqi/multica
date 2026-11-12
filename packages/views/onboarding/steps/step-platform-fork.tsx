@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@multica/ui/components/ui/dialog";
-import { cn } from "@multica/ui/lib/utils";
 import type { AgentRuntime } from "@multica/core/types";
 import {
   runtimeDisplayLabel,
@@ -108,13 +107,6 @@ export function StepPlatformFork({
             actionLabel={t(($) => $.step_platform.cli_action)}
             onAction={handleOpenCli}
           />
-
-          <ForkAlt
-            title={t(($) => $.step_platform.cloud_title)}
-            subtitle={t(($) => $.step_platform.cloud_subtitle)}
-            actionLabel={t(($) => $.step_platform.cloud_action)}
-            disabled
-          />
         </div>
 
       </div>
@@ -162,51 +154,36 @@ export function StepPlatformFork({
 // Fork cards
 
 /**
- * Alt card with a right-side action. When `disabled`, the action
- * renders as a static badge (used for "Coming soon" paths that aren't
- * yet wired up); otherwise it's an outline button that fires
- * `onAction` and typically opens a dialog.
+ * Alt card with a right-side action. The outline button fires `onAction`
+ * and typically opens a dialog.
  */
 function ForkAlt({
   title,
   subtitle,
   actionLabel,
   onAction,
-  disabled = false,
 }: {
   title: string;
   subtitle: ReactNode;
   actionLabel: ReactNode;
   onAction?: () => void;
-  disabled?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 rounded-lg border bg-card px-5 py-4",
-        disabled && "opacity-70",
-      )}
-    >
+    <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-5 py-4">
       <div className="min-w-0">
         <div className="text-body font-medium text-foreground">{title}</div>
         <div className="mt-1 text-caption leading-[1.5] text-muted-foreground">
           {subtitle}
         </div>
       </div>
-      {disabled ? (
-        <span className="shrink-0 rounded-full border bg-muted px-3 py-1 text-caption font-medium text-muted-foreground">
-          {actionLabel}
-        </span>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={onAction}
-        >
-          {actionLabel}
-        </Button>
-      )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={onAction}
+      >
+        {actionLabel}
+      </Button>
     </div>
   );
 }

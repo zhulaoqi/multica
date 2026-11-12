@@ -160,16 +160,12 @@ describe("StepPlatformFork", () => {
     expect(within(dialog).queryByText("multica setup")).not.toBeInTheDocument();
   });
 
-  it("renders the terminal and cloud options at rest", () => {
+  it("renders the terminal option at rest", () => {
     renderFork();
     expect(screen.queryByText(/^use this computer$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/^connect from the terminal$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^use a cloud computer$/i)).toBeInTheDocument();
-    // Cloud option is a "Coming soon" preview — not yet wired up.
-    expect(screen.getByText(/^coming soon$/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /^coming soon$/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^use a cloud computer$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^coming soon$/i)).not.toBeInTheDocument();
     // CLI dialog closed at rest → no CLI instructions.
     expect(screen.queryByTestId("cli-instructions")).not.toBeInTheDocument();
   });
