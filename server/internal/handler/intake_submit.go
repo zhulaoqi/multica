@@ -78,6 +78,7 @@ func (h *Handler) CreateIntakeRequest(w http.ResponseWriter, r *http.Request) {
 	for _, module := range modules {
 		choices = append(choices, service.IntakeModuleChoice{
 			ID: uuidToString(module.ID), Product: module.Product, Module: module.Module, Scope: module.Scope,
+			Can: module.IntakeCan, Cannot: module.IntakeCannot,
 		})
 	}
 	var gen service.TextGenerator

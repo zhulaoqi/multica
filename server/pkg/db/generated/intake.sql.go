@@ -819,9 +819,11 @@ func (q *Queries) ListIntakeMaintainProjects(ctx context.Context, arg ListIntake
 }
 
 const listIntakeModulesForCaller = `-- name: ListIntakeModulesForCaller :many
-SELECT m.id, m.project_id, m.product, m.module, m.scope, m.agent_id, m.backup_agent_id
+SELECT m.id, m.project_id, m.product, m.module, m.scope, m.agent_id, m.backup_agent_id,
+       COALESCE(a.intake_can, '')::text AS intake_can, COALESCE(a.intake_cannot, '')::text AS intake_cannot
 FROM intake_module m
 JOIN project p ON p.id = m.project_id AND p.workspace_id = m.workspace_id
+LEFT JOIN agent a ON a.id = m.agent_id AND a.workspace_id = m.workspace_id
 WHERE m.workspace_id = $1
   AND p.lead_type = 'member'
   AND p.lead_id IS NOT NULL
@@ -850,6 +852,8 @@ type ListIntakeModulesForCallerRow struct {
 	Scope         string      `json:"scope"`
 	AgentID       pgtype.UUID `json:"agent_id"`
 	BackupAgentID pgtype.UUID `json:"backup_agent_id"`
+	IntakeCan     string      `json:"intake_can"`
+	IntakeCannot  string      `json:"intake_cannot"`
 }
 
 func (q *Queries) ListIntakeModulesForCaller(ctx context.Context, arg ListIntakeModulesForCallerParams) ([]ListIntakeModulesForCallerRow, error) {
@@ -869,6 +873,8 @@ func (q *Queries) ListIntakeModulesForCaller(ctx context.Context, arg ListIntake
 			&i.Scope,
 			&i.AgentID,
 			&i.BackupAgentID,
+			&i.IntakeCan,
+			&i.IntakeCannot,
 		); err != nil {
 			return nil, err
 		}

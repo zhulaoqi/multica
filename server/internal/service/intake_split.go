@@ -12,13 +12,20 @@ import (
 // Callers must not create an issue.
 var ErrIntakeSplitEmpty = errors.New("intake_split_empty")
 
-// IntakeModuleChoice is one row the model may choose. Agent names stay out.
+// IntakeModuleChoice is one row the model may choose. Agent names stay out;
+// Can and Cannot are the primary agent's stated capabilities.
 type IntakeModuleChoice struct {
 	ID      string
 	Product string
 	Module  string
 	Scope   string
+	Can     string
+	Cannot  string
 }
+
+// intakeChoiceFieldMaxRunes caps each capability field so one verbose agent
+// cannot crowd the rest of the catalog out of the prompt.
+const intakeChoiceFieldMaxRunes = 300
 
 // IntakeSplit is one module and the ordered work that module's agent will do
 // on a single branch.
@@ -35,6 +42,8 @@ type TextGenerator interface {
 const intakeSplitSystemPrompt = `把用户的几句话拆成有顺序的开发任务，并选定一个模块承接。
 只返回 JSON：{"module_id":"...","tasks":["..."]}。
 module_id 必须来自给定列表。tasks 至少一条，按开发顺序书写。
+按每个模块的范围、"能做"和"不做"来选：需求落在某模块"不做"的内容里，就不要选它。
+没有合适的模块时，module_id 返回空字符串。
 不要输出执行人、机器或别的模块。`
 
 // SplitIntakeUtterance asks the model to pick one module and write the task list.
@@ -53,6 +62,14 @@ func SplitIntakeUtterance(ctx context.Context, gen TextGenerator, modules []Inta
 		b.WriteString(module.Module)
 		b.WriteString("\t")
 		b.WriteString(module.Scope)
+		if can := intakeChoiceField(module.Can); can != "" {
+			b.WriteString("\t能做：")
+			b.WriteString(can)
+		}
+		if cannot := intakeChoiceField(module.Cannot); cannot != "" {
+			b.WriteString("\t不做：")
+			b.WriteString(cannot)
+		}
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n用户原文：\n")
@@ -62,6 +79,16 @@ func SplitIntakeUtterance(ctx context.Context, gen TextGenerator, modules []Inta
 		return IntakeSplit{}, ErrIntakeSplitEmpty
 	}
 	return ParseIntakeSplit(raw, allowed)
+}
+
+// intakeChoiceField keeps one catalog field on its row: whitespace runs become
+// one space and the text is cut to intakeChoiceFieldMaxRunes.
+func intakeChoiceField(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if runes := []rune(text); len(runes) > intakeChoiceFieldMaxRunes {
+		text = string(runes[:intakeChoiceFieldMaxRunes])
+	}
+	return text
 }
 
 // ParseIntakeSplit keeps a reply only when its module is allowed and it has

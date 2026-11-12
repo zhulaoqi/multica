@@ -95,6 +95,43 @@ func TestIntakeTaskDescription_OneBranchOneDeploy(t *testing.T) {
 	}
 }
 
+func TestSplitIntakeUtterance_ShowsAgentCapabilities(t *testing.T) {
+	stub := &stubSplitter{text: `{"module_id":"mod-refund","tasks":["写退款"]}`}
+	_, err := SplitIntakeUtterance(context.Background(), stub, []IntakeModuleChoice{{
+		ID: "mod-refund", Product: "支付", Module: "退款", Scope: "退款",
+		Can: "写退款接口\n改对账", Cannot: "不碰风控规则",
+	}}, "退款成功后记一笔")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stub.got, "能做：写退款接口 改对账") || !strings.Contains(stub.got, "不做：不碰风控规则") {
+		t.Fatalf("prompt = %s", stub.got)
+	}
+}
+
+func TestSplitIntakeUtterance_TruncatesLongCapabilities(t *testing.T) {
+	stub := &stubSplitter{text: `{"module_id":"mod-refund","tasks":["写退款"]}`}
+	long := strings.Repeat("退", intakeChoiceFieldMaxRunes+50)
+	if _, err := SplitIntakeUtterance(context.Background(), stub, []IntakeModuleChoice{{
+		ID: "mod-refund", Product: "支付", Module: "退款", Scope: "退款", Can: long,
+	}}, "做一下"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stub.got, strings.Repeat("退", intakeChoiceFieldMaxRunes+1)) {
+		t.Fatal("capability text was not truncated")
+	}
+	if !strings.Contains(stub.got, strings.Repeat("退", intakeChoiceFieldMaxRunes)) {
+		t.Fatal("capability text was cut too short")
+	}
+}
+
+func TestParseIntakeSplit_EmptyModuleMeansNoFit(t *testing.T) {
+	allowed := map[string]struct{}{"mod-refund": {}}
+	if _, err := ParseIntakeSplit(`{"module_id":"","tasks":["做登录"]}`, allowed); !errors.Is(err, ErrIntakeSplitEmpty) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestSplitIntakeUtterance_ModelFailureCreatesNothing(t *testing.T) {
 	_, err := SplitIntakeUtterance(context.Background(), &stubSplitter{err: errors.New("down")}, []IntakeModuleChoice{{
 		ID: "mod-refund", Product: "支付", Module: "退款", Scope: "退款",

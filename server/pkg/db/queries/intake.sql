@@ -46,9 +46,11 @@ WHERE a.workspace_id = $1
 ORDER BY a.created_at ASC, a.id ASC;
 
 -- name: ListIntakeModulesForCaller :many
-SELECT m.id, m.project_id, m.product, m.module, m.scope, m.agent_id, m.backup_agent_id
+SELECT m.id, m.project_id, m.product, m.module, m.scope, m.agent_id, m.backup_agent_id,
+       COALESCE(a.intake_can, '')::text AS intake_can, COALESCE(a.intake_cannot, '')::text AS intake_cannot
 FROM intake_module m
 JOIN project p ON p.id = m.project_id AND p.workspace_id = m.workspace_id
+LEFT JOIN agent a ON a.id = m.agent_id AND a.workspace_id = m.workspace_id
 WHERE m.workspace_id = $1
   AND p.lead_type = 'member'
   AND p.lead_id IS NOT NULL
