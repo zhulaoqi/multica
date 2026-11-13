@@ -19,6 +19,7 @@ export const workspaceKeys = {
   squadMemberStatus: (wsId: string, squadId: string) =>
     ["workspaces", wsId, "squads", squadId, "members-status"] as const,
   skills: (wsId: string) => ["workspaces", wsId, "skills"] as const,
+  org: (wsId: string) => ["workspaces", wsId, "org"] as const,
   assigneeFrequency: (wsId: string) => ["workspaces", wsId, "assignee-frequency"] as const,
   mcpServers: (wsId: string) => ["workspaces", wsId, "mcp-servers"] as const,
 };
@@ -35,6 +36,13 @@ export function workspaceBySlugOptions(slug: string) {
   return queryOptions({
     ...workspaceListOptions(),
     select: (list: Workspace[]) => list.find((w) => w.slug === slug) ?? null,
+  });
+}
+
+export function orgTreeOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.org(wsId),
+    queryFn: () => api.listOrgUnits(),
   });
 }
 

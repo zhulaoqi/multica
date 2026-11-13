@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, BookOpenText, Bot, Monitor, Plus, User, UserPlus, Users } from "@multica/ui/icons";
+import { BarChart3, BookOpenText, Bot, Monitor, Network, Plus, User, UserPlus, Users } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { IconButton } from "@multica/ui/components/common/icon-button";
@@ -12,7 +12,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { issueDetailOptions } from "@multica/core/issues/queries";
 import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
-import { memberListOptions, skillListOptions, squadListOptions } from "@multica/core/workspace/queries";
+import { memberListOptions, orgTreeOptions, skillListOptions, squadListOptions } from "@multica/core/workspace/queries";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import type { Agent, AgentTask } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
@@ -118,6 +118,7 @@ export function TeamPanel() {
   const liveSquads = useMemo(() => squads.filter((squad) => !squad.archived_at), [squads]);
   const { data: members = [] } = useQuery({ ...memberListOptions(wsId), enabled: !!wsId });
   const { data: skills = [] } = useQuery({ ...skillListOptions(wsId), enabled: !!wsId });
+  const { data: orgTree } = useQuery({ ...orgTreeOptions(wsId), enabled: !!wsId });
   const { data: runtimes = [] } = useQuery({ ...runtimeListOptions(wsId), enabled: !!wsId });
   const machineCounts = useMemo(() => {
     const machines = buildRuntimeMachines(runtimes, { now: Date.now() }).filter(
@@ -226,6 +227,13 @@ export function TeamPanel() {
 
         <PanelSection label={t(($) => $.panels.team.squads_and_members)}>
           <PanelList>
+            <PanelLink
+              href={p.org()}
+              icon={<Network />}
+              label={t(($) => $.nav.org)}
+              active={isPathWithin(pathname, p.org())}
+              trailing={<PanelCount value={orgTree?.units.length ?? 0} />}
+            />
             <PanelLink
               href={p.squads()}
               icon={<Users />}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type OrgAgent, type OrgImportResult, type OrgTree, type OrgUnit } from "@multica/core/api";
+import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgImportResult, type OrgTree, type OrgUnit } from "@multica/core/api";
 import { useCurrentWorkspace, useWorkspaceSlug } from "@multica/core/paths";
 import { ORG_IMPORT_PLACEHOLDER, parseOrgImportText } from "./org-import";
 
@@ -278,7 +278,7 @@ export function OrgPage() {
     queryFn: () => api.listMembers(workspaceId),
     enabled: workspaceId !== "",
   });
-  const data: OrgTree = tree.data ?? { units: [], agents: [], can_manage: false };
+  const data: OrgTree = tree.data ?? EMPTY_ORG_TREE;
   const leadNames = new Map<string, string>();
   const memberChoices: Array<{ user_id: string; label: string }> = [];
   for (const member of members.data ?? []) {

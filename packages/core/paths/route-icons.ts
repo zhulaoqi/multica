@@ -33,6 +33,7 @@ export type RouteIconName =
   | "Monitor"
   | "Server"
   | "BookOpenText"
+  | "Network"
   | "Settings"
   | "File"
   | "FileText"
@@ -54,6 +55,7 @@ export type NavLabelKey =
   | "views"
   | "autopilots"
   | "agents"
+  | "org"
   | "squads"
   | "usage"
   | "runtimes"
@@ -71,6 +73,7 @@ export type WorkspacePageKey =
   | "views"
   | "autopilots"
   | "agents"
+  | "org"
   | "squads"
   | "usage"
   | "runtimes"
@@ -100,6 +103,7 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   views: { segment: "views", icon: "Layers", navKey: "views" },
   autopilots: { segment: "autopilots", icon: "Zap", navKey: "autopilots" },
   agents: { segment: "agents", icon: "Bot", navKey: "agents" },
+  org: { segment: "org", icon: "Network", navKey: "org" },
   squads: { segment: "squads", icon: "Users", navKey: "squads" },
   usage: { segment: "usage", icon: "BarChart3", navKey: "usage" },
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },

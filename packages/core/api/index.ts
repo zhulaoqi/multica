@@ -14,7 +14,7 @@ export type {
 } from "./client";
 export { parseWithFallback, setSchemaLogger } from "./schema";
 export type { IntakeAgent, IntakeListItem, IntakeMaintainProject, IntakeModule, IntakeProjectItem, IntakeSession } from "./intake-schema";
-export type { OrgAgent, OrgImportResult, OrgImportRow, OrgTree, OrgUnit } from "./org-schema";
+export type { OrgAgent, OrgImportResult, OrgImportRow, OrgMember, OrgTree, OrgUnit } from "./org-schema";
 export type { ParseOptions } from "./schema";
 export { DuplicateIssueErrorBodySchema } from "./schemas";
 export type { DuplicateIssueErrorBody } from "./schemas";
@@ -47,3 +47,5 @@ export const api = new Proxy({} as ApiClientType, {
     return typeof value === "function" ? value.bind(_api) : value;
   },
 });
+
+export { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_TREE } from "./org-schema";

@@ -5728,4 +5728,11 @@ export class ApiClient {
       body: JSON.stringify({ unit_id: unitId }),
     });
   }
+
+  async setOrgMemberUnit(userId: string, unitId: string): Promise<void> {
+    await this.fetch(`/api/org/members/${encodeURIComponent(userId)}/unit`, {
+      method: "PUT",
+      body: JSON.stringify({ unit_id: unitId }),
+    });
+  }
 }
