@@ -438,3 +438,129 @@ func TestOrgUnitCrud_CreateRenameLeadDelete(t *testing.T) {
 		}
 	}
 }
+
+func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-lead-rights-admin@example.com")
+	lead := createPermissionTestMember(t, "org-lead-rights-lead@example.com")
+	other := createPermissionTestMember(t, "org-lead-rights-other@example.com")
+
+	call := func(userID, method, path, paramName, paramValue string, body any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.SetOrgMemberUnit(rec, orgRequestWithParam(userID, method, path, paramName, paramValue, body))
+		return rec
+	}
+	patchUnit := func(userID, unitID string, body map[string]any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.UpdateOrgUnit(rec, orgRequestWithParam(userID, "PATCH", "/api/org/units/x", "unitId", unitID, body))
+		return rec
+	}
+	createUnit := func(userID string, body map[string]any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.CreateOrgUnit(rec, newRequestAs(userID, "POST", "/api/org/units", body))
+		return rec
+	}
+	deleteUnit := func(userID, unitID string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(userID, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		return rec
+	}
+
+	rootRec := createUnit(admin, map[string]any{"name": "研发中心", "lead_user_id": lead})
+	if rootRec.Code != http.StatusCreated {
+		t.Fatalf("create root status = %d: %s", rootRec.Code, rootRec.Body.String())
+	}
+	var root struct{ ID string }
+	if err := json.Unmarshal(rootRec.Body.Bytes(), &root); err != nil {
+		t.Fatalf("decode root: %v", err)
+	}
+
+	// A lead creates children under their own unit but not sibling roots.
+	childRec := createUnit(lead, map[string]any{"name": "支付组", "parent_id": root.ID})
+	if childRec.Code != http.StatusCreated {
+		t.Fatalf("lead create child status = %d: %s", childRec.Code, childRec.Body.String())
+	}
+	var child struct{ ID string }
+	if err := json.Unmarshal(childRec.Body.Bytes(), &child); err != nil {
+		t.Fatalf("decode child: %v", err)
+	}
+	rootAgain := createUnit(lead, map[string]any{"name": "另一个部"})
+	if rootAgain.Code != http.StatusForbidden {
+		t.Fatalf("lead create root status = %d, want 403: %s", rootAgain.Code, rootAgain.Body.String())
+	}
+
+	// Non-lead members cannot place or rename anything.
+	if rec := call(other, "PUT", "/api/org/members/x/unit", "userId", other, map[string]any{"unit_id": child.ID}); rec.Code != http.StatusForbidden {
+		t.Fatalf("member place status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := patchUnit(other, child.ID, map[string]any{"name": "改名组"}); rec.Code != http.StatusForbidden {
+		t.Fatalf("member rename status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+
+	// The lead moves a member in and out of their subtree, then renames.
+	if rec := call(lead, "PUT", "/api/org/members/x/unit", "userId", other, map[string]any{"unit_id": child.ID}); rec.Code != http.StatusNoContent {
+		t.Fatalf("lead place status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var placed string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM member WHERE workspace_id = $1 AND user_id = $2
+	`, testWorkspaceID, other).Scan(&placed); err != nil {
+		t.Fatalf("load member unit: %v", err)
+	}
+	if placed != child.ID {
+		t.Fatalf("member unit = %q, want %q", placed, child.ID)
+	}
+	if rec := patchUnit(lead, child.ID, map[string]any{"name": "收单组"}); rec.Code != http.StatusNoContent {
+		t.Fatalf("lead rename status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The tree reports per-unit manage rights: the lead manages the subtree,
+	// a plain member manages nothing.
+	tree := httptest.NewRecorder()
+	testHandler.ListOrgUnits(tree, newRequestAs(lead, "GET", "/api/org/units", nil))
+	if tree.Code != http.StatusOK {
+		t.Fatalf("tree status = %d: %s", tree.Code, tree.Body.String())
+	}
+	var treeData orgTreeResponse
+	if err := json.Unmarshal(tree.Body.Bytes(), &treeData); err != nil {
+		t.Fatalf("decode tree: %v", err)
+	}
+	if treeData.CanManage {
+		t.Fatal("workspace-level can_manage = true for a unit lead, want false")
+	}
+	placedMember := ""
+	for _, entry := range treeData.Members {
+		if entry.UserID == other {
+			placedMember = entry.UnitID
+		}
+	}
+	if placedMember != child.ID {
+		t.Fatalf("tree member unit = %q, want %q: %+v", placedMember, child.ID, treeData.Members)
+	}
+	byID := map[string]orgUnitResponse{}
+	for _, unit := range treeData.Units {
+		byID[unit.ID] = unit
+	}
+	if !byID[child.ID].CanManage || !byID[root.ID].CanManage {
+		t.Fatalf("lead can_manage child=%v root=%v, want true/true", byID[child.ID].CanManage, byID[root.ID].CanManage)
+	}
+
+	// Deleting a unit that still has members is refused.
+	if rec := deleteUnit(admin, child.ID); rec.Code != http.StatusConflict {
+		t.Fatalf("delete occupied status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	// The member (no manage rights) cannot remove themselves either.
+	if rec := call(other, "PUT", "/api/org/members/x/unit", "userId", other, map[string]any{"unit_id": ""}); rec.Code != http.StatusForbidden {
+		t.Fatalf("member self-remove status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := call(lead, "PUT", "/api/org/members/x/unit", "userId", other, map[string]any{"unit_id": ""}); rec.Code != http.StatusNoContent {
+		t.Fatalf("lead remove status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := deleteUnit(lead, child.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("lead delete child status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := deleteUnit(admin, root.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("admin delete root status = %d: %s", rec.Code, rec.Body.String())
+	}
+}

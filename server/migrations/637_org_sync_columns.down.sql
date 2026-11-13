@@ -1,0 +1,2 @@
+ALTER TABLE member DROP COLUMN IF EXISTS org_unit_id;
+ALTER TABLE org_unit DROP COLUMN IF NOT EXISTS external_id;

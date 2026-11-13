@@ -45,6 +45,24 @@ func (q *Queries) CountOrgUnitChildren(ctx context.Context, arg CountOrgUnitChil
 	return column_1, err
 }
 
+const countOrgUnitMembers = `-- name: CountOrgUnitMembers :one
+SELECT count(*)::int
+FROM member
+WHERE workspace_id = $1 AND org_unit_id = $2
+`
+
+type CountOrgUnitMembersParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) CountOrgUnitMembers(ctx context.Context, arg CountOrgUnitMembersParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countOrgUnitMembers, arg.WorkspaceID, arg.OrgUnitID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createOrgUnit = `-- name: CreateOrgUnit :one
 INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, position)
 VALUES ($1, $2, $3, $4, $5)
@@ -206,6 +224,50 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 	return items, nil
 }
 
+const listOrgUnitMembers = `-- name: ListOrgUnitMembers :many
+SELECT m.user_id, m.org_unit_id, u.name, u.email, u.avatar_url
+FROM member m
+JOIN "user" u ON u.id = m.user_id
+WHERE m.workspace_id = $1
+ORDER BY u.name
+`
+
+type ListOrgUnitMembersRow struct {
+	UserID    pgtype.UUID `json:"user_id"`
+	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+	Name      string      `json:"name"`
+	Email     string      `json:"email"`
+	AvatarUrl pgtype.Text `json:"avatar_url"`
+}
+
+// Every workspace member with their org unit (NULL when unassigned). The org
+// page needs the full roster to pick unit leads and to list unassigned people.
+func (q *Queries) ListOrgUnitMembers(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitMembersRow, error) {
+	rows, err := q.db.Query(ctx, listOrgUnitMembers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgUnitMembersRow{}
+	for rows.Next() {
+		var i ListOrgUnitMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.OrgUnitID,
+			&i.Name,
+			&i.Email,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgUnits = `-- name: ListOrgUnits :many
 SELECT id, parent_id, name, lead_user_id, description, position
 FROM org_unit
@@ -280,6 +342,23 @@ type SetAgentOrgUnitParams struct {
 
 func (q *Queries) SetAgentOrgUnit(ctx context.Context, arg SetAgentOrgUnitParams) error {
 	_, err := q.db.Exec(ctx, setAgentOrgUnit, arg.ID, arg.WorkspaceID, arg.OrgUnitID)
+	return err
+}
+
+const setMemberOrgUnit = `-- name: SetMemberOrgUnit :exec
+UPDATE member
+SET org_unit_id = $3
+WHERE workspace_id = $1 AND user_id = $2
+`
+
+type SetMemberOrgUnitParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) SetMemberOrgUnit(ctx context.Context, arg SetMemberOrgUnitParams) error {
+	_, err := q.db.Exec(ctx, setMemberOrgUnit, arg.WorkspaceID, arg.UserID, arg.OrgUnitID)
 	return err
 }
 

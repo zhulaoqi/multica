@@ -2574,6 +2574,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Patch("/units/{unitId}", h.UpdateOrgUnit)
 				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
+		r.Put("/members/{userId}/unit", h.SetOrgMemberUnit)
 			})
 
 			// Tasks (user-facing, with ownership check)

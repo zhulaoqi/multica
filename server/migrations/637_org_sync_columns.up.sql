@@ -1,0 +1,2 @@
+ALTER TABLE org_unit ADD COLUMN IF NOT EXISTS external_id TEXT;
+ALTER TABLE member ADD COLUMN IF NOT EXISTS org_unit_id UUID;

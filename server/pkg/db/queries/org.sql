@@ -67,3 +67,22 @@ WHERE workspace_id = $1 AND org_unit_id = $2;
 -- name: DeleteOrgUnit :exec
 DELETE FROM org_unit
 WHERE id = $1 AND workspace_id = $2;
+
+-- name: ListOrgUnitMembers :many
+-- Every workspace member with their org unit (NULL when unassigned). The org
+-- page needs the full roster to pick unit leads and to list unassigned people.
+SELECT m.user_id, m.org_unit_id, u.name, u.email, u.avatar_url
+FROM member m
+JOIN "user" u ON u.id = m.user_id
+WHERE m.workspace_id = $1
+ORDER BY u.name;
+
+-- name: SetMemberOrgUnit :exec
+UPDATE member
+SET org_unit_id = $3
+WHERE workspace_id = $1 AND user_id = $2;
+
+-- name: CountOrgUnitMembers :one
+SELECT count(*)::int
+FROM member
+WHERE workspace_id = $1 AND org_unit_id = $2;

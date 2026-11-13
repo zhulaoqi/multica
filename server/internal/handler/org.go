@@ -17,10 +17,13 @@ import (
 )
 
 type orgUnitResponse struct {
-	ID          string `json:"id"`
-	ParentID    string `json:"parent_id"`
-	Name        string `json:"name"`
-	LeadUserID  string `json:"lead_user_id"`
+	ID         string `json:"id"`
+	ParentID   string `json:"parent_id"`
+	Name       string `json:"name"`
+	LeadUserID string `json:"lead_user_id"`
+	// CanManage marks units the requester may edit: workspace managers, or
+	// the lead of this unit or one of its ancestors.
+	CanManage   bool   `json:"can_manage"`
 	Description string `json:"description"`
 	Position    int32  `json:"position"`
 }
@@ -33,10 +36,19 @@ type orgAgentResponse struct {
 	Cannot string `json:"cannot"`
 }
 
+type orgMemberResponse struct {
+	UserID    string  `json:"user_id"`
+	UnitID    string  `json:"unit_id"`
+	Name      string  `json:"name"`
+	Email     string  `json:"email"`
+	AvatarURL *string `json:"avatar_url"`
+}
+
 type orgTreeResponse struct {
-	Units     []orgUnitResponse  `json:"units"`
-	Agents    []orgAgentResponse `json:"agents"`
-	CanManage bool               `json:"can_manage"`
+	Units     []orgUnitResponse   `json:"units"`
+	Agents    []orgAgentResponse  `json:"agents"`
+	Members   []orgMemberResponse `json:"members"`
+	CanManage bool                `json:"can_manage"`
 }
 
 type orgAgentUnitBody struct {
@@ -62,40 +74,38 @@ type orgImportResponse struct {
 }
 
 // ListOrgUnits returns the flat organisation tree plus every agent that has a
-// unit. Clients assemble the tree; the payload stays stable when units move.
+// unit and every member placed in one. Clients assemble the tree; the payload
+// stays stable when units move.
 func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
-	workspaceID := h.resolveWorkspaceID(r)
-	member, ok := h.workspaceMember(w, r, workspaceID)
+	access, ok := h.orgAccess(w, r)
 	if !ok {
 		return
 	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
-	if err != nil {
-		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
-		writeError(w, http.StatusInternalServerError, "could not list organisation units")
-		return
-	}
-	agents, err := h.Queries.ListAgentsInOrgUnits(r.Context(), wsUUID)
+	agents, err := h.Queries.ListAgentsInOrgUnits(r.Context(), access.wsUUID)
 	if err != nil {
 		slog.Error("list org agents failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "could not list organisation agents")
 		return
 	}
-	resp := orgTreeResponse{
-		Units:     make([]orgUnitResponse, 0, len(units)),
-		Agents:    make([]orgAgentResponse, 0, len(agents)),
-		CanManage: roleAllowed(member.Role, "owner", "admin"),
+	members, err := h.Queries.ListOrgUnitMembers(r.Context(), access.wsUUID)
+	if err != nil {
+		slog.Error("list org members failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not list organisation members")
+		return
 	}
-	for _, unit := range units {
+	resp := orgTreeResponse{
+		Units:     make([]orgUnitResponse, 0, len(access.units)),
+		Agents:    make([]orgAgentResponse, 0, len(agents)),
+		Members:   make([]orgMemberResponse, 0, len(members)),
+		CanManage: access.admin,
+	}
+	for _, unit := range access.units {
 		resp.Units = append(resp.Units, orgUnitResponse{
 			ID:          uuidToString(unit.ID),
 			ParentID:    uuidToString(unit.ParentID),
 			Name:        unit.Name,
 			LeadUserID:  uuidToString(unit.LeadUserID),
+			CanManage:   access.manages(unit.ID),
 			Description: unit.Description,
 			Position:    unit.Position,
 		})
@@ -107,6 +117,15 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			UnitID: uuidToString(agent.OrgUnitID),
 			Can:    textValue(agent.IntakeCan),
 			Cannot: textValue(agent.IntakeCannot),
+		})
+	}
+	for _, member := range members {
+		resp.Members = append(resp.Members, orgMemberResponse{
+			UserID:    uuidToString(member.UserID),
+			UnitID:    uuidToString(member.OrgUnitID),
+			Name:      member.Name,
+			Email:     member.Email,
+			AvatarURL: textPtr(member.AvatarUrl),
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -255,9 +274,15 @@ func (h *Handler) upsertOrgUnitPath(
 }
 
 // CreateOrgUnit adds one unit, optionally under a parent and with a lead.
+// Workspace managers may create roots; a unit lead may add children under a
+// unit they manage.
 func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
-	wsUUID, ok := h.orgManageWorkspace(w, r)
+	access, ok := h.orgAccess(w, r)
 	if !ok {
+		return
+	}
+	if !access.managesAny() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
 	var body orgUnitBody
@@ -271,20 +296,24 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	parent := pgtype.UUID{}
 	if body.ParentID != "" {
-		parent, ok = h.orgUnitRef(w, r, wsUUID, body.ParentID)
+		parent, ok = h.orgUnitRef(w, r, access.wsUUID, body.ParentID)
 		if !ok {
 			return
 		}
 	}
+	if !access.manages(parent) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
 	lead := pgtype.UUID{}
 	if body.LeadUserID != nil && *body.LeadUserID != "" {
-		lead, ok = h.orgLeadRef(w, r, wsUUID, *body.LeadUserID)
+		lead, ok = h.orgLeadRef(w, r, access.wsUUID, *body.LeadUserID)
 		if !ok {
 			return
 		}
 	}
 	id, err := h.Queries.CreateOrgUnit(r.Context(), db.CreateOrgUnitParams{
-		WorkspaceID: wsUUID,
+		WorkspaceID: access.wsUUID,
 		ParentID:    parent,
 		Name:        name,
 		LeadUserID:  lead,
@@ -302,13 +331,23 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateOrgUnit renames a unit and/or sets its lead; an empty lead clears it.
+// The lead of a unit or one of its ancestors may edit it.
 func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
-	wsUUID, ok := h.orgManageWorkspace(w, r)
+	access, ok := h.orgAccess(w, r)
 	if !ok {
 		return
 	}
+	if !access.managesAny() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	wsUUID := access.wsUUID
 	unitID, ok := h.orgUnitRef(w, r, wsUUID, chi.URLParam(r, "unitId"))
 	if !ok {
+		return
+	}
+	if !access.manages(unitID) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
 	var body orgUnitBody
@@ -358,15 +397,24 @@ func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeleteOrgUnit removes an empty-leaved unit: agents in it become unassigned,
-// while units below it must be moved or deleted first.
+// DeleteOrgUnit removes a leaf unit: agents in it become unassigned, while
+// units below it and members placed in it must be moved or deleted first.
 func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
-	wsUUID, ok := h.orgManageWorkspace(w, r)
+	access, ok := h.orgAccess(w, r)
 	if !ok {
 		return
 	}
+	if !access.managesAny() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	wsUUID := access.wsUUID
 	unitID, ok := h.orgUnitRef(w, r, wsUUID, chi.URLParam(r, "unitId"))
 	if !ok {
+		return
+	}
+	if !access.manages(unitID) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
 	children, err := h.Queries.CountOrgUnitChildren(r.Context(), db.CountOrgUnitChildrenParams{
@@ -379,6 +427,18 @@ func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	if children > 0 {
 		writeError(w, http.StatusConflict, "先移走或删除下级部门")
+		return
+	}
+	members, err := h.Queries.CountOrgUnitMembers(r.Context(), db.CountOrgUnitMembersParams{
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitID,
+	})
+	if err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	if members > 0 {
+		writeError(w, http.StatusConflict, "先移走这个部门里的成员")
 		return
 	}
 	if err := h.Queries.ClearOrgUnitAgents(r.Context(), db.ClearOrgUnitAgentsParams{
@@ -456,10 +516,26 @@ func (h *Handler) orgLeadRef(w http.ResponseWriter, r *http.Request, wsUUID pgty
 }
 
 // SetOrgAgentUnit places an agent in a unit, or clears its unit when unit_id
-// is empty. Agents stay in the workspace either way.
+// is empty. Agents stay in the workspace either way. Placing an agent needs
+// manage rights on the target unit; removing it needs manage rights on the
+// unit it currently sits in.
 func (h *Handler) SetOrgAgentUnit(w http.ResponseWriter, r *http.Request) {
-	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+	h.setOrgEntityUnit(w, r, chi.URLParam(r, "agentId"), "agent")
+}
+
+// SetOrgMemberUnit places a workspace member in a unit, or clears their unit
+// when unit_id is empty, with the same manage-rights split as agents.
+func (h *Handler) SetOrgMemberUnit(w http.ResponseWriter, r *http.Request) {
+	h.setOrgEntityUnit(w, r, chi.URLParam(r, "userId"), "member")
+}
+
+func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entityID string, entityType string) {
+	access, ok := h.orgAccess(w, r)
+	if !ok {
+		return
+	}
+	if !access.managesAny() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
 	var body orgAgentUnitBody
@@ -467,18 +543,33 @@ func (h *Handler) SetOrgAgentUnit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+	entityUUID, ok := parseUUIDOrBadRequest(w, entityID, entityType+" id")
 	if !ok {
 		return
 	}
-	agentUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "agentId"), "agent id")
-	if !ok {
-		return
-	}
-	agent, err := h.Queries.GetAgent(r.Context(), agentUUID)
-	if err != nil || agent.WorkspaceID != wsUUID {
-		writeError(w, http.StatusNotFound, "agent not found")
-		return
+	var currentUnit pgtype.UUID
+	switch entityType {
+	case "agent":
+		agent, err := h.Queries.GetAgent(r.Context(), entityUUID)
+		if err != nil || agent.WorkspaceID != access.wsUUID {
+			writeError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		currentUnit = agent.OrgUnitID
+	case "member":
+		member, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+			UserID:      entityUUID,
+			WorkspaceID: access.wsUUID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusNotFound, "member not found")
+				return
+			}
+			h.importOrgFailed(w, r, err)
+			return
+		}
+		currentUnit = member.OrgUnitID
 	}
 	unitUUID := pgtype.UUID{}
 	if body.UnitID != "" {
@@ -488,7 +579,7 @@ func (h *Handler) SetOrgAgentUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := h.Queries.GetOrgUnit(r.Context(), db.GetOrgUnitParams{
 			ID:          unitUUID,
-			WorkspaceID: wsUUID,
+			WorkspaceID: access.wsUUID,
 		}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeError(w, http.StatusNotFound, "organisation unit not found")
@@ -497,16 +588,114 @@ func (h *Handler) SetOrgAgentUnit(w http.ResponseWriter, r *http.Request) {
 			h.importOrgFailed(w, r, err)
 			return
 		}
+		if !access.manages(unitUUID) {
+			writeError(w, http.StatusForbidden, "insufficient permissions")
+			return
+		}
+	} else if !access.manages(currentUnit) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
 	}
-	if err := h.Queries.SetAgentOrgUnit(r.Context(), db.SetAgentOrgUnitParams{
-		ID:          agentUUID,
-		WorkspaceID: wsUUID,
+	if entityType == "member" {
+		if err := h.Queries.SetMemberOrgUnit(r.Context(), db.SetMemberOrgUnitParams{
+			WorkspaceID: access.wsUUID,
+			UserID:      entityUUID,
+			OrgUnitID:   unitUUID,
+		}); err != nil {
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	} else if err := h.Queries.SetAgentOrgUnit(r.Context(), db.SetAgentOrgUnitParams{
+		ID:          entityUUID,
+		WorkspaceID: access.wsUUID,
 		OrgUnitID:   unitUUID,
 	}); err != nil {
 		h.importOrgFailed(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// orgAccess carries everything org mutations need: the resolved workspace, the
+// caller and their units, so permission decisions stay consistent across the
+// org handlers without repeating the load.
+type orgAccess struct {
+	wsUUID pgtype.UUID
+	userID pgtype.UUID
+	admin  bool
+	units  []db.ListOrgUnitsRow
+}
+
+func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, bool) {
+	workspaceID := h.resolveWorkspaceID(r)
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
+		return orgAccess{}, false
+	}
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+	if !ok {
+		return orgAccess{}, false
+	}
+	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	if err != nil {
+		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not list organisation units")
+		return orgAccess{}, false
+	}
+	return orgAccess{
+		wsUUID: wsUUID,
+		userID: member.UserID,
+		admin:  roleAllowed(member.Role, "owner", "admin"),
+		units:  units,
+	}, true
+}
+
+// manages reports that the caller may administer the unit: workspace managers
+// may, and so may the lead of the unit itself or one of its ancestors.
+func (a orgAccess) manages(unitID pgtype.UUID) bool {
+	if a.admin {
+		return true
+	}
+	return orgUserLeadsUnit(a.userID, a.units, unitID)
+}
+
+// managesAny reports whether the caller may administer at least one unit.
+// Handlers gate on it before resolving a unit so callers without any rights get
+// a stable 403 instead of a 404 that leaks whether the unit exists.
+func (a orgAccess) managesAny() bool {
+	if a.admin {
+		return true
+	}
+	if !a.userID.Valid {
+		return false
+	}
+	for _, unit := range a.units {
+		if unit.LeadUserID == a.userID {
+			return true
+		}
+	}
+	return false
+}
+
+func orgUserLeadsUnit(userID pgtype.UUID, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
+	if !userID.Valid || !unitID.Valid {
+		return false
+	}
+	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
+	for _, unit := range units {
+		byID[unit.ID] = unit
+	}
+	for current, guard := unitID, 0; current.Valid && guard <= len(units); guard++ {
+		unit, ok := byID[current]
+		if !ok {
+			return false
+		}
+		if unit.LeadUserID == userID {
+			return true
+		}
+		current = unit.ParentID
+	}
+	return false
 }
 
 func (h *Handler) importOrgFailed(w http.ResponseWriter, r *http.Request, err error) {
@@ -523,4 +712,11 @@ func textValue(t pgtype.Text) string {
 		return ""
 	}
 	return t.String
+}
+
+func textPtr(t pgtype.Text) *string {
+	if !t.Valid || t.String == "" {
+		return nil
+	}
+	return &t.String
 }

@@ -1303,6 +1303,7 @@ type Member struct {
 	UserID      pgtype.UUID        `json:"user_id"`
 	Role        string             `json:"role"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	OrgUnitID   pgtype.UUID        `json:"org_unit_id"`
 }
 
 type MemberDelegationDay struct {
@@ -1328,6 +1329,7 @@ type OrgUnit struct {
 	Position    int32              `json:"position"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ExternalID  pgtype.Text        `json:"external_id"`
 }
 
 type PersonalAccessToken struct {
