@@ -1,15 +1,21 @@
 "use client";
 
 import { Children, Fragment, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@multica/core/auth";
 import { api, type OrgAgent, type OrgMember, type OrgSquad, type OrgUnit } from "@multica/core/api";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { workspaceKeys } from "@multica/core/workspace/queries";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { Button } from "@multica/ui/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@multica/ui/components/ui/dialog";
 import { Input } from "@multica/ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@multica/ui/components/ui/select";
 import { Bot, ChevronRight } from "@multica/ui/icons";
 import { useT } from "../i18n";
 import { IntroArtCard, IntroArtConnector } from "../layout/feature-intro";
-import { agentAvailability, squadAvailability, type OrgNode } from "./org-tree";
+import { agentAvailability, memberTwin, squadAvailability, type OrgNode } from "./org-tree";
+import { TwinDialog } from "./org-twin";
 
 export const NO_UNIT = "__none";
 
@@ -85,12 +91,20 @@ export function MemberRow({
   canMove,
   choices,
   onMove,
+  twin = null,
+  placeUnitId = "",
 }: {
   member: OrgMember;
   canMove: boolean;
   choices: Array<{ id: string; path: string }>;
   onMove: (unitId: string) => void;
+  twin?: OrgAgent | null;
+  placeUnitId?: string;
 }) {
+  const { t } = useT("org");
+  const myUserId = useAuthStore((state) => state.user?.id ?? "");
+  const isSelf = member.user_id === myUserId;
+  const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <div className="flex items-center gap-3 py-1.5">
       <ActorAvatar
@@ -102,9 +116,99 @@ export function MemberRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-body">{member.name}</div>
         <div className="truncate text-caption text-muted-foreground">{member.email}</div>
+        {twin ? (
+          <div className="mt-1 flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1">
+            <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="shrink-0 text-caption font-medium text-muted-foreground">{t(($) => $.twin)}</span>
+            <span className="shrink-0 truncate text-caption">{twin.name}</span>
+            <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">{twin.can}</span>
+            <StatusChip tone={agentAvailability(twin.status)} />
+            {isSelf ? (
+              <button
+                type="button"
+                className="shrink-0 text-caption text-primary hover:underline"
+                onClick={() => setDialogOpen(true)}
+              >
+                {t(($) => $.edit_twin)}
+              </button>
+            ) : null}
+          </div>
+        ) : isSelf ? (
+          <div className="mt-1">
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-caption" onClick={() => setDialogOpen(true)}>
+              {t(($) => $.twin_register)}
+            </Button>
+          </div>
+        ) : null}
       </div>
       {canMove ? <UnitPicker value={member.unit_id} choices={choices} onChange={onMove} /> : null}
+      {dialogOpen ? (
+        <TwinDialog twin={twin} placeUnitId={placeUnitId} open onOpenChange={setDialogOpen} />
+      ) : null}
     </div>
+  );
+}
+
+/** CreateUnitDialog is the compact replacement for the create-child card that
+ * used to sit inside the card grid: a small header button opens it. */
+export function CreateUnitDialog({
+  unitId,
+  open,
+  onOpenChange,
+}: {
+  unitId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useT("org");
+  const wsId = useWorkspaceId();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await api.createOrgUnit({ name: name.trim(), parent_id: unitId });
+      await queryClient.invalidateQueries({ queryKey: workspaceKeys.org(wsId) });
+      setName("");
+      onOpenChange(false);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : t(($) => $.action_failed));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!saving) onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-w-sm" data-testid="create-unit-dialog">
+        <DialogHeader>
+          <DialogTitle>{t(($) => $.create_child)}</DialogTitle>
+        </DialogHeader>
+        <Input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={t(($) => $.unit_name_placeholder)}
+        />
+        {error ? <p className="text-body text-destructive">{error}</p> : null}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
+            {t(($) => $.cancel)}
+          </Button>
+          <Button size="sm" disabled={saving || !name.trim()} onClick={() => void submit()}>
+            {t(($) => $.new_unit)}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -170,6 +274,7 @@ function UnitHeaderCard({
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(unit.name);
   const [confirming, setConfirming] = useState(false);
+  const [creating, setCreating] = useState(false);
   const leadLabel = unit.lead_user_id
     ? (allMembers.find((member) => member.user_id === unit.lead_user_id)?.label ?? unit.lead_user_id.slice(0, 8))
     : "";
@@ -223,6 +328,11 @@ function UnitHeaderCard({
             {unit.can_manage ? (
               <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
                 {t(($) => $.rename)}
+              </Button>
+            ) : null}
+            {unit.can_manage ? (
+              <Button size="sm" variant="ghost" onClick={() => setCreating(true)}>
+                {t(($) => $.create_child)}
               </Button>
             ) : null}
           </>
@@ -284,6 +394,7 @@ function UnitHeaderCard({
       <p className="mt-1 text-caption text-muted-foreground tabular-nums">
         {t(($) => $.members)} {memberCount} · {t(($) => $.squads)} {squadCount} · {t(($) => $.agents)} {agentCount}
       </p>
+      {creating ? <CreateUnitDialog unitId={unit.id} open onOpenChange={setCreating} /> : null}
     </IntroArtCard>
   );
 }
@@ -396,10 +507,19 @@ export function OrgCanvas({
   const { unit, agents, members, squads, children } = node;
   const { run } = actions;
   const manageableChoices = unitChoices.filter((choice) => choice.manage);
-  const [childName, setChildName] = useState("");
+
+  // An agent owned by a member shown here is that member's twin; it renders
+  // on the member row instead of duplicating in the shared agents grid.
+  const twins = new Map<string, OrgAgent>();
+  for (const member of members) {
+    const twin = memberTwin(agents, member.user_id);
+    if (twin) twins.set(member.user_id, twin);
+  }
+  const twinIds = new Set([...twins.values()].map((twin) => twin.id));
+  const sharedAgents = agents.filter((agent) => !twinIds.has(agent.id));
 
   const sections: Array<{ key: string; node: ReactNode }> = [];
-  if (children.length > 0 || unit.can_manage) {
+  if (children.length > 0) {
     sections.push({
       key: "children",
       node: (
@@ -407,31 +527,6 @@ export function OrgCanvas({
           {children.map((child) => (
             <ChildCard key={child.unit.id} node={child} onSelect={onSelect} />
           ))}
-          {unit.can_manage ? (
-            <div className="flex w-full flex-col gap-2 rounded-lg border-[1.5px] border-dashed border-border p-3">
-              <Input
-                value={childName}
-                onChange={(event) => setChildName(event.target.value)}
-                placeholder={t(($) => $.unit_name_placeholder)}
-                className="h-8"
-              />
-              <Button
-                size="sm"
-                disabled={!childName.trim()}
-                onClick={() => {
-                  const name = childName.trim();
-                  if (!name) return;
-                  void run(
-                    () => api.createOrgUnit({ name, parent_id: unit.id }),
-                    t(($) => $.action_failed),
-                  );
-                  setChildName("");
-                }}
-              >
-                {t(($) => $.new_unit)}
-              </Button>
-            </div>
-          ) : null}
         </Group>
       ),
     });
@@ -459,12 +554,12 @@ export function OrgCanvas({
       ),
     });
   }
-  if (agents.length > 0) {
+  if (sharedAgents.length > 0) {
     sections.push({
       key: "agents",
       node: (
         <Group label={t(($) => $.agents)}>
-          {agents.map((agent) => (
+          {sharedAgents.map((agent) => (
             <AgentCard
               key={agent.id}
               agent={agent}
@@ -495,6 +590,8 @@ export function OrgCanvas({
                 member={member}
                 canMove={unit.can_manage}
                 choices={manageableChoices}
+                twin={twins.get(member.user_id) ?? null}
+                placeUnitId={member.unit_id}
                 onMove={(unitId) =>
                   void run(
                     () => api.setOrgMemberUnit(member.user_id, unitId),

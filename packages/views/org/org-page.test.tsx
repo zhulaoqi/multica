@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { api, type OrgAgent, type OrgMember, type OrgSquad, type OrgTree, type OrgUnit } from "@multica/core/api";
 
 vi.mock("@multica/core/api", async (importOriginal) => ({
@@ -12,9 +13,12 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
     setOrgMemberUnit: vi.fn(),
     setOrgAgentUnit: vi.fn(),
     setOrgSquadUnit: vi.fn(),
+    registerIntakeAgent: vi.fn(),
+    patchIntakeAgent: vi.fn(),
   },
 }));
 import { WorkspaceSlugProvider } from "@multica/core/paths";
+import { NavigationProvider, type NavigationAdapter } from "../navigation";
 import { memberListOptions, orgSyncStatusOptions, orgTreeOptions, workspaceListOptions } from "@multica/core/workspace/queries";
 import type { MemberWithUser } from "@multica/core/types";
 import { renderWithI18n } from "../test/i18n";
@@ -43,7 +47,7 @@ const baseUnit: OrgUnit = {
   description: "",
   position: 0,
 };
-const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", can: "", cannot: "", status: "" };
+const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", owner_id: "", runtime_mode: "", can: "", cannot: "", status: "" };
 const baseSquad: OrgSquad = { id: "", name: "", unit_id: "", leader_id: "", agent_count: 0, working_agents: 0 };
 const baseOrgMember: OrgMember = { user_id: "", unit_id: "", name: "", email: "", avatar_url: null };
 
@@ -67,8 +71,33 @@ function tree(overrides: Partial<OrgTree> = {}): OrgTree {
 }
 
 let qc: QueryClient;
+let auth: ReturnType<typeof createAuthStore>;
+
+function signIn(userID: string) {
+  auth.setState({
+    user: {
+      id: userID,
+      name: "Ada",
+      email: "ada@example.com",
+      avatar_url: null,
+      onboarded_at: null,
+      onboarding_questionnaire: {},
+      language: null,
+      profile_description: "",
+      timezone: null,
+      created_at: new Date(NOW).toISOString(),
+      updated_at: new Date(NOW).toISOString(),
+    },
+  });
+}
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  auth = createAuthStore({
+    api,
+    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  });
+  registerAuthStore(auth);
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   qc.setQueryData(workspaceListOptions().queryKey, [{
     id: WS,
@@ -92,12 +121,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const navAdapter: NavigationAdapter = {
+  push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+  pathname: "/acme/org",
+  searchParams: new URLSearchParams(),
+  hash: "",
+  getShareableUrl: (path) => path,
+};
+
 function renderPage(data: OrgTree) {
   qc.setQueryData(orgTreeOptions(WS).queryKey, data);
   renderWithI18n(
     <QueryClientProvider client={qc}>
       <WorkspaceSlugProvider slug="acme">
-        <OrgPage />
+        <NavigationProvider value={navAdapter}>
+          <OrgPage />
+        </NavigationProvider>
       </WorkspaceSlugProvider>
     </QueryClientProvider>,
   );
@@ -319,5 +360,112 @@ describe("OrgPage member landing and squads", () => {
     expect(screen.getByText("Loose squad")).toBeInTheDocument();
     // The squad's own department picker; members and agents are already placed.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  });
+});
+
+describe("OrgPage member twins", () => {
+  const twinAgent: OrgAgent = {
+    ...baseAgent,
+    id: "agent-twin",
+    name: "Ada twin",
+    unit_id: "dept-child",
+    owner_id: "u-ada",
+    can: "Backend APIs",
+    status: "idle",
+  };
+
+  it("shows a member's twin with its responsibility and availability", () => {
+    renderPage(
+      tree({
+        units: [unit({ id: "dept-child", name: "Payments" })],
+        agents: [twinAgent],
+        my_unit_id: "dept-child",
+        can_manage: false,
+      }),
+    );
+
+    // The twin renders on the member row only, not a second time as a
+    // shared agent card.
+    expect(screen.getAllByText("Ada twin")).toHaveLength(1);
+    expect(screen.getByText("Backend APIs")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for scheduling")).toBeInTheDocument();
+    // Another member cannot edit someone else's twin.
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("lets the signed-in member register a twin into their department", async () => {
+    signIn("u-ada");
+    vi.mocked(api.registerIntakeAgent).mockResolvedValue({
+      id: "agent-new",
+      name: "Ada twin",
+      can: "Backend APIs",
+    });
+    renderPage(
+      tree({
+        units: [unit({ id: "dept-child", name: "Payments" })],
+        agents: [],
+        my_unit_id: "dept-child",
+        can_manage: false,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Register my digital twin" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada twin" } });
+    fireEvent.change(screen.getByLabelText("Does"), { target: { value: "Backend APIs" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.registerIntakeAgent).toHaveBeenCalledWith({
+        name: "Ada twin",
+        can: "Backend APIs",
+        cannot: "",
+        runtime_mode: "local",
+      }),
+    );
+    await waitFor(() => expect(api.setOrgAgentUnit).toHaveBeenCalledWith("agent-new", "dept-child"));
+  });
+
+  it("edits the signed-in member's twin without moving it", async () => {
+    signIn("u-ada");
+    renderPage(
+      tree({
+        units: [unit({ id: "dept-child", name: "Payments" })],
+        agents: [twinAgent],
+        my_unit_id: "dept-child",
+        can_manage: false,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    expect(nameInput.value).toBe("Ada twin");
+    fireEvent.change(nameInput, { target: { value: "Ada digital twin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.patchIntakeAgent).toHaveBeenCalledWith("agent-twin", {
+        name: "Ada digital twin",
+        can: "Backend APIs",
+        cannot: "",
+        runtime_mode: "local",
+      }),
+    );
+    expect(api.setOrgAgentUnit).not.toHaveBeenCalled();
+  });
+
+  it("creates a sub-department from the department card dialog", async () => {
+    vi.mocked(api.createOrgUnit).mockResolvedValue({ id: "dept-new" });
+    renderPage(tree({ my_unit_id: "dept-root" }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Add sub-department" })[0]!);
+    const dialog = screen.getByTestId("create-unit-dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("Department name"), {
+      target: { value: "Payments two" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "New department" }));
+
+    await waitFor(() =>
+      expect(api.createOrgUnit).toHaveBeenCalledWith({ name: "Payments two", parent_id: "dept-root" }),
+    );
   });
 });

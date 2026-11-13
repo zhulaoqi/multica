@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from "vitest";
-import { agentAvailability, buildOrgForest, squadAvailability, unitPaths } from "./org-tree";
+import { agentAvailability, buildOrgForest, memberTwin, squadAvailability, unitPaths } from "./org-tree";
 
 const UNITS = [
   { id: "a", parent_id: "", name: "研发中心", lead_user_id: "", can_manage: true, description: "", position: 0 },
@@ -23,8 +23,8 @@ describe("buildOrgForest", () => {
     const forest = buildOrgForest({
       units: UNITS,
       agents: [
-        { id: "ag1", name: "Mika", unit_id: "b", can: "", cannot: "", status: "idle" },
-        { id: "ag2", name: "Loose", unit_id: "", can: "", cannot: "", status: "offline" },
+        { id: "ag1", name: "Mika", unit_id: "b", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "idle" },
+        { id: "ag2", name: "Loose", unit_id: "", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "offline" },
       ],
       members: [
         { user_id: "u1", unit_id: "b", name: "Ann", email: "ann@example.com", avatar_url: null },
@@ -54,6 +54,22 @@ describe("squads in the forest", () => {
     });
     expect(forest.roots[0]!.children[0]!.squads.map((squad) => squad.id)).toEqual(["s1"]);
     expect(forest.unassignedSquads.map((squad) => squad.id)).toEqual(["s2", "s3"]);
+  });
+});
+
+describe("memberTwin", () => {
+  const agents = [
+    { id: "ag1", name: "Mika", unit_id: "b", owner_id: "u1", runtime_mode: "local", can: "", cannot: "", status: "idle" },
+    { id: "ag2", name: "Loose", unit_id: "", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "offline" },
+  ];
+
+  it("binds an agent to the member that registered it", () => {
+    expect(memberTwin(agents, "u1")?.id).toBe("ag1");
+  });
+
+  it("returns null for members without a twin or without an id", () => {
+    expect(memberTwin(agents, "u2")).toBeNull();
+    expect(memberTwin(agents, "")).toBeNull();
   });
 });
 

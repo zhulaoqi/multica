@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { EMPTY_ORG_TREE, api, type OrgSyncReport, type OrgTree } from "@multica/core/api";
+import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgSyncReport, type OrgTree } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   memberListOptions,
@@ -13,7 +13,7 @@ import {
 import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { useT } from "../i18n";
-import { buildOrgForest, unitPaths } from "./org-tree";
+import { buildOrgForest, memberTwin, unitPaths } from "./org-tree";
 import { AgentCard, MemberRow, NO_UNIT, OrgCanvas, SquadCard } from "./org-canvas";
 
 function useOrgActions() {
@@ -140,6 +140,15 @@ export function OrgPage() {
   }));
   const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
   const moveChoices = unitChoices.filter((choice) => choice.manage);
+  // Unassigned people keep their twins on their own row; those agents leave
+  // the unassigned agent list.
+  const unassignedTwins = new Map<string, OrgAgent>();
+  for (const member of forest.unassignedMembers) {
+    const twin = memberTwin(forest.unassignedAgents, member.user_id);
+    if (twin) unassignedTwins.set(member.user_id, twin);
+  }
+  const unassignedTwinIds = new Set([...unassignedTwins.values()].map((twin) => twin.id));
+  const unassignedAgents = forest.unassignedAgents.filter((agent) => !unassignedTwinIds.has(agent.id));
   const lastRun = syncStatus.data?.last_run ?? null;
   const runSync = async () => {
     setFailure("");
@@ -264,6 +273,7 @@ export function OrgPage() {
                     member={member}
                     canMove={moveChoices.length > 0}
                     choices={moveChoices}
+                    twin={unassignedTwins.get(member.user_id) ?? null}
                     onMove={(unitId) =>
                       void run(
                         () => api.setOrgMemberUnit(member.user_id, unitId),
@@ -274,10 +284,10 @@ export function OrgPage() {
                 ))}
               </section>
             ) : null}
-            {forest.unassignedAgents.length > 0 ? (
+            {unassignedAgents.length > 0 ? (
               <section className="flex flex-col gap-1">
                 <h3 className="text-body font-medium">{t(($) => $.agents)}</h3>
-                {forest.unassignedAgents.map((agent) => (
+                {unassignedAgents.map((agent) => (
                   <AgentCard
                     key={agent.id}
                     agent={agent}

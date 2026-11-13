@@ -15,6 +15,12 @@ export interface OrgForest {
   unassignedSquads: OrgSquad[];
 }
 
+/** The agent a member registered as their own digital twin, if any. */
+export function memberTwin(agents: OrgAgent[], userID: string): OrgAgent | null {
+  if (!userID) return null;
+  return agents.find((agent) => agent.owner_id === userID) ?? null;
+}
+
 /** Resolves the full path (研发中心/支付组) for every unit. */
 export function unitPaths(units: OrgUnit[]): Map<string, string> {
   const byID = new Map(units.map((unit) => [unit.id, unit]));

@@ -40,6 +40,8 @@ type orgAgentResponse struct {
 	// Status is the agent's runtime availability (idle, working, offline…).
 	// The org view reads it to show idle agents as waiting for scheduling.
 	Status string `json:"status"`
+	// RuntimeMode lets the twin editor keep local/cloud as configured.
+	RuntimeMode string `json:"runtime_mode"`
 }
 
 // orgSquadResponse is a squad attached to a unit. AgentCount and the working
@@ -165,8 +167,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			UnitID:  uuidToString(agent.OrgUnitID),
 			OwnerID: uuidToString(agent.OwnerID),
 			Can:     textValue(agent.IntakeCan),
-			Cannot:  textValue(agent.IntakeCannot),
-			Status:  agent.Status,
+			Cannot:      textValue(agent.IntakeCannot),
+			Status:      agent.Status,
+			RuntimeMode: agent.RuntimeMode,
 		})
 	}
 	for _, member := range members {

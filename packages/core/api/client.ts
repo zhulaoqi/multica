@@ -5648,8 +5648,21 @@ export class ApiClient {
     return parseWithFallback(raw, IntakeSessionSchema, { id: "", name: "" }, { endpoint: "GET /api/intake/session" });
   }
 
-  async registerIntakeAgent(input: { name: string; can: string; cannot?: string; runtime_mode: "local" | "cloud" }): Promise<void> {
-    await this.fetch("/api/intake/agents", { method: "POST", body: JSON.stringify(input) });
+  async registerIntakeAgent(input: {
+    name: string;
+    can: string;
+    cannot?: string;
+    runtime_mode: "local" | "cloud";
+  }): Promise<IntakeAgent> {
+    const raw = await this.fetch<unknown>("/api/intake/agents", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    const parsed = IntakeAgentSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error("could not read the registered agent");
+    }
+    return parsed.data;
   }
 
   async setIntakeTestEnvironment(projectId: string, url: string): Promise<void> {

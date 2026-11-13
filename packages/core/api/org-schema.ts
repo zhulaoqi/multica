@@ -24,6 +24,11 @@ export const OrgAgentSchema = z.object({
   id: z.string(),
   name: z.string(),
   unit_id: z.string().optional().default(""),
+  // The member this agent belongs to when it is their registered digital
+  // twin; empty for shared or unowned agents. Older servers omit it.
+  owner_id: z.string().optional().default(""),
+  // Runtime backing the twin; the editor keeps it as configured.
+  runtime_mode: z.string().optional().default(""),
   can: z.string().optional().default(""),
   cannot: z.string().optional().default(""),
   // Runtime availability (idle, working, blocked, error, offline). Older

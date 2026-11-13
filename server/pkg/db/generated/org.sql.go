@@ -266,7 +266,7 @@ func (q *Queries) InsertOrgSyncRun(ctx context.Context, arg InsertOrgSyncRunPara
 }
 
 const listAgentsInOrgUnits = `-- name: ListAgentsInOrgUnits :many
-SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
@@ -281,6 +281,7 @@ type ListAgentsInOrgUnitsRow struct {
 	IntakeCan    pgtype.Text `json:"intake_can"`
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
 	Status       string      `json:"status"`
+	RuntimeMode  string      `json:"runtime_mode"`
 }
 
 // Includes agents with an empty unit so the org page can place them. Status is
@@ -304,6 +305,7 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.IntakeCan,
 			&i.IntakeCannot,
 			&i.Status,
+			&i.RuntimeMode,
 		); err != nil {
 			return nil, err
 		}

@@ -47,7 +47,7 @@ WHERE lower(u.email) = lower($2);
 -- the agent's own availability, which the org view surfaces as whether the
 -- agent is waiting for collaborative scheduling. OwnerID lets the client match
 -- an agent to its member (the "digital twin" binding).
-SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
