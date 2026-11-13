@@ -129,7 +129,7 @@ export function TeamPanel() {
 
   const mineCount = userId ? agents.filter((agent) => agent.owner_id === userId).length : 0;
   const myRole = members.find((member) => member.user_id === userId)?.role;
-  const canInvite = myRole === "owner" || myRole === "admin";
+  const canManageMembers = myRole === "owner" || myRole === "admin";
   const onAgents = pathname === p.agents();
   // Member pages live under /members/:id; the list itself is a Settings tab.
   const membersRoot = p.memberDetail("").replace(/\/$/, "");
@@ -137,7 +137,7 @@ export function TeamPanel() {
   return (
     <>
       <PanelHeader title={t(($) => $.spaces.team)}>
-        {canInvite && (
+        {canManageMembers && (
           <IconButton
             label={t(($) => $.panels.team.invite_member)}
             tooltipSide="bottom"
@@ -254,25 +254,27 @@ export function TeamPanel() {
                 />
               );
             })}
-            <PanelLink
-              href={`${p.settings()}?tab=members`}
-              label={t(($) => $.panels.team.members, { count: members.length })}
-              active={isPathWithin(pathname, membersRoot)}
-              icon={
-                <span className="flex -space-x-1">
-                  {members.slice(0, MEMBER_AVATAR_LIMIT).map((member) => (
-                    <ActorAvatar
-                      key={member.user_id}
-                      name={member.name}
-                      initials={member.name.charAt(0).toUpperCase()}
-                      avatarUrl={resolvePublicFileUrl(member.avatar_url)}
-                      size="xs"
-                      className="ring-1 ring-page-canvas"
-                    />
-                  ))}
-                </span>
-              }
-            />
+            {canManageMembers && (
+              <PanelLink
+                href={`${p.settings()}?tab=members`}
+                label={t(($) => $.panels.team.members, { count: members.length })}
+                active={isPathWithin(pathname, membersRoot)}
+                icon={
+                  <span className="flex -space-x-1">
+                    {members.slice(0, MEMBER_AVATAR_LIMIT).map((member) => (
+                      <ActorAvatar
+                        key={member.user_id}
+                        name={member.name}
+                        initials={member.name.charAt(0).toUpperCase()}
+                        avatarUrl={resolvePublicFileUrl(member.avatar_url)}
+                        size="xs"
+                        className="ring-1 ring-page-canvas"
+                      />
+                    ))}
+                  </span>
+                }
+              />
+            )}
           </PanelList>
         </PanelSection>
 

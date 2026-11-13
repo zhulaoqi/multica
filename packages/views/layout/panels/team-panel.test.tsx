@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentTaskSnapshotOptions } from "@multica/core/agents";
-import { api } from "@multica/core/api";
+import { api, setApiInstance, type ApiClient } from "@multica/core/api";
 import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { WorkspaceSlugProvider } from "@multica/core/paths";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
@@ -52,15 +52,16 @@ function runtime(overrides: Partial<AgentRuntime> = {}): AgentRuntime {
 }
 
 let qc: QueryClient;
+let auth: ReturnType<typeof createAuthStore>;
 
 beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(NOW);
-  registerAuthStore(
-    createAuthStore({
-      api,
-      storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-    }),
-  );
+  setApiInstance({ getBaseUrl: () => "" } as unknown as ApiClient);
+  auth = createAuthStore({
+    api,
+    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  });
+  registerAuthStore(auth);
   qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -178,5 +179,54 @@ describe("TeamPanel runtime badge", () => {
 
     expect(screen.getByRole("link", { name: "Runtimes" })).toBeInTheDocument();
     expect(screen.queryByText(/online|offline/)).not.toBeInTheDocument();
+  });
+});
+
+describe("TeamPanel member directory", () => {
+  function memberRow(role: "owner" | "admin" | "member") {
+    return {
+      id: "member-1",
+      workspace_id: WS,
+      user_id: "user-1",
+      role,
+      created_at: new Date(NOW).toISOString(),
+      name: "Ada",
+      email: "ada@example.com",
+      avatar_url: null,
+    };
+  }
+
+  function signIn() {
+    auth.setState({
+      user: {
+        id: "user-1",
+        name: "Ada",
+        email: "ada@example.com",
+        avatar_url: null,
+        onboarded_at: null,
+        onboarding_questionnaire: {},
+        language: null,
+        profile_description: "",
+        timezone: null,
+        created_at: new Date(NOW).toISOString(),
+        updated_at: new Date(NOW).toISOString(),
+      },
+    });
+  }
+
+  it("hides the workspace-wide member count from plain members", () => {
+    signIn();
+    qc.setQueryData(memberListOptions(WS).queryKey, [memberRow("member")]);
+    renderPanel([]);
+
+    expect(screen.queryByRole("link", { name: /1 member/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the member directory for workspace admins", () => {
+    signIn();
+    qc.setQueryData(memberListOptions(WS).queryKey, [memberRow("admin")]);
+    renderPanel([]);
+
+    expect(screen.getByRole("link", { name: /1 member/ })).toBeInTheDocument();
   });
 });
