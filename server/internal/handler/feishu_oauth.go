@@ -139,7 +139,39 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Header.Set("Content-Type", "application/json")
 	rec := &bufferedResponse{header: make(http.Header)}
 	h.FeishuLogin(rec, r2)
-	finishFeishuBrowserLogin(w, r, rec)
+	dest := h.feishuLandingPath(r.Context(), rec)
+	if dest != "/" {
+		http.SetCookie(w, &http.Cookie{
+			Name: "multica_logged_in", Value: "1", Path: "/",
+			MaxAge: 31536000, SameSite: http.SameSiteLaxMode,
+		})
+	}
+	finishFeishuBrowserLogin(w, r, rec, dest)
+}
+
+// feishuLandingPath skips the login page. A fresh session has no
+// last-workspace cookie, and the site root would bounce through /login.
+func (h *Handler) feishuLandingPath(ctx context.Context, rec *bufferedResponse) string {
+	if rec.status != http.StatusOK {
+		return "/"
+	}
+	var body feishuLoginResponse
+	if err := json.Unmarshal(rec.body.Bytes(), &body); err != nil || body.ID == "" {
+		return "/"
+	}
+	userID := parseUUID(body.ID)
+	user, err := h.Queries.GetUser(ctx, userID)
+	if err != nil {
+		return "/"
+	}
+	if !user.OnboardedAt.Valid {
+		return "/onboarding"
+	}
+	workspaces, err := h.Queries.ListWorkspaces(ctx, userID)
+	if err != nil || len(workspaces) == 0 || workspaces[0].Slug == "" {
+		return "/workspaces/new"
+	}
+	return "/" + workspaces[0].Slug + "/intake"
 }
 
 // bufferedResponse keeps the login JSON off the browser. The callback only
@@ -165,7 +197,7 @@ func (b *bufferedResponse) Write(p []byte) (int, error) {
 	return b.body.Write(p)
 }
 
-func finishFeishuBrowserLogin(w http.ResponseWriter, r *http.Request, rec *bufferedResponse) {
+func finishFeishuBrowserLogin(w http.ResponseWriter, r *http.Request, rec *bufferedResponse, dest string) {
 	if rec.status >= 400 || rec.status == 0 {
 		for key, values := range rec.header {
 			for _, value := range values {
@@ -183,7 +215,10 @@ func finishFeishuBrowserLogin(w http.ResponseWriter, r *http.Request, rec *buffe
 	for _, cookie := range rec.header.Values("Set-Cookie") {
 		w.Header().Add("Set-Cookie", cookie)
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	if dest == "" {
+		dest = "/"
+	}
+	http.Redirect(w, r, dest, http.StatusFound)
 }
 
 func ioNopCloser(r *strings.Reader) nopCloser { return nopCloser{r} }

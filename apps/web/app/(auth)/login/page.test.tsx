@@ -105,10 +105,7 @@ describe("LoginPage", () => {
       "href",
       "/auth/feishu/start",
     );
-    expect(screen.getByRole("link", { name: "开发者入口" })).toHaveAttribute(
-      "href",
-      "/login/operator",
-    );
+    expect(screen.queryByRole("link", { name: "开发者入口" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument();
   });
@@ -150,11 +147,11 @@ describe("LoginPage", () => {
     });
   });
 
-  it("stays on Feishu sign-in when a desktop handoff is requested", () => {
+  it("does not flash the login form when a session is already present", () => {
     searchParamsState.params = new URLSearchParams({ platform: "desktop" });
     authStateRef.state.user = { id: "u1", email: "test@multica.ai" };
     render(<LoginPage />, { wrapper: createWrapper() });
-    expect(screen.getByRole("link", { name: "飞书登录" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "飞书登录" })).not.toBeInTheDocument();
     expect(mockIssueCliToken).not.toHaveBeenCalled();
   });
 

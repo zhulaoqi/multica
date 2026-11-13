@@ -29,7 +29,7 @@ func TestFeishuBrowserLoginRedirectsWithoutJSON(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/auth/feishu/callback?code=abc", nil)
-	finishFeishuBrowserLogin(w, req, rec)
+	finishFeishuBrowserLogin(w, req, rec, "/")
 
 	if w.Code != http.StatusFound {
 		t.Fatalf("status = %d, want 302", w.Code)
