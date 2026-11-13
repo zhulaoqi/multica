@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 const feishuTokenURL = "https://open.feishu.cn/open-apis/authen/v2/oauth/token"
@@ -165,6 +167,13 @@ func (h *Handler) feishuLandingPath(ctx context.Context, rec *bufferedResponse) 
 		return "/"
 	}
 	if !user.OnboardedAt.Valid {
+		invites, err := h.Queries.ListPendingInvitationsForUser(ctx, db.ListPendingInvitationsForUserParams{
+			InviteeUserID: userID,
+			InviteeEmail:  user.Email,
+		})
+		if err == nil && len(invites) > 0 {
+			return "/invitations"
+		}
 		return "/onboarding"
 	}
 	workspaces, err := h.Queries.ListWorkspaces(ctx, userID)
