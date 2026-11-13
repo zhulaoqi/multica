@@ -19,7 +19,7 @@
   "confirm_delete": "削除を確定",
   "delete_blocked": "サブ部門とメンバーを先に移動してください。",
   "move_to": "部門",
-  "read_only": "変更できるのはワークスペース管理者と部門責任者だけです。",
+  "read_only": "表示されるのは自分の部署のみです。管理者は組織全体を同期・管理できます。",
   "load_failed": "組織ツリーを読み込めませんでした。",
   "action_failed": "変更が反映されませんでした。",
   "sync_from_feishu": "Feishu から同期",

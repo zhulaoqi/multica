@@ -596,7 +596,7 @@ export function OrgPage() {
             </Button>
           </div>
         ) : null}
-        {data.units.length === 0 && !tree.isLoading ? (
+        {canAnyManage && data.units.length === 0 && !tree.isLoading ? (
           <p className="px-2 text-caption text-muted-foreground">{t(($) => $.no_units)}</p>
         ) : null}
         {forest.roots.map((node) => (

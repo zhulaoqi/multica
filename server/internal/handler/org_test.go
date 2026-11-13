@@ -590,9 +590,13 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		t.Fatalf("add squad agents: %v", err)
 	}
 
-	createUnit := func(name string) string {
+	createUnit := func(name string, parentID ...string) string {
+		body := map[string]any{"name": name}
+		if len(parentID) > 0 && parentID[0] != "" {
+			body["parent_id"] = parentID[0]
+		}
 		rec := httptest.NewRecorder()
-		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", map[string]any{"name": name}))
+		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", body))
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("create unit %s status = %d: %s", name, rec.Code, rec.Body.String())
 		}
@@ -602,7 +606,14 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		}
 		return created.ID
 	}
+	deleteUnit := func(unitID string) int {
+		rec := httptest.NewRecorder()
+		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		return rec.Code
+	}
 	unitID := createUnit("支付组")
+	childID := createUnit("支付一组", unitID)
+	createUnit("销售组")
 
 	squadReq := func(userID, squad string, body any) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
@@ -617,10 +628,10 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		t.Fatalf("admin squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 
-	// The member placed in the unit sees the whole tree read-only, lands on
-	// their own department, and finds the squad waiting for scheduling.
+	// The member placed in a sub-department only sees that branch: its unit,
+	// the ancestor that locates it, and nothing from the sibling root.
 	place := httptest.NewRecorder()
-	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": unitID}))
+	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": childID}))
 	if place.Code != http.StatusNoContent {
 		t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
 	}
@@ -636,8 +647,18 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	if tree.CanManage {
 		t.Fatal("member can_manage = true, want false")
 	}
-	if tree.MyUnitID != unitID {
-		t.Fatalf("my_unit_id = %q, want %q", tree.MyUnitID, unitID)
+	if tree.MyUnitID != childID {
+		t.Fatalf("my_unit_id = %q, want %q", tree.MyUnitID, childID)
+	}
+	unitNames := map[string]string{}
+	for _, unit := range tree.Units {
+		unitNames[unit.ID] = unit.Name
+	}
+	if unitNames[childID] != "支付一组" || unitNames[unitID] != "支付组" {
+		t.Fatalf("member tree = %v, want own department and its parent", unitNames)
+	}
+	if len(tree.Units) != 2 {
+		t.Fatalf("member tree has %d units, want 2: %v", len(tree.Units), unitNames)
 	}
 	if len(tree.Squads) != 1 {
 		t.Fatalf("squads = %+v, want one", tree.Squads)
@@ -646,25 +667,53 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	if squad.ID != squadID || squad.UnitID != unitID || squad.AgentCount != 2 {
 		t.Fatalf("squad = %+v, want id %q unit %q with 2 agents", squad, squadID, unitID)
 	}
-	// Agents report availability so the org view can show waiting vs working.
+	// Unassigned agents stay out of a plain member's view.
+	if len(tree.Agents) != 0 {
+		t.Fatalf("member agents = %+v, want none while no agent sits in their branch", tree.Agents)
+	}
+	// The admin still sees everything, including each agent's availability.
+	adminList := httptest.NewRecorder()
+	testHandler.ListOrgUnits(adminList, newRequestAs(admin, "GET", "/api/org/units", nil))
+	if adminList.Code != http.StatusOK {
+		t.Fatalf("admin list status = %d: %s", adminList.Code, adminList.Body.String())
+	}
+	var adminTree orgTreeResponse
+	if err := json.Unmarshal(adminList.Body.Bytes(), &adminTree); err != nil {
+		t.Fatalf("decode admin tree: %v", err)
+	}
+	if len(adminTree.Units) != 3 {
+		t.Fatalf("admin tree has %d units, want 3", len(adminTree.Units))
+	}
 	statuses := map[string]string{}
-	for _, agent := range tree.Agents {
+	for _, agent := range adminTree.Agents {
 		statuses[agent.Name] = agent.Status
 	}
 	if statuses["org-squad-leader"] == "" {
 		t.Fatalf("agent statuses = %v, want a status for every agent", statuses)
 	}
 
-	// Deleting the unit detaches the squad instead of leaving a dangling id.
+	// A member outside every department sees an empty organisation.
 	clearPlace := httptest.NewRecorder()
 	testHandler.SetOrgMemberUnit(clearPlace, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ""}))
 	if clearPlace.Code != http.StatusNoContent {
 		t.Fatalf("clear member status = %d: %s", clearPlace.Code, clearPlace.Body.String())
 	}
-	deleteRec := httptest.NewRecorder()
-	testHandler.DeleteOrgUnit(deleteRec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
-	if deleteRec.Code != http.StatusNoContent {
-		t.Fatalf("delete unit status = %d: %s", deleteRec.Code, deleteRec.Body.String())
+	detached := httptest.NewRecorder()
+	testHandler.ListOrgUnits(detached, newRequestAs(member, "GET", "/api/org/units", nil))
+	var detachedTree orgTreeResponse
+	if err := json.Unmarshal(detached.Body.Bytes(), &detachedTree); err != nil {
+		t.Fatalf("decode detached tree: %v", err)
+	}
+	if len(detachedTree.Units) != 0 || len(detachedTree.Squads) != 0 || detachedTree.MyUnitID != "" {
+		t.Fatalf("detached member tree = %+v, want empty", detachedTree)
+	}
+
+	// Deleting the unit detaches the squad instead of leaving a dangling id.
+	if code := deleteUnit(childID); code != http.StatusNoContent {
+		t.Fatalf("delete child unit status = %d", code)
+	}
+	if code := deleteUnit(unitID); code != http.StatusNoContent {
+		t.Fatalf("delete unit status = %d", code)
 	}
 	var squadUnit string
 	if err := testPool.QueryRow(context.Background(), `

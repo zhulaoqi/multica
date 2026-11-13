@@ -117,7 +117,7 @@ describe("OrgPage permissions", () => {
       can_manage: false,
     }));
 
-    expect(screen.getByText(/Only workspace admins/)).toBeInTheDocument();
+    expect(screen.getByText(/You only see your own department/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add top-level department" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sync from Feishu" })).not.toBeInTheDocument();
 

@@ -94,7 +94,9 @@ type orgImportResponse struct {
 
 // ListOrgUnits returns the flat organisation tree plus every agent that has a
 // unit and every member placed in one. Clients assemble the tree; the payload
-// stays stable when units move.
+// stays stable when units move. Callers who cannot manage the workspace only
+// receive the departments they belong to or lead, so the org view answers
+// "where am I" instead of exposing the whole company.
 func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	access, ok := h.orgAccess(w, r)
 	if !ok {
@@ -125,7 +127,21 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		Squads:    make([]orgSquadResponse, 0, len(squads)),
 		CanManage: access.admin,
 	}
+	var ownUnitID pgtype.UUID
+	for _, member := range members {
+		if member.UserID == access.userID {
+			ownUnitID = member.OrgUnitID
+			resp.MyUnitID = uuidToString(member.OrgUnitID)
+		}
+	}
+	var visible map[pgtype.UUID]bool
+	if !access.admin {
+		visible = visibleOrgUnits(access.units, ownUnitID, access.manages)
+	}
 	for _, unit := range access.units {
+		if visible != nil && !visible[unit.ID] {
+			continue
+		}
 		resp.Units = append(resp.Units, orgUnitResponse{
 			ID:          uuidToString(unit.ID),
 			ParentID:    uuidToString(unit.ParentID),
@@ -137,6 +153,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	for _, agent := range agents {
+		if visible != nil && !visible[agent.OrgUnitID] {
+			continue
+		}
 		resp.Agents = append(resp.Agents, orgAgentResponse{
 			ID:     uuidToString(agent.ID),
 			Name:   agent.Name,
@@ -147,8 +166,8 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	for _, member := range members {
-		if member.UserID == access.userID {
-			resp.MyUnitID = uuidToString(member.OrgUnitID)
+		if visible != nil && !visible[member.OrgUnitID] {
+			continue
 		}
 		resp.Members = append(resp.Members, orgMemberResponse{
 			UserID:    uuidToString(member.UserID),
@@ -159,6 +178,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	for _, squad := range squads {
+		if visible != nil && !visible[squad.OrgUnitID] {
+			continue
+		}
 		resp.Squads = append(resp.Squads, orgSquadResponse{
 			ID:            uuidToString(squad.ID),
 			Name:          squad.Name,
@@ -775,6 +797,52 @@ func orgUserLeadsUnit(userID pgtype.UUID, units []db.ListOrgUnitsRow, unitID pgt
 		current = unit.ParentID
 	}
 	return false
+}
+
+// visibleOrgUnits narrows the tree for callers without workspace management:
+// they see their own department and the departments they lead, each with its
+// descendants, plus the ancestor chain that locates them. Ancestors are added
+// without their other branches so the tree still renders a path to the root.
+func visibleOrgUnits(units []db.ListOrgUnitsRow, ownUnitID pgtype.UUID, manages func(pgtype.UUID) bool) map[pgtype.UUID]bool {
+	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
+	children := make(map[pgtype.UUID][]pgtype.UUID, len(units))
+	for _, unit := range units {
+		byID[unit.ID] = unit
+		if unit.ParentID.Valid {
+			children[unit.ParentID] = append(children[unit.ParentID], unit.ID)
+		}
+	}
+	visible := make(map[pgtype.UUID]bool, len(units))
+	var addSubtree func(pgtype.UUID)
+	addSubtree = func(id pgtype.UUID) {
+		if !id.Valid || visible[id] {
+			return
+		}
+		if _, ok := byID[id]; !ok {
+			return
+		}
+		visible[id] = true
+		for _, child := range children[id] {
+			addSubtree(child)
+		}
+	}
+	addAncestors := func(id pgtype.UUID) {
+		for current, guard := id, 0; current.Valid && guard <= len(units); guard++ {
+			unit, ok := byID[current]
+			if !ok {
+				return
+			}
+			visible[current] = true
+			current = unit.ParentID
+		}
+	}
+	for _, unit := range units {
+		if unit.ID == ownUnitID || manages(unit.ID) {
+			addSubtree(unit.ID)
+			addAncestors(unit.ID)
+		}
+	}
+	return visible
 }
 
 func (h *Handler) importOrgFailed(w http.ResponseWriter, r *http.Request, err error) {

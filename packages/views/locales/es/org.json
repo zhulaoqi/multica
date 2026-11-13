@@ -19,7 +19,7 @@
   "confirm_delete": "Confirmar eliminación",
   "delete_blocked": "Mueve primero sus subdepartamentos y miembros.",
   "move_to": "Departamento",
-  "read_only": "Solo los administradores y el responsable del departamento pueden modificar.",
+  "read_only": "Solo ves tu propio departamento. Los administradores sincronizan y gestionan toda la organización.",
   "load_failed": "No se pudo cargar la organización.",
   "action_failed": "El cambio no se aplicó.",
   "sync_from_feishu": "Sincronizar desde Feishu",

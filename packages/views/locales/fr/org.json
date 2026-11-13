@@ -19,7 +19,7 @@
   "confirm_delete": "Confirmer la suppression",
   "delete_blocked": "Déplacez d'abord ses sous-départements et ses membres.",
   "move_to": "Département",
-  "read_only": "Seuls les administrateurs et le responsable du département peuvent modifier.",
+  "read_only": "Vous ne voyez que votre propre service. Les administrateurs synchronisent et gèrent toute l'organisation.",
   "load_failed": "Impossible de charger l'organisation.",
   "action_failed": "La modification n'a pas été appliquée.",
   "sync_from_feishu": "Synchroniser depuis Feishu",

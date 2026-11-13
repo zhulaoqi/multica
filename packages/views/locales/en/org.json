@@ -19,7 +19,7 @@
   "confirm_delete": "Confirm delete",
   "delete_blocked": "Move its sub-departments and members out first.",
   "move_to": "Department",
-  "read_only": "Only workspace admins and the department lead can make changes.",
+  "read_only": "You only see your own department. Admins sync and manage the whole organization.",
   "load_failed": "Could not load the organisation tree.",
   "action_failed": "That change did not go through.",
   "sync_from_feishu": "Sync from Feishu",
