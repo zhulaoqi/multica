@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorCode, type IntakeAgent, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem } from "@multica/core/api";
 import { useWorkspaceSlug } from "@multica/core/paths";
+import { createSafeId } from "@multica/core/utils";
 import { useOptionalWS } from "@multica/core/realtime";
 import type { WSEventType } from "@multica/core/types";
 import { AppLink } from "../navigation";
@@ -28,7 +29,7 @@ export function IntakePage({
   const [startAt, setStartAt] = useState("");
   const [status, setStatus] = useState("");
   const [sending, setSending] = useState(false);
-  const [requestID, setRequestID] = useState(() => crypto.randomUUID());
+  const [requestID, setRequestID] = useState(() => createSafeId());
   const [canMaintain, setCanMaintain] = useState(false);
   const [maintainProjects, setMaintainProjects] = useState<IntakeMaintainProject[]>([]);
   const [catalog, setCatalog] = useState<IntakeAgent[]>([]);
@@ -140,7 +141,7 @@ export function IntakePage({
         return;
       }
       setText("");
-      setRequestID(crypto.randomUUID());
+      setRequestID(createSafeId());
       setStatus(result.enqueue_error ? "等待处理" : "正在做");
       await refresh();
     } catch (err) {

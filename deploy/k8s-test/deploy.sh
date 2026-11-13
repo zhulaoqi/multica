@@ -7,8 +7,12 @@ root="$(cd "$(dirname "$0")" && pwd)"
 export KUBECONFIG="${KUBECONFIG:-/Users/zhujinqi/Documents/env/pem/config}"
 
 namespace="${NAMESPACE:-multica-test}"
-api_image="${API_IMAGE:-multica/agent-api:test}"
-web_image="${WEB_IMAGE:-multica/agent-web:test}"
+# A fresh tag every publish. Reusing multica/agent-*:test leaves the node
+# running the image imported last time, because containerd keeps that tag
+# and imagePullPolicy is Never.
+stamp="$(date -u +%Y%m%d%H%M%S)"
+api_image="multica/agent-api:${stamp}"
+web_image="multica/agent-web:${stamp}"
 postgres_image="${POSTGRES_IMAGE:-postgres:17}"
 go_runtime="${GO_RUNTIME:-172.30.10.185:15000/common/golang:1.27.0}"
 node_runtime="${NODE_RUNTIME:-172.30.10.185:15000/common/node:22-chrome}"
@@ -64,6 +68,13 @@ EOF
   kubectl -n "${namespace}" cp "${tar}" image-loader:/images/multica.tar
   kubectl -n "${namespace}" exec image-loader -- \
     chroot /host ctr -n k8s.io images import /tmp/multica-images/multica.tar
+  kubectl -n "${namespace}" exec image-loader -- \
+    chroot /host sh -c "ctr -n k8s.io images ls -q | while read -r name; do
+      case \"\${name}\" in
+        *multica/agent-api:${stamp}|*multica/agent-web:${stamp}) ;;
+        *multica/agent-api:*|*multica/agent-web:*) ctr -n k8s.io images rm \"\${name}\" || true ;;
+      esac
+    done"
   kubectl -n "${namespace}" exec image-loader -- \
     chroot /host rm -f /tmp/multica-images/multica.tar
   kubectl -n "${namespace}" delete pod image-loader --wait=true >/dev/null
@@ -123,15 +134,24 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
   docker image prune -f
 fi
 
-# The image tag stays multica/agent-*:test and pull policy is Never, so a
-# plain apply sees an unchanged Deployment and leaves the old process running.
-# A new publish time changes the pod template and forces that process to exit.
+# Each publish uses a new image tag. published-at also changes the pod
+# template, so the running process is replaced by that image.
 published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# The browser opens the site on a node IP. /ws is proxied to the API, so the
+# API does not see that address as its own Host and rejects the upgrade
+# unless the address is on the origin allowlist.
+web_port="$(kubectl -n "${namespace}" get svc agent-web -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
+web_origins="http://127.0.0.1:3000"
+if [ -n "${web_port}" ]; then
+  web_origins="$(kubectl get nodes -o wide --no-headers | awk -v port="${web_port}" '$6 != "" { urls = urls (urls ? "," : "") "http://" $6 ":" port } END { print urls }')"
+fi
 echo "更换正在运行的容器（${published_at}）"
+echo "网页来源：${web_origins}"
 sed \
   -e "s#API_IMAGE#${api_image}#g" \
   -e "s#NODE_NAME#${node}#g" \
   -e "s#PUBLISHED_AT#${published_at}#g" \
+  -e "s#WEB_ORIGINS#${web_origins}#g" \
   "${root}/agent-api.yaml" | kubectl apply -f -
 sed \
   -e "s#WEB_IMAGE#${web_image}#g" \
@@ -164,4 +184,4 @@ kubectl -n "${namespace}" get deploy,svc,ingress
 node_port="$(kubectl -n "${namespace}" get svc agent-web -o jsonpath='{.spec.ports[0].nodePort}')"
 echo
 echo "网页从节点内网 IP 的 ${node_port} 端口进入："
-kubectl get nodes -o wide --no-headers | awk -v port="${node_port}" '{print "http://"$6":"port"/login/operator"}'
+kubectl get nodes -o wide --no-headers | awk -v port="${node_port}" '{print "http://"$6":"port"/login"}'

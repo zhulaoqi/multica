@@ -36,6 +36,19 @@ describe("IntakePage", () => {
     intakeApi.submitIntake.mockReset();
   });
 
+  it("opens over plain HTTP, where crypto.randomUUID is missing", async () => {
+    const realCrypto = globalThis.crypto;
+    vi.stubGlobal("crypto", {
+      getRandomValues: (bytes: Uint8Array<ArrayBuffer>) => realCrypto.getRandomValues(bytes),
+    });
+    try {
+      renderPage();
+      expect(await screen.findByPlaceholderText("写下几句话")).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("opens in chat without a project, module, or agent picker", async () => {
     renderPage();
     expect(await screen.findByPlaceholderText("写下几句话")).toBeTruthy();
