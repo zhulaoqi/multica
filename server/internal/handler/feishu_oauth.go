@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 const feishuTokenURL = "https://open.feishu.cn/open-apis/authen/v2/oauth/token"
@@ -142,8 +144,14 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Body = ioNopCloser(strings.NewReader(string(payload)))
 	r2.ContentLength = int64(len(payload))
 	r2.Header.Set("Content-Type", "application/json")
-	rec := &redirectRecorder{header: http.Header{}}
+	rec := &bufferedResponse{header: make(http.Header)}
 	h.FeishuLogin(rec, r2)
+	if rec.status >= 400 || rec.status == 0 {
+		// Send the person back to the sign-in page with a message instead of a
+		// bare JSON error; the exchange reason is logged by FeishuLogin.
+		http.Redirect(w, r, "/login?error=feishu", http.StatusFound)
+		return
+	}
 	// Only the session cookies belong on the redirect. The login response's
 	// own Content-Type/Content-Length describe a JSON body the recorder
 	// swallows; forwarding them makes the 302 advertise a body it never sends,
@@ -151,38 +159,66 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	for _, cookie := range rec.header.Values("Set-Cookie") {
 		w.Header().Add("Set-Cookie", cookie)
 	}
-	if rec.status >= 400 {
-		// Send the person back to the sign-in page with a message instead of a
-		// bare JSON error; the exchange reason is logged by FeishuLogin.
-		http.Redirect(w, r, "/login?error=feishu", http.StatusFound)
-		return
-	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.SetCookie(w, &http.Cookie{
+		Name: "multica_logged_in", Value: "1", Path: "/",
+		MaxAge: 31536000, SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, h.feishuLandingPath(r.Context(), rec), http.StatusFound)
 }
 
-// redirectRecorder lets the callback inspect the login outcome before deciding
-// where to send the browser. It keeps the login handler's status, headers and
-// body in memory; the callback copies just the cookies it needs onto the real
-// response and redirects.
-type redirectRecorder struct {
+// feishuLandingPath skips the login page. A fresh session has no
+// last-workspace cookie, and the site root would bounce through /login.
+func (h *Handler) feishuLandingPath(ctx context.Context, rec *bufferedResponse) string {
+	if rec.status != http.StatusOK {
+		return "/"
+	}
+	var body feishuLoginResponse
+	if err := json.Unmarshal(rec.body.Bytes(), &body); err != nil || body.ID == "" {
+		return "/"
+	}
+	userID := parseUUID(body.ID)
+	user, err := h.Queries.GetUser(ctx, userID)
+	if err != nil {
+		return "/"
+	}
+	if !user.OnboardedAt.Valid {
+		invites, err := h.Queries.ListPendingInvitationsForUser(ctx, db.ListPendingInvitationsForUserParams{
+			InviteeUserID: userID,
+			InviteeEmail:  user.Email,
+		})
+		if err == nil && len(invites) > 0 {
+			return "/invitations"
+		}
+		return "/onboarding"
+	}
+	workspaces, err := h.Queries.ListWorkspaces(ctx, userID)
+	if err != nil || len(workspaces) == 0 || workspaces[0].Slug == "" {
+		return "/workspaces/new"
+	}
+	return "/" + workspaces[0].Slug + "/intake"
+}
+
+// bufferedResponse keeps the login JSON off the browser. The callback only
+// needs the session cookies, then sends the person back to the site.
+type bufferedResponse struct {
 	header http.Header
 	status int
 	body   bytes.Buffer
 }
 
-func (r *redirectRecorder) Header() http.Header { return r.header }
+func (b *bufferedResponse) Header() http.Header { return b.header }
 
-func (r *redirectRecorder) WriteHeader(status int) {
-	if r.status == 0 {
-		r.status = status
+func (b *bufferedResponse) WriteHeader(status int) {
+	if b.status == 0 {
+		b.status = status
 	}
 }
 
-func (r *redirectRecorder) Write(b []byte) (int, error) {
-	if r.status == 0 {
-		r.status = http.StatusOK
+func (b *bufferedResponse) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
 	}
-	return r.body.Write(b)
+	return b.body.Write(p)
 }
 
 func ioNopCloser(r *strings.Reader) nopCloser { return nopCloser{r} }

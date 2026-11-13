@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -19,12 +20,10 @@ import (
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Configure the CLI, authenticate, and start the daemon",
-	Long: `Configures the CLI to connect to Multica Cloud (multica.ai), then
-authenticates via browser and starts the agent daemon.
+	Long: `Configures the CLI for this deployment and starts the agent daemon.
 
-If a configuration already exists, you will be prompted before overwriting.
-
-Use 'multica setup self-host' to connect to a self-hosted server instead.
+The server and web addresses are read from the multica-test services.
+Use 'multica setup cloud' to connect to Multica Cloud (multica.ai) instead.
 
 If you run this command over SSH on a remote machine, keep the localhost
 callback and follow the SSH tunnel hint printed during browser login. If your
@@ -33,7 +32,7 @@ browser can reach this CLI directly on a private network address, pass
 
 Use --profile to create an isolated configuration for a separate environment:
   multica setup self-host --profile staging --server-url https://api-staging.co`,
-	RunE: runSetupCloud,
+	RunE: runSetup,
 }
 
 var setupCloudCmd = &cobra.Command{
@@ -46,7 +45,7 @@ callback and follow the SSH tunnel hint printed during browser login. If your
 browser can reach this CLI directly on a private network address, pass
 --callback-host <host-or-ip>.
 
-This is equivalent to running 'multica setup' without a subcommand.`,
+Use this only when you intend to sign in at multica.ai.`,
 	RunE: runSetupCloud,
 }
 
@@ -136,6 +135,54 @@ func formatURLChange(oldVal, newVal string) string {
 		return fmt.Sprintf("%s  ->  %s", oldVal, newVal)
 	}
 	return oldVal
+}
+
+func runSetup(cmd *cobra.Command, args []string) error {
+	serverURL, appURL, err := discoverDeploymentURLs()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Using this deployment:\n  server_url: %s\n  app_url:    %s\n\n", serverURL, appURL)
+	_ = os.Setenv("MULTICA_SERVER_URL", serverURL)
+	_ = os.Setenv("MULTICA_APP_URL", appURL)
+	return runSetupSelfHost(setupSelfHostCmd, args)
+}
+
+// discoverDeploymentURLs reads the NodePorts of the running test stack.
+// multica setup must not guess https://multica.ai.
+func discoverDeploymentURLs() (serverURL, appURL string, err error) {
+	kubeconfig := strings.TrimSpace(os.Getenv("KUBECONFIG"))
+	if kubeconfig == "" {
+		kubeconfig = "/Users/zhujinqi/Documents/env/pem/config"
+	}
+	namespace := "multica-test"
+	webPort, err := kubectlOutput(kubeconfig, "-n", namespace, "get", "svc", "agent-web", "-o", "jsonpath={.spec.ports[0].nodePort}")
+	if err != nil {
+		return "", "", fmt.Errorf("read the web address: %w", err)
+	}
+	apiPort, err := kubectlOutput(kubeconfig, "-n", namespace, "get", "svc", "agent-api", "-o", "jsonpath={.spec.ports[0].nodePort}")
+	if err != nil {
+		return "", "", fmt.Errorf("read the API address: %w", err)
+	}
+	host, err := kubectlOutput(kubeconfig, "-n", namespace, "get", "pod", "-l", "app=agent-web", "-o", "jsonpath={.items[0].status.hostIP}")
+	if err != nil || strings.TrimSpace(host) == "" {
+		host, err = kubectlOutput(kubeconfig, "get", "nodes", "-o", "jsonpath={.items[0].status.addresses[?(@.type==\"InternalIP\")].address}")
+	}
+	if err != nil || strings.TrimSpace(host) == "" || webPort == "" || apiPort == "" {
+		return "", "", fmt.Errorf("could not find the multica-test node address")
+	}
+	host = strings.TrimSpace(host)
+	return "http://" + host + ":" + strings.TrimSpace(apiPort), "http://" + host + ":" + strings.TrimSpace(webPort), nil
+}
+
+func kubectlOutput(kubeconfig string, args ...string) (string, error) {
+	cmd := exec.Command("kubectl", args...)
+	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func runSetupCloud(cmd *cobra.Command, args []string) error {

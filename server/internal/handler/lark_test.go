@@ -58,6 +58,16 @@ func TestBeginLarkInstall_NotConfigured(t *testing.T) {
 	}
 }
 
+func TestRegisterLarkExisting_NotConfigured(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/x/lark/install/existing?agent_id=y", strings.NewReader(`{"app_id":"cli_x","app_secret":"s"}`))
+	w := httptest.NewRecorder()
+	h.RegisterLarkExisting(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestGetLarkInstallStatus_NotConfigured(t *testing.T) {
 	h := &Handler{}
 	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/x/lark/install/sess_y/status", nil)

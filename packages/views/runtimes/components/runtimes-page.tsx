@@ -317,7 +317,7 @@ export function RuntimesPage({
   const totalCount = machineList.length + configuredCloudCount;
   const onlineCount =
     machineList.filter((machine) => machine.health === "online").length +
-    (qoder && qoderIsOnline(qoder) ? 1 : 0);
+    (showVendorCloudRuntimes && qoder && qoderIsOnline(qoder) ? 1 : 0);
   const statusCounts: Record<StatusFilter, number> = {
     all: totalCount,
     online: onlineCount,

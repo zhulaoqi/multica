@@ -4,7 +4,7 @@ Multica is a task management platform where people and agents collaborate on iss
 
 ## 语言
 
-对用户的回复使用简体中文。代码、标识符、提交说明和代码注释仍用英文。
+所有对用户可见的交流都使用简体中文，包括解释、进度、报错、提问和总结。代码、标识符、提交说明和代码注释仍用英文。引用终端或接口原文时保留原文，再用中文说明含义。
 
 ## 双仓库
 

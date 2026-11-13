@@ -1,14 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  IntakeAgent,
+  IntakeListItem,
+  IntakeProjectItem,
+  IntakeSession,
+} from "@multica/core/api";
 
 const intakeApi = vi.hoisted(() => ({
-  intakeSession: vi.fn(async () => ({ id: "user-1", name: "周可" })),
-  listMyIntake: vi.fn(async () => []),
-  listScheduledIntake: vi.fn(async () => []),
-  listProjectIntake: vi.fn(async () => []),
+  intakeSession: vi.fn(async (): Promise<IntakeSession> => ({ id: "user-1", name: "周可" })),
+  listMyIntake: vi.fn(async (): Promise<IntakeListItem[]> => []),
+  listScheduledIntake: vi.fn(async (): Promise<IntakeListItem[]> => []),
+  listProjectIntake: vi.fn(async (): Promise<IntakeProjectItem[]> => []),
   submitIntake: vi.fn(),
-  listIntakeAgents: vi.fn(async () => []),
+  listIntakeAgents: vi.fn(async (): Promise<IntakeAgent[]> => []),
   logout: vi.fn(async () => undefined),
 }));
 
@@ -34,6 +40,19 @@ describe("IntakePage", () => {
     intakeApi.listScheduledIntake.mockReset();
     intakeApi.listScheduledIntake.mockResolvedValue([]);
     intakeApi.submitIntake.mockReset();
+  });
+
+  it("opens over plain HTTP, where crypto.randomUUID is missing", async () => {
+    const realCrypto = globalThis.crypto;
+    vi.stubGlobal("crypto", {
+      getRandomValues: (bytes: Uint8Array<ArrayBuffer>) => realCrypto.getRandomValues(bytes),
+    });
+    try {
+      renderPage();
+      expect(await screen.findByPlaceholderText("写下几句话")).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("opens in chat without a project, module, or agent picker", async () => {

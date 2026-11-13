@@ -813,6 +813,97 @@ func (s *RegistrationService) gcDeadline() time.Time {
 // unknown / GC'd sessions. The handler maps it to 404.
 var ErrRegistrationSessionNotFound = errors.New("lark registration: session not found")
 
+// ErrAppCredentialsRequired means a bring-your-own install was submitted
+// without an app id or app secret.
+var ErrAppCredentialsRequired = errors.New("app id and app secret are required")
+
+// ErrAppCredentialsRejected means Feishu refused the pasted credentials
+// or did not return a bot identity.
+var ErrAppCredentialsRejected = errors.New("could not verify the Feishu app id and secret")
+
+// ExistingInstallConflictError means the Feishu app is already held by a
+// live installation. Message is safe to show to the person binding.
+type ExistingInstallConflictError struct {
+	Message string
+}
+
+func (e *ExistingInstallConflictError) Error() string {
+	if e == nil || e.Message == "" {
+		return "This Feishu app is already connected to another agent."
+	}
+	return e.Message
+}
+
+// RegisterExistingParams binds a Feishu app the workspace already owns.
+// The device-flow QR creates a new app; this path uses the app id and
+// secret from the Feishu console instead.
+type RegisterExistingParams struct {
+	WorkspaceID pgtype.UUID
+	AgentID     pgtype.UUID
+	InitiatorID pgtype.UUID
+	AppID       string
+	AppSecret   string
+	Region      Region
+}
+
+// RegisterExisting verifies the pasted credentials, stores them against
+// the agent, and starts serving that bot. The installer's own Feishu
+// identity is not bound here: the first person to message the bot gets
+// the usual account-link prompt.
+func (s *RegistrationService) RegisterExisting(ctx context.Context, p RegisterExistingParams) (Installation, error) {
+	appID := strings.TrimSpace(p.AppID)
+	secret := strings.TrimSpace(p.AppSecret)
+	if appID == "" || secret == "" {
+		return Installation{}, ErrAppCredentialsRequired
+	}
+	region := RegionOrDefault(string(p.Region))
+	creds := InstallationCredentials{AppID: appID, AppSecret: secret, Region: Region(region)}
+	if invalidator, ok := s.api.(TokenCacheInvalidator); ok {
+		invalidator.InvalidateTokenCache(appID)
+	}
+	info, err := s.api.GetBotInfo(ctx, creds)
+	if err != nil || info.OpenID == "" {
+		return Installation{}, ErrAppCredentialsRejected
+	}
+	sealed, err := s.installs.box.Seal([]byte(secret))
+	if err != nil {
+		return Installation{}, fmt.Errorf("encrypt app_secret: %w", err)
+	}
+	tx, err := s.tx.Begin(ctx)
+	if err != nil {
+		return Installation{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.queries.WithTx(tx)
+	if err := qtx.ReclaimDeadInstallationByAppID(ctx, p.WorkspaceID, p.AgentID, appID); err != nil {
+		return Installation{}, err
+	}
+	inst, err := qtx.UpsertLarkInstallation(ctx, UpsertInstallationParams{
+		WorkspaceID:        p.WorkspaceID,
+		AgentID:            p.AgentID,
+		AppID:              appID,
+		AppSecretEncrypted: sealed,
+		BotOpenID:          string(info.OpenID),
+		BotUnionID:         textOrNull(info.UnionID),
+		InstallerUserID:    p.InitiatorID,
+		Region:             string(region),
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return Installation{}, &ExistingInstallConflictError{
+				Message: s.liveOwnerConflictMessage(ctx, p.WorkspaceID, appID),
+			}
+		}
+		return Installation{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Installation{}, err
+	}
+	s.publishInstalled(p.WorkspaceID, inst.ID)
+	return inst, nil
+}
+
 func randomSessionID() (string, error) {
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {

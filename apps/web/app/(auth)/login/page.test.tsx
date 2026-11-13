@@ -160,11 +160,11 @@ describe("LoginPage", () => {
     });
   });
 
-  it("stays on Feishu sign-in when a desktop handoff is requested", () => {
+  it("does not flash the login form when a session is already present", () => {
     searchParamsState.params = new URLSearchParams({ platform: "desktop" });
     authStateRef.state.user = { id: "u1", email: "test@multica.ai" };
     render(<LoginPage />, { wrapper: createWrapper() });
-    expect(screen.getByRole("link", { name: "飞书登录" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "飞书登录" })).not.toBeInTheDocument();
     expect(mockIssueCliToken).not.toHaveBeenCalled();
   });
 

@@ -26,6 +26,7 @@ const ApiError = vi.hoisted(() => {
 });
 
 const mockBeginInstall = vi.hoisted(() => vi.fn());
+const mockRegisterExisting = vi.hoisted(() => vi.fn());
 const mockGetStatus = vi.hoisted(() => vi.fn());
 const mockDeleteInstallation = vi.hoisted(() => vi.fn());
 const mockInvalidate = vi.hoisted(() => vi.fn());
@@ -107,6 +108,7 @@ vi.mock("@multica/core/lark", () => ({
 vi.mock("@multica/core/api", () => ({
   api: {
     beginLarkInstall: mockBeginInstall,
+    registerLarkExisting: mockRegisterExisting,
     getLarkInstallStatus: mockGetStatus,
     deleteLarkInstallation: mockDeleteInstallation,
   },
@@ -253,6 +255,24 @@ describe("LarkAgentBindButton (CTA gate)", () => {
       { wrapper: I18nWrapper },
     );
     expect(container.querySelector("button")).toBeNull();
+  });
+
+  it("connects an existing Feishu bot from the pasted app id and secret", async () => {
+    const user = userEvent.setup();
+    mockRegisterExisting.mockResolvedValue({ id: "inst-1", status: "active" });
+    render(<LarkAgentBindButton agentId="agent-1" agentName="Bot" />, {
+      wrapper: I18nWrapper,
+    });
+    await user.click(screen.getByRole("button", { name: "Use an existing bot" }));
+    await user.type(screen.getByLabelText("App ID"), "cli_existing");
+    await user.type(screen.getByLabelText("App Secret"), "secret-value");
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() => {
+      expect(mockRegisterExisting).toHaveBeenCalledWith("workspace-1", "agent-1", {
+        app_id: "cli_existing",
+        app_secret: "secret-value",
+      });
+    });
   });
 
   it("clicking Bind to Feishu begins an install with region='feishu'", async () => {

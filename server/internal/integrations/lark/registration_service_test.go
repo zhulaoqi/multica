@@ -73,6 +73,14 @@ func TestRegistrationServiceConstructorValidatesDeps(t *testing.T) {
 // TestBotNamePreset pins the bot-name pre-fill format that rides on the
 // QR URL: "<agent> - Multica", with a blank agent name degrading to
 // plain "Multica" rather than a dangling " - Multica".
+func TestRegisterExistingRejectsBlankCredentials(t *testing.T) {
+	s := &RegistrationService{api: NewStubAPIClient(nil)}
+	_, err := s.RegisterExisting(context.Background(), RegisterExistingParams{AppID: " ", AppSecret: "secret"})
+	if !errors.Is(err, ErrAppCredentialsRequired) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestBotNamePreset(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Ada", "Ada - Multica"},

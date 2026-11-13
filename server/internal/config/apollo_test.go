@@ -105,6 +105,42 @@ func TestProdProfileRefusesStartWithoutApolloRedis(t *testing.T) {
 	}
 }
 
+func TestApplyProfileCopiesOperatorKeysFromApollo(t *testing.T) {
+	for _, key := range []string{"MULTICA_APP_URL", "CORS_ALLOWED_ORIGINS", "MULTICA_LARK_SECRET_KEY", "S3_BUCKET"} {
+		t.Setenv(key, "")
+	}
+	configService := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"configurations":{"MULTICA_APP_URL":"http://app.example","CORS_ALLOWED_ORIGINS":"http://app.example","MULTICA_LARK_SECRET_KEY":"a2V5","S3_BUCKET":"uploads"}}`))
+	}))
+	defer configService.Close()
+	meta := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"homepageUrl":"` + configService.URL + `"}]`))
+	}))
+	defer meta.Close()
+
+	dir := t.TempDir()
+	body := "app:\n  id: multica\napollo:\n  meta: " + meta.URL + "\n  bootstrap:\n    enabled: true\n    namespaces: application\nredis:\n  host: 172.30.11.78\n  port: 6379\n  db: 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "application-test-ali.yml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REDIS_URL", "redis://already-set:6379/0")
+	if err := ApplyProfile("test-ali", dir); err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv("MULTICA_APP_URL"); got != "http://app.example" {
+		t.Fatalf("MULTICA_APP_URL = %q", got)
+	}
+	if got := os.Getenv("CORS_ALLOWED_ORIGINS"); got != "http://app.example" {
+		t.Fatalf("CORS_ALLOWED_ORIGINS = %q", got)
+	}
+	if got := os.Getenv("MULTICA_LARK_SECRET_KEY"); got != "a2V5" {
+		t.Fatalf("MULTICA_LARK_SECRET_KEY = %q", got)
+	}
+	if got := os.Getenv("S3_BUCKET"); got != "uploads" {
+		t.Fatalf("S3_BUCKET = %q", got)
+	}
+}
+
 func TestEmptyProfileSkipsApollo(t *testing.T) {
 	t.Setenv("REDIS_URL", "")
 	if err := ApplyProfile("", ""); err != nil {

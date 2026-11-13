@@ -48,7 +48,7 @@ import { useT } from "../../i18n";
 import { SettingsRow } from "./settings-layout";
 import { HostMark, HostStatus } from "./code-host";
 
-const PROVIDERS: VCSProvider[] = ["forgejo", "gitea", "gitlab"];
+const PROVIDERS: VCSProvider[] = ["gitlab", "gitea", "forgejo"];
 const PROVIDER_LABELS: Record<VCSProvider, string> = {
   forgejo: "Forgejo",
   gitea: "Gitea",
@@ -76,7 +76,7 @@ export function VCSConnectionRows() {
   const canManage = data?.can_manage === true;
 
   const [connectOpen, setConnectOpen] = useState(false);
-  const [provider, setProvider] = useState<VCSProvider>("forgejo");
+  const [provider, setProvider] = useState<VCSProvider>("gitlab");
   const [instanceUrl, setInstanceUrl] = useState("");
   const [token, setToken] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -293,7 +293,7 @@ export function VCSConnectionRows() {
               <Label htmlFor="vcs-url">{t(($) => $.vcs.form_instance_url_label)}</Label>
               <Input
                 id="vcs-url"
-                placeholder="https://forgejo.example.com"
+                placeholder="https://gitlab.example.com"
                 value={instanceUrl}
                 onChange={(e) => setInstanceUrl(e.target.value)}
                 disabled={connecting}

@@ -4028,3 +4028,18 @@ export const EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE: ListLarkInstallationsRespon
   installations: [],
   configured: false,
 };
+
+export type LarkInstallation = z.infer<typeof LarkInstallationSchema>;
+
+export const EMPTY_LARK_INSTALLATION: LarkInstallation = {
+  id: "",
+  workspace_id: "",
+  agent_id: "",
+  app_id: "",
+  bot_open_id: "",
+  installer_user_id: "",
+  status: "revoked",
+  installed_at: "",
+  created_at: "",
+  updated_at: "",
+};

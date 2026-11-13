@@ -126,19 +126,22 @@ function LoginPageContent() {
     <FeishuSignIn
       operatorHref={`/login/operator${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
       authorizingCli={authorizingCli}
+      showForm={!isLoading && !user}
       feishuFailed={feishuFailed}
     />
   );
 }
 
 function FeishuSignIn({
-  operatorHref,
   authorizingCli,
+  showForm,
   feishuFailed,
+  operatorHref,
 }: {
-  operatorHref: string;
   authorizingCli: boolean;
+  showForm: boolean;
   feishuFailed: boolean;
+  operatorHref: string;
 }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05070b] text-white">
@@ -157,13 +160,15 @@ function FeishuSignIn({
       />
       <div className="relative z-10 mx-4 w-full max-w-md border border-white/20 bg-black/30 px-8 py-12 text-center shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-md">
         <p className="text-body tracking-[0.18em] text-white/75">multica</p>
-        <h1 className="landing-serif mt-3 text-[3.2rem] leading-none tracking-[-0.04em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)]">
-          登录
-        </h1>
-        {authorizingCli ? (
-          <p className="mt-10 text-body text-white/80">正在把登录交给这台电脑</p>
-        ) : (
+        {showForm ? (
           <>
+            <h1 className="landing-serif mt-3 text-[3.2rem] leading-none tracking-[-0.04em] text-white drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)]">
+              登录
+            </h1>
+            {/* A plain anchor: this must be a full page load so the browser
+                follows Feishu's redirect. Client routing would try to render
+                the API response as a page. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/auth/feishu/start"
               className="mt-10 inline-flex h-12 w-full items-center justify-center bg-white text-body font-semibold text-[#0a0d12] transition-colors hover:bg-white/92"
@@ -179,7 +184,9 @@ function FeishuSignIn({
               开发者入口
             </a>
           </>
-        )}
+        ) : authorizingCli ? (
+          <p className="mt-10 text-body text-white/80">正在把登录交给这台电脑</p>
+        ) : null}
       </div>
     </div>
   );

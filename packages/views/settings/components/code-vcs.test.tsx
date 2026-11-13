@@ -67,7 +67,7 @@ describe("VCSConnectionRows", () => {
 
     await waitFor(() =>
       expect(mockConnect).toHaveBeenCalledWith("ws-1", {
-        provider: "forgejo",
+        provider: "gitlab",
         instance_url: "https://git.acme.dev",
         access_token: "tok",
       }),

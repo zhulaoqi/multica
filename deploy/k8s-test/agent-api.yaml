@@ -26,6 +26,8 @@ spec:
           env:
             - name: PROFILE
               value: test-ali
+            - name: CORS_ALLOWED_ORIGINS
+              value: WEB_ORIGINS
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

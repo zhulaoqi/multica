@@ -69,7 +69,7 @@ func TestFeishuLoginCallback_ReturnsToLoginWhenExchangeFails(t *testing.T) {
 	}
 }
 
-func TestFeishuLoginCallback_SetsSessionCookiesAndRedirectsHome(t *testing.T) {
+func TestFeishuLoginCallback_SetsSessionCookiesAndSkipsTheLoginPage(t *testing.T) {
 	if testHandler == nil || testPool == nil {
 		t.Skip("handler not available")
 	}
@@ -94,8 +94,13 @@ func TestFeishuLoginCallback_SetsSessionCookiesAndRedirectsHome(t *testing.T) {
 	if w.Code != http.StatusFound {
 		t.Fatalf("status = %d, want 302; body = %s", w.Code, w.Body.String())
 	}
-	if got := w.Header().Get("Location"); got != "/" {
-		t.Fatalf("Location = %q, want /", got)
+	// The visitor is brand new, so the landing is the onboarding flow rather
+	// than the site root that would bounce back through /login.
+	if got := w.Header().Get("Location"); got != "/onboarding" {
+		t.Fatalf("Location = %q, want /onboarding", got)
+	}
+	if body := w.Body.String(); strings.Contains(body, "飞书回调") {
+		t.Fatalf("login JSON was shown to the browser: %s", body)
 	}
 	var sessionCookie bool
 	for _, cookie := range w.Result().Cookies() {

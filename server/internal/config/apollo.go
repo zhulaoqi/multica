@@ -21,13 +21,38 @@ import (
 
 // envFromApollo is copied into the process only when that variable is still empty.
 // redis.host / redis.port / redis.password / redis.db are assembled into REDIS_URL.
+// A key missing from this list is ignored even when Apollo has a value for it.
 var envFromApollo = []string{
 	"DATABASE_URL",
 	"JWT_SECRET",
 	"REDIS_URL",
+	"MULTICA_APP_URL",
+	"FRONTEND_ORIGIN",
+	"CORS_ALLOWED_ORIGINS",
+	"MULTICA_PUBLIC_URL",
+	"MULTICA_TRUSTED_PROXIES",
 	"MULTICA_FEISHU_APP_ID",
 	"MULTICA_FEISHU_APP_SECRET",
 	"MULTICA_FEISHU_REDIRECT_URI",
+	"MULTICA_LARK_SECRET_KEY",
+	"MULTICA_WECOM_SECRET_KEY",
+	"MULTICA_DINGTALK_SECRET_KEY",
+	"MULTICA_SLACK_SECRET_KEY",
+	"MULTICA_TELEGRAM_SECRET_KEY",
+	"MULTICA_VCS_SECRET_KEY",
+	"MULTICA_PLUGIN_SECRET_KEY",
+	"COMPOSIO_API_KEY",
+	"RESEND_API_KEY",
+	"SMTP_HOST",
+	"SMTP_PORT",
+	"SMTP_USERNAME",
+	"SMTP_PASSWORD",
+	"SMTP_FROM_EMAIL",
+	"S3_BUCKET",
+	"S3_REGION",
+	"AWS_ACCESS_KEY_ID",
+	"AWS_SECRET_ACCESS_KEY",
+	"AWS_ENDPOINT_URL",
 }
 
 // ApplyProfile loads the company profile file and Apollo.
