@@ -6,6 +6,10 @@ const withMDX = createMDX();
 const config = {
   reactStrictMode: true,
   basePath: "/docs",
+  // The web image runs `node server.js` from the standalone bundle, the same
+  // way apps/web does; shared workspace packages export raw TypeScript.
+  ...(process.env.STANDALONE === "true" ? { output: "standalone" } : {}),
+  transpilePackages: ["@multica/ui"],
   // Visiting http://host/ (outside basePath) would otherwise 404 — redirect
   // to the docs root. basePath: false makes the source and destination
   // literal (not re-prefixed with `/docs`), so the redirect runs before

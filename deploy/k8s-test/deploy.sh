@@ -13,6 +13,7 @@ namespace="${NAMESPACE:-multica-test}"
 stamp="$(date -u +%Y%m%d%H%M%S)"
 api_image="multica/agent-api:${stamp}"
 web_image="multica/agent-web:${stamp}"
+docs_image="multica/agent-docs:${stamp}"
 postgres_image="${POSTGRES_IMAGE:-postgres:17}"
 postgres_storage_class="${POSTGRES_STORAGE_CLASS:-local-path}"
 go_runtime="${GO_RUNTIME:-172.30.10.185:15000/common/golang:1.27.0}"
@@ -76,8 +77,8 @@ EOF
   kubectl -n "${namespace}" exec image-loader -- \
     chroot /host sh -c "ctr -n k8s.io images ls -q | while read -r name; do
       case \"\${name}\" in
-        *multica/agent-api:${stamp}|*multica/agent-web:${stamp}) ;;
-        *multica/agent-api:*|*multica/agent-web:*) ctr -n k8s.io images rm \"\${name}\" || true ;;
+        *multica/agent-api:${stamp}|*multica/agent-web:${stamp}|*multica/agent-docs:${stamp}) ;;
+        *multica/agent-api:*|*multica/agent-web:*|*multica/agent-docs:*) ctr -n k8s.io images rm \"\${name}\" || true ;;
       esac
     done"
   kubectl -n "${namespace}" exec image-loader -- \
@@ -99,9 +100,10 @@ echo "namespace:  ${namespace}"
 echo "node:       ${node}"
 echo "api image:  ${api_image}"
 echo "web image:  ${web_image}"
+echo "docs image: ${docs_image}"
 
 kubectl apply -f "${root}/namespace.yaml"
-kubectl -n "${namespace}" delete pod build-api build-web --ignore-not-found --wait=false >/dev/null
+kubectl -n "${namespace}" delete pod build-api build-web build-docs --ignore-not-found --wait=false >/dev/null
 
 if ! kubectl -n "${namespace}" get secret multica-postgres >/dev/null 2>&1; then
   password="$(openssl rand -hex 16)"
@@ -130,13 +132,17 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
   docker build --platform linux/amd64 -f "${repo}/docker/agent-web/Dockerfile" \
     --build-arg NODE_RUNTIME="${node_runtime}" \
     -t "${web_image}" "${repo}"
+  "${repo}/docker/agent-docs/build.sh"
+  docker build --platform linux/amd64 -f "${repo}/docker/agent-docs/Dockerfile" \
+    --build-arg NODE_RUNTIME="${node_runtime}" \
+    -t "${docs_image}" "${repo}"
   image_tar="${root}/multica-images.tar"
   echo "导出镜像文件"
-  docker save -o "${image_tar}" "${api_image}" "${web_image}"
+  docker save -o "${image_tar}" "${api_image}" "${web_image}" "${docs_image}"
   ls -lh "${image_tar}"
   load_images_on_node "${image_tar}"
   rm -f "${image_tar}"
-  docker rmi "${api_image}" "${web_image}"
+  docker rmi "${api_image}" "${web_image}" "${docs_image}"
   docker image prune -f
 fi
 
@@ -160,7 +166,13 @@ sed \
   -e "s#WEB_ORIGINS#${web_origins}#g" \
   "${root}/agent-api.yaml" | kubectl apply -f -
 sed \
+  -e "s#DOCS_IMAGE#${docs_image}#g" \
+  -e "s#NODE_NAME#${node}#g" \
+  -e "s#PUBLISHED_AT#${published_at}#g" \
+  "${root}/agent-docs.yaml" | kubectl apply -f -
+sed \
   -e "s#WEB_IMAGE#${web_image}#g" \
+  -e "s#DOCS_NAMESPACE#${namespace}#g" \
   -e "s#NODE_NAME#${node}#g" \
   -e "s#PUBLISHED_AT#${published_at}#g" \
   "${root}/agent-web.yaml" | kubectl apply -f -
@@ -178,6 +190,11 @@ fi
 if ! kubectl -n "${namespace}" rollout status deployment/agent-api --timeout=600s; then
   echo "agent-api 没有就绪，最近事件：" >&2
   kubectl -n "${namespace}" describe pod -l app=agent-api | sed -n '/Events:/,$p' >&2
+  exit 1
+fi
+if ! kubectl -n "${namespace}" rollout status deployment/agent-docs --timeout=300s; then
+  echo "agent-docs 没有就绪，最近事件：" >&2
+  kubectl -n "${namespace}" describe pod -l app=agent-docs | sed -n '/Events:/,$p' >&2
   exit 1
 fi
 if ! kubectl -n "${namespace}" rollout status deployment/agent-web --timeout=300s; then

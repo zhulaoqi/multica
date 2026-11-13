@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-docs
+  namespace: multica-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-docs
+  template:
+    metadata:
+      labels:
+        app: agent-docs
+      annotations:
+        multica.ai/published-at: PUBLISHED_AT
+    spec:
+      nodeName: NODE_NAME
+      containers:
+        - name: agent-docs
+          image: DOCS_IMAGE
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 80
+          # The docs app mounts itself at basePath /docs, so its health target
+          # is the prefixed root, not "/".
+          startupProbe:
+            httpGet:
+              path: /docs
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-docs
+  namespace: multica-test
+spec:
+  # Cluster-internal only: the web pod proxies /docs here, so the docs site is
+  # reachable on the same origin as the app without a second published port.
+  type: ClusterIP
+  selector:
+    app: agent-docs
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

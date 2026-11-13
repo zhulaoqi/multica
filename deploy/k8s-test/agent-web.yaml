@@ -26,6 +26,10 @@ spec:
           env:
             - name: REMOTE_API_URL
               value: http://agent-api.multica-test.svc.cluster.local:8080
+            # Same-origin /docs: the web server proxies that path to the docs
+            # deployment instead of linking out to the public marketing site.
+            - name: DOCS_URL
+              value: http://agent-docs.DOCS_NAMESPACE.svc.cluster.local
             - name: HOSTIP
               valueFrom:
                 fieldRef:
