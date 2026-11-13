@@ -801,8 +801,8 @@ func orgUserLeadsUnit(userID pgtype.UUID, units []db.ListOrgUnitsRow, unitID pgt
 
 // visibleOrgUnits narrows the tree for callers without workspace management:
 // they see their own department and the departments they lead, each with its
-// descendants, plus the ancestor chain that locates them. Ancestors are added
-// without their other branches so the tree still renders a path to the root.
+// descendants. Ancestors stay out: a member should read "my department" as the
+// scope, not browse up into their superiors' structure.
 func visibleOrgUnits(units []db.ListOrgUnitsRow, ownUnitID pgtype.UUID, manages func(pgtype.UUID) bool) map[pgtype.UUID]bool {
 	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
 	children := make(map[pgtype.UUID][]pgtype.UUID, len(units))
@@ -826,20 +826,9 @@ func visibleOrgUnits(units []db.ListOrgUnitsRow, ownUnitID pgtype.UUID, manages 
 			addSubtree(child)
 		}
 	}
-	addAncestors := func(id pgtype.UUID) {
-		for current, guard := id, 0; current.Valid && guard <= len(units); guard++ {
-			unit, ok := byID[current]
-			if !ok {
-				return
-			}
-			visible[current] = true
-			current = unit.ParentID
-		}
-	}
 	for _, unit := range units {
 		if unit.ID == ownUnitID || manages(unit.ID) {
 			addSubtree(unit.ID)
-			addAncestors(unit.ID)
 		}
 	}
 	return visible

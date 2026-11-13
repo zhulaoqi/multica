@@ -297,6 +297,7 @@ function UnitDetail({
         )}
         {unit.can_manage ? (
           <>
+            <span className="text-caption text-muted-foreground">{t(($) => $.lead)}</span>
             <Select
               items={leadItems}
               value={unit.lead_user_id || NO_UNIT}

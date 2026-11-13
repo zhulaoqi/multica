@@ -621,15 +621,15 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		return rec
 	}
 	// A plain member cannot attach anything; the admin can.
-	if rec := squadReq(member, squadID, map[string]any{"unit_id": unitID}); rec.Code != http.StatusForbidden {
+	if rec := squadReq(member, squadID, map[string]any{"unit_id": childID}); rec.Code != http.StatusForbidden {
 		t.Fatalf("member squad attach status = %d, want 403: %s", rec.Code, rec.Body.String())
 	}
-	if rec := squadReq(admin, squadID, map[string]any{"unit_id": unitID}); rec.Code != http.StatusNoContent {
+	if rec := squadReq(admin, squadID, map[string]any{"unit_id": childID}); rec.Code != http.StatusNoContent {
 		t.Fatalf("admin squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 
-	// The member placed in a sub-department only sees that branch: its unit,
-	// the ancestor that locates it, and nothing from the sibling root.
+	// The member placed in a sub-department sees that department and its
+	// children only: no parent department and no sibling branches.
 	place := httptest.NewRecorder()
 	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": childID}))
 	if place.Code != http.StatusNoContent {
@@ -654,18 +654,15 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	for _, unit := range tree.Units {
 		unitNames[unit.ID] = unit.Name
 	}
-	if unitNames[childID] != "支付一组" || unitNames[unitID] != "支付组" {
-		t.Fatalf("member tree = %v, want own department and its parent", unitNames)
-	}
-	if len(tree.Units) != 2 {
-		t.Fatalf("member tree has %d units, want 2: %v", len(tree.Units), unitNames)
+	if len(tree.Units) != 1 || unitNames[childID] != "支付一组" {
+		t.Fatalf("member tree = %v, want only own department", unitNames)
 	}
 	if len(tree.Squads) != 1 {
 		t.Fatalf("squads = %+v, want one", tree.Squads)
 	}
 	squad := tree.Squads[0]
-	if squad.ID != squadID || squad.UnitID != unitID || squad.AgentCount != 2 {
-		t.Fatalf("squad = %+v, want id %q unit %q with 2 agents", squad, squadID, unitID)
+	if squad.ID != squadID || squad.UnitID != childID || squad.AgentCount != 2 {
+		t.Fatalf("squad = %+v, want id %q unit %q with 2 agents", squad, squadID, childID)
 	}
 	// Unassigned agents stay out of a plain member's view.
 	if len(tree.Agents) != 0 {
