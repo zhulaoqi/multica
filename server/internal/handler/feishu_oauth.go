@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,14 +71,17 @@ func (f *FeishuOAuth) Exchange(ctx context.Context, code string) (FeishuProfile,
 	}
 	defer resp.Body.Close()
 	var token struct {
-		Code        int    `json:"code"`
-		AccessToken string `json:"access_token"`
+		Code             int    `json:"code"`
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+		AccessToken      string `json:"access_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return FeishuProfile{}, err
 	}
 	if token.Code != 0 || token.AccessToken == "" {
-		return FeishuProfile{}, fmt.Errorf("feishu token exchange failed")
+		return FeishuProfile{}, fmt.Errorf("feishu token exchange failed: status=%d code=%d error=%s description=%s",
+			resp.StatusCode, token.Code, token.Error, token.ErrorDescription)
 	}
 	infoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, feishuUserInfoURL, nil)
 	if err != nil {
@@ -90,7 +94,8 @@ func (f *FeishuOAuth) Exchange(ctx context.Context, code string) (FeishuProfile,
 	}
 	defer infoResp.Body.Close()
 	var info struct {
-		Code int `json:"code"`
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
 		Data struct {
 			Name      string `json:"name"`
 			OpenID    string `json:"open_id"`
@@ -103,7 +108,8 @@ func (f *FeishuOAuth) Exchange(ctx context.Context, code string) (FeishuProfile,
 		return FeishuProfile{}, err
 	}
 	if info.Code != 0 || info.Data.OpenID == "" {
-		return FeishuProfile{}, fmt.Errorf("feishu user info failed")
+		return FeishuProfile{}, fmt.Errorf("feishu user info failed: status=%d code=%d msg=%s",
+			infoResp.StatusCode, info.Code, info.Msg)
 	}
 	email := strings.TrimSpace(info.Data.Email)
 	if email == "" {
@@ -136,21 +142,40 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Body = ioNopCloser(strings.NewReader(string(payload)))
 	r2.ContentLength = int64(len(payload))
 	r2.Header.Set("Content-Type", "application/json")
-	rec := &redirectRecorder{ResponseWriter: w, header: w.Header()}
+	rec := &redirectRecorder{header: w.Header()}
 	h.FeishuLogin(rec, r2)
-	if rec.status >= 400 || rec.status == 0 {
+	if rec.status >= 400 {
+		// Send the person back to the sign-in page with a message instead of a
+		// bare JSON error; the exchange reason is logged by FeishuLogin.
+		http.Redirect(w, r, "/login?error=feishu", http.StatusFound)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+// redirectRecorder lets the callback inspect the login outcome before deciding
+// where to send the browser. Headers (including the session cookies) go through
+// to the real response; the status and body are held back.
 type redirectRecorder struct {
-	http.ResponseWriter
 	header http.Header
 	status int
+	body   bytes.Buffer
 }
 
-func (r *redirectRecorder) WriteHeader(status int) { r.status = status }
+func (r *redirectRecorder) Header() http.Header { return r.header }
+
+func (r *redirectRecorder) WriteHeader(status int) {
+	if r.status == 0 {
+		r.status = status
+	}
+}
+
+func (r *redirectRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.body.Write(b)
+}
 
 func ioNopCloser(r *strings.Reader) nopCloser { return nopCloser{r} }
 

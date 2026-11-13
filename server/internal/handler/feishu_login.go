@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -46,6 +47,12 @@ func (h *Handler) FeishuLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile, err := h.FeishuLoginExchanger.Exchange(r.Context(), strings.TrimSpace(body.Code))
+	if err != nil {
+		// Feishu replies with single-use codes; the reason (expired, reused,
+		// redirect mismatch) only lives in the exchange error, so keep it in
+		// the server log instead of replying with it.
+		slog.Warn("feishu login: code exchange failed", "error", err)
+	}
 	if err != nil || strings.TrimSpace(profile.OpenID) == "" || strings.TrimSpace(profile.Email) == "" {
 		writeError(w, http.StatusUnauthorized, "feishu login failed")
 		return
