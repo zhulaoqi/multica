@@ -1629,8 +1629,13 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	r.With(authRL).Post("/auth/google", h.GoogleLogin)
 	r.With(authRL).Post("/auth/feishu", h.FeishuLogin)
 	r.With(authRL).Post("/auth/operator", h.OperatorLogin)
-	r.With(authRL).Get("/auth/feishu/start", h.FeishuLoginStart)
-	r.With(authRL).Get("/auth/feishu/callback", h.FeishuLoginCallback)
+	// Feishu sign-in is two browser redirects. The limiter keys on the
+	// connecting IP, and every request reaches the API through the web proxy,
+	// so one bucket is shared by the whole company — a few retries in a row
+	// locked everyone out with 429. The authorization codes are single-use and
+	// minted by Feishu, so neither redirect needs brute-force protection.
+	r.Get("/auth/feishu/start", h.FeishuLoginStart)
+	r.Get("/auth/feishu/callback", h.FeishuLoginCallback)
 	r.Post("/auth/logout", h.Logout)
 
 	// Public API
