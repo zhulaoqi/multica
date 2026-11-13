@@ -36,6 +36,7 @@ import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
   memberListOptions,
+  orgTreeOptions,
 } from "@multica/core/workspace/queries";
 import { runtimeDisplayLabel, runtimeListOptions } from "@multica/core/runtimes";
 import { Button } from "@multica/ui/components/ui/button";
@@ -389,6 +390,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     runtimeListOptions(wsId),
   );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  // The org tree carries can_manage, which decides whether the caller may
+  // open the full agent list or only sees their own.
+  const { data: orgTree } = useQuery(orgTreeOptions(wsId));
   const { data: runCountsRaw = [], isPending: runCountsPending } = useQuery(
     agentRunCounts30dOptions(wsId),
   );
@@ -401,7 +405,6 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     new Set(),
   );
   const rawScope = useAgentsViewStore((s) => s.scope);
-  const scope = AGENT_SCOPES.includes(rawScope) ? rawScope : "mine";
   const setScope = useAgentsViewStore((s) => s.setScope);
   const sortField = useAgentsViewStore((s) => s.sortField);
   const sortDirection = useAgentsViewStore((s) => s.sortDirection);
@@ -441,29 +444,52 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     return me?.role === "owner" || me?.role === "admin";
   }, [members, currentUser]);
 
+  // Plain members see their own agents only; anyone who manages the
+  // workspace or at least one department may open the full list. The store
+  // may still hold "all" from an earlier, more privileged session.
+  const canViewAllAgents =
+    isWorkspaceAdmin ||
+    (orgTree?.units.some((unit) => unit.can_manage) ?? false);
+  const scope: AgentsScope = canViewAllAgents
+    ? AGENT_SCOPES.includes(rawScope)
+      ? rawScope
+      : "mine"
+    : "mine";
+  const scopeOptions = AGENT_SCOPES.filter(
+    (value) => value !== "all" || canViewAllAgents,
+  );
+
   // Scope counts come from the FULL set (filters never affect them).
-  // Archived ignores the ownership lens (see the view store comment).
+  // Archived ignores the ownership lens for managers; members still only
+  // count their own archived agents.
   const scopeCounts = useMemo<Record<AgentsScope, number>>(() => {
     let mine = 0;
     let all = 0;
     let archived = 0;
     for (const a of agents) {
+      const isMine = !!currentUser && a.owner_id === currentUser.id;
       if (a.archived_at) {
-        archived++;
+        if (canViewAllAgents || isMine) archived++;
         continue;
       }
       all++;
-      if (currentUser && a.owner_id === currentUser.id) mine++;
+      if (isMine) mine++;
     }
     return { mine, all, archived };
-  }, [agents, currentUser]);
+  }, [agents, currentUser, canViewAllAgents]);
 
   // Rows within the current scope, unfiltered, fully assembled — the
   // filter menu's option lists derive from this; cells never pull their
   // own queries.
   const scopeRows = useMemo<AgentListRow[]>(() => {
     const inScope = agents.filter((a) => {
-      if (scope === "archived") return !!a.archived_at;
+      if (scope === "archived") {
+        return (
+          !!a.archived_at &&
+          (canViewAllAgents ||
+            (!!currentUser && a.owner_id === currentUser.id))
+        );
+      }
       if (a.archived_at) return false;
       if (scope === "mine") {
         return !!currentUser && a.owner_id === currentUser.id;
@@ -495,6 +521,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     activityMap,
     runCountsById,
     isWorkspaceAdmin,
+    canViewAllAgents,
   ]);
 
   // Visible rows: search and filters, then sort.
@@ -697,7 +724,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
           <CollectionScopeItems
             value={scope}
             onChange={setScope}
-            options={AGENT_SCOPES.map((value) => ({
+            options={scopeOptions.map((value) => ({
               value,
               label: scopeTitles[value],
               count: scopeCounts[value],

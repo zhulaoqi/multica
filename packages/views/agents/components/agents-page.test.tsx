@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
   agentsLoading: false,
   runCounts: [] as Array<{ agent_id: string; run_count: number }>,
   runCountsPending: false,
+  // Org tree decides whether the caller may open the full agent list.
+  // Defaults to a caller who manages a department so the legacy scope
+  // behavior (all agents visible) is what most tests here pin.
+  orgTree: { units: [] as Array<{ can_manage: boolean }> },
   activity: {
     byAgent: new Map<string, AgentActivity>(),
     loading: false,
@@ -67,6 +71,9 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (key === "agent-run-counts") {
       return { data: mocks.runCounts, isPending: mocks.runCountsPending };
+    }
+    if (key === "org") {
+      return { data: mocks.orgTree };
     }
     return { data: [], isLoading: false, isPending: false, isSuccess: true };
   },
@@ -139,6 +146,7 @@ vi.mock("@multica/core/paths", () => ({
 vi.mock("@multica/core/workspace/queries", () => ({
   agentListOptions: () => ({ queryKey: ["agents"] }),
   memberListOptions: () => ({ queryKey: ["members"] }),
+  orgTreeOptions: () => ({ queryKey: ["org"] }),
   workspaceKeys: { agents: (wsId: string) => ["agents", wsId] },
 }));
 
@@ -249,6 +257,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.agents = [ALPHA, BETA];
   mocks.agentsLoading = false;
+  mocks.orgTree = { units: [{ can_manage: true }] };
   mocks.runCounts = [];
   mocks.runCountsPending = false;
   mocks.activity = { byAgent: new Map(), loading: false };
@@ -402,6 +411,31 @@ describe("AgentsPage header", () => {
     expect(
       within(screen.getByRole("banner")).getByRole("heading", { level: 1 }),
     ).toHaveTextContent("Agents archivés");
+  });
+
+  it("shows plain members only their own agents, without the all-agents scope", () => {
+    // user-1 owns Alpha and Beta; Gamma belongs to someone else.
+    mocks.agents = [
+      ALPHA,
+      makeAgent({ id: "a-gamma", name: "Gamma Agent", owner_id: "user-2" }),
+    ];
+    // Not a workspace admin and leads no department.
+    mocks.orgTree = { units: [{ can_manage: false }] };
+    renderPage();
+
+    const header = screen.getByRole("banner");
+    const title = within(header).getByRole("heading", { level: 1 });
+    // The store still holds "all" from a previous session; members fall back.
+    expect(title).toHaveTextContent("My agents");
+    expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Gamma Agent")).not.toBeInTheDocument();
+
+    fireEvent.click(within(title).getByRole("button"));
+    const options = screen.getAllByRole("menuitemradio");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "My agents1",
+      "Archived agents0",
+    ]);
   });
 
   it("offers Reset only while a filter narrows the list", () => {
