@@ -142,8 +142,15 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Body = ioNopCloser(strings.NewReader(string(payload)))
 	r2.ContentLength = int64(len(payload))
 	r2.Header.Set("Content-Type", "application/json")
-	rec := &redirectRecorder{header: w.Header()}
+	rec := &redirectRecorder{header: http.Header{}}
 	h.FeishuLogin(rec, r2)
+	// Only the session cookies belong on the redirect. The login response's
+	// own Content-Type/Content-Length describe a JSON body the recorder
+	// swallows; forwarding them makes the 302 advertise a body it never sends,
+	// and the web proxy drops the connection instead of the browser navigating.
+	for _, cookie := range rec.header.Values("Set-Cookie") {
+		w.Header().Add("Set-Cookie", cookie)
+	}
 	if rec.status >= 400 {
 		// Send the person back to the sign-in page with a message instead of a
 		// bare JSON error; the exchange reason is logged by FeishuLogin.
@@ -154,8 +161,9 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // redirectRecorder lets the callback inspect the login outcome before deciding
-// where to send the browser. Headers (including the session cookies) go through
-// to the real response; the status and body are held back.
+// where to send the browser. It keeps the login handler's status, headers and
+// body in memory; the callback copies just the cookies it needs onto the real
+// response and redirects.
 type redirectRecorder struct {
 	header http.Header
 	status int
