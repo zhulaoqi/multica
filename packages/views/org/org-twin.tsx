@@ -22,15 +22,21 @@ import { AppLink } from "../navigation";
 
 /** TwinDialog edits the digital twin (the member's own agent) or registers
  * the first one. A new twin is placed into the member's department right
- * after registration so it shows up in the org tree immediately. */
+ * after registration so it shows up in the org tree immediately. ownerId is
+ * the member the twin belongs to — a department lead may configure a direct
+ * report's twin, so it can differ from the signed-in user. */
 export function TwinDialog({
   twin,
   placeUnitId,
+  ownerId,
+  ownerName = "",
   open,
   onOpenChange,
 }: {
   twin: OrgAgent | null;
   placeUnitId: string;
+  ownerId?: string;
+  ownerName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -61,6 +67,7 @@ export function TwinDialog({
           can: can.trim(),
           cannot: cannot.trim(),
           runtime_mode: "local",
+          ...(ownerId ? { owner_id: ownerId } : {}),
         });
         if (placeUnitId) {
           await api.setOrgAgentUnit(created.id, placeUnitId);
@@ -85,7 +92,9 @@ export function TwinDialog({
     >
       <DialogContent className="max-w-md" data-testid="twin-dialog">
         <DialogHeader>
-          <DialogTitle>{t(($) => $.twin_title)}</DialogTitle>
+          <DialogTitle>
+            {ownerName ? t(($) => $.twin_title_for, { name: ownerName }) : t(($) => $.twin_title)}
+          </DialogTitle>
           <DialogDescription>{t(($) => $.twin_desc)}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
@@ -95,11 +104,7 @@ export function TwinDialog({
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-caption font-medium">{t(($) => $.twin_can)}</span>
-            <Textarea
-              value={can}
-              onChange={(event) => setCan(event.target.value)}
-              className="min-h-20 resize-y"
-            />
+            <Textarea value={can} onChange={(event) => setCan(event.target.value)} className="min-h-20 resize-y" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-caption font-medium">{t(($) => $.twin_cannot)}</span>
@@ -120,11 +125,7 @@ export function TwinDialog({
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
             {t(($) => $.cancel)}
           </Button>
-          <Button
-            size="sm"
-            disabled={saving || !name.trim() || !can.trim()}
-            onClick={() => void save()}
-          >
+          <Button size="sm" disabled={saving || !name.trim() || !can.trim()} onClick={() => void save()}>
             {t(($) => $.save)}
           </Button>
         </DialogFooter>

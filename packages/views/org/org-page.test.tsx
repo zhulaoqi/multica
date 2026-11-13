@@ -425,6 +425,55 @@ describe("OrgPage member twins", () => {
     await waitFor(() => expect(api.setOrgAgentUnit).toHaveBeenCalledWith("agent-new", "dept-child"));
   });
 
+  it("lets a department lead register a twin for a direct report", async () => {
+    signIn("u-lead");
+    vi.mocked(api.registerIntakeAgent).mockResolvedValue({
+      id: "agent-new",
+      name: "Ada twin",
+      can: "Backend APIs",
+    });
+    renderPage(
+      tree({
+        units: [unit({ id: "dept-child", name: "Payments", can_manage: true })],
+        agents: [],
+        my_unit_id: "dept-child",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Register Ada's twin" }));
+    const dialog = screen.getByTestId("twin-dialog");
+    expect(within(dialog).getByText("Ada's digital twin")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Ada twin" } });
+    fireEvent.change(within(dialog).getByLabelText("Does"), { target: { value: "Backend APIs" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.registerIntakeAgent).toHaveBeenCalledWith({
+        name: "Ada twin",
+        can: "Backend APIs",
+        cannot: "",
+        runtime_mode: "local",
+        owner_id: "u-ada",
+      }),
+    );
+    await waitFor(() => expect(api.setOrgAgentUnit).toHaveBeenCalledWith("agent-new", "dept-child"));
+  });
+
+  it("keeps a report's twin read-only for non-leads", () => {
+    signIn("u-someone-else");
+    renderPage(
+      tree({
+        units: [unit({ id: "dept-child", name: "Payments", can_manage: false })],
+        agents: [twinAgent],
+        my_unit_id: "dept-child",
+      }),
+    );
+
+    expect(screen.getAllByText("Ada twin")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Register Ada's twin" })).not.toBeInTheDocument();
+  });
+
   it("edits the signed-in member's twin without moving it", async () => {
     signIn("u-ada");
     renderPage(

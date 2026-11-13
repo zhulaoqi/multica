@@ -272,6 +272,7 @@ export function OrgPage() {
                     key={member.user_id}
                     member={member}
                     canMove={moveChoices.length > 0}
+                    canConfigureTwin={data.can_manage}
                     choices={moveChoices}
                     twin={unassignedTwins.get(member.user_id) ?? null}
                     onMove={(unitId) =>

@@ -89,6 +89,7 @@ export function UnitPicker({
 export function MemberRow({
   member,
   canMove,
+  canConfigureTwin = false,
   choices,
   onMove,
   twin = null,
@@ -96,6 +97,9 @@ export function MemberRow({
 }: {
   member: OrgMember;
   canMove: boolean;
+  /** The caller leads this member's department (or the workspace), so they
+   * may configure the member's twin as well as their own. */
+  canConfigureTwin?: boolean;
   choices: Array<{ id: string; path: string }>;
   onMove: (unitId: string) => void;
   twin?: OrgAgent | null;
@@ -104,6 +108,7 @@ export function MemberRow({
   const { t } = useT("org");
   const myUserId = useAuthStore((state) => state.user?.id ?? "");
   const isSelf = member.user_id === myUserId;
+  const canEditTwin = isSelf || canConfigureTwin;
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -123,7 +128,7 @@ export function MemberRow({
             <span className="shrink-0 truncate text-caption">{twin.name}</span>
             <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">{twin.can}</span>
             <StatusChip tone={agentAvailability(twin.status)} />
-            {isSelf ? (
+            {canEditTwin ? (
               <button
                 type="button"
                 className="shrink-0 text-caption text-primary hover:underline"
@@ -133,17 +138,24 @@ export function MemberRow({
               </button>
             ) : null}
           </div>
-        ) : isSelf ? (
+        ) : canEditTwin ? (
           <div className="mt-1">
             <Button size="sm" variant="ghost" className="h-7 px-2 text-caption" onClick={() => setDialogOpen(true)}>
-              {t(($) => $.twin_register)}
+              {isSelf ? t(($) => $.twin_register) : t(($) => $.twin_register_for, { name: member.name })}
             </Button>
           </div>
         ) : null}
       </div>
       {canMove ? <UnitPicker value={member.unit_id} choices={choices} onChange={onMove} /> : null}
       {dialogOpen ? (
-        <TwinDialog twin={twin} placeUnitId={placeUnitId} open onOpenChange={setDialogOpen} />
+        <TwinDialog
+          twin={twin}
+          placeUnitId={placeUnitId}
+          ownerId={isSelf ? undefined : member.user_id}
+          ownerName={isSelf ? "" : member.name}
+          open
+          onOpenChange={setDialogOpen}
+        />
       ) : null}
     </div>
   );
@@ -589,6 +601,7 @@ export function OrgCanvas({
                 key={member.user_id}
                 member={member}
                 canMove={unit.can_manage}
+                canConfigureTwin={unit.can_manage}
                 choices={manageableChoices}
                 twin={twins.get(member.user_id) ?? null}
                 placeUnitId={member.unit_id}
