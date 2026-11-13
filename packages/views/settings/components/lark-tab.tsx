@@ -14,6 +14,8 @@ import { ChevronRight, ExternalLink, RefreshCw, Trash2 } from "@multica/ui/icons
 import { QRCode } from "react-qr-code";
 import { cn } from "@multica/ui/lib/utils";
 import { Button } from "@multica/ui/components/ui/button";
+import { Input } from "@multica/ui/components/ui/input";
+import { Label } from "@multica/ui/components/ui/label";
 import { Card, CardContent } from "@multica/ui/components/ui/card";
 import {
   AlertDialog,
@@ -350,6 +352,7 @@ export function LarkAgentBindButton({
   const [dialogRegion, setDialogRegion] = useState<"feishu" | "lark" | null>(
     null,
   );
+  const [existingOpen, setExistingOpen] = useState(false);
 
   const { data: listing } = useQuery({
     ...larkInstallationsOptions(wsId),
@@ -433,6 +436,23 @@ export function LarkAgentBindButton({
             {t(($) => $.lark.bind_button_feishu)}
           </Button>
         </TooltipHint>
+        <TooltipHint
+          label={
+            agentName
+              ? t(($) => $.lark.existing_bot_button_title, { agent: agentName })
+              : undefined
+          }
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExistingOpen(true)}
+            disabled={!agentId}
+            data-testid="lark-agent-bind-existing"
+          >
+            {t(($) => $.lark.existing_bot_button)}
+          </Button>
+        </TooltipHint>
         {/* MUL-3083: Lark (international) bind entry is temporarily hidden —
             see LARK_INTL_CONNECT_ENABLED. Mainland Feishu (above) is
             unaffected. */}
@@ -464,6 +484,13 @@ export function LarkAgentBindButton({
           agentName={agentName}
           region={dialogRegion}
           onClose={() => setDialogRegion(null)}
+        />
+      )}
+      {existingOpen && (
+        <LarkExistingBotDialog
+          wsId={wsId}
+          agentId={agentId}
+          onClose={() => setExistingOpen(false)}
         />
       )}
     </>
@@ -694,6 +721,95 @@ function LarkAgentBotConnectedBadge({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function LarkExistingBotDialog({
+  wsId,
+  agentId,
+  onClose,
+}: {
+  wsId: string;
+  agentId: string;
+  onClose: () => void;
+}) {
+  const { t } = useT("settings");
+  const qc = useQueryClient();
+  const [appId, setAppId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const canSubmit = appId.trim() !== "" && appSecret.trim() !== "" && !submitting;
+
+  async function handleSubmit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      await api.registerLarkExisting(wsId, agentId, {
+        app_id: appId.trim(),
+        app_secret: appSecret.trim(),
+      });
+      await qc.invalidateQueries({ queryKey: larkKeys.installations(wsId) });
+      toast.success(t(($) => $.lark.existing_bot_success_toast));
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t(($) => $.lark.existing_bot_failed_toast));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg" data-testid="lark-existing-bot-dialog">
+        <DialogHeader className="gap-1 border-b px-5 py-3">
+          <DialogTitle className="text-title-sm font-semibold">
+            {t(($) => $.lark.existing_bot_dialog_title)}
+          </DialogTitle>
+          <DialogDescription>
+            {t(($) => $.lark.existing_bot_hint)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 p-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="lark-existing-app-id" className="text-caption text-muted-foreground">
+              {t(($) => $.lark.existing_bot_app_id_label)}
+            </Label>
+            <Input
+              id="lark-existing-app-id"
+              data-testid="lark-existing-app-id"
+              value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={submitting}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="lark-existing-app-secret" className="text-caption text-muted-foreground">
+              {t(($) => $.lark.existing_bot_app_secret_label)}
+            </Label>
+            <Input
+              id="lark-existing-app-secret"
+              data-testid="lark-existing-app-secret"
+              type="password"
+              value={appSecret}
+              onChange={(e) => setAppSecret(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={submitting}
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t bg-background px-5 py-3">
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            {t(($) => $.lark.existing_bot_cancel)}
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit} data-testid="lark-existing-submit">
+            {submitting ? t(($) => $.lark.existing_bot_submitting) : t(($) => $.lark.existing_bot_submit)}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

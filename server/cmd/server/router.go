@@ -1954,6 +1954,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// /install/{sessionId}/status until success or
 					// terminal failure.
 					r.Post("/lark/install/begin", h.BeginLarkInstall)
+					r.Post("/lark/install/existing", h.RegisterLarkExisting)
 					r.Get("/lark/install/{sessionId}/status", h.GetLarkInstallStatus)
 				})
 

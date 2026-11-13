@@ -261,14 +261,7 @@ describe("CodeTab — pull requests", () => {
     expect(screen.getByText("merge rule read-only")).toBeInTheDocument();
   });
 
-  it("lists self-hosted Git only where the deployment supports it", () => {
-    const { unmount } = render(<CodeTab />, { wrapper: Wrapper });
-    expect(screen.queryByText("VCS rows")).toBeNull();
-    unmount();
-
-    configStore
-      .getState()
-      .setAuthConfig({ allowSignup: true, vcsIntegrationAvailable: true });
+  it("shows GitLab on the code hosting card beside GitHub", () => {
     render(<CodeTab />, { wrapper: Wrapper });
     expect(screen.getByText("VCS rows")).toBeInTheDocument();
   });

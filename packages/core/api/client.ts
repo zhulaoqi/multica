@@ -396,6 +396,9 @@ import {
   EMPTY_WECOM_INSTALLATION,
   EMPTY_LIST_WECOM_INSTALLATIONS_RESPONSE,
   ListLarkInstallationsResponseSchema,
+  LarkInstallationSchema,
+  type LarkInstallation,
+  EMPTY_LARK_INSTALLATION,
   EMPTY_LIST_LARK_INSTALLATIONS_RESPONSE,
   EMPTY_REDEEM_WECOM_BINDING_TOKEN_RESPONSE,
   TelegramInstallationSchema,
@@ -5239,6 +5242,21 @@ export class ApiClient {
     const search = new URLSearchParams({ agent_id: agentId, region });
     return this.fetch(`/api/workspaces/${workspaceId}/lark/install/begin?${search.toString()}`, {
       method: "POST",
+    });
+  }
+
+  async registerLarkExisting(
+    workspaceId: string,
+    agentId: string,
+    body: { app_id: string; app_secret: string },
+  ): Promise<LarkInstallation> {
+    const search = new URLSearchParams({ agent_id: agentId });
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/lark/install/existing?${search.toString()}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    return parseWithFallback(raw, LarkInstallationSchema, EMPTY_LARK_INSTALLATION, {
+      endpoint: "POST /api/workspaces/:id/lark/install/existing",
     });
   }
 

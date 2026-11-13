@@ -24,7 +24,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
-import { useConfigStore } from "@multica/core/config";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useCurrentMember } from "@multica/core/permissions";
 import { useCurrentWorkspace } from "@multica/core/paths";
@@ -64,8 +63,6 @@ export function CodeTab() {
   const qc = useQueryClient();
   const { role, member } = useCurrentMember(wsId);
   const isManager = role === "owner" || role === "admin";
-  const vcsAvailable = useConfigStore((s) => s.vcsIntegrationAvailable);
-
   // Every member can see the installation list (MUL-2413); connect and
   // disconnect follow the backend's `can_manage` so the UI never offers what
   // the server would reject.
@@ -258,7 +255,7 @@ export function CodeTab() {
               </span>
             ) : null}
           </SettingsRow>
-          {vcsAvailable ? <VCSConnectionRows /> : null}
+          <VCSConnectionRows />
         </SettingsCard>
       </SettingsSection>
 

@@ -277,6 +277,80 @@ type BeginLarkInstallResponse struct {
 // Returns 503 when the integration is not wired (no at-rest key, no
 // HTTP client, no RegistrationService); the UI hides the bind button
 // in that case so this should not be reached through the normal flow.
+// RegisterLarkExistingRequest binds a Feishu app the workspace already has.
+// The QR flow creates a new app; this accepts the console app id and secret.
+type RegisterLarkExistingRequest struct {
+	AppID     string `json:"app_id"`
+	AppSecret string `json:"app_secret"`
+}
+
+// RegisterLarkExisting (POST /api/workspaces/{id}/lark/install/existing?agent_id=…)
+// verifies the pasted Feishu credentials and binds that bot to the agent.
+func (h *Handler) RegisterLarkExisting(w http.ResponseWriter, r *http.Request) {
+	if h.LarkRegistration == nil {
+		writeFeatureDisabled(w, "lark_not_configured", "lark install not configured")
+		return
+	}
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	wsUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace id")
+	if !ok {
+		return
+	}
+	agentIDStr := strings.TrimSpace(r.URL.Query().Get("agent_id"))
+	if agentIDStr == "" {
+		writeError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+	agentUUID, ok := parseUUIDOrBadRequest(w, agentIDStr, "agent_id")
+	if !ok {
+		return
+	}
+	agent, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
+		ID:          agentUUID,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "agent not found in this workspace")
+		return
+	}
+	if !h.canManageAgent(w, r, agent) {
+		return
+	}
+	initiatorUUID, ok := parseUUIDOrBadRequest(w, userID, "user id")
+	if !ok {
+		return
+	}
+	var body RegisterLarkExistingRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	inst, err := h.LarkRegistration.RegisterExisting(r.Context(), lark.RegisterExistingParams{
+		WorkspaceID: wsUUID,
+		AgentID:     agentUUID,
+		InitiatorID: initiatorUUID,
+		AppID:       body.AppID,
+		AppSecret:   body.AppSecret,
+		Region:      lark.RegionFeishu,
+	})
+	if err != nil {
+		var conflict *lark.ExistingInstallConflictError
+		switch {
+		case errors.Is(err, lark.ErrAppCredentialsRequired), errors.Is(err, lark.ErrAppCredentialsRejected):
+			writeError(w, http.StatusBadRequest, err.Error())
+		case errors.As(err, &conflict):
+			writeError(w, http.StatusConflict, conflict.Error())
+		default:
+			writeError(w, http.StatusInternalServerError, "could not connect the Feishu bot")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, larkInstallationToResponse(inst))
+}
+
 func (h *Handler) BeginLarkInstall(w http.ResponseWriter, r *http.Request) {
 	if h.LarkRegistration == nil {
 		writeFeatureDisabled(w, "lark_not_configured", "lark install not configured")
