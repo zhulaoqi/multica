@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { setLoggedInCookie } from "@/features/auth/auth-cookie";
+import { LoginBackdrop } from "@/features/auth/login-backdrop";
 
 export default function OperatorLoginPage() {
   const [name, setName] = useState("");
@@ -42,8 +43,13 @@ export default function OperatorLoginPage() {
         alt=""
         fill
         preload
-        className="object-cover object-center"
+        className="object-cover object-center opacity-60"
         sizes="100vw"
+      />
+      <LoginBackdrop />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(5,7,11,0.55)_100%)]"
       />
       <form
         onSubmit={submit}
