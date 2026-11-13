@@ -21,5 +21,21 @@
   "move_to": "部门",
   "read_only": "只有工作空间管理员和部门负责人可以修改。",
   "load_failed": "组织架构加载失败。",
-  "action_failed": "修改没有成功。"
+  "action_failed": "修改没有成功。",
+  "sync_from_feishu": "从飞书同步",
+  "syncing": "同步中…",
+  "sync_not_configured": "飞书同步需要配置 MULTICA_FEISHU_APP_ID 和 MULTICA_FEISHU_APP_SECRET。",
+  "last_synced": "上次同步 {{time}}",
+  "never_synced": "还没有同步过",
+  "sync_report_line": "{{label}}：{{names}}",
+  "sync_report_created": "新建部门",
+  "sync_report_updated": "更新部门",
+  "sync_report_leads": "补上负责人",
+  "sync_report_added": "新增成员",
+  "sync_report_moved": "成员调整",
+  "sync_report_no_email": "缺邮箱已跳过",
+  "sync_report_detached_departments": "飞书中已没有",
+  "sync_report_detached_users": "已离开通讯录",
+  "sync_nothing_changed": "没有变化。",
+  "sync_failed": "同步失败。"
 }

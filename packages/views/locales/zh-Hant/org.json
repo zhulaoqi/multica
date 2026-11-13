@@ -21,5 +21,21 @@
   "move_to": "部門",
   "read_only": "只有工作區管理員和部門負責人可以修改。",
   "load_failed": "組織架構載入失敗。",
-  "action_failed": "修改沒有成功。"
+  "action_failed": "修改沒有成功。",
+  "sync_from_feishu": "從飛書同步",
+  "syncing": "同步中…",
+  "sync_not_configured": "飛書同步需要設定 MULTICA_FEISHU_APP_ID 和 MULTICA_FEISHU_APP_SECRET。",
+  "last_synced": "上次同步 {{time}}",
+  "never_synced": "尚未同步",
+  "sync_report_line": "{{label}}：{{names}}",
+  "sync_report_created": "新增部門",
+  "sync_report_updated": "更新部門",
+  "sync_report_leads": "補上負責人",
+  "sync_report_added": "新增成員",
+  "sync_report_moved": "成員調整",
+  "sync_report_no_email": "缺信箱已跳過",
+  "sync_report_detached_departments": "飛書中已沒有",
+  "sync_report_detached_users": "已離開通訊錄",
+  "sync_nothing_changed": "沒有變化。",
+  "sync_failed": "同步失敗。"
 }

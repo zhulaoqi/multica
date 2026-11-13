@@ -20,6 +20,9 @@ export const workspaceKeys = {
     ["workspaces", wsId, "squads", squadId, "members-status"] as const,
   skills: (wsId: string) => ["workspaces", wsId, "skills"] as const,
   org: (wsId: string) => ["workspaces", wsId, "org"] as const,
+  // Directory sync status sits beside the tree key so invalidating the org
+  // subtree also refreshes a report that a sync just rewrote.
+  orgSync: (wsId: string) => ["workspaces", wsId, "org-sync"] as const,
   assigneeFrequency: (wsId: string) => ["workspaces", wsId, "assignee-frequency"] as const,
   mcpServers: (wsId: string) => ["workspaces", wsId, "mcp-servers"] as const,
 };
@@ -43,6 +46,13 @@ export function orgTreeOptions(wsId: string) {
   return queryOptions({
     queryKey: workspaceKeys.org(wsId),
     queryFn: () => api.listOrgUnits(),
+  });
+}
+
+export function orgSyncStatusOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.orgSync(wsId),
+    queryFn: () => api.getOrgSyncStatus(),
   });
 }
 

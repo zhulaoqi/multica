@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgMember, type OrgTree } from "@multica/core/api";
+import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgMember, type OrgSyncReport, type OrgTree } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { memberListOptions, orgTreeOptions, workspaceKeys } from "@multica/core/workspace/queries";
+import { memberListOptions, orgSyncStatusOptions, orgTreeOptions, workspaceKeys } from "@multica/core/workspace/queries";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
@@ -342,15 +342,47 @@ function UnitDetail({
   );
 }
 
+/** SyncReport summarises the last directory sync in the change lists the
+ * server returns, so an admin sees exactly what moved without diffing. */
+function SyncReport({ report }: { report: OrgSyncReport }) {
+  const { t } = useT("org");
+  const lines: Array<[string, string[]]> = [
+    [t(($) => $.sync_report_created), report.created_units],
+    [t(($) => $.sync_report_updated), report.updated_units],
+    [t(($) => $.sync_report_leads), report.leads_assigned],
+    [t(($) => $.sync_report_added), report.members_added],
+    [t(($) => $.sync_report_moved), report.members_moved],
+    [t(($) => $.sync_report_no_email), report.members_without_email],
+    [t(($) => $.sync_report_detached_departments), report.detached_departments],
+    [t(($) => $.sync_report_detached_users), report.detached_users],
+  ];
+  const visible = lines.filter(([, names]) => names.length > 0);
+  if (visible.length === 0) {
+    return <p className="mb-4 text-caption text-muted-foreground">{t(($) => $.sync_nothing_changed)}</p>;
+  }
+  return (
+    <div className="mb-4 flex flex-col gap-0.5 text-caption text-muted-foreground">
+      {visible.map(([label, names]) => (
+        <p key={label}>
+          {t(($) => $.sync_report_line, { label, names: names.join(", ") })}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
+  const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
   const members = useQuery(memberListOptions(wsId));
+  const syncStatus = useQuery(orgSyncStatusOptions(wsId));
   const [selected, setSelected] = useState("");
   const [rootName, setRootName] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const actions = useOrgActions();
-  const { run, failure } = actions;
+  const { run, failure, setFailure } = actions;
   const data: OrgTree = tree.data ?? EMPTY_ORG_TREE;
   const paths = unitPaths(data.units);
   const unitChoices = data.units
@@ -364,6 +396,21 @@ export function OrgPage() {
   }));
   const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
   const moveChoices = unitChoices.filter((choice) => choice.manage);
+  const lastRun = syncStatus.data?.last_run ?? null;
+  const runSync = async () => {
+    setFailure("");
+    setSyncing(true);
+    try {
+      const report = await api.syncOrgFromFeishu();
+      queryClient.setQueryData(workspaceKeys.orgSync(wsId), { configured: true, last_run: report });
+      await queryClient.invalidateQueries({ queryKey: workspaceKeys.org(wsId) });
+      await queryClient.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
+    } catch (error) {
+      setFailure(error instanceof Error && error.message ? error.message : t(($) => $.sync_failed));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (tree.isError) {
     return <p className="p-6 text-body text-muted-foreground">{t(($) => $.load_failed)}</p>;
@@ -416,6 +463,25 @@ export function OrgPage() {
         ) : null}
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-6">
+        {data.can_manage ? (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              disabled={!syncStatus.data?.configured || syncing}
+              onClick={() => void runSync()}
+            >
+              {syncing ? t(($) => $.syncing) : t(($) => $.sync_from_feishu)}
+            </Button>
+            <span className="text-caption text-muted-foreground">
+              {syncStatus.data?.configured
+                ? lastRun?.synced_at
+                  ? t(($) => $.last_synced, { time: new Date(lastRun.synced_at).toLocaleString() })
+                  : t(($) => $.never_synced)
+                : t(($) => $.sync_not_configured)}
+            </span>
+          </div>
+        ) : null}
+        {data.can_manage && lastRun ? <SyncReport report={lastRun} /> : null}
         {failure ? <p className="mb-3 text-body text-destructive">{failure}</p> : null}
         {!canAnyManage ? (
           <p className="mb-3 text-caption text-muted-foreground">{t(($) => $.read_only)}</p>

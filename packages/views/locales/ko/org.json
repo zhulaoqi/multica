@@ -21,5 +21,21 @@
   "move_to": "부서",
   "read_only": "워크스페이스 관리자와 부서 책임자만 변경할 수 있습니다.",
   "load_failed": "조직 트리를 불러오지 못했습니다.",
-  "action_failed": "변경이 적용되지 않았습니다."
+  "action_failed": "변경이 적용되지 않았습니다.",
+  "sync_from_feishu": "Feishu에서 동기화",
+  "syncing": "동기화 중…",
+  "sync_not_configured": "Feishu 동기화에는 MULTICA_FEISHU_APP_ID와 MULTICA_FEISHU_APP_SECRET이 필요합니다.",
+  "last_synced": "마지막 동기화 {{time}}",
+  "never_synced": "동기화한 적 없음",
+  "sync_report_line": "{{label}}: {{names}}",
+  "sync_report_created": "새 부서",
+  "sync_report_updated": "업데이트된 부서",
+  "sync_report_leads": "책임자 지정",
+  "sync_report_added": "추가된 멤버",
+  "sync_report_moved": "이동된 멤버",
+  "sync_report_no_email": "이메일 없음 제외",
+  "sync_report_detached_departments": "Feishu에 없음",
+  "sync_report_detached_users": "디렉터리에서 떠남",
+  "sync_nothing_changed": "변경 없음.",
+  "sync_failed": "동기화 실패."
 }

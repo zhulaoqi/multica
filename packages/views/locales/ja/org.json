@@ -21,5 +21,21 @@
   "move_to": "部門",
   "read_only": "変更できるのはワークスペース管理者と部門責任者だけです。",
   "load_failed": "組織ツリーを読み込めませんでした。",
-  "action_failed": "変更が反映されませんでした。"
+  "action_failed": "変更が反映されませんでした。",
+  "sync_from_feishu": "Feishu から同期",
+  "syncing": "同期中…",
+  "sync_not_configured": "Feishu 同期には MULTICA_FEISHU_APP_ID と MULTICA_FEISHU_APP_SECRET が必要です。",
+  "last_synced": "前回の同期 {{time}}",
+  "never_synced": "未同期",
+  "sync_report_line": "{{label}}: {{names}}",
+  "sync_report_created": "新しい部門",
+  "sync_report_updated": "更新した部門",
+  "sync_report_leads": "責任者を設定",
+  "sync_report_added": "追加したメンバー",
+  "sync_report_moved": "移動したメンバー",
+  "sync_report_no_email": "メール未設定でスキップ",
+  "sync_report_detached_departments": "Feishu に存在しない",
+  "sync_report_detached_users": "連絡先から離脱",
+  "sync_nothing_changed": "変更はありません。",
+  "sync_failed": "同期に失敗しました。"
 }

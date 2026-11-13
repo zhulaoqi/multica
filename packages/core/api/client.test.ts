@@ -3265,3 +3265,28 @@ describe("ApiClient shared credential across windows", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("ApiClient Feishu organisation sync", () => {
+  const json = (value: unknown) =>
+    new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  it("falls back to defaults when the sync report is malformed", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ created_units: "nope", synced_at: 42 })));
+    const client = new ApiClient("https://api.example.test");
+
+    const report = await client.syncOrgFromFeishu();
+
+    expect(report.created_units).toEqual([]);
+    expect(report.members_added).toEqual([]);
+    expect(report.synced_at).toBe("");
+  });
+
+  it("reads the sync status and tolerates an unknown shape", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json("unexpected")));
+    const client = new ApiClient("https://api.example.test");
+
+    const status = await client.getOrgSyncStatus();
+
+    expect(status).toEqual({ configured: false, last_run: null });
+  });
+});

@@ -53,6 +53,26 @@ export const OrgImportResultSchema = z.object({
   unknown_leads: z.string().array().default([]),
 });
 
+export const OrgSyncReportSchema = z.object({
+  created_units: z.string().array().optional().default([]),
+  updated_units: z.string().array().optional().default([]),
+  leads_assigned: z.string().array().optional().default([]),
+  members_added: z.string().array().optional().default([]),
+  members_moved: z.string().array().optional().default([]),
+  members_without_email: z.string().array().optional().default([]),
+  detached_departments: z.string().array().optional().default([]),
+  detached_users: z.string().array().optional().default([]),
+  synced_at: z.string().optional().default(""),
+});
+
+export const OrgSyncStatusSchema = z.object({
+  configured: z.boolean().optional().default(false),
+  last_run: OrgSyncReportSchema.nullable().optional().default(null),
+});
+
+export type OrgSyncReport = z.infer<typeof OrgSyncReportSchema>;
+export type OrgSyncStatus = z.infer<typeof OrgSyncStatusSchema>;
+
 export type OrgUnit = z.infer<typeof OrgUnitSchema>;
 export type OrgAgent = z.infer<typeof OrgAgentSchema>;
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
@@ -61,6 +81,18 @@ export type OrgImportRow = z.infer<typeof OrgImportRowSchema>;
 export type OrgImportResult = z.infer<typeof OrgImportResultSchema>;
 
 export const EMPTY_ORG_TREE: OrgTree = { units: [], agents: [], members: [], can_manage: false };
+export const EMPTY_ORG_SYNC_REPORT: OrgSyncReport = {
+  created_units: [],
+  updated_units: [],
+  leads_assigned: [],
+  members_added: [],
+  members_moved: [],
+  members_without_email: [],
+  detached_departments: [],
+  detached_users: [],
+  synced_at: "",
+};
+export const EMPTY_ORG_SYNC_STATUS: OrgSyncStatus = { configured: false, last_run: null };
 export const EMPTY_ORG_IMPORT_RESULT: OrgImportResult = {
   created_units: 0,
   existing_units: 0,

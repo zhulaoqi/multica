@@ -14,7 +14,7 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
   },
 }));
 import { WorkspaceSlugProvider } from "@multica/core/paths";
-import { memberListOptions, orgTreeOptions, workspaceListOptions } from "@multica/core/workspace/queries";
+import { memberListOptions, orgSyncStatusOptions, orgTreeOptions, workspaceListOptions } from "@multica/core/workspace/queries";
 import type { MemberWithUser } from "@multica/core/types";
 import { renderWithI18n } from "../test/i18n";
 import { OrgPage } from "./org-page";
@@ -80,6 +80,7 @@ beforeEach(() => {
     updated_at: new Date(NOW).toISOString(),
   }]);
   qc.setQueryData(memberListOptions(WS).queryKey, [member]);
+  qc.setQueryData(orgSyncStatusOptions(WS).queryKey, { configured: true, last_run: null });
 });
 
 afterEach(() => {
@@ -114,6 +115,7 @@ describe("OrgPage permissions", () => {
 
     expect(screen.getByText(/Only workspace admins/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add top-level department" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sync from Feishu" })).not.toBeInTheDocument();
 
     selectUnit("Payments");
 
@@ -163,6 +165,37 @@ describe("OrgPage permissions", () => {
     // lead picker, the member's department picker, and the agent's picker.
     expect(screen.getAllByRole("combobox")).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
+  });
+});
+
+describe("OrgPage Feishu sync", () => {
+  it("keeps the sync button disabled until credentials are configured", () => {
+    qc.setQueryData(orgSyncStatusOptions(WS).queryKey, { configured: false, last_run: null });
+    renderPage(tree());
+
+    expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeDisabled();
+    expect(screen.getByText(/MULTICA_FEISHU_APP_ID/)).toBeInTheDocument();
+  });
+
+  it("shows the last run report", () => {
+    qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
+      configured: true,
+      last_run: {
+        created_units: [],
+        updated_units: [],
+        leads_assigned: [],
+        members_added: ["Ada"],
+        members_moved: [],
+        members_without_email: [],
+        detached_departments: [],
+        detached_users: [],
+        synced_at: "2026-11-12T08:00:00Z",
+      },
+    });
+    renderPage(tree());
+
+    expect(screen.getByText("People added: Ada")).toBeInTheDocument();
+    expect(screen.getByText(/Last synced/)).toBeInTheDocument();
   });
 });
 

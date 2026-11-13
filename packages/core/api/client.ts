@@ -1,5 +1,5 @@
 import type { ZodType } from "zod";
-import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_TREE, OrgImportResultSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgTree, type OrgUnitCreated } from "./org-schema";
+import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_SYNC_REPORT, EMPTY_ORG_SYNC_STATUS, EMPTY_ORG_TREE, OrgImportResultSchema, OrgSyncReportSchema, OrgSyncStatusSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgSyncReport, type OrgSyncStatus, type OrgTree, type OrgUnitCreated } from "./org-schema";
 import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
@@ -5733,6 +5733,20 @@ export class ApiClient {
     await this.fetch(`/api/org/members/${encodeURIComponent(userId)}/unit`, {
       method: "PUT",
       body: JSON.stringify({ unit_id: unitId }),
+    });
+  }
+
+  async getOrgSyncStatus(): Promise<OrgSyncStatus> {
+    const raw = await this.fetch<unknown>("/api/org/sync/feishu");
+    return parseWithFallback(raw, OrgSyncStatusSchema, EMPTY_ORG_SYNC_STATUS, {
+      endpoint: "GET /api/org/sync/feishu",
+    });
+  }
+
+  async syncOrgFromFeishu(): Promise<OrgSyncReport> {
+    const raw = await this.fetch<unknown>("/api/org/sync/feishu", { method: "POST" });
+    return parseWithFallback(raw, OrgSyncReportSchema, EMPTY_ORG_SYNC_REPORT, {
+      endpoint: "POST /api/org/sync/feishu",
     });
   }
 }

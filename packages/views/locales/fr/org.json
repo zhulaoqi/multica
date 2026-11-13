@@ -21,5 +21,21 @@
   "move_to": "Département",
   "read_only": "Seuls les administrateurs et le responsable du département peuvent modifier.",
   "load_failed": "Impossible de charger l'organisation.",
-  "action_failed": "La modification n'a pas été appliquée."
+  "action_failed": "La modification n'a pas été appliquée.",
+  "sync_from_feishu": "Synchroniser depuis Feishu",
+  "syncing": "Synchronisation…",
+  "sync_not_configured": "La synchronisation Feishu nécessite MULTICA_FEISHU_APP_ID et MULTICA_FEISHU_APP_SECRET.",
+  "last_synced": "Dernière synchronisation {{time}}",
+  "never_synced": "Jamais synchronisé",
+  "sync_report_line": "{{label}} : {{names}}",
+  "sync_report_created": "Nouveaux départements",
+  "sync_report_updated": "Départements mis à jour",
+  "sync_report_leads": "Responsables renseignés",
+  "sync_report_added": "Personnes ajoutées",
+  "sync_report_moved": "Personnes déplacées",
+  "sync_report_no_email": "Ignorées sans e-mail",
+  "sync_report_detached_departments": "Plus dans Feishu",
+  "sync_report_detached_users": "Ont quitté l’annuaire",
+  "sync_nothing_changed": "Aucun changement.",
+  "sync_failed": "La synchronisation a échoué."
 }

@@ -21,5 +21,21 @@
   "move_to": "Department",
   "read_only": "Only workspace admins and the department lead can make changes.",
   "load_failed": "Could not load the organisation tree.",
-  "action_failed": "That change did not go through."
+  "action_failed": "That change did not go through.",
+  "sync_from_feishu": "Sync from Feishu",
+  "syncing": "Syncing…",
+  "sync_not_configured": "Feishu sync needs MULTICA_FEISHU_APP_ID and MULTICA_FEISHU_APP_SECRET.",
+  "last_synced": "Last synced {{time}}",
+  "never_synced": "Never synced",
+  "sync_report_line": "{{label}}: {{names}}",
+  "sync_report_created": "New departments",
+  "sync_report_updated": "Updated departments",
+  "sync_report_leads": "Leads filled in",
+  "sync_report_added": "People added",
+  "sync_report_moved": "People moved",
+  "sync_report_no_email": "Skipped without email",
+  "sync_report_detached_departments": "No longer in Feishu",
+  "sync_report_detached_users": "Left the directory",
+  "sync_nothing_changed": "Nothing changed.",
+  "sync_failed": "Sync failed."
 }

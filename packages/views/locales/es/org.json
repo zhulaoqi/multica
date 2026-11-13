@@ -21,5 +21,21 @@
   "move_to": "Departamento",
   "read_only": "Solo los administradores y el responsable del departamento pueden modificar.",
   "load_failed": "No se pudo cargar la organización.",
-  "action_failed": "El cambio no se aplicó."
+  "action_failed": "El cambio no se aplicó.",
+  "sync_from_feishu": "Sincronizar desde Feishu",
+  "syncing": "Sincronizando…",
+  "sync_not_configured": "La sincronización con Feishu requiere MULTICA_FEISHU_APP_ID y MULTICA_FEISHU_APP_SECRET.",
+  "last_synced": "Última sincronización {{time}}",
+  "never_synced": "Nunca sincronizado",
+  "sync_report_line": "{{label}}: {{names}}",
+  "sync_report_created": "Departamentos nuevos",
+  "sync_report_updated": "Departamentos actualizados",
+  "sync_report_leads": "Responsables asignados",
+  "sync_report_added": "Personas añadidas",
+  "sync_report_moved": "Personas movidas",
+  "sync_report_no_email": "Omitidas sin correo",
+  "sync_report_detached_departments": "Ya no están en Feishu",
+  "sync_report_detached_users": "Salieron del directorio",
+  "sync_nothing_changed": "Sin cambios.",
+  "sync_failed": "La sincronización falló."
 }
