@@ -308,6 +308,9 @@ type Handler struct {
 	// FeishuLoginExchanger exchanges a Feishu authorization code for a profile.
 	// Nil means Feishu login is not configured.
 	FeishuLoginExchanger FeishuExchanger
+	// OrgDirectory reads the Feishu contact directory for organisation sync.
+	// Nil means sync is not configured and the endpoint reports that state.
+	OrgDirectory OrgDirectory
 	// Composio integration (MUL-3720). Nil when COMPOSIO_API_KEY is unset;
 	// the composio HTTP handlers return 403 in that case. Wired in
 	// cmd/server/router.go after handler.New.

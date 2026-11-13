@@ -34,6 +34,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
 	composiointeg "github.com/multica-ai/multica/server/internal/integrations/composio"
 	"github.com/multica-ai/multica/server/internal/integrations/dingtalk"
+	"github.com/multica-ai/multica/server/internal/integrations/feishu/contact"
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
 	"github.com/multica-ai/multica/server/internal/integrations/slack"
 	"github.com/multica-ai/multica/server/internal/integrations/telegram"
@@ -454,6 +455,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	}
 	h := handler.New(queries, pool, hub, bus, emailSvc, store, cfSigner, analyticsClient, signupConfig, daemonHub)
 	h.FeishuLoginExchanger = handler.NewFeishuOAuthFromEnv()
+	if directory := contact.NewFromEnv(); directory != nil {
+		h.OrgDirectory = directory
+	}
 	invitationRateLimits := handler.DefaultInvitationRateLimits()
 	invitationRateLimits.Actor.Limit = envNonNegativeInt("RATE_LIMIT_INVITATION_ACTOR_10M", invitationRateLimits.Actor.Limit)
 	invitationRateLimits.Workspace.Limit = envNonNegativeInt("RATE_LIMIT_INVITATION_WORKSPACE_24H", invitationRateLimits.Workspace.Limit)
@@ -2574,7 +2578,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Patch("/units/{unitId}", h.UpdateOrgUnit)
 				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
-		r.Put("/members/{userId}/unit", h.SetOrgMemberUnit)
+				r.Put("/members/{userId}/unit", h.SetOrgMemberUnit)
+				r.Get("/sync/feishu", h.GetOrgSyncStatus)
+				r.Post("/sync/feishu", h.SyncOrgFromFeishu)
 			})
 
 			// Tasks (user-facing, with ownership check)

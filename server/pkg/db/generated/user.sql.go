@@ -147,6 +147,34 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserByLowerEmail = `-- name: GetUserByLowerEmail :one
+SELECT id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone, whats_new_seen_version FROM "user"
+WHERE lower(email) = lower($1)
+`
+
+func (q *Queries) GetUserByLowerEmail(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByLowerEmail, lower)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OnboardedAt,
+		&i.OnboardingQuestionnaire,
+		&i.CloudWaitlistEmail,
+		&i.CloudWaitlistReason,
+		&i.StarterContentState,
+		&i.Language,
+		&i.ProfileDescription,
+		&i.Timezone,
+		&i.WhatsNewSeenVersion,
+	)
+	return i, err
+}
+
 const getUsersByIDs = `-- name: GetUsersByIDs :many
 SELECT id, name, email, avatar_url FROM "user"
 WHERE id = ANY($1::uuid[])

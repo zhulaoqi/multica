@@ -86,3 +86,45 @@ WHERE workspace_id = $1 AND user_id = $2;
 SELECT count(*)::int
 FROM member
 WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: ListSyncedOrgUnits :many
+-- Units this workspace imported from a directory, keyed by the directory's id.
+-- Manual units have no external id and are left alone by sync.
+SELECT id, parent_id, name, external_id, lead_user_id
+FROM org_unit
+WHERE workspace_id = $1 AND external_id IS NOT NULL;
+
+-- name: CreateOrgUnitWithExternal :one
+INSERT INTO org_unit (workspace_id, parent_id, name, external_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id;
+
+-- name: UpdateOrgUnitFromExternal :exec
+UPDATE org_unit
+SET name = $3, parent_id = $4, updated_at = now()
+WHERE id = $1 AND workspace_id = $2;
+
+-- name: SetOrgUnitLeadIfEmpty :execrows
+-- Sync only fills a lead the workspace has not chosen yet; manual assignments win.
+UPDATE org_unit
+SET lead_user_id = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2 AND lead_user_id IS NULL;
+
+-- name: InsertOrgSyncRun :one
+INSERT INTO org_sync_run (workspace_id, summary)
+VALUES ($1, sqlc.arg(summary)::jsonb)
+RETURNING id, created_at;
+
+-- name: GetLatestOrgSyncRun :one
+SELECT summary, created_at
+FROM org_sync_run
+WHERE workspace_id = $1
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: ListWorkspaceFeishuIdentities :many
+-- Directory-linked people in one workspace, so a sync can report who disappeared
+-- upstream without touching manually invited members.
+SELECT i.user_id, i.email, i.name
+FROM feishu_identity i
+JOIN member m ON m.user_id = i.user_id AND m.workspace_id = $1;

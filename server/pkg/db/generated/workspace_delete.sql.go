@@ -111,12 +111,16 @@ func (q *Queries) DeleteWorkspaceAdministration(ctx context.Context, workspaceID
 const deleteWorkspaceAgents = `-- name: DeleteWorkspaceAgents :exec
 WITH deleted_org_units AS (
     DELETE FROM org_unit WHERE org_unit.workspace_id = $1
+),
+deleted_org_sync_runs AS (
+    DELETE FROM org_sync_run WHERE org_sync_run.workspace_id = $1
 )
 DELETE FROM agent WHERE agent.workspace_id = $1
 `
 
 // org_unit has no foreign key to agent; both are deleted from the same
 // snapshot so a teardown cannot leave units behind for removed agents.
+// Directory sync history goes with the organisation it describes.
 func (q *Queries) DeleteWorkspaceAgents(ctx context.Context, workspaceID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteWorkspaceAgents, workspaceID)
 	return err

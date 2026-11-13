@@ -90,6 +90,31 @@ func (q *Queries) CreateOrgUnit(ctx context.Context, arg CreateOrgUnitParams) (p
 	return id, err
 }
 
+const createOrgUnitWithExternal = `-- name: CreateOrgUnitWithExternal :one
+INSERT INTO org_unit (workspace_id, parent_id, name, external_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id
+`
+
+type CreateOrgUnitWithExternalParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+	Name        string      `json:"name"`
+	ExternalID  pgtype.Text `json:"external_id"`
+}
+
+func (q *Queries) CreateOrgUnitWithExternal(ctx context.Context, arg CreateOrgUnitWithExternalParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createOrgUnitWithExternal,
+		arg.WorkspaceID,
+		arg.ParentID,
+		arg.Name,
+		arg.ExternalID,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteOrgUnit = `-- name: DeleteOrgUnit :exec
 DELETE FROM org_unit
 WHERE id = $1 AND workspace_id = $2
@@ -142,6 +167,26 @@ func (q *Queries) FindWorkspaceMemberByEmail(ctx context.Context, arg FindWorksp
 	return id, err
 }
 
+const getLatestOrgSyncRun = `-- name: GetLatestOrgSyncRun :one
+SELECT summary, created_at
+FROM org_sync_run
+WHERE workspace_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestOrgSyncRunRow struct {
+	Summary   []byte             `json:"summary"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetLatestOrgSyncRun(ctx context.Context, workspaceID pgtype.UUID) (GetLatestOrgSyncRunRow, error) {
+	row := q.db.QueryRow(ctx, getLatestOrgSyncRun, workspaceID)
+	var i GetLatestOrgSyncRunRow
+	err := row.Scan(&i.Summary, &i.CreatedAt)
+	return i, err
+}
+
 const getOrgUnit = `-- name: GetOrgUnit :one
 SELECT id
 FROM org_unit
@@ -179,6 +224,29 @@ func (q *Queries) GetOrgUnitByParentAndName(ctx context.Context, arg GetOrgUnitB
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertOrgSyncRun = `-- name: InsertOrgSyncRun :one
+INSERT INTO org_sync_run (workspace_id, summary)
+VALUES ($1, $2::jsonb)
+RETURNING id, created_at
+`
+
+type InsertOrgSyncRunParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Summary     []byte      `json:"summary"`
+}
+
+type InsertOrgSyncRunRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) InsertOrgSyncRun(ctx context.Context, arg InsertOrgSyncRunParams) (InsertOrgSyncRunRow, error) {
+	row := q.db.QueryRow(ctx, insertOrgSyncRun, arg.WorkspaceID, arg.Summary)
+	var i InsertOrgSyncRunRow
+	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
 }
 
 const listAgentsInOrgUnits = `-- name: ListAgentsInOrgUnits :many
@@ -311,6 +379,82 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listSyncedOrgUnits = `-- name: ListSyncedOrgUnits :many
+SELECT id, parent_id, name, external_id, lead_user_id
+FROM org_unit
+WHERE workspace_id = $1 AND external_id IS NOT NULL
+`
+
+type ListSyncedOrgUnitsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	ParentID   pgtype.UUID `json:"parent_id"`
+	Name       string      `json:"name"`
+	ExternalID pgtype.Text `json:"external_id"`
+	LeadUserID pgtype.UUID `json:"lead_user_id"`
+}
+
+// Units this workspace imported from a directory, keyed by the directory's id.
+// Manual units have no external id and are left alone by sync.
+func (q *Queries) ListSyncedOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListSyncedOrgUnitsRow, error) {
+	rows, err := q.db.Query(ctx, listSyncedOrgUnits, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSyncedOrgUnitsRow{}
+	for rows.Next() {
+		var i ListSyncedOrgUnitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Name,
+			&i.ExternalID,
+			&i.LeadUserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceFeishuIdentities = `-- name: ListWorkspaceFeishuIdentities :many
+SELECT i.user_id, i.email, i.name
+FROM feishu_identity i
+JOIN member m ON m.user_id = i.user_id AND m.workspace_id = $1
+`
+
+type ListWorkspaceFeishuIdentitiesRow struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Email  string      `json:"email"`
+	Name   string      `json:"name"`
+}
+
+// Directory-linked people in one workspace, so a sync can report who disappeared
+// upstream without touching manually invited members.
+func (q *Queries) ListWorkspaceFeishuIdentities(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceFeishuIdentitiesRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceFeishuIdentities, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceFeishuIdentitiesRow{}
+	for rows.Next() {
+		var i ListWorkspaceFeishuIdentitiesRow
+		if err := rows.Scan(&i.UserID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renameOrgUnit = `-- name: RenameOrgUnit :exec
 UPDATE org_unit
 SET name = $3, updated_at = now()
@@ -376,5 +520,49 @@ type SetOrgUnitLeadParams struct {
 
 func (q *Queries) SetOrgUnitLead(ctx context.Context, arg SetOrgUnitLeadParams) error {
 	_, err := q.db.Exec(ctx, setOrgUnitLead, arg.ID, arg.WorkspaceID, arg.LeadUserID)
+	return err
+}
+
+const setOrgUnitLeadIfEmpty = `-- name: SetOrgUnitLeadIfEmpty :execrows
+UPDATE org_unit
+SET lead_user_id = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2 AND lead_user_id IS NULL
+`
+
+type SetOrgUnitLeadIfEmptyParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	LeadUserID  pgtype.UUID `json:"lead_user_id"`
+}
+
+// Sync only fills a lead the workspace has not chosen yet; manual assignments win.
+func (q *Queries) SetOrgUnitLeadIfEmpty(ctx context.Context, arg SetOrgUnitLeadIfEmptyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOrgUnitLeadIfEmpty, arg.ID, arg.WorkspaceID, arg.LeadUserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateOrgUnitFromExternal = `-- name: UpdateOrgUnitFromExternal :exec
+UPDATE org_unit
+SET name = $3, parent_id = $4, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+`
+
+type UpdateOrgUnitFromExternalParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+}
+
+func (q *Queries) UpdateOrgUnitFromExternal(ctx context.Context, arg UpdateOrgUnitFromExternalParams) error {
+	_, err := q.db.Exec(ctx, updateOrgUnitFromExternal,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.ParentID,
+	)
 	return err
 }

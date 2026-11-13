@@ -89,3 +89,7 @@ UPDATE "user" SET
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetUserByLowerEmail :one
+SELECT * FROM "user"
+WHERE lower(email) = lower($1);
