@@ -1,9 +1,7 @@
-import { useMemo } from "react";
 import { isRouteErrorResponse, useLocation, useRouteError } from "react-router-dom";
-import { AlertTriangle, Compass, RotateCw, Send, X } from "@multica/ui/icons";
+import { AlertTriangle, Compass, RotateCw, X } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import type { DesktopRouteErrorFeedbackContext } from "@multica/core/feedback";
-import { useModalStore } from "@multica/core/modals";
 import { useTabStore } from "@/stores/tab-store";
 
 export function createRouteErrorFeedbackContext({
@@ -106,14 +104,6 @@ function DesktopNotFoundPage() {
 
 function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
   const recoveryRoute = useRecoveryRoute();
-  const feedbackContext = useMemo(
-    () =>
-      createRouteErrorFeedbackContext({
-        error,
-        trigger: "route-errorElement",
-      }),
-    [error],
-  );
   const message = normalizeError(error).message;
 
   return (
@@ -162,18 +152,6 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
         >
           <X className="mr-2 h-4 w-4" aria-hidden="true" />
           Close tab
-        </Button>
-        <Button
-          type="button"
-          onClick={() =>
-            useModalStore.getState().open("feedback", {
-              kind: "bug",
-              context: feedbackContext,
-            })
-          }
-        >
-          <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-          Report error
         </Button>
       </div>
     </div>

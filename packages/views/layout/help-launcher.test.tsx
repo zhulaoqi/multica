@@ -3,21 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configStore } from "@multica/core/config";
 import enLayout from "../locales/en/layout.json";
-import { isDesktopShell } from "../platform/local-directory";
 import { HelpLauncher } from "./help-launcher";
-
-// The download entry is gated on the desktop-shell probe, which reads a
-// preload-injected bridge that jsdom never has. Mock it so both platforms are
-// reachable from the same suite.
-vi.mock("../platform/local-directory", () => ({
-  isDesktopShell: vi.fn(() => false),
-}));
-
-// The What's new entry is covered with the real menu in whats-new-launcher.test.tsx.
-vi.mock("../whats-new/whats-new-launcher", () => ({
-  useWhatsNewMenuPanel: () => ({ available: false }),
-  WhatsNewMenuPanel: () => null,
-}));
 
 // The UI language the mocked i18n instance reports; drives locale-aware links.
 const i18nState = vi.hoisted(() => ({ language: "en" }));
@@ -84,7 +70,6 @@ vi.mock("@multica/ui/components/ui/dropdown-menu", async () => {
 });
 
 beforeEach(() => {
-  vi.mocked(isDesktopShell).mockReturnValue(false);
   i18nState.language = "en";
 });
 
@@ -104,18 +89,22 @@ describe("HelpLauncher", () => {
     expect(screen.getByText("Server version 1.2.3")).toBeInTheDocument();
   });
 
-  it("does not offer the desktop app", () => {
+  // The fork ships without the vendor's community surfaces: no changelog,
+  // Discord, feedback or "what's new" entries in the Help menu.
+  it("keeps only the internal docs entry", () => {
     render(<HelpLauncher />);
-    expect(screen.queryByText("Desktop app")).not.toBeInTheDocument();
     expect(screen.getByText("Docs")).toBeInTheDocument();
+    for (const label of ["Changelog", "Discord", "Feedback", "What's new"]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
   });
 
   it.each([
-    ["en", "https://multica.ai/docs"],
-    ["zh-Hans", "https://multica.ai/docs/zh"],
-    ["zh-Hant", "https://multica.ai/docs/zh-Hant"],
-    ["fr", "https://multica.ai/docs/fr"],
-  ])("links Docs to the %s docs", (language, href) => {
+    ["en", "/docs"],
+    ["zh-Hans", "/docs/zh"],
+    ["zh-Hant", "/docs/zh-Hant"],
+    ["fr", "/docs/fr"],
+  ])("links Docs to the same-origin %s docs", (language, href) => {
     i18nState.language = language;
     render(<HelpLauncher />);
     expect(screen.getByRole("link", { name: /Docs/ })).toHaveAttribute(

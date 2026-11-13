@@ -1,3 +1,7 @@
+// This fork serves its own docs at the same origin under `/docs`; UI copy must
+// never link to the public multica.ai marketing site.
+export const DOCS_URL = "/docs";
+
 // Docs-site path prefix for a UI language. English docs are prefix-less;
 // every other docs locale lives under `/docs/<lang>/`.
 export function docsLocalePrefix(language?: string): string {
@@ -13,4 +17,9 @@ export function docsLocalePrefix(language?: string): string {
 
 export function isTraditionalChinese(language?: string): boolean {
   return language?.toLowerCase().startsWith("zh-hant") ?? false;
+}
+
+/** Same-origin docs link for a UI language and an optional page path. */
+export function docsHref(language?: string, path = ""): string {
+  return `${DOCS_URL}${docsLocalePrefix(language)}${path}`;
 }

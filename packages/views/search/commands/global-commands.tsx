@@ -6,7 +6,6 @@ import {
   Archive,
   CheckCheck,
   FolderPlus,
-  MessageCircleQuestion,
   MessageSquare,
   Palette,
   SquarePen,
@@ -134,13 +133,6 @@ export function useGlobalCommands(contexts: readonly CommandBarContext[]): Palet
         icon: Palette,
         keywords: ["theme", "appearance", "dark", "light", "system", "mode", "主题", "深色", "浅色"],
         page: { type: "theme" },
-      },
-      {
-        id: "feedback",
-        label: t(($) => $.commands.send_feedback),
-        icon: MessageCircleQuestion,
-        keywords: ["feedback", "bug", "report", "support", "反馈"],
-        run: () => useModalStore.getState().open("feedback"),
       },
     ];
   }, [
