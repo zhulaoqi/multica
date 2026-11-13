@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -136,21 +137,54 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Body = ioNopCloser(strings.NewReader(string(payload)))
 	r2.ContentLength = int64(len(payload))
 	r2.Header.Set("Content-Type", "application/json")
-	rec := &redirectRecorder{ResponseWriter: w, header: w.Header()}
+	rec := &bufferedResponse{header: make(http.Header)}
 	h.FeishuLogin(rec, r2)
+	finishFeishuBrowserLogin(w, r, rec)
+}
+
+// bufferedResponse keeps the login JSON off the browser. The callback only
+// needs the session cookies, then sends the person back to the site.
+type bufferedResponse struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (b *bufferedResponse) Header() http.Header { return b.header }
+
+func (b *bufferedResponse) WriteHeader(status int) {
+	if b.status == 0 {
+		b.status = status
+	}
+}
+
+func (b *bufferedResponse) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(p)
+}
+
+func finishFeishuBrowserLogin(w http.ResponseWriter, r *http.Request, rec *bufferedResponse) {
 	if rec.status >= 400 || rec.status == 0 {
+		for key, values := range rec.header {
+			for _, value := range values {
+				w.Header().Add(key, value)
+			}
+		}
+		status := rec.status
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(rec.body.Bytes())
 		return
+	}
+	for _, cookie := range rec.header.Values("Set-Cookie") {
+		w.Header().Add("Set-Cookie", cookie)
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
-
-type redirectRecorder struct {
-	http.ResponseWriter
-	header http.Header
-	status int
-}
-
-func (r *redirectRecorder) WriteHeader(status int) { r.status = status }
 
 func ioNopCloser(r *strings.Reader) nopCloser { return nopCloser{r} }
 
