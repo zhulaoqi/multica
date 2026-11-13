@@ -156,7 +156,7 @@ function FeishuSignIn({
       <LoginBackdrop />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(5,7,11,0.55)_100%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(5,7,11,0.42)_100%)]"
       />
       <div className="relative z-10 mx-4 w-full max-w-md border border-white/20 bg-black/30 px-8 py-12 text-center shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-md">
         <p className="text-body tracking-[0.18em] text-white/75">multica</p>
