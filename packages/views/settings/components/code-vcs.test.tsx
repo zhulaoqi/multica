@@ -34,6 +34,7 @@ vi.mock("@multica/core/api", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+import { toast } from "sonner";
 import { VCSConnectionRows } from "./code-vcs";
 
 const CONNECTION = {
@@ -67,7 +68,7 @@ describe("VCSConnectionRows", () => {
 
     await waitFor(() =>
       expect(mockConnect).toHaveBeenCalledWith("ws-1", {
-        provider: "forgejo",
+        provider: "gitlab",
         instance_url: "https://git.acme.dev",
         access_token: "tok",
       }),
@@ -76,6 +77,30 @@ describe("VCSConnectionRows", () => {
     expect(within(webhook).getByDisplayValue("s3cret")).toBeInTheDocument();
     await user.click(within(webhook).getByRole("button", { name: "I've saved it" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("copies the webhook secret when the clipboard API is missing", async () => {
+    mockConnect.mockResolvedValue({
+      ...CONNECTION,
+      webhook_url: "",
+      webhook_path: "/api/webhooks/vcs/vcs-1",
+      webhook_secret: "s3cret",
+    });
+    document.execCommand = vi.fn(() => true);
+    const exec = vi.mocked(document.execCommand);
+    const user = userEvent.setup();
+    renderWithI18n(<VCSConnectionRows />);
+
+    await user.click(screen.getByRole("button", { name: "Connect" }));
+    const form = await screen.findByRole("dialog");
+    await user.type(within(form).getByLabelText("Instance URL"), "https://git.acme.dev");
+    await user.type(within(form).getByLabelText("Access token"), "tok");
+    await user.click(within(form).getByRole("button", { name: "Connect" }));
+
+    const webhook = await screen.findByRole("dialog", { name: /Finish setup/ });
+    await user.click(within(webhook).getByRole("button", { name: "Copy: Webhook secret" }));
+    expect(exec).toHaveBeenCalledWith("copy");
+    expect(toast.success).toHaveBeenCalled();
   });
 
   it("lists connected instances with their actions", async () => {

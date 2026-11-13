@@ -44,6 +44,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { vcsConnectionsOptions } from "@multica/core/vcs";
 import { api } from "@multica/core/api";
 import type { ConnectVCSResponse, VCSProvider } from "@multica/core/types";
+import { copyText } from "@multica/ui/lib/clipboard";
 import { useT } from "../../i18n";
 import { SettingsRow } from "./settings-layout";
 import { HostMark, HostStatus } from "./code-host";
@@ -137,11 +138,27 @@ export function VCSConnectionRows() {
     }
   }
 
-  async function copy(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
+  async function copy(value: string, fieldId: string) {
+    const field = document.getElementById(fieldId);
+    // The dialog is often opened over plain http://, where
+    // navigator.clipboard does not exist. Selecting the field that is
+    // already inside the dialog lets the legacy copy command succeed
+    // without fighting the dialog focus trap.
+    if (field instanceof HTMLInputElement) {
+      field.focus();
+      field.select();
+      try {
+        if (document.execCommand("copy")) {
+          toast.success(t(($) => $.vcs.copied));
+          return;
+        }
+      } catch {
+        // Fall through to the shared helper.
+      }
+    }
+    if (await copyText(value)) {
       toast.success(t(($) => $.vcs.copied));
-    } catch {
+    } else {
       toast.error(t(($) => $.vcs.copy_failed));
     }
   }
@@ -432,7 +449,7 @@ function CopyField({
   id: string;
   label: string;
   value: string;
-  onCopy: (v: string) => void;
+  onCopy: (value: string, fieldId: string) => void;
   copyLabel: string;
   mono?: boolean;
 }) {
@@ -452,7 +469,7 @@ function CopyField({
           variant="outline"
           size="icon-sm"
           className="shrink-0"
-          onClick={() => onCopy(value)}
+          onClick={() => onCopy(value, id)}
           label={`${copyLabel}: ${label}`}
         >
           <Copy />
