@@ -54,6 +54,9 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
 
   const cliCallbackRaw = searchParams.get("cli_callback");
+  // The Feishu callback sends people back here when the code exchange fails,
+  // so the sign-in page can explain the failure instead of showing JSON.
+  const feishuFailed = searchParams.get("error") === "feishu";
   const invalidCliCallback = cliCallbackRaw !== null && !validateCliCallback(cliCallbackRaw);
   // `next` carries a protected URL the user was originally headed to
   // (e.g. /invite/{id}). With URL-driven workspaces there is no legacy
@@ -123,6 +126,7 @@ function LoginPageContent() {
     <FeishuSignIn
       operatorHref={`/login/operator${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
       authorizingCli={authorizingCli}
+      feishuFailed={feishuFailed}
     />
   );
 }
@@ -130,9 +134,11 @@ function LoginPageContent() {
 function FeishuSignIn({
   operatorHref,
   authorizingCli,
+  feishuFailed,
 }: {
   operatorHref: string;
   authorizingCli: boolean;
+  feishuFailed: boolean;
 }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05070b] text-white">
@@ -164,6 +170,11 @@ function FeishuSignIn({
             >
               飞书登录
             </a>
+            {feishuFailed ? (
+              <p role="alert" className="mt-4 text-body leading-relaxed text-[#ffb347]">
+                飞书登录没有完成，可能是链接已过期，请重新点击登录。
+              </p>
+            ) : null}
             <a href={operatorHref} className="mt-6 inline-block text-body text-white/70 underline underline-offset-4">
               开发者入口
             </a>

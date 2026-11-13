@@ -113,6 +113,16 @@ describe("LoginPage", () => {
     expect(screen.queryByLabelText("邮箱")).not.toBeInTheDocument();
   });
 
+  it("explains a failed Feishu callback and keeps the retry available", () => {
+    searchParamsState.params = new URLSearchParams({ error: "feishu" });
+    render(<LoginPage />, { wrapper: createWrapper() });
+    expect(screen.getByRole("alert")).toHaveTextContent("飞书登录没有完成");
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
+      "href",
+      "/auth/feishu/start",
+    );
+  });
+
   it.each([null, { id: "u1", email: "test@multica.ai" }])(
     "blocks invalid CLI callbacks even with an existing session: %j",
     (user) => {
