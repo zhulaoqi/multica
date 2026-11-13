@@ -12,7 +12,7 @@ import { HelpPanel } from "./help-panel";
 import { IntakeBar } from "./intake-bar";
 import { ScheduledList } from "./scheduled-page";
 import { RoutesHeading } from "./routes-page";
-import { OrgPage } from "./org-page";
+import { OrgPage } from "../org";
 
 export function IntakePage({
   focusIssueId,
@@ -275,7 +275,7 @@ export function IntakePage({
   });
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
+    <div className={`mx-auto flex h-full w-full flex-col gap-4 px-6 py-8 ${screen === "org" ? "max-w-6xl" : "max-w-3xl"}`}>
       <IntakeBar
         person={person}
         workspaceName={workspaceName}
@@ -288,18 +288,18 @@ export function IntakePage({
         showMode={screen === "all"}
       />
       {help ? <HelpPanel canMaintain={canMaintain} onClose={() => setHelp(false)} /> : null}
-      <div key={mode} className="intake-mode flex flex-col gap-4">
+      {wsKey !== "session" ? (
+        <div className="flex gap-3 text-sm">
+          {screen !== "all" ? <AppLink href={`/${wsKey}/intake`}>聊天</AppLink> : null}
+          {screen !== "scheduled" ? <AppLink href={`/${wsKey}/intake/scheduled`}>已排期</AppLink> : null}
+          {screen !== "agents" ? <AppLink href={`/${wsKey}/intake/agents`}>我的 Agent</AppLink> : null}
+          {screen !== "routes" ? <AppLink href={`/${wsKey}/intake/routes`}>模块分工</AppLink> : null}
+          {screen !== "org" ? <AppLink href={`/${wsKey}/intake/org`}>组织架构</AppLink> : null}
+        </div>
+      ) : null}
+      <div key={mode} className="intake-mode flex min-h-0 flex-col gap-4">
       {screen === "scheduled" || screen === "agents" || screen === "routes" || screen === "org" || mode === "manage" ? (
         <div className="flex flex-col gap-2">
-          {wsKey !== "session" ? (
-            <div className="flex gap-3 text-sm">
-              {screen !== "all" ? <AppLink href={`/${wsKey}/intake`}>聊天</AppLink> : null}
-              {screen !== "scheduled" ? <AppLink href={`/${wsKey}/intake/scheduled`}>已排期</AppLink> : null}
-              {screen !== "agents" ? <AppLink href={`/${wsKey}/intake/agents`}>我的 Agent</AppLink> : null}
-              {screen !== "routes" ? <AppLink href={`/${wsKey}/intake/routes`}>模块分工</AppLink> : null}
-              {screen !== "org" ? <AppLink href={`/${wsKey}/intake/org`}>组织架构</AppLink> : null}
-            </div>
-          ) : null}
           {screen === "all" || screen === "scheduled" ? (
           <ScheduledList items={scheduled.data ?? []} onCancel={(issueId) => void decide(issueId, "cancel")} />
           ) : null}
