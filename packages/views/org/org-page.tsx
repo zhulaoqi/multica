@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgMember, type OrgTree, type OrgUnit } from "@multica/core/api";
+import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgMember, type OrgTree } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions, orgTreeOptions, workspaceKeys } from "@multica/core/workspace/queries";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
@@ -77,16 +77,15 @@ function UnitPicker({
 
 function MemberRow({
   member,
-  unit,
+  canMove,
   choices,
   onMove,
 }: {
   member: OrgMember;
-  unit: OrgUnit | null;
+  canMove: boolean;
   choices: Array<{ id: string; path: string }>;
-  onMove?: (unitId: string) => void;
+  onMove: (unitId: string) => void;
 }) {
-  const canMove = !!unit?.can_manage && !!onMove;
   return (
     <div className="flex items-center gap-3 py-1.5">
       <ActorAvatar
@@ -108,16 +107,15 @@ function MemberRow({
 
 function AgentRow({
   agent,
-  unit,
+  canMove,
   choices,
   onMove,
 }: {
   agent: OrgAgent;
-  unit: OrgUnit | null;
+  canMove: boolean;
   choices: Array<{ id: string; path: string }>;
-  onMove?: (unitId: string) => void;
+  onMove: (unitId: string) => void;
 }) {
-  const canMove = !!unit?.can_manage && !!onMove;
   return (
     <div className="flex items-center gap-3 py-1.5">
       <div className="min-w-0 flex-1">
@@ -285,7 +283,7 @@ function UnitDetail({
             <MemberRow
               key={member.user_id}
               member={member}
-              unit={unit}
+              canMove={unit.can_manage}
               choices={manageableChoices}
               onMove={(unitId) => void run(() => api.setOrgMemberUnit(member.user_id, unitId), t(($) => $.action_failed))}
             />
@@ -302,7 +300,7 @@ function UnitDetail({
             <AgentRow
               key={agent.id}
               agent={agent}
-              unit={unit}
+              canMove={unit.can_manage}
               choices={manageableChoices}
               onMove={(unitId) => void run(() => api.setOrgAgentUnit(agent.id, unitId), t(($) => $.action_failed))}
             />
@@ -365,6 +363,7 @@ export function OrgPage() {
     label: member.name || member.email,
   }));
   const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
+  const moveChoices = unitChoices.filter((choice) => choice.manage);
 
   if (tree.isError) {
     return <p className="p-6 text-body text-muted-foreground">{t(($) => $.load_failed)}</p>;
@@ -438,8 +437,8 @@ export function OrgPage() {
                 <MemberRow
                   key={member.user_id}
                   member={member}
-                  unit={null}
-                  choices={unitChoices.filter((choice) => choice.manage)}
+                  canMove={moveChoices.length > 0}
+                  choices={moveChoices}
                   onMove={(unitId) => void run(() => api.setOrgMemberUnit(member.user_id, unitId), t(($) => $.action_failed))}
                 />
               ))}
@@ -450,8 +449,8 @@ export function OrgPage() {
                 <AgentRow
                   key={agent.id}
                   agent={agent}
-                  unit={null}
-                  choices={unitChoices.filter((choice) => choice.manage)}
+                  canMove={moveChoices.length > 0}
+                  choices={moveChoices}
                   onMove={(unitId) => void run(() => api.setOrgAgentUnit(agent.id, unitId), t(($) => $.action_failed))}
                 />
               ))}

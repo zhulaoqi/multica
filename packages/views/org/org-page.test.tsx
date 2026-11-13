@@ -123,6 +123,30 @@ describe("OrgPage permissions", () => {
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });
 
+  it("lets a unit lead place unassigned people", () => {
+    renderPage(tree({
+      members: [{ ...baseOrgMember, user_id: "u-grace", name: "Grace", email: "grace@example.com" }],
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Unassigned/ }));
+
+    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+  });
+
+  it("keeps unassigned people read-only without unit rights", () => {
+    renderPage(tree({
+      units: [unit({ id: "dept-root", name: "Engineering" })],
+      members: [{ ...baseOrgMember, user_id: "u-grace", name: "Grace", email: "grace@example.com" }],
+      can_manage: false,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Unassigned/ }));
+
+    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
   it("offers lead and move controls only inside a manageable subtree", () => {
     renderPage(tree({
       units: [
