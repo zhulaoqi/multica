@@ -6,6 +6,8 @@
   "create_child": "新增子部門",
   "no_units": "還沒有部門。",
   "unassigned": "未分配",
+  "children": "子部門",
+  "my_department": "我的部門",
   "members": "成員",
   "agents": "Agent",
   "no_members": "這個部門還沒有成員。",

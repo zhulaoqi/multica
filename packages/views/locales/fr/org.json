@@ -6,6 +6,8 @@
   "create_child": "Ajouter un sous-département",
   "no_units": "Aucun département pour l'instant.",
   "unassigned": "Non affecté",
+  "children": "Sous-départements",
+  "my_department": "Mon département",
   "members": "Membres",
   "agents": "Agents",
   "no_members": "Aucun membre dans ce département.",

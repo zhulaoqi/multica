@@ -268,7 +268,7 @@ describe("OrgPage member landing and squads", () => {
       my_unit_id: "dept-child",
     }));
 
-    expect(screen.getByText("My organization")).toBeInTheDocument();
+    expect(screen.getByText("My department")).toBeInTheDocument();
     // The department detail is preselected without a click, and the squad
     // attached to it reports that it is waiting for scheduling.
     expect(screen.getAllByText("Payments squad").length).toBeGreaterThan(0);

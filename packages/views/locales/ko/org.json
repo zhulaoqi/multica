@@ -6,6 +6,8 @@
   "create_child": "하위 부서 추가",
   "no_units": "아직 부서가 없습니다.",
   "unassigned": "미배정",
+  "children": "하위 부서",
+  "my_department": "내 부서",
   "members": "멤버",
   "agents": "에이전트",
   "no_members": "이 부서에는 멤버가 없습니다.",

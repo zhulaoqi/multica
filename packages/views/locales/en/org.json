@@ -6,6 +6,8 @@
   "create_child": "Add sub-department",
   "no_units": "No departments yet.",
   "unassigned": "Unassigned",
+  "children": "Sub-departments",
+  "my_department": "My department",
   "members": "Members",
   "agents": "Agents",
   "no_members": "No members in this department.",
