@@ -397,14 +397,14 @@ function UnitDetail({
         )}
       </section>
 
-      <section className="flex flex-col gap-1">
-        <h3 className="text-body font-medium">{t(($) => $.create_child)}</h3>
-        {children.length > 0 ? (
-          <p className="text-caption text-muted-foreground">
-            {children.map((child) => child.unit.name).join("、")}
-          </p>
-        ) : null}
-        {unit.can_manage ? (
+      {unit.can_manage ? (
+        <section className="flex flex-col gap-1">
+          <h3 className="text-body font-medium">{t(($) => $.create_child)}</h3>
+          {children.length > 0 ? (
+            <p className="text-caption text-muted-foreground">
+              {children.map((child) => child.unit.name).join("、")}
+            </p>
+          ) : null}
           <div className="flex items-center gap-2">
             <Input
               value={childName}
@@ -425,8 +425,8 @@ function UnitDetail({
               {t(($) => $.new_unit)}
             </Button>
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
