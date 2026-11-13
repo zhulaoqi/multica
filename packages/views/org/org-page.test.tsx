@@ -197,6 +197,29 @@ describe("OrgPage Feishu sync", () => {
     expect(screen.getByText("People added: Ada")).toBeInTheDocument();
     expect(screen.getByText(/Last synced/)).toBeInTheDocument();
   });
+
+  it("summarises long change lists instead of printing every name", () => {
+    const people = Array.from({ length: 11 }, (_, index) => `Person ${index + 1}`);
+    qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
+      configured: true,
+      last_run: {
+        created_units: [],
+        updated_units: [],
+        leads_assigned: [],
+        members_added: people,
+        members_moved: [],
+        members_without_email: [],
+        detached_departments: [],
+        detached_users: [],
+        synced_at: "2026-11-12T08:00:00Z",
+      },
+    });
+    renderPage(tree());
+
+    expect(
+      screen.getByText("People added: Person 1, Person 2, Person 3, Person 4, Person 5, Person 6, Person 7, Person 8 +3"),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("OrgPage admin actions", () => {

@@ -342,6 +342,16 @@ function UnitDetail({
   );
 }
 
+/** A real directory sync moves hundreds of names; show the head of each list
+ * and count the rest so the report stays readable. */
+const SYNC_REPORT_NAME_LIMIT = 8;
+
+function summariseNames(names: string[]): string {
+  const shown = names.slice(0, SYNC_REPORT_NAME_LIMIT);
+  const hidden = names.length - shown.length;
+  return hidden > 0 ? `${shown.join(", ")} +${hidden}` : shown.join(", ");
+}
+
 /** SyncReport summarises the last directory sync in the change lists the
  * server returns, so an admin sees exactly what moved without diffing. */
 function SyncReport({ report }: { report: OrgSyncReport }) {
@@ -364,7 +374,7 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
     <div className="mb-4 flex flex-col gap-0.5 text-caption text-muted-foreground">
       {visible.map(([label, names]) => (
         <p key={label}>
-          {t(($) => $.sync_report_line, { label, names: names.join(", ") })}
+          {t(($) => $.sync_report_line, { label, names: summariseNames(names) })}
         </p>
       ))}
     </div>
