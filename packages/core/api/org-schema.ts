@@ -26,13 +26,29 @@ export const OrgAgentSchema = z.object({
   unit_id: z.string().optional().default(""),
   can: z.string().optional().default(""),
   cannot: z.string().optional().default(""),
+  // Runtime availability (idle, working, blocked, error, offline). Older
+  // servers omit it; the org view then treats the agent as unknown.
+  status: z.string().optional().default(""),
+});
+
+export const OrgSquadSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  unit_id: z.string().optional().default(""),
+  leader_id: z.string().optional().default(""),
+  agent_count: z.number().optional().default(0),
+  working_agents: z.number().optional().default(0),
 });
 
 export const OrgTreeSchema = z.object({
   units: OrgUnitSchema.array().default([]),
   agents: OrgAgentSchema.array().default([]),
   members: OrgMemberSchema.array().default([]),
+  squads: OrgSquadSchema.array().default([]),
   can_manage: z.boolean().optional().default(false),
+  // The requester's own department, so plain members still land on their
+  // organisation instead of an empty selection.
+  my_unit_id: z.string().optional().default(""),
 });
 
 export const OrgUnitCreatedSchema = z.object({ id: z.string() });
@@ -76,11 +92,19 @@ export type OrgSyncStatus = z.infer<typeof OrgSyncStatusSchema>;
 export type OrgUnit = z.infer<typeof OrgUnitSchema>;
 export type OrgAgent = z.infer<typeof OrgAgentSchema>;
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
+export type OrgSquad = z.infer<typeof OrgSquadSchema>;
 export type OrgTree = z.infer<typeof OrgTreeSchema>;
 export type OrgImportRow = z.infer<typeof OrgImportRowSchema>;
 export type OrgImportResult = z.infer<typeof OrgImportResultSchema>;
 
-export const EMPTY_ORG_TREE: OrgTree = { units: [], agents: [], members: [], can_manage: false };
+export const EMPTY_ORG_TREE: OrgTree = {
+  units: [],
+  agents: [],
+  members: [],
+  squads: [],
+  can_manage: false,
+  my_unit_id: "",
+};
 export const EMPTY_ORG_SYNC_REPORT: OrgSyncReport = {
   created_units: [],
   updated_units: [],

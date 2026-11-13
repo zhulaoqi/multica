@@ -27,6 +27,22 @@ func (q *Queries) ClearOrgUnitAgents(ctx context.Context, arg ClearOrgUnitAgents
 	return err
 }
 
+const clearOrgUnitSquads = `-- name: ClearOrgUnitSquads :exec
+UPDATE squad
+SET org_unit_id = NULL, updated_at = now()
+WHERE workspace_id = $1 AND org_unit_id = $2
+`
+
+type ClearOrgUnitSquadsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) ClearOrgUnitSquads(ctx context.Context, arg ClearOrgUnitSquadsParams) error {
+	_, err := q.db.Exec(ctx, clearOrgUnitSquads, arg.WorkspaceID, arg.OrgUnitID)
+	return err
+}
+
 const countOrgUnitChildren = `-- name: CountOrgUnitChildren :one
 SELECT count(*)::int
 FROM org_unit
@@ -250,7 +266,7 @@ func (q *Queries) InsertOrgSyncRun(ctx context.Context, arg InsertOrgSyncRunPara
 }
 
 const listAgentsInOrgUnits = `-- name: ListAgentsInOrgUnits :many
-SELECT id, name, org_unit_id, intake_can, intake_cannot
+SELECT id, name, org_unit_id, intake_can, intake_cannot, status
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
@@ -263,9 +279,12 @@ type ListAgentsInOrgUnitsRow struct {
 	OrgUnitID    pgtype.UUID `json:"org_unit_id"`
 	IntakeCan    pgtype.Text `json:"intake_can"`
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
+	Status       string      `json:"status"`
 }
 
-// Includes agents with an empty unit so the org page can place them.
+// Includes agents with an empty unit so the org page can place them. Status is
+// the agent's own availability, which the org view surfaces as whether the
+// agent is waiting for collaborative scheduling.
 func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentsInOrgUnitsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsInOrgUnits, workspaceID)
 	if err != nil {
@@ -281,6 +300,7 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.OrgUnitID,
 			&i.IntakeCan,
 			&i.IntakeCannot,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -368,6 +388,64 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 			&i.LeadUserID,
 			&i.Description,
 			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSquadsInOrgUnits = `-- name: ListSquadsInOrgUnits :many
+SELECT
+    s.id,
+    s.name,
+    s.org_unit_id,
+    s.leader_id,
+    count(DISTINCT sm.member_id) FILTER (WHERE sm.member_type = 'agent')::int AS agent_count,
+    count(DISTINCT a.id) FILTER (
+        WHERE sm.member_type = 'agent' AND a.status = 'working'
+    )::int AS working_agents
+FROM squad s
+LEFT JOIN squad_member sm ON sm.squad_id = s.id
+LEFT JOIN agent a ON a.id = sm.member_id
+WHERE s.workspace_id = $1
+  AND s.archived_at IS NULL
+GROUP BY s.id
+ORDER BY s.name ASC
+`
+
+type ListSquadsInOrgUnitsRow struct {
+	ID            pgtype.UUID `json:"id"`
+	Name          string      `json:"name"`
+	OrgUnitID     pgtype.UUID `json:"org_unit_id"`
+	LeaderID      pgtype.UUID `json:"leader_id"`
+	AgentCount    int32       `json:"agent_count"`
+	WorkingAgents int32       `json:"working_agents"`
+}
+
+// Squads attached to the organisation tree, with the working count their
+// members currently report so the org view can show squads as waiting for or
+// already busy with collaborative scheduling.
+func (q *Queries) ListSquadsInOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListSquadsInOrgUnitsRow, error) {
+	rows, err := q.db.Query(ctx, listSquadsInOrgUnits, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSquadsInOrgUnitsRow{}
+	for rows.Next() {
+		var i ListSquadsInOrgUnitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.OrgUnitID,
+			&i.LeaderID,
+			&i.AgentCount,
+			&i.WorkingAgents,
 		); err != nil {
 			return nil, err
 		}
@@ -542,6 +620,23 @@ func (q *Queries) SetOrgUnitLeadIfEmpty(ctx context.Context, arg SetOrgUnitLeadI
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setSquadOrgUnit = `-- name: SetSquadOrgUnit :exec
+UPDATE squad
+SET org_unit_id = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+`
+
+type SetSquadOrgUnitParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) SetSquadOrgUnit(ctx context.Context, arg SetSquadOrgUnitParams) error {
+	_, err := q.db.Exec(ctx, setSquadOrgUnit, arg.ID, arg.WorkspaceID, arg.OrgUnitID)
+	return err
 }
 
 const updateOrgUnitFromExternal = `-- name: UpdateOrgUnitFromExternal :exec

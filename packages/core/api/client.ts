@@ -5754,6 +5754,14 @@ export class ApiClient {
     });
   }
 
+  /** Attaches a squad to a unit; an empty id clears its unit. */
+  async setOrgSquadUnit(squadId: string, unitId: string): Promise<void> {
+    await this.fetch(`/api/org/squads/${encodeURIComponent(squadId)}/unit`, {
+      method: "PUT",
+      body: JSON.stringify({ unit_id: unitId }),
+    });
+  }
+
   async getOrgSyncStatus(): Promise<OrgSyncStatus> {
     const raw = await this.fetch<unknown>("/api/org/sync/feishu");
     return parseWithFallback(raw, OrgSyncStatusSchema, EMPTY_ORG_SYNC_STATUS, {

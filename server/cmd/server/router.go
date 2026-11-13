@@ -2585,6 +2585,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
 				r.Put("/members/{userId}/unit", h.SetOrgMemberUnit)
+				r.Put("/squads/{squadId}/unit", h.SetOrgSquadUnit)
 				r.Get("/sync/feishu", h.GetOrgSyncStatus)
 				r.Post("/sync/feishu", h.SyncOrgFromFeishu)
 			})

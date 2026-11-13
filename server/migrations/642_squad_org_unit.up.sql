@@ -1,0 +1,1 @@
+ALTER TABLE squad ADD COLUMN IF NOT EXISTS org_unit_id UUID;

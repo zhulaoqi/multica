@@ -564,3 +564,115 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 		t.Fatalf("admin delete root status = %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-squad-admin@example.com")
+	member := createPermissionTestMember(t, "org-squad-member@example.com")
+	leaderAgent := insertIntakeDutyAgent(t, "org-squad-leader", admin)
+	workerAgent := insertIntakeDutyAgent(t, "org-squad-worker", admin)
+
+	var squadID string
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM squad_member WHERE squad_id = $1`, squadID)
+		testPool.Exec(context.Background(), `DELETE FROM squad WHERE id = $1`, squadID)
+	})
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO squad (workspace_id, name, description, leader_id, creator_id)
+		VALUES ($1, '支付小队', '', $2, $3) RETURNING id
+	`, testWorkspaceID, leaderAgent, admin).Scan(&squadID); err != nil {
+		t.Fatalf("create squad: %v", err)
+	}
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO squad_member (squad_id, member_type, member_id) VALUES ($1, 'agent', $2), ($1, 'agent', $3)
+	`, squadID, leaderAgent, workerAgent); err != nil {
+		t.Fatalf("add squad agents: %v", err)
+	}
+
+	createUnit := func(name string) string {
+		rec := httptest.NewRecorder()
+		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", map[string]any{"name": name}))
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create unit %s status = %d: %s", name, rec.Code, rec.Body.String())
+		}
+		var created struct{ ID string }
+		if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil || created.ID == "" {
+			t.Fatalf("decode created unit: %v %s", err, rec.Body.String())
+		}
+		return created.ID
+	}
+	unitID := createUnit("支付组")
+
+	squadReq := func(userID, squad string, body any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.SetOrgSquadUnit(rec, orgRequestWithParam(userID, "PUT", "/api/org/squads/x/unit", "squadId", squad, body))
+		return rec
+	}
+	// A plain member cannot attach anything; the admin can.
+	if rec := squadReq(member, squadID, map[string]any{"unit_id": unitID}); rec.Code != http.StatusForbidden {
+		t.Fatalf("member squad attach status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := squadReq(admin, squadID, map[string]any{"unit_id": unitID}); rec.Code != http.StatusNoContent {
+		t.Fatalf("admin squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	// The member placed in the unit sees the whole tree read-only, lands on
+	// their own department, and finds the squad waiting for scheduling.
+	place := httptest.NewRecorder()
+	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": unitID}))
+	if place.Code != http.StatusNoContent {
+		t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
+	}
+	list := httptest.NewRecorder()
+	testHandler.ListOrgUnits(list, newRequestAs(member, "GET", "/api/org/units", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list status = %d: %s", list.Code, list.Body.String())
+	}
+	var tree orgTreeResponse
+	if err := json.Unmarshal(list.Body.Bytes(), &tree); err != nil {
+		t.Fatalf("decode tree: %v", err)
+	}
+	if tree.CanManage {
+		t.Fatal("member can_manage = true, want false")
+	}
+	if tree.MyUnitID != unitID {
+		t.Fatalf("my_unit_id = %q, want %q", tree.MyUnitID, unitID)
+	}
+	if len(tree.Squads) != 1 {
+		t.Fatalf("squads = %+v, want one", tree.Squads)
+	}
+	squad := tree.Squads[0]
+	if squad.ID != squadID || squad.UnitID != unitID || squad.AgentCount != 2 {
+		t.Fatalf("squad = %+v, want id %q unit %q with 2 agents", squad, squadID, unitID)
+	}
+	// Agents report availability so the org view can show waiting vs working.
+	statuses := map[string]string{}
+	for _, agent := range tree.Agents {
+		statuses[agent.Name] = agent.Status
+	}
+	if statuses["org-squad-leader"] == "" {
+		t.Fatalf("agent statuses = %v, want a status for every agent", statuses)
+	}
+
+	// Deleting the unit detaches the squad instead of leaving a dangling id.
+	clearPlace := httptest.NewRecorder()
+	testHandler.SetOrgMemberUnit(clearPlace, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ""}))
+	if clearPlace.Code != http.StatusNoContent {
+		t.Fatalf("clear member status = %d: %s", clearPlace.Code, clearPlace.Body.String())
+	}
+	deleteRec := httptest.NewRecorder()
+	testHandler.DeleteOrgUnit(deleteRec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("delete unit status = %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+	var squadUnit string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM squad WHERE id = $1
+	`, squadID).Scan(&squadUnit); err != nil {
+		t.Fatalf("load squad unit: %v", err)
+	}
+	if squadUnit != "" {
+		t.Fatalf("squad unit after delete = %q, want empty", squadUnit)
+	}
+}

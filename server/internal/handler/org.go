@@ -34,6 +34,21 @@ type orgAgentResponse struct {
 	UnitID string `json:"unit_id"`
 	Can    string `json:"can"`
 	Cannot string `json:"cannot"`
+	// Status is the agent's runtime availability (idle, working, offline…).
+	// The org view reads it to show idle agents as waiting for scheduling.
+	Status string `json:"status"`
+}
+
+// orgSquadResponse is a squad attached to a unit. AgentCount and the working
+// count let the client tell "waiting for collaborative scheduling" apart from
+// a squad already busy with work.
+type orgSquadResponse struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	UnitID        string `json:"unit_id"`
+	LeaderID      string `json:"leader_id"`
+	AgentCount    int32  `json:"agent_count"`
+	WorkingAgents int32  `json:"working_agents"`
 }
 
 type orgMemberResponse struct {
@@ -48,7 +63,11 @@ type orgTreeResponse struct {
 	Units     []orgUnitResponse   `json:"units"`
 	Agents    []orgAgentResponse  `json:"agents"`
 	Members   []orgMemberResponse `json:"members"`
+	Squads    []orgSquadResponse  `json:"squads"`
 	CanManage bool                `json:"can_manage"`
+	// MyUnitID is the requester's own unit, so a member who cannot manage
+	// anything still lands on their department instead of an empty tree.
+	MyUnitID string `json:"my_unit_id"`
 }
 
 type orgAgentUnitBody struct {
@@ -93,10 +112,17 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not list organisation members")
 		return
 	}
+	squads, err := h.Queries.ListSquadsInOrgUnits(r.Context(), access.wsUUID)
+	if err != nil {
+		slog.Error("list org squads failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not list organisation squads")
+		return
+	}
 	resp := orgTreeResponse{
 		Units:     make([]orgUnitResponse, 0, len(access.units)),
 		Agents:    make([]orgAgentResponse, 0, len(agents)),
 		Members:   make([]orgMemberResponse, 0, len(members)),
+		Squads:    make([]orgSquadResponse, 0, len(squads)),
 		CanManage: access.admin,
 	}
 	for _, unit := range access.units {
@@ -117,15 +143,29 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			UnitID: uuidToString(agent.OrgUnitID),
 			Can:    textValue(agent.IntakeCan),
 			Cannot: textValue(agent.IntakeCannot),
+			Status: agent.Status,
 		})
 	}
 	for _, member := range members {
+		if member.UserID == access.userID {
+			resp.MyUnitID = uuidToString(member.OrgUnitID)
+		}
 		resp.Members = append(resp.Members, orgMemberResponse{
 			UserID:    uuidToString(member.UserID),
 			UnitID:    uuidToString(member.OrgUnitID),
 			Name:      member.Name,
 			Email:     member.Email,
 			AvatarURL: textPtr(member.AvatarUrl),
+		})
+	}
+	for _, squad := range squads {
+		resp.Squads = append(resp.Squads, orgSquadResponse{
+			ID:            uuidToString(squad.ID),
+			Name:          squad.Name,
+			UnitID:        uuidToString(squad.OrgUnitID),
+			LeaderID:      uuidToString(squad.LeaderID),
+			AgentCount:    squad.AgentCount,
+			WorkingAgents: squad.WorkingAgents,
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -448,6 +488,13 @@ func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
 		h.importOrgFailed(w, r, err)
 		return
 	}
+	if err := h.Queries.ClearOrgUnitSquads(r.Context(), db.ClearOrgUnitSquadsParams{
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitID,
+	}); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
 	if err := h.Queries.DeleteOrgUnit(r.Context(), db.DeleteOrgUnitParams{
 		ID:          unitID,
 		WorkspaceID: wsUUID,
@@ -529,6 +576,12 @@ func (h *Handler) SetOrgMemberUnit(w http.ResponseWriter, r *http.Request) {
 	h.setOrgEntityUnit(w, r, chi.URLParam(r, "userId"), "member")
 }
 
+// SetOrgSquadUnit attaches a squad to a unit, or clears the attachment when
+// unit_id is empty, using the same manage-rights split as agents.
+func (h *Handler) SetOrgSquadUnit(w http.ResponseWriter, r *http.Request) {
+	h.setOrgEntityUnit(w, r, chi.URLParam(r, "squadId"), "squad")
+}
+
 func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entityID string, entityType string) {
 	access, ok := h.orgAccess(w, r)
 	if !ok {
@@ -570,6 +623,20 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			return
 		}
 		currentUnit = member.OrgUnitID
+	case "squad":
+		squad, err := h.Queries.GetSquadInWorkspace(r.Context(), db.GetSquadInWorkspaceParams{
+			ID:          entityUUID,
+			WorkspaceID: access.wsUUID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusNotFound, "squad not found")
+				return
+			}
+			h.importOrgFailed(w, r, err)
+			return
+		}
+		currentUnit = squad.OrgUnitID
 	}
 	unitUUID := pgtype.UUID{}
 	if body.UnitID != "" {
@@ -596,7 +663,8 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
-	if entityType == "member" {
+	switch entityType {
+	case "member":
 		if err := h.Queries.SetMemberOrgUnit(r.Context(), db.SetMemberOrgUnitParams{
 			WorkspaceID: access.wsUUID,
 			UserID:      entityUUID,
@@ -605,13 +673,24 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			h.importOrgFailed(w, r, err)
 			return
 		}
-	} else if err := h.Queries.SetAgentOrgUnit(r.Context(), db.SetAgentOrgUnitParams{
-		ID:          entityUUID,
-		WorkspaceID: access.wsUUID,
-		OrgUnitID:   unitUUID,
-	}); err != nil {
-		h.importOrgFailed(w, r, err)
-		return
+	case "squad":
+		if err := h.Queries.SetSquadOrgUnit(r.Context(), db.SetSquadOrgUnitParams{
+			ID:          entityUUID,
+			WorkspaceID: access.wsUUID,
+			OrgUnitID:   unitUUID,
+		}); err != nil {
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	default:
+		if err := h.Queries.SetAgentOrgUnit(r.Context(), db.SetAgentOrgUnitParams{
+			ID:          entityUUID,
+			WorkspaceID: access.wsUUID,
+			OrgUnitID:   unitUUID,
+		}); err != nil {
+			h.importOrgFailed(w, r, err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

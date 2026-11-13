@@ -43,8 +43,10 @@ JOIN member m ON m.user_id = u.id AND m.workspace_id = $1
 WHERE lower(u.email) = lower($2);
 
 -- name: ListAgentsInOrgUnits :many
--- Includes agents with an empty unit so the org page can place them.
-SELECT id, name, org_unit_id, intake_can, intake_cannot
+-- Includes agents with an empty unit so the org page can place them. Status is
+-- the agent's own availability, which the org view surfaces as whether the
+-- agent is waiting for collaborative scheduling.
+SELECT id, name, org_unit_id, intake_can, intake_cannot, status
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
@@ -61,6 +63,37 @@ WHERE workspace_id = $1 AND parent_id = $2;
 
 -- name: ClearOrgUnitAgents :exec
 UPDATE agent
+SET org_unit_id = NULL, updated_at = now()
+WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: ListSquadsInOrgUnits :many
+-- Squads attached to the organisation tree, with the working count their
+-- members currently report so the org view can show squads as waiting for or
+-- already busy with collaborative scheduling.
+SELECT
+    s.id,
+    s.name,
+    s.org_unit_id,
+    s.leader_id,
+    count(DISTINCT sm.member_id) FILTER (WHERE sm.member_type = 'agent')::int AS agent_count,
+    count(DISTINCT a.id) FILTER (
+        WHERE sm.member_type = 'agent' AND a.status = 'working'
+    )::int AS working_agents
+FROM squad s
+LEFT JOIN squad_member sm ON sm.squad_id = s.id
+LEFT JOIN agent a ON a.id = sm.member_id
+WHERE s.workspace_id = $1
+  AND s.archived_at IS NULL
+GROUP BY s.id
+ORDER BY s.name ASC;
+
+-- name: SetSquadOrgUnit :exec
+UPDATE squad
+SET org_unit_id = $3, updated_at = now()
+WHERE id = $1 AND workspace_id = $2;
+
+-- name: ClearOrgUnitSquads :exec
+UPDATE squad
 SET org_unit_id = NULL, updated_at = now()
 WHERE workspace_id = $1 AND org_unit_id = $2;
 

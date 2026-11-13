@@ -1615,6 +1615,7 @@ type Squad struct {
 	ArchivedBy   pgtype.UUID        `json:"archived_by"`
 	AvatarUrl    pgtype.Text        `json:"avatar_url"`
 	Instructions string             `json:"instructions"`
+	OrgUnitID    pgtype.UUID        `json:"org_unit_id"`
 }
 
 type SquadMember struct {
