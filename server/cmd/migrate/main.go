@@ -367,6 +367,20 @@ var concurrentIndexCleanups = map[string]string{
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
 	"537_issue_duplicate_of_index":                              "idx_issue_duplicate_of",
+	"616_intake_module_uidx":                                    "intake_module_product_uidx",
+	"617_intake_module_position_idx":                            "intake_module_position_idx",
+	"619_intake_project_member_uidx":                            "intake_project_member_uidx",
+	"620_intake_project_member_user_idx":                        "intake_project_member_user_idx",
+	"622_intake_request_client_uidx":                            "intake_request_client_uidx",
+	"623_intake_request_issue_uidx":                             "intake_request_issue_uidx",
+	"624_intake_request_list_idx":                               "intake_request_list_idx",
+	"625_intake_request_scheduled_idx":                          "intake_request_scheduled_idx",
+	"627_intake_blocker_open_uidx":                              "intake_blocker_open_uidx",
+	"629_feishu_open_id_uidx":                                   "feishu_identity_open_id_uidx",
+	"636_org_unit_parent_name_idx":                              "org_unit_parent_name_idx",
+	"638_member_org_unit_idx":                                   "member_org_unit_idx",
+	"639_org_unit_external_id_uidx":                             "org_unit_external_id_uidx",
+	"641_org_sync_run_workspace_idx":                            "org_sync_run_workspace_idx",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
