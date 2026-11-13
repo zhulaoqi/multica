@@ -143,7 +143,7 @@ describe("TelegramAgentBindButton", () => {
     await userEvent.click(screen.getByTestId("telegram-agent-connect"));
     await userEvent.click(await screen.findByTestId("telegram-docs-link"));
     expect(mockOpenExternal).toHaveBeenCalledWith(
-      "https://multica.ai/docs/telegram-bot-integration",
+      "/docs/telegram-bot-integration",
     );
   });
 

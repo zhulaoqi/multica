@@ -515,7 +515,7 @@ describe("LarkAgentBotConnectedBadge (Unbind / Disconnect)", () => {
     expect(screen.getByText(/long connection/i)).toBeTruthy();
     const docs = screen.getByRole("link", { name: /Troubleshooting/i });
     expect(docs.getAttribute("href")).toBe(
-      "https://multica.ai/docs/lark-bot-integration",
+      "/docs/lark-bot-integration",
     );
   });
 

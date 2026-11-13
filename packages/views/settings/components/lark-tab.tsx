@@ -43,7 +43,7 @@ import { larkInstallationsOptions, larkKeys } from "@multica/core/lark";
 import { api, ApiError } from "@multica/core/api";
 import type { LarkInstallation, LarkInstallStatusResponse } from "@multica/core/types";
 import { ActorAvatar } from "../../common/actor-avatar";
-import { docsLocalePrefix } from "../../common/docs-locale";
+import { docsHref } from "../../common/docs-locale";
 import { useLocale, useT } from "../../i18n";
 import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
 
@@ -570,7 +570,7 @@ function larkDevConsoleHost(region?: string): string {
 // larkDocsUrl points at the Lark/Feishu integration guide, localized the
 // same way as the Telegram and Slack docs links.
 function larkDocsUrl(lang: string | undefined): string {
-  return `https://multica.ai/docs${docsLocalePrefix(lang)}/lark-bot-integration`;
+  return docsHref(lang, "/lark-bot-integration");
 }
 
 function LarkAgentBotConnectedBadge({

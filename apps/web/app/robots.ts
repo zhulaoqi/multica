@@ -1,28 +1,14 @@
 import type { MetadataRoute } from "next";
 
+// Internal deployment: nothing under this origin is meant to be indexed, and
+// the fork keeps no public marketing copy to advertise.
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = "https://www.multica.ai";
-
   return {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/about", "/changelog"],
-        disallow: [
-          "/api/",
-          "/ws",
-          "/auth/",
-          "/issues",
-          "/board",
-          "/inbox",
-          "/agents",
-          "/settings",
-          "/my-issues",
-          "/runtimes",
-          "/skills",
-        ],
+        disallow: "/",
       },
     ],
-    sitemap: [`${baseUrl}/sitemap.xml`, `${baseUrl}/docs/sitemap.xml`],
   };
 }

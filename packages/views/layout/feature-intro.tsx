@@ -14,7 +14,7 @@ import {
 } from "@multica/ui/icons";
 import { Button, buttonVariants } from "@multica/ui/components/ui/button";
 import { cn } from "@multica/ui/lib/utils";
-import { docsLocalePrefix } from "../common/docs-locale";
+import { docsHref } from "../common/docs-locale";
 import { useLocale, useT } from "../i18n";
 
 export type FeatureDocsSlug =
@@ -27,7 +27,7 @@ export type FeatureDocsSlug =
   | "issue-wakeups";
 
 export function featureDocsHref(slug: FeatureDocsSlug, language?: string): string {
-  return `https://multica.ai/docs${docsLocalePrefix(language)}/${slug}`;
+  return docsHref(language, `/${slug}`);
 }
 
 interface FeatureIntroProps {

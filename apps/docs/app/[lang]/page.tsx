@@ -7,7 +7,6 @@ import type { Metadata } from "next";
 import { DocsHero } from "@/components/hero";
 import { NumberedCards, NumberedCard, NumberedSteps, Step } from "@/components/editorial";
 import { VideoEmbed } from "@/components/video-embed";
-import { CommunityLinks } from "@/components/community-links";
 import { i18n, type Lang } from "@/lib/i18n";
 import { homeCopy } from "@/lib/translations";
 import { docsAlternates } from "@/lib/site";
@@ -67,7 +66,6 @@ export default async function Page({
               NumberedSteps,
               Step,
               VideoEmbed,
-              CommunityLinks,
             }}
           />
         </DocsLocaleProvider>

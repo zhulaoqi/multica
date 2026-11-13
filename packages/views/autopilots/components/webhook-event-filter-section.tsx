@@ -6,7 +6,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
 import type { WebhookEventFilter } from "@multica/core/types";
 import { useT } from "../../i18n";
-import { isTraditionalChinese } from "../../common/docs-locale";
+import { docsHref, isTraditionalChinese } from "../../common/docs-locale";
 
 interface WebhookEventFilterSectionProps {
   filters: WebhookEventFilter[];
@@ -20,13 +20,13 @@ export function WebhookEventFilterSection({
   const { t, i18n } = useT("autopilots");
   const [newEvent, setNewEvent] = useState("");
   const [newActions, setNewActions] = useState("");
-  const docsHref = isTraditionalChinese(i18n.language)
-    ? `https://multica.ai/docs/zh-Hant/autopilots#${encodeURIComponent("事件過濾")}`
+  const docsUrl = isTraditionalChinese(i18n.language)
+    ? docsHref(i18n.language, `/autopilots#${encodeURIComponent("事件過濾")}`)
     : i18n.language?.startsWith("zh")
-      ? `https://multica.ai/docs/zh/autopilots#${encodeURIComponent("事件过滤")}`
+      ? docsHref(i18n.language, `/autopilots#${encodeURIComponent("事件过滤")}`)
       : i18n.language?.startsWith("fr")
-        ? `https://multica.ai/docs/fr/autopilots#${encodeURIComponent("filtres-dévénements")}`
-        : "https://multica.ai/docs/autopilots#event-filters";
+        ? docsHref(i18n.language, `/autopilots#${encodeURIComponent("filtres-dévénements")}`)
+        : docsHref(i18n.language, "/autopilots#event-filters");
 
   const addFilter = () => {
     const event = newEvent.trim();
@@ -52,7 +52,7 @@ export function WebhookEventFilterSection({
         <Filter className="size-3" />
         {t(($) => $.dialog.event_filter_label)}
         <a
-          href={docsHref}
+          href={docsUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={t(($) => $.dialog.event_filter_docs_link_label)}

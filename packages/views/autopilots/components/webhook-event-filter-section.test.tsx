@@ -86,11 +86,11 @@ describe("WebhookEventFilterSection", () => {
   it.each([
     [
       "zh-Hans",
-      `https://multica.ai/docs/zh/autopilots#${encodeURIComponent("事件过滤")}`,
+      `/docs/zh/autopilots#${encodeURIComponent("事件过滤")}`,
     ],
     [
       "zh-Hant",
-      `https://multica.ai/docs/zh-Hant/autopilots#${encodeURIComponent("事件過濾")}`,
+      `/docs/zh-Hant/autopilots#${encodeURIComponent("事件過濾")}`,
     ],
   ] as const)("links the %s event filter docs section", (locale, href) => {
     renderWithI18n(
