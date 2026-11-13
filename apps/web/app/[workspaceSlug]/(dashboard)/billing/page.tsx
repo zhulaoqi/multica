@@ -1,10 +1,12 @@
-import { BillingTestPage } from "@multica/views/billing";
+import { redirect } from "next/navigation";
 
-// Account-level test page for the cloud-billing API surface. Despite
-// living under [workspaceSlug] — that's where the dashboard layout
-// requires every page to sit — none of the data here is workspace-
-// scoped. The slug just keeps the route inside the authenticated
-// shell.
-export default function BillingRoute() {
-  return <BillingTestPage />;
+// Billing is disabled in this fork; the upstream API test page is not part of
+// the internal product. Any saved link lands back on the workspace instead.
+export default async function BillingRoute({
+  params,
+}: {
+  params: Promise<{ workspaceSlug: string }>;
+}) {
+  const { workspaceSlug } = await params;
+  redirect(`/${workspaceSlug}`);
 }
