@@ -17,6 +17,41 @@ type intakeAgentBody struct {
 	Can         string `json:"can"`
 	Cannot      string `json:"cannot"`
 	RuntimeMode string `json:"runtime_mode"`
+	// OwnerID lets a department lead register a twin for a direct report.
+	// Empty means the caller registers their own.
+	OwnerID string `json:"owner_id"`
+}
+
+// mayConfigureIntakeAgentOwnedBy reports whether the caller may register or
+// edit the intake identity (name, can/cannot, runtime mode) of an agent owned
+// by ownerID: the owner themselves, a workspace manager, or the lead of the
+// owner's department or one of its ancestors.
+func (h *Handler) mayConfigureIntakeAgentOwnedBy(
+	r *http.Request,
+	wsUUID pgtype.UUID,
+	caller db.Member,
+	ownerID pgtype.UUID,
+) bool {
+	if !ownerID.Valid {
+		return false
+	}
+	if ownerID == caller.UserID {
+		return true
+	}
+	if roleAllowed(caller.Role, "owner", "admin") {
+		return true
+	}
+	owner, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+		WorkspaceID: wsUUID, UserID: ownerID,
+	})
+	if err != nil || !owner.OrgUnitID.Valid {
+		return false
+	}
+	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	if err != nil {
+		return false
+	}
+	return orgUserLeadsUnit(caller.UserID, units, owner.OrgUnitID)
 }
 
 type intakePlacement struct {
@@ -41,10 +76,11 @@ type intakeAgentResponse struct {
 
 func (h *Handler) CreateIntakeAgent(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.workspaceMember(w, r, workspaceID); !ok {
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
 		return
 	}
-	ownerID, ok := requireUserID(w, r)
+	callerID, ok := requireUserID(w, r)
 	if !ok {
 		return
 	}
@@ -66,9 +102,16 @@ func (h *Handler) CreateIntakeAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ownerUUID, ok := parseUUIDOrBadRequest(w, ownerID, "user id")
-	if !ok {
-		return
+	ownerUUID := parseUUID(callerID)
+	if target := strings.TrimSpace(body.OwnerID); target != "" && target != callerID {
+		ownerUUID, ok = parseUUIDOrBadRequest(w, target, "owner id")
+		if !ok {
+			return
+		}
+		if !h.mayConfigureIntakeAgentOwnedBy(r, wsUUID, member, ownerUUID) {
+			writeError(w, http.StatusForbidden, "cannot register an agent for this member")
+			return
+		}
 	}
 	cannot := strings.TrimSpace(body.Cannot)
 	agent, err := h.Queries.CreateIntakeAgent(r.Context(), db.CreateIntakeAgentParams{
@@ -227,7 +270,7 @@ func (h *Handler) PatchIntakeAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	editorID := ownerID
 	if uuidToString(existing.OwnerID) != ownerID {
-		if member.Role != "owner" && member.Role != "admin" {
+		if !h.mayConfigureIntakeAgentOwnedBy(r, parseUUID(workspaceID), member, existing.OwnerID) {
 			writeError(w, http.StatusForbidden, "cannot edit this agent")
 			return
 		}

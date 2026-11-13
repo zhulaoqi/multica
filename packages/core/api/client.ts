@@ -5653,6 +5653,9 @@ export class ApiClient {
     can: string;
     cannot?: string;
     runtime_mode: "local" | "cloud";
+    // Registers the twin for another member; only a department lead (or a
+    // workspace manager) may set this. Omit to register your own.
+    owner_id?: string;
   }): Promise<IntakeAgent> {
     const raw = await this.fetch<unknown>("/api/intake/agents", {
       method: "POST",

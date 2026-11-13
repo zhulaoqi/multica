@@ -117,3 +117,120 @@ func TestIntakeAgent_RegisterAndListOwn(t *testing.T) {
 		}
 	}
 }
+
+func TestIntakeAgent_LeadConfiguresDirectReportTwin(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "intake-lead-admin@example.com")
+	lead := createPermissionTestMember(t, "intake-lead-lead@example.com")
+	report := createPermissionTestMember(t, "intake-lead-report@example.com")
+	stranger := createPermissionTestMember(t, "intake-lead-stranger@example.com")
+
+	importRec := httptest.NewRecorder()
+	testHandler.ImportOrgUnits(importRec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+		"rows": []map[string]any{
+			{"path": "研发部/开发一组", "lead_email": "intake-lead-lead@example.com"},
+			{"path": "研发部/开发二组"},
+		},
+	}))
+	if importRec.Code != http.StatusOK {
+		t.Fatalf("import status = %d: %s", importRec.Code, importRec.Body.String())
+	}
+	units := map[string]string{}
+	rows, err := testPool.Query(context.Background(), `
+		SELECT name, id FROM org_unit WHERE workspace_id = $1 AND name IN ('开发一组', '开发二组')
+	`, testWorkspaceID)
+	if err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name, id string
+		if err := rows.Scan(&name, &id); err != nil {
+			t.Fatalf("scan unit: %v", err)
+		}
+		units[name] = id
+	}
+	ownUnit, sisterUnit := units["开发一组"], units["开发二组"]
+	if ownUnit == "" || sisterUnit == "" {
+		t.Fatalf("units = %v, want both development groups", units)
+	}
+	for userID, unitID := range map[string]string{report: ownUnit, stranger: sisterUnit} {
+		place := httptest.NewRecorder()
+		testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", userID, map[string]any{"unit_id": unitID}))
+		if place.Code != http.StatusNoContent {
+			t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
+		}
+	}
+
+	// The lead registers a twin on behalf of a direct report.
+	createRec := httptest.NewRecorder()
+	testHandler.CreateIntakeAgent(createRec, newRequestAs(lead, "POST", "/api/intake/agents", map[string]any{
+		"name":         "intake-lead-twin",
+		"can":          "写代码",
+		"runtime_mode": "local",
+		"owner_id":     report,
+	}))
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("lead create status = %d, want 201: %s", createRec.Code, createRec.Body.String())
+	}
+	var created struct {
+		ID      string `json:"id"`
+		OwnerID string `json:"owner_id"`
+	}
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, created.ID)
+	})
+	if created.OwnerID != report {
+		t.Fatalf("created owner = %q, want report %q", created.OwnerID, report)
+	}
+
+	// The lead edits the report's twin and the owner binding survives.
+	patchRec := httptest.NewRecorder()
+	testHandler.PatchIntakeAgent(patchRec, orgRequestWithAgent(lead, "PATCH", "/api/intake/agents/x", created.ID, map[string]any{
+		"name":         "intake-lead-twin-v2",
+		"can":          "写代码、做评审",
+		"runtime_mode": "local",
+	}))
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("lead patch status = %d, want 200: %s", patchRec.Code, patchRec.Body.String())
+	}
+	var patched struct {
+		Name    string `json:"name"`
+		Can     string `json:"can"`
+		OwnerID string `json:"owner_id"`
+	}
+	if err := json.NewDecoder(patchRec.Body).Decode(&patched); err != nil {
+		t.Fatalf("decode patched: %v", err)
+	}
+	if patched.OwnerID != report || patched.Name != "intake-lead-twin-v2" || patched.Can != "写代码、做评审" {
+		t.Fatalf("patched = %+v", patched)
+	}
+
+	// The lead cannot register for a member of a department they do not lead.
+	strangerRec := httptest.NewRecorder()
+	testHandler.CreateIntakeAgent(strangerRec, newRequestAs(lead, "POST", "/api/intake/agents", map[string]any{
+		"name":         "intake-lead-stranger",
+		"can":          "写代码",
+		"runtime_mode": "local",
+		"owner_id":     stranger,
+	}))
+	if strangerRec.Code != http.StatusForbidden {
+		t.Fatalf("lead stranger create status = %d, want 403: %s", strangerRec.Code, strangerRec.Body.String())
+	}
+
+	// A plain member cannot register on someone else's behalf either.
+	memberRec := httptest.NewRecorder()
+	testHandler.CreateIntakeAgent(memberRec, newRequestAs(report, "POST", "/api/intake/agents", map[string]any{
+		"name":         "intake-lead-onbehalf",
+		"can":          "写代码",
+		"runtime_mode": "local",
+		"owner_id":     lead,
+	}))
+	if memberRec.Code != http.StatusForbidden {
+		t.Fatalf("member on-behalf create status = %d, want 403: %s", memberRec.Code, memberRec.Body.String())
+	}
+}
