@@ -234,6 +234,79 @@ func orgRequestWithAgent(userID, method, path, agentID string, body any) *http.R
 	return orgRequestWithParam(userID, method, path, "agentId", agentID, body)
 }
 
+func TestSetOrgAgentUnit_OwnerPlacesOwnTwinInOwnDepartment(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-twin-admin@example.com")
+	member := createPermissionTestMember(t, "org-twin-member@example.com")
+	twin := insertIntakeDutyAgent(t, "org-twin-agent", member)
+	foreign := insertIntakeDutyAgent(t, "org-twin-foreign", admin)
+
+	rec := httptest.NewRecorder()
+	testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+		"rows": []map[string]any{{"path": "研发部/开发一组"}, {"path": "研发部/开发二组"}},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import status = %d: %s", rec.Code, rec.Body.String())
+	}
+	units := map[string]string{}
+	rows, err := testPool.Query(context.Background(), `
+		SELECT name, id FROM org_unit WHERE workspace_id = $1 AND name IN ('开发一组', '开发二组')
+	`, testWorkspaceID)
+	if err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name, id string
+		if err := rows.Scan(&name, &id); err != nil {
+			t.Fatalf("scan unit: %v", err)
+		}
+		units[name] = id
+	}
+	ownUnit, sisterUnit := units["开发一组"], units["开发二组"]
+	if ownUnit == "" || sisterUnit == "" {
+		t.Fatalf("units = %v, want both development groups", units)
+	}
+
+	place := httptest.NewRecorder()
+	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ownUnit}))
+	if place.Code != http.StatusNoContent {
+		t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
+	}
+
+	// Registering a twin must not require lead rights: the owner files their
+	// own agent into the department they belong to.
+	own := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(own, orgRequestWithAgent(member, "PUT", "/api/org/agents/x/unit", twin, map[string]any{"unit_id": ownUnit}))
+	if own.Code != http.StatusNoContent {
+		t.Fatalf("owner twin placement status = %d, want 204: %s", own.Code, own.Body.String())
+	}
+	var placed string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT COALESCE(org_unit_id::text, '') FROM agent WHERE id = $1
+	`, twin).Scan(&placed); err != nil {
+		t.Fatalf("load twin unit: %v", err)
+	}
+	if placed != ownUnit {
+		t.Fatalf("twin unit = %q, want %q", placed, ownUnit)
+	}
+
+	// The owner still cannot reach beyond their own department.
+	sister := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(sister, orgRequestWithAgent(member, "PUT", "/api/org/agents/x/unit", twin, map[string]any{"unit_id": sisterUnit}))
+	if sister.Code != http.StatusForbidden {
+		t.Fatalf("owner sister placement status = %d, want 403: %s", sister.Code, sister.Body.String())
+	}
+
+	// Nor can they place someone else's agent, even inside their department.
+	foreignRec := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(foreignRec, orgRequestWithAgent(member, "PUT", "/api/org/agents/x/unit", foreign, map[string]any{"unit_id": ownUnit}))
+	if foreignRec.Code != http.StatusForbidden {
+		t.Fatalf("foreign agent placement status = %d, want 403: %s", foreignRec.Code, foreignRec.Body.String())
+	}
+}
+
 func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)

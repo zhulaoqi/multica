@@ -613,7 +613,10 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 	if !ok {
 		return
 	}
-	if !access.managesAny() {
+	// Agent placement also allows a member to file their own agent into their
+	// own department (the twin registration flow), so that case is decided
+	// after the entity is resolved.
+	if entityType != "agent" && !access.managesAny() {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
@@ -627,6 +630,7 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 		return
 	}
 	var currentUnit pgtype.UUID
+	var ownerID pgtype.UUID
 	switch entityType {
 	case "agent":
 		agent, err := h.Queries.GetAgent(r.Context(), entityUUID)
@@ -635,6 +639,7 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			return
 		}
 		currentUnit = agent.OrgUnitID
+		ownerID = agent.OwnerID
 	case "member":
 		member, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
 			UserID:      entityUUID,
@@ -681,11 +686,11 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			h.importOrgFailed(w, r, err)
 			return
 		}
-		if !access.manages(unitUUID) {
+		if !access.manages(unitUUID) && !access.ownsAgentPlacement(entityType, ownerID, unitUUID) {
 			writeError(w, http.StatusForbidden, "insufficient permissions")
 			return
 		}
-	} else if !access.manages(currentUnit) {
+	} else if !access.manages(currentUnit) && !access.ownsAgentPlacement(entityType, ownerID, currentUnit) {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
@@ -729,6 +734,8 @@ type orgAccess struct {
 	userID pgtype.UUID
 	admin  bool
 	units  []db.ListOrgUnitsRow
+	// ownUnitID is the caller's own department, if they are placed in one.
+	ownUnitID pgtype.UUID
 }
 
 func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, bool) {
@@ -748,10 +755,11 @@ func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, 
 		return orgAccess{}, false
 	}
 	return orgAccess{
-		wsUUID: wsUUID,
-		userID: member.UserID,
-		admin:  roleAllowed(member.Role, "owner", "admin"),
-		units:  units,
+		wsUUID:    wsUUID,
+		userID:    member.UserID,
+		admin:     roleAllowed(member.Role, "owner", "admin"),
+		units:     units,
+		ownUnitID: member.OrgUnitID,
 	}, true
 }
 
@@ -780,6 +788,15 @@ func (a orgAccess) managesAny() bool {
 		}
 	}
 	return false
+}
+
+// ownsAgentPlacement lets a member place their own agent into their own
+// department without org-management rights: registering a digital twin must
+// not require being a department lead.
+func (a orgAccess) ownsAgentPlacement(entityType string, ownerID pgtype.UUID, unitID pgtype.UUID) bool {
+	return entityType == "agent" &&
+		ownerID.Valid && ownerID == a.userID &&
+		unitID.Valid && unitID == a.ownUnitID
 }
 
 func orgUserLeadsUnit(userID pgtype.UUID, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
