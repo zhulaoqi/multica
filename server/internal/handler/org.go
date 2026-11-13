@@ -32,8 +32,11 @@ type orgAgentResponse struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	UnitID string `json:"unit_id"`
-	Can    string `json:"can"`
-	Cannot string `json:"cannot"`
+	// OwnerID binds the agent to its member: the org view matches an agent to
+	// the person whose digital twin it is.
+	OwnerID string `json:"owner_id"`
+	Can     string `json:"can"`
+	Cannot  string `json:"cannot"`
 	// Status is the agent's runtime availability (idle, working, offline…).
 	// The org view reads it to show idle agents as waiting for scheduling.
 	Status string `json:"status"`
@@ -157,12 +160,13 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		resp.Agents = append(resp.Agents, orgAgentResponse{
-			ID:     uuidToString(agent.ID),
-			Name:   agent.Name,
-			UnitID: uuidToString(agent.OrgUnitID),
-			Can:    textValue(agent.IntakeCan),
-			Cannot: textValue(agent.IntakeCannot),
-			Status: agent.Status,
+			ID:      uuidToString(agent.ID),
+			Name:    agent.Name,
+			UnitID:  uuidToString(agent.OrgUnitID),
+			OwnerID: uuidToString(agent.OwnerID),
+			Can:     textValue(agent.IntakeCan),
+			Cannot:  textValue(agent.IntakeCannot),
+			Status:  agent.Status,
 		})
 	}
 	for _, member := range members {

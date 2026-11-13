@@ -45,8 +45,9 @@ WHERE lower(u.email) = lower($2);
 -- name: ListAgentsInOrgUnits :many
 -- Includes agents with an empty unit so the org page can place them. Status is
 -- the agent's own availability, which the org view surfaces as whether the
--- agent is waiting for collaborative scheduling.
-SELECT id, name, org_unit_id, intake_can, intake_cannot, status
+-- agent is waiting for collaborative scheduling. OwnerID lets the client match
+-- an agent to its member (the "digital twin" binding).
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL

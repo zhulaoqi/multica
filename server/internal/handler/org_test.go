@@ -628,6 +628,15 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		t.Fatalf("admin squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 
+	// The member's twin agent sits in their own department so the org view can
+	// bind it back to them through owner_id.
+	memberTwin := insertIntakeDutyAgent(t, "org-squad-member-twin", member)
+	twinAttach := httptest.NewRecorder()
+	testHandler.SetOrgAgentUnit(twinAttach, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", memberTwin, map[string]any{"unit_id": childID}))
+	if twinAttach.Code != http.StatusNoContent {
+		t.Fatalf("admin twin attach status = %d, want 204: %s", twinAttach.Code, twinAttach.Body.String())
+	}
+
 	// The member placed in a sub-department sees that department and its
 	// children only: no parent department and no sibling branches.
 	place := httptest.NewRecorder()
@@ -664,9 +673,13 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	if squad.ID != squadID || squad.UnitID != childID || squad.AgentCount != 2 {
 		t.Fatalf("squad = %+v, want id %q unit %q with 2 agents", squad, squadID, childID)
 	}
-	// Unassigned agents stay out of a plain member's view.
-	if len(tree.Agents) != 0 {
-		t.Fatalf("member agents = %+v, want none while no agent sits in their branch", tree.Agents)
+	// The member sees exactly their own twin, bound to them by owner_id with
+	// its responsibility text; other agents stay out of a plain member's view.
+	if len(tree.Agents) != 1 {
+		t.Fatalf("member agents = %+v, want only the own twin", tree.Agents)
+	}
+	if twin := tree.Agents[0]; twin.ID != memberTwin || twin.OwnerID != member || twin.Can == "" {
+		t.Fatalf("member twin = %+v, want id %s owned by the member with a responsibility", twin, memberTwin)
 	}
 	// The admin still sees everything, including each agent's availability.
 	adminList := httptest.NewRecorder()
@@ -682,11 +695,16 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 		t.Fatalf("admin tree has %d units, want 3", len(adminTree.Units))
 	}
 	statuses := map[string]string{}
+	owners := map[string]string{}
 	for _, agent := range adminTree.Agents {
 		statuses[agent.Name] = agent.Status
+		owners[agent.Name] = agent.OwnerID
 	}
 	if statuses["org-squad-leader"] == "" {
 		t.Fatalf("agent statuses = %v, want a status for every agent", statuses)
+	}
+	if owners["org-squad-leader"] != admin || owners["org-squad-member-twin"] != member {
+		t.Fatalf("agent owners = %v, want squad leader owned by admin and twin owned by the member", owners)
 	}
 
 	// A member outside every department sees an empty organisation.

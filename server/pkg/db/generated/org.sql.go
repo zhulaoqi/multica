@@ -266,7 +266,7 @@ func (q *Queries) InsertOrgSyncRun(ctx context.Context, arg InsertOrgSyncRunPara
 }
 
 const listAgentsInOrgUnits = `-- name: ListAgentsInOrgUnits :many
-SELECT id, name, org_unit_id, intake_can, intake_cannot, status
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
@@ -276,6 +276,7 @@ ORDER BY name ASC
 type ListAgentsInOrgUnitsRow struct {
 	ID           pgtype.UUID `json:"id"`
 	Name         string      `json:"name"`
+	OwnerID      pgtype.UUID `json:"owner_id"`
 	OrgUnitID    pgtype.UUID `json:"org_unit_id"`
 	IntakeCan    pgtype.Text `json:"intake_can"`
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
@@ -284,7 +285,8 @@ type ListAgentsInOrgUnitsRow struct {
 
 // Includes agents with an empty unit so the org page can place them. Status is
 // the agent's own availability, which the org view surfaces as whether the
-// agent is waiting for collaborative scheduling.
+// agent is waiting for collaborative scheduling. OwnerID lets the client match
+// an agent to its member (the "digital twin" binding).
 func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentsInOrgUnitsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsInOrgUnits, workspaceID)
 	if err != nil {
@@ -297,6 +299,7 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.OwnerID,
 			&i.OrgUnitID,
 			&i.IntakeCan,
 			&i.IntakeCannot,
