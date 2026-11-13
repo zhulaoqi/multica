@@ -40,6 +40,12 @@ const allowedDevOrigins = process.env.CORS_ALLOWED_ORIGINS
 
 const nextConfig: NextConfig = {
   ...(process.env.STANDALONE === "true" ? { output: "standalone" as const } : {}),
+  // Feishu organisation sync is a single long POST (the directory crawl takes
+  // minutes). Next's rewrite proxy defaults to 30s and aborted every in-UI sync
+  // half-way, so the browser saw a 500 while the API logged a cancelled request.
+  experimental: {
+    proxyTimeout: 15 * 60 * 1000,
+  },
   transpilePackages: ["@multica/core", "@multica/ui", "@multica/views"],
   ...(allowedDevOrigins && allowedDevOrigins.length > 0
     ? { allowedDevOrigins }
