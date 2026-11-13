@@ -37,5 +37,18 @@
   "sync_report_detached_departments": "Ya no están en Feishu",
   "sync_report_detached_users": "Salieron del directorio",
   "sync_nothing_changed": "Sin cambios.",
-  "sync_failed": "La sincronización falló."
+  "sync_failed": "La sincronización falló.",
+  "squads": "Equipos",
+  "no_squads": "Este departamento aún no tiene equipos.",
+  "squad_agents_one": "{{count}} agente",
+  "squad_agents_other": "{{count}} agentes",
+  "squad_empty": "Sin agentes asignados",
+  "waiting_dispatch": "Esperando planificación",
+  "status_working": "Colaborando",
+  "status_offline": "Desconectado",
+  "status_attention": "Requiere atención",
+  "my_org": "Mi organización",
+  "my_org_empty": "Aún no perteneces a un departamento; pide a un admin que te añada.",
+  "my_org_quiet": "Este departamento aún no tiene equipos ni agentes.",
+  "pick_unit": "Elige un departamento a la izquierda para ver el detalle."
 }

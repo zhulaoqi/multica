@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, type OrgAgent, type OrgMember, type OrgTree, type OrgUnit } from "@multica/core/api";
+import { api, type OrgAgent, type OrgMember, type OrgSquad, type OrgTree, type OrgUnit } from "@multica/core/api";
 
 vi.mock("@multica/core/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@multica/core/api")>()),
@@ -11,6 +11,7 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
     deleteOrgUnit: vi.fn(),
     setOrgMemberUnit: vi.fn(),
     setOrgAgentUnit: vi.fn(),
+    setOrgSquadUnit: vi.fn(),
   },
 }));
 import { WorkspaceSlugProvider } from "@multica/core/paths";
@@ -42,7 +43,8 @@ const baseUnit: OrgUnit = {
   description: "",
   position: 0,
 };
-const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", can: "", cannot: "" };
+const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", can: "", cannot: "", status: "" };
+const baseSquad: OrgSquad = { id: "", name: "", unit_id: "", leader_id: "", agent_count: 0, working_agents: 0 };
 const baseOrgMember: OrgMember = { user_id: "", unit_id: "", name: "", email: "", avatar_url: null };
 
 function unit(overrides: Partial<OrgUnit> & Pick<OrgUnit, "id" | "name">): OrgUnit {
@@ -55,9 +57,11 @@ function tree(overrides: Partial<OrgTree> = {}): OrgTree {
       unit({ id: "dept-root", name: "Engineering", can_manage: true }),
       unit({ id: "dept-child", parent_id: "dept-root", name: "Payments", can_manage: true }),
     ],
-    agents: [{ ...baseAgent, id: "agent-1", name: "Reviewer", unit_id: "dept-child" }],
+    agents: [{ ...baseAgent, id: "agent-1", name: "Reviewer", unit_id: "dept-child", status: "idle" }],
     members: [{ ...baseOrgMember, user_id: "u-ada", unit_id: "dept-child", name: "Ada", email: "ada@example.com" }],
+    squads: [],
     can_manage: true,
+    my_unit_id: "",
     ...overrides,
   };
 }
@@ -241,5 +245,79 @@ describe("OrgPage admin actions", () => {
     expect(screen.getByText("Ada")).toBeInTheDocument();
     expect(screen.getByText("Reviewer")).toBeInTheDocument();
     expect(screen.getAllByText("Engineering/Payments").length).toBeGreaterThan(0);
+  });
+});
+
+describe("OrgPage member landing and squads", () => {
+  it("lands a plain member on their own department and shows what is waiting", () => {
+    renderPage(tree({
+      units: [
+        unit({ id: "dept-root", name: "Engineering" }),
+        unit({ id: "dept-child", parent_id: "dept-root", name: "Payments" }),
+      ],
+      agents: [{ ...baseAgent, id: "agent-1", name: "Reviewer", unit_id: "dept-child", status: "idle" }],
+      squads: [{
+        ...baseSquad,
+        id: "squad-1",
+        name: "Payments squad",
+        unit_id: "dept-child",
+        agent_count: 2,
+        working_agents: 0,
+      }],
+      can_manage: false,
+      my_unit_id: "dept-child",
+    }));
+
+    expect(screen.getByText("My organization")).toBeInTheDocument();
+    // The department detail is preselected without a click, and the squad
+    // attached to it reports that it is waiting for scheduling.
+    expect(screen.getAllByText("Payments squad").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Waiting for scheduling").length).toBeGreaterThan(0);
+  });
+
+  it("shows a member without a department that they are not placed yet", () => {
+    renderPage(tree({
+      units: [
+        unit({ id: "dept-root", name: "Engineering" }),
+        unit({ id: "dept-child", parent_id: "dept-root", name: "Payments" }),
+      ],
+      can_manage: false,
+      my_unit_id: "",
+    }));
+
+    expect(screen.getByText(/You are not in a department yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Pick a department/)).toBeInTheDocument();
+  });
+
+  it("tells busy squads apart from waiting ones inside a department", () => {
+    renderPage(tree({
+      units: [unit({ id: "dept-root", name: "Engineering" })],
+      agents: [],
+      members: [],
+      squads: [
+        { ...baseSquad, id: "squad-waiting", name: "Waiting squad", unit_id: "dept-root", agent_count: 3, working_agents: 0 },
+        { ...baseSquad, id: "squad-busy", name: "Busy squad", unit_id: "dept-root", agent_count: 2, working_agents: 1 },
+        { ...baseSquad, id: "squad-empty", name: "Empty squad", unit_id: "dept-root", agent_count: 0, working_agents: 0 },
+      ],
+      my_unit_id: "dept-root",
+    }));
+
+    expect(screen.getByText("Waiting squad")).toBeInTheDocument();
+    expect(screen.getByText("Busy squad")).toBeInTheDocument();
+    expect(screen.getAllByText("Waiting for scheduling")).toHaveLength(1);
+    expect(screen.getByText("Working together")).toBeInTheDocument();
+    expect(screen.getByText("No agents assigned")).toBeInTheDocument();
+  });
+
+  it("offers placement for squads without a department", () => {
+    renderPage(tree({
+      squads: [{ ...baseSquad, id: "squad-1", name: "Loose squad", unit_id: "", agent_count: 1 }],
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Unassigned/ }));
+
+    expect(screen.getByText("Loose squad")).toBeInTheDocument();
+    // The squad's own department picker; members and agents are already placed.
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
 });

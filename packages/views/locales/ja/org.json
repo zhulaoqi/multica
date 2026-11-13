@@ -37,5 +37,17 @@
   "sync_report_detached_departments": "Feishu に存在しない",
   "sync_report_detached_users": "連絡先から離脱",
   "sync_nothing_changed": "変更はありません。",
-  "sync_failed": "同期に失敗しました。"
+  "sync_failed": "同期に失敗しました。",
+  "squads": "チーム",
+  "no_squads": "この部門にはまだチームがありません。",
+  "squad_agents_other": "{{count}} 体の Agent",
+  "squad_empty": "Agent 未配置",
+  "waiting_dispatch": "共同スケジュール待ち",
+  "status_working": "共同作業中",
+  "status_offline": "オフライン",
+  "status_attention": "要対応",
+  "my_org": "自分の組織",
+  "my_org_empty": "まだ部門に所属していません。管理者に追加を依頼してください。",
+  "my_org_quiet": "この部門にはまだチームも Agent もいません。",
+  "pick_unit": "左の一覧から部門を選んでください。"
 }

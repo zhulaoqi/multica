@@ -37,5 +37,17 @@
   "sync_report_detached_departments": "飞书中已没有",
   "sync_report_detached_users": "已离开通讯录",
   "sync_nothing_changed": "没有变化。",
-  "sync_failed": "同步失败。"
+  "sync_failed": "同步失败。",
+  "squads": "小队",
+  "no_squads": "这个部门还没有小队。",
+  "squad_agents_other": "{{count}} 个 Agent",
+  "squad_empty": "未编入 Agent",
+  "waiting_dispatch": "等待协同调度",
+  "status_working": "协同中",
+  "status_offline": "离线",
+  "status_attention": "需处理",
+  "my_org": "我的组织",
+  "my_org_empty": "你还没有归入部门，可以请管理员把你加进去。",
+  "my_org_quiet": "这个部门还没有小队或 Agent。",
+  "pick_unit": "在左边选择一个部门查看。"
 }

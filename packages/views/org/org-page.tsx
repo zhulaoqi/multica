@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgMember, type OrgSyncReport, type OrgTree } from "@multica/core/api";
+import {
+  EMPTY_ORG_TREE,
+  api,
+  type OrgAgent,
+  type OrgMember,
+  type OrgSquad,
+  type OrgSyncReport,
+  type OrgTree,
+} from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions, orgSyncStatusOptions, orgTreeOptions, workspaceKeys } from "@multica/core/workspace/queries";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
@@ -16,7 +24,13 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { useT } from "../i18n";
-import { buildOrgForest, unitPaths, type OrgNode } from "./org-tree";
+import {
+  agentAvailability,
+  buildOrgForest,
+  squadAvailability,
+  unitPaths,
+  type OrgNode,
+} from "./org-tree";
 
 const NO_UNIT = "__none";
 
@@ -105,6 +119,35 @@ function MemberRow({
   );
 }
 
+type AvailabilityTone = "waiting" | "working" | "offline" | "attention" | "empty" | "unknown";
+
+/** Small state chip: waiting for collaborative scheduling, busy, offline… */
+function StatusChip({ tone }: { tone: AvailabilityTone }) {
+  const { t } = useT("org");
+  const label = {
+    waiting: t(($) => $.waiting_dispatch),
+    working: t(($) => $.status_working),
+    offline: t(($) => $.status_offline),
+    attention: t(($) => $.status_attention),
+    empty: t(($) => $.squad_empty),
+    unknown: "",
+  }[tone];
+  if (!label) return null;
+  const toneClass =
+    tone === "working"
+      ? "text-primary"
+      : tone === "attention"
+        ? "text-destructive"
+        : "text-muted-foreground";
+  return (
+    <span
+      className={`shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-caption ${toneClass}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function AgentRow({
   agent,
   canMove,
@@ -124,8 +167,37 @@ function AgentRow({
           <div className="truncate text-caption text-muted-foreground">{agent.can}</div>
         ) : null}
       </div>
+      <StatusChip tone={agentAvailability(agent.status)} />
       {canMove ? (
         <UnitPicker value={agent.unit_id} choices={choices} onChange={onMove} />
+      ) : null}
+    </div>
+  );
+}
+
+function SquadRow({
+  squad,
+  canMove,
+  choices,
+  onMove,
+}: {
+  squad: OrgSquad;
+  canMove: boolean;
+  choices: Array<{ id: string; path: string }>;
+  onMove: (unitId: string) => void;
+}) {
+  const { t } = useT("org");
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-body">{squad.name}</div>
+        <div className="truncate text-caption text-muted-foreground">
+          {t(($) => $.squad_agents, { count: squad.agent_count })}
+        </div>
+      </div>
+      <StatusChip tone={squadAvailability(squad)} />
+      {canMove ? (
+        <UnitPicker value={squad.unit_id} choices={choices} onChange={onMove} />
       ) : null}
     </div>
   );
@@ -153,7 +225,7 @@ function TreeRow({
       >
         <span className="min-w-0 flex-1 truncate">{node.unit.name}</span>
         <span className="text-caption text-muted-foreground tabular-nums">
-          {node.members.length + node.agents.length}
+          {node.members.length + node.agents.length + node.squads.length}
         </span>
       </button>
       {node.children.map((child) => (
@@ -176,7 +248,7 @@ function UnitDetail({
   allMembers: Array<{ user_id: string; label: string }>;
   actions: ReturnType<typeof useOrgActions>;
 }) {
-  const { unit, agents, members, children } = node;
+  const { unit, agents, members, squads, children } = node;
   const { t } = useT("org");
   const { run } = actions;
   const [renaming, setRenaming] = useState(false);
@@ -309,6 +381,23 @@ function UnitDetail({
       </section>
 
       <section className="flex flex-col gap-1">
+        <h3 className="text-body font-medium">{t(($) => $.squads)}</h3>
+        {squads.length === 0 ? (
+          <p className="text-caption text-muted-foreground">{t(($) => $.no_squads)}</p>
+        ) : (
+          squads.map((squad) => (
+            <SquadRow
+              key={squad.id}
+              squad={squad}
+              canMove={unit.can_manage}
+              choices={manageableChoices}
+              onMove={(unitId) => void run(() => api.setOrgSquadUnit(squad.id, unitId), t(($) => $.action_failed))}
+            />
+          ))
+        )}
+      </section>
+
+      <section className="flex flex-col gap-1">
         <h3 className="text-body font-medium">{t(($) => $.create_child)}</h3>
         {children.length > 0 ? (
           <p className="text-caption text-muted-foreground">
@@ -381,6 +470,58 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
   );
 }
 
+/** Plain members land on their own department, so the page answers "where do
+ * I sit, what does my team do, and which squads are waiting" before the tree. */
+function MyOrgCard({
+  unitId,
+  data,
+  paths,
+  leadLabel,
+  onSelect,
+}: {
+  unitId: string;
+  data: OrgTree;
+  paths: Map<string, string>;
+  leadLabel: string;
+  onSelect: (unitId: string) => void;
+}) {
+  const { t } = useT("org");
+  const unit = data.units.find((entry) => entry.id === unitId);
+  if (!unit) {
+    return <p className="mb-4 text-caption text-muted-foreground">{t(($) => $.my_org_empty)}</p>;
+  }
+  const agents = data.agents.filter((agent) => agent.unit_id === unitId);
+  const squads = data.squads.filter((squad) => squad.unit_id === unitId);
+  return (
+    <section className="mb-6 flex flex-col gap-2 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-body font-medium">{t(($) => $.my_org)}</h2>
+        <button
+          type="button"
+          onClick={() => onSelect(unitId)}
+          className="text-body text-primary hover:underline"
+        >
+          {paths.get(unitId) ?? unit.name}
+        </button>
+        {leadLabel ? (
+          <span className="text-caption text-muted-foreground">
+            {t(($) => $.lead)} · {leadLabel}
+          </span>
+        ) : null}
+      </div>
+      {squads.length === 0 && agents.length === 0 ? (
+        <p className="text-caption text-muted-foreground">{t(($) => $.my_org_quiet)}</p>
+      ) : null}
+      {squads.map((squad) => (
+        <SquadRow key={squad.id} squad={squad} canMove={false} choices={[]} onMove={() => undefined} />
+      ))}
+      {agents.map((agent) => (
+        <AgentRow key={agent.id} agent={agent} canMove={false} choices={[]} onMove={() => undefined} />
+      ))}
+    </section>
+  );
+}
+
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
@@ -399,7 +540,10 @@ export function OrgPage() {
     .map((unit) => ({ id: unit.id, path: paths.get(unit.id) ?? unit.name, manage: unit.can_manage }))
     .sort((a, b) => a.path.localeCompare(b.path));
   const forest = buildOrgForest(data);
-  const selectedNode = findNode(forest.roots, selected);
+  // Landing on the caller's own department keeps plain members oriented; an
+  // explicit click (including the unassigned pseudo-node) always wins.
+  const activeSelected = selected || data.my_unit_id;
+  const selectedNode = findNode(forest.roots, activeSelected);
   const allMembers = (members.data ?? []).map((member) => ({
     user_id: member.user_id,
     label: member.name || member.email,
@@ -456,18 +600,18 @@ export function OrgPage() {
           <p className="px-2 text-caption text-muted-foreground">{t(($) => $.no_units)}</p>
         ) : null}
         {forest.roots.map((node) => (
-          <TreeRow key={node.unit.id} node={node} selected={selected} onSelect={setSelected} depth={0} />
+          <TreeRow key={node.unit.id} node={node} selected={activeSelected} onSelect={setSelected} depth={0} />
         ))}
-        {forest.unassignedMembers.length + forest.unassignedAgents.length > 0 ? (
+        {forest.unassignedMembers.length + forest.unassignedAgents.length + forest.unassignedSquads.length > 0 ? (
           <button
             type="button"
-            aria-current={selected === NO_UNIT ? "true" : undefined}
+            aria-current={activeSelected === NO_UNIT ? "true" : undefined}
             onClick={() => setSelected(NO_UNIT)}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-body hover:bg-sidebar-accent aria-[current=true]:bg-sidebar-accent"
           >
             <span className="min-w-0 flex-1 truncate">{t(($) => $.unassigned)}</span>
             <span className="text-caption text-muted-foreground tabular-nums">
-              {forest.unassignedMembers.length + forest.unassignedAgents.length}
+              {forest.unassignedMembers.length + forest.unassignedAgents.length + forest.unassignedSquads.length}
             </span>
           </button>
         ) : null}
@@ -494,7 +638,20 @@ export function OrgPage() {
         {data.can_manage && lastRun ? <SyncReport report={lastRun} /> : null}
         {failure ? <p className="mb-3 text-body text-destructive">{failure}</p> : null}
         {!canAnyManage ? (
-          <p className="mb-3 text-caption text-muted-foreground">{t(($) => $.read_only)}</p>
+          <>
+            <MyOrgCard
+              unitId={data.my_unit_id}
+              data={data}
+              paths={paths}
+              leadLabel={
+                allMembers.find((member) =>
+                  member.user_id === data.units.find((unit) => unit.id === data.my_unit_id)?.lead_user_id,
+                )?.label ?? ""
+              }
+              onSelect={setSelected}
+            />
+            <p className="mb-3 text-caption text-muted-foreground">{t(($) => $.read_only)}</p>
+          </>
         ) : null}
         {selectedNode ? (
           <UnitDetail
@@ -504,7 +661,7 @@ export function OrgPage() {
             allMembers={allMembers}
             actions={actions}
           />
-        ) : selected === NO_UNIT ? (
+        ) : activeSelected === NO_UNIT ? (
           <div className="flex flex-col gap-4">
             <h2 className="text-heading">{t(($) => $.unassigned)}</h2>
             <section className="flex flex-col gap-1">
@@ -531,7 +688,21 @@ export function OrgPage() {
                 />
               ))}
             </section>
+            <section className="flex flex-col gap-1">
+              <h3 className="text-body font-medium">{t(($) => $.squads)}</h3>
+              {forest.unassignedSquads.map((squad) => (
+                <SquadRow
+                  key={squad.id}
+                  squad={squad}
+                  canMove={moveChoices.length > 0}
+                  choices={moveChoices}
+                  onMove={(unitId) => void run(() => api.setOrgSquadUnit(squad.id, unitId), t(($) => $.action_failed))}
+                />
+              ))}
+            </section>
           </div>
+        ) : forest.roots.length > 0 ? (
+          <p className="text-caption text-muted-foreground">{t(($) => $.pick_unit)}</p>
         ) : null}
       </main>
     </div>

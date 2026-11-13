@@ -37,5 +37,17 @@
   "sync_report_detached_departments": "飛書中已沒有",
   "sync_report_detached_users": "已離開通訊錄",
   "sync_nothing_changed": "沒有變化。",
-  "sync_failed": "同步失敗。"
+  "sync_failed": "同步失敗。",
+  "squads": "小隊",
+  "no_squads": "這個部門還沒有小隊。",
+  "squad_agents_other": "{{count}} 個 Agent",
+  "squad_empty": "未編入 Agent",
+  "waiting_dispatch": "等待協同調度",
+  "status_working": "協同中",
+  "status_offline": "離線",
+  "status_attention": "需處理",
+  "my_org": "我的組織",
+  "my_org_empty": "你還沒有歸入部門，可以請管理員把你加進去。",
+  "my_org_quiet": "這個部門還沒有小隊或 Agent。",
+  "pick_unit": "在左邊選擇一個部門查看。"
 }
