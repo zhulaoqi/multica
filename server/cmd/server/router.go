@@ -1784,6 +1784,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.Post("/api/me/onboarding/complete", h.CompleteOnboarding)
 		r.Post("/api/me/onboarding/cloud-waitlist", h.JoinCloudWaitlist)
 		r.Post("/api/me/whats-new/seen", h.MarkWhatsNewSeen)
+		// Platform console: cross-workspace overview for the developer
+		// account only. RequireOperator re-checks the X-Operator stamp that
+		// Auth alone can set, so a forged header never reaches the handler.
+		r.With(middleware.RequireOperator()).Get("/api/operator/overview", h.OperatorOverview)
 		// Credential minting is human-only (MUL-8154): an agent task token
 		// (mat_) or cloud-node PAT (mcn_) authenticates as its owner, so
 		// without this guard a prompt-injected agent could trade its scoped,

@@ -79,6 +79,10 @@ type UserResponse struct {
 	WhatsNewSeenVersion *string `json:"whats_new_seen_version"`
 	CreatedAt           string  `json:"created_at"`
 	UpdatedAt           string  `json:"updated_at"`
+	// IsOperator is true only for the developer account's own session, and
+	// only on /api/me — userToResponse has no request, so every other caller
+	// serializes false.
+	IsOperator bool `json:"is_operator"`
 }
 
 // MaxProfileDescriptionLen caps the user-supplied profile_description body.
@@ -504,7 +508,9 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, h.userToResponse(user))
+	resp := h.userToResponse(user)
+	resp.IsOperator = requestIsOperator(r)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type UpdateMeRequest struct {
