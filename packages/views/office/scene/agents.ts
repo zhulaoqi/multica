@@ -36,6 +36,7 @@ import { hashSeed } from "./room";
 
 const WALK_SPEED = 74;
 const CHAT_RADIUS = 26;
+const AGENT_CHAT_RADIUS = 18;
 const CHAT_MS = 1200;
 const ERRAND_MIN_MS = 5000;
 const ERRAND_SPREAD_MS = 6000;
@@ -213,9 +214,26 @@ export class OfficeAgents {
         }
       }
 
-      avatar.view.setBubble(this.bubbleFor(avatar, nowMs));
       avatar.view.tick(nowMs);
       this.pulseGlow(avatar, target, nowMs);
+    }
+    this.stepAgentChat(nowMs);
+    for (const avatar of this.avatars.values()) {
+      avatar.view.setBubble(this.bubbleFor(avatar, nowMs));
+    }
+  }
+
+  /** Two agents standing together chat, which is the "talking shop" beat. */
+  private stepAgentChat(nowMs: number) {
+    const list = [...this.avatars.values()];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i]!;
+        const b = list[j]!;
+        if (Math.hypot(a.x - b.x, a.y - b.y) >= AGENT_CHAT_RADIUS) continue;
+        a.chatUntil = nowMs + CHAT_MS;
+        b.chatUntil = nowMs + CHAT_MS;
+      }
     }
   }
 
@@ -252,11 +270,11 @@ export class OfficeAgents {
     });
   }
 
-  /** Walk-in point inside the bottom doorway, spread across four columns. */
+  /** Walk-in points inside the bottom doorway, spread so avatars never stack. */
   private entranceFor(index: number): { x: number; y: number } {
     return {
       x: (13.5 + (index % 4)) * TILE,
-      y: 16 * TILE + 14,
+      y: 16 * TILE + 14 - Math.floor(index / 4) * 9,
     };
   }
 
@@ -344,7 +362,7 @@ export class OfficeAgents {
       Math.hypot(avatar.x - avatar.home.x, avatar.y - avatar.home.y) < 2;
     const phase = 0.55 + 0.45 * Math.sin(nowMs / 320);
     avatar.glow.alpha =
-      avatar.status === "working" && atHome ? 0.18 + 0.12 * phase : 0;
+      avatar.status === "working" && atHome ? 0.22 + 0.2 * phase : 0;
   }
 
   private dispose(avatar: Avatar) {
