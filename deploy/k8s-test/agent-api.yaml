@@ -26,6 +26,9 @@ spec:
           env:
             - name: PROFILE
               value: test-ali
+            # Internal deployment: never phone home with deployment stats.
+            - name: DO_NOT_TRACK
+              value: "true"
             - name: CORS_ALLOWED_ORIGINS
               value: WEB_ORIGINS
             - name: DATABASE_URL
