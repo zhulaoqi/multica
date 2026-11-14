@@ -898,6 +898,60 @@ func (q *Queries) ListAgentRuntimesByOwner(ctx context.Context, arg ListAgentRun
 	return items, nil
 }
 
+const listAgentRuntimesByOwners = `-- name: ListAgentRuntimesByOwners :many
+SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, custom_name, shared_with, max_concurrent_tasks FROM agent_runtime
+WHERE workspace_id = $1 AND owner_id = ANY($2::uuid[])
+ORDER BY created_at ASC
+`
+
+type ListAgentRuntimesByOwnersParams struct {
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Column2     []pgtype.UUID `json:"column_2"`
+}
+
+// Runtimes owned by an explicit set of members. Department leads use this to
+// include their team's machines in the runtime list without widening the
+// owner/admin contract — callers mark the added rows read-only.
+func (q *Queries) ListAgentRuntimesByOwners(ctx context.Context, arg ListAgentRuntimesByOwnersParams) ([]AgentRuntime, error) {
+	rows, err := q.db.Query(ctx, listAgentRuntimesByOwners, arg.WorkspaceID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentRuntime{}
+	for rows.Next() {
+		var i AgentRuntime
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.DaemonID,
+			&i.Name,
+			&i.RuntimeMode,
+			&i.Provider,
+			&i.Status,
+			&i.DeviceInfo,
+			&i.Metadata,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerID,
+			&i.LegacyDaemonID,
+			&i.Visibility,
+			&i.ProfileID,
+			&i.CustomName,
+			&i.SharedWith,
+			&i.MaxConcurrentTasks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDaemonCustomNames = `-- name: ListDaemonCustomNames :many
 SELECT custom_name FROM agent_runtime
 WHERE workspace_id = $1

@@ -317,6 +317,42 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 	return items, nil
 }
 
+const listOrgUnitMemberIDs = `-- name: ListOrgUnitMemberIDs :many
+SELECT user_id, org_unit_id
+FROM member
+WHERE workspace_id = $1
+ORDER BY user_id
+`
+
+type ListOrgUnitMemberIDsRow struct {
+	UserID    pgtype.UUID `json:"user_id"`
+	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+}
+
+// Every member's unit assignment, ids only. Manager surfaces (team runtime
+// visibility) walk the unit tree in Go and do not want the full roster's
+// names/emails — the org page's ListOrgUnitMembers is far too heavy for a
+// list endpoint that runs on every Runtimes page load.
+func (q *Queries) ListOrgUnitMemberIDs(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitMemberIDsRow, error) {
+	rows, err := q.db.Query(ctx, listOrgUnitMemberIDs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgUnitMemberIDsRow{}
+	for rows.Next() {
+		var i ListOrgUnitMemberIDsRow
+		if err := rows.Scan(&i.UserID, &i.OrgUnitID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgUnitMembers = `-- name: ListOrgUnitMembers :many
 SELECT m.user_id, m.org_unit_id, u.name, u.email, u.avatar_url
 FROM member m

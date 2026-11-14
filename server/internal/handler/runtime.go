@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,12 @@ type AgentRuntimeResponse struct {
 	LastSeenAt         *string `json:"last_seen_at"`
 	CreatedAt          string  `json:"created_at"`
 	UpdatedAt          string  `json:"updated_at"`
+	// ReadOnly marks a runtime that appears in the list only because the
+	// caller leads the department its owner belongs to. Such rows expose
+	// status metadata so a lead can see their team's machines, but the
+	// per-runtime read/write gates stay owner-only: clients must not offer
+	// detail navigation or management actions for them.
+	ReadOnly bool `json:"read_only"`
 }
 
 func runtimeToResponse(rt db.AgentRuntime) AgentRuntimeResponse {
@@ -1250,6 +1257,7 @@ func (h *Handler) ListAgentRuntimes(w http.ResponseWriter, r *http.Request) {
 
 	var runtimes []db.AgentRuntime
 	var err error
+	readOnly := map[pgtype.UUID]bool{}
 
 	if ownerFilter := r.URL.Query().Get("owner"); ownerFilter == "me" {
 		runtimes, err = h.Queries.ListAgentRuntimesByOwner(r.Context(), db.ListAgentRuntimesByOwnerParams{
@@ -1266,19 +1274,117 @@ func (h *Handler) ListAgentRuntimes(w http.ResponseWriter, r *http.Request) {
 			WorkspaceID: parseUUID(workspaceID),
 			OwnerID:     parseUUID(userID),
 		})
+		if err == nil {
+			runtimes = h.appendTeamRuntimes(r, workspaceID, member.UserID, runtimes, readOnly)
+		}
 	}
 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list runtimes")
 		return
 	}
+	sort.SliceStable(runtimes, func(i, j int) bool {
+		return runtimes[i].CreatedAt.Time.Before(runtimes[j].CreatedAt.Time)
+	})
 
 	resp := make([]AgentRuntimeResponse, len(runtimes))
 	for i, rt := range runtimes {
 		resp[i] = runtimeToResponse(rt)
+		resp[i].ReadOnly = readOnly[rt.ID]
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// appendTeamRuntimes adds the machines owned by members of the departments the
+// caller leads. Department leads need to see their team's runtimes in the list;
+// nothing else widens: rows that were not already visible are marked read-only,
+// and every per-runtime handler keeps its owner/admin gate. A lookup failure is
+// logged and ignored — the caller still gets their own visible runtimes.
+func (h *Handler) appendTeamRuntimes(
+	r *http.Request,
+	workspaceID string,
+	userID pgtype.UUID,
+	runtimes []db.AgentRuntime,
+	readOnly map[pgtype.UUID]bool,
+) []db.AgentRuntime {
+	teamOwnerIDs := h.orgTeamMemberIDs(r.Context(), parseUUID(workspaceID), userID)
+	if len(teamOwnerIDs) == 0 {
+		return runtimes
+	}
+	teamRuntimes, err := h.Queries.ListAgentRuntimesByOwners(r.Context(), db.ListAgentRuntimesByOwnersParams{
+		WorkspaceID: parseUUID(workspaceID),
+		Column2:     teamOwnerIDs,
+	})
+	if err != nil {
+		slog.Error("list team runtimes failed", "error", err)
+		return runtimes
+	}
+	known := make(map[pgtype.UUID]bool, len(runtimes))
+	for _, rt := range runtimes {
+		known[rt.ID] = true
+	}
+	for _, rt := range teamRuntimes {
+		if known[rt.ID] {
+			continue
+		}
+		known[rt.ID] = true
+		readOnly[rt.ID] = true
+		runtimes = append(runtimes, rt)
+	}
+	return runtimes
+}
+
+// orgTeamMemberIDs returns the member ids placed in any department the user
+// leads, including every descendant department, excluding the user. It walks
+// the unit tree in Go because the tree is small and ListOrgUnitMemberIDs is a
+// lean id-only query; loading the full roster for a list endpoint would drag
+// names and emails along.
+func (h *Handler) orgTeamMemberIDs(ctx context.Context, workspaceID, userID pgtype.UUID) []pgtype.UUID {
+	if !userID.Valid {
+		return nil
+	}
+	units, err := h.Queries.ListOrgUnits(ctx, workspaceID)
+	if err != nil {
+		slog.Error("list org units failed", "error", err)
+		return nil
+	}
+	children := make(map[pgtype.UUID][]pgtype.UUID, len(units))
+	var stack []pgtype.UUID
+	for _, unit := range units {
+		if unit.LeadUserID == userID {
+			stack = append(stack, unit.ID)
+		}
+		if unit.ParentID.Valid {
+			children[unit.ParentID] = append(children[unit.ParentID], unit.ID)
+		}
+	}
+	if len(stack) == 0 {
+		return nil
+	}
+	subtree := make(map[pgtype.UUID]bool, len(units))
+	for len(stack) > 0 {
+		id := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if subtree[id] {
+			continue
+		}
+		subtree[id] = true
+		stack = append(stack, children[id]...)
+	}
+
+	assignments, err := h.Queries.ListOrgUnitMemberIDs(ctx, workspaceID)
+	if err != nil {
+		slog.Error("list org unit member ids failed", "error", err)
+		return nil
+	}
+	ids := make([]pgtype.UUID, 0, len(assignments))
+	for _, row := range assignments {
+		if row.OrgUnitID.Valid && subtree[row.OrgUnitID] && row.UserID != userID {
+			ids = append(ids, row.UserID)
+		}
+	}
+	return ids
 }
 
 // DeleteAgentRuntime deletes a runtime after permission and dependency checks.

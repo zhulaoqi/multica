@@ -17,6 +17,14 @@ WHERE workspace_id = $1
   AND (owner_id = $2 OR visibility = 'public' OR (visibility = 'private' AND $2 = ANY(shared_with)))
 ORDER BY created_at ASC;
 
+-- name: ListAgentRuntimesByOwners :many
+-- Runtimes owned by an explicit set of members. Department leads use this to
+-- include their team's machines in the runtime list without widening the
+-- owner/admin contract — callers mark the added rows read-only.
+SELECT * FROM agent_runtime
+WHERE workspace_id = $1 AND owner_id = ANY($2::uuid[])
+ORDER BY created_at ASC;
+
 -- name: GetAgentRuntime :one
 SELECT * FROM agent_runtime
 WHERE id = $1;

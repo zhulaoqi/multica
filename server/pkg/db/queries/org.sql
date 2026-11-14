@@ -111,6 +111,16 @@ JOIN "user" u ON u.id = m.user_id
 WHERE m.workspace_id = $1
 ORDER BY u.name;
 
+-- name: ListOrgUnitMemberIDs :many
+-- Every member's unit assignment, ids only. Manager surfaces (team runtime
+-- visibility) walk the unit tree in Go and do not want the full roster's
+-- names/emails — the org page's ListOrgUnitMembers is far too heavy for a
+-- list endpoint that runs on every Runtimes page load.
+SELECT user_id, org_unit_id
+FROM member
+WHERE workspace_id = $1
+ORDER BY user_id;
+
 -- name: SetMemberOrgUnit :exec
 UPDATE member
 SET org_unit_id = $3
