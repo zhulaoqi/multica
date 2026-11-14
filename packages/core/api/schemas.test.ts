@@ -77,6 +77,7 @@ import {
   EMPTY_ISSUE_STATUS_ENTRY,
 } from "./schemas";
 import { IssueUnreadPageSchema, EMPTY_ISSUE_UNREAD_PAGE } from "./schemas";
+import { OperatorOverviewSchema, EMPTY_OPERATOR_OVERVIEW } from "./schemas";
 import { parseWithFallback } from "./schema";
 
 describe("IssueUnreadPageSchema", () => {
@@ -2491,5 +2492,50 @@ describe("task usage credits", () => {
     });
     expect(parsed.usage).toHaveLength(1);
     expect(parsed.usage?.[0]?.credits_micros).toBeUndefined();
+  });
+});
+
+describe("OperatorOverviewSchema", () => {
+  it("keeps a workspace row when optional counts are missing", () => {
+    const parsed = OperatorOverviewSchema.parse({
+      workspaces: [{ id: "w1", slug: "acme", name: "Acme" }],
+    });
+    expect(parsed.workspaces[0]?.owner_emails).toEqual([]);
+    expect(parsed.workspaces[0]?.channels).toEqual([]);
+    expect(parsed.workspaces[0]?.usage_7d.task_count).toBe(0);
+  });
+
+  it("keeps unknown channel types as strings", () => {
+    const parsed = OperatorOverviewSchema.parse({
+      workspaces: [
+        {
+          id: "w1",
+          channels: [{ type: "wechat-work", active: 2, revoked: 0 }],
+        },
+      ],
+    });
+    expect(parsed.workspaces[0]?.channels[0]?.type).toBe("wechat-work");
+  });
+
+  it("returns the empty overview instead of throwing on malformed payloads", () => {
+    const parsed = parseWithFallback(
+      { workspaces: "not-a-list" },
+      OperatorOverviewSchema,
+      EMPTY_OPERATOR_OVERVIEW,
+      { endpoint: "GET /api/operator/overview" },
+    );
+    expect(parsed).toEqual(EMPTY_OPERATOR_OVERVIEW);
+  });
+});
+
+describe("UserSchema is_operator", () => {
+  it("defaults to false for older servers", () => {
+    const parsed = UserSchema.parse({ id: "u1" });
+    expect(parsed.is_operator).toBe(false);
+  });
+
+  it("keeps a true flag", () => {
+    const parsed = UserSchema.parse({ id: "u1", is_operator: true });
+    expect(parsed.is_operator).toBe(true);
   });
 });

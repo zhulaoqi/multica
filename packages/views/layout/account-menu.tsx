@@ -7,6 +7,7 @@ import {
   Monitor,
   Moon,
   Palette,
+  Shield,
   Sun,
   User,
 } from "@multica/ui/icons";
@@ -34,6 +35,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { useLogout } from "../auth";
 import { useLanguageSwitch } from "../common/use-language-switch";
 import { useT } from "../i18n";
+import { isDesktopShell } from "../platform";
 import { AppLink } from "../navigation";
 import { RAIL_ICON_BUTTON_CLASS } from "./rail-styles";
 
@@ -97,6 +99,12 @@ export function AccountMenu() {
             <User />
             {t(($) => $.account.profile)}
           </DropdownMenuItem>
+          {user?.is_operator && !isDesktopShell() ? (
+            <DropdownMenuItem render={<AppLink href="/admin" />}>
+              <Shield />
+              {t(($) => $.account.console)}
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Palette />

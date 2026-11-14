@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "プラットフォーム管理",
+    "back": "ワークスペースに戻る",
+    "refresh": "更新",
+    "loadFailed": "概要を読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "ワークスペースはまだありません。"
+  },
+  "summary": {
+    "workspaces": "ワークスペース",
+    "members": "メンバー",
+    "agents": "エージェント",
+    "activeBots": "稼働中の bot",
+    "cost7d": "コスト · 7 日"
+  },
+  "table": {
+    "workspace": "ワークスペース",
+    "owners": "所有者",
+    "members": "メンバー",
+    "agents": "エージェント",
+    "channels": "チャネル bot",
+    "usage7d": "使用量 · 7 日",
+    "actions": "操作",
+    "none": "なし",
+    "revokedCount": "{{revoked}} 件停止",
+    "roleBreakdown": "{{owners}} 所有者 · {{admins}} 管理者 · {{members}} メンバー",
+    "usageBreakdown": "{{tasks}} タスク · {{tokens}} トークン",
+    "channelsAction": "チャネル",
+    "membersAction": "メンバー",
+    "usageAction": "使用量"
+  },
+  "channels": {
+    "feishu": "Feishu",
+    "slack": "Slack",
+    "dingtalk": "DingTalk",
+    "wecom": "WeCom",
+    "telegram": "Telegram"
+  }
+}

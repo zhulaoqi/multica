@@ -514,6 +514,9 @@ import {
   EMPTY_SHARE_LINK,
   EMPTY_SHARE_LINK_INFO,
   EMPTY_JOIN_SHARE_LINK_RESPONSE,
+  OperatorOverviewSchema,
+  EMPTY_OPERATOR_OVERVIEW,
+  type OperatorOverview,
   type IssueView,
   type IssueViewPreference,
   type CreateIssueViewRequest,
@@ -1066,6 +1069,16 @@ export class ApiClient {
     const raw = await this.fetch<unknown>("/api/me");
     return parseWithFallback(raw, UserSchema, EMPTY_USER, {
       endpoint: "GET /api/me",
+    });
+  }
+
+  /** Cross-workspace overview for the platform console. 403 for anyone but
+   *  the developer account; the console never renders partial server state
+   *  on failure. */
+  async getOperatorOverview(): Promise<OperatorOverview> {
+    const raw = await this.fetch<unknown>("/api/operator/overview");
+    return parseWithFallback(raw, OperatorOverviewSchema, EMPTY_OPERATOR_OVERVIEW, {
+      endpoint: "GET /api/operator/overview",
     });
   }
 

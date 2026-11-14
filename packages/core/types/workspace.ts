@@ -83,6 +83,11 @@ export interface User {
    * so the client must not auto-open the card (it would reappear forever).
    */
   whats_new_seen_version?: string | null;
+  /**
+   * True only on `/api/me` for the developer account's own session. Gates
+   * the platform console (`/admin`); never true for a normal member.
+   */
+  is_operator: boolean;
   created_at: string;
   updated_at: string;
 }

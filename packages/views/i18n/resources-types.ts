@@ -28,6 +28,7 @@ import type usage from "../locales/en/usage.json";
 import type squads from "../locales/en/squads.json";
 import type billing from "../locales/en/billing.json";
 import type org from "../locales/en/org.json";
+import type admin from "../locales/en/admin.json";
 
 // Module augmentation enables i18next v26 selector API across the monorepo:
 // `t($ => $.signin.title)` resolves to the value in en/auth.json.
@@ -70,6 +71,7 @@ declare global {
     squads: typeof squads;
     billing: typeof billing;
     org: typeof org;
+    admin: typeof admin;
   }
 }
 

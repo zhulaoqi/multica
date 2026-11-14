@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "플랫폼 콘솔",
+    "back": "워크스페이스로 돌아가기",
+    "refresh": "새로고침",
+    "loadFailed": "개요를 불러오지 못했습니다.",
+    "retry": "재시도",
+    "empty": "아직 워크스페이스가 없습니다."
+  },
+  "summary": {
+    "workspaces": "워크스페이스",
+    "members": "멤버",
+    "agents": "에이전트",
+    "activeBots": "활성 bot",
+    "cost7d": "비용 · 7일"
+  },
+  "table": {
+    "workspace": "워크스페이스",
+    "owners": "소유자",
+    "members": "멤버",
+    "agents": "에이전트",
+    "channels": "채널 bot",
+    "usage7d": "사용량 · 7일",
+    "actions": "작업",
+    "none": "없음",
+    "revokedCount": "{{revoked}}개 해제됨",
+    "roleBreakdown": "{{owners}} 소유자 · {{admins}} 관리자 · {{members}} 멤버",
+    "usageBreakdown": "{{tasks}} 작업 · {{tokens}} 토큰",
+    "channelsAction": "채널",
+    "membersAction": "멤버",
+    "usageAction": "사용량"
+  },
+  "channels": {
+    "feishu": "Feishu",
+    "slack": "Slack",
+    "dingtalk": "DingTalk",
+    "wecom": "WeCom",
+    "telegram": "Telegram"
+  }
+}

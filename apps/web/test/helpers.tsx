@@ -14,6 +14,7 @@ export const mockUser: User = {
   language: null,
   timezone: null,
   profile_description: "",
+  is_operator: false,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };

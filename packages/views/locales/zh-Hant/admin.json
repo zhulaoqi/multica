@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "平台控制台",
+    "back": "返回工作區",
+    "refresh": "重新整理",
+    "loadFailed": "無法載入總覽。",
+    "retry": "重試",
+    "empty": "尚無工作區。"
+  },
+  "summary": {
+    "workspaces": "工作區",
+    "members": "成員",
+    "agents": "Agent",
+    "activeBots": "活躍 bot",
+    "cost7d": "成本 · 7 天"
+  },
+  "table": {
+    "workspace": "工作區",
+    "owners": "擁有者",
+    "members": "成員",
+    "agents": "Agent",
+    "channels": "頻道 bot",
+    "usage7d": "用量 · 7 天",
+    "actions": "操作",
+    "none": "無",
+    "revokedCount": "{{revoked}} 個已撤銷",
+    "roleBreakdown": "{{owners}} 擁有者 · {{admins}} 管理員 · {{members}} 成員",
+    "usageBreakdown": "{{tasks}} 次任務 · {{tokens}} tokens",
+    "channelsAction": "頻道",
+    "membersAction": "成員",
+    "usageAction": "用量"
+  },
+  "channels": {
+    "feishu": "飛書",
+    "slack": "Slack",
+    "dingtalk": "釘釘",
+    "wecom": "企業微信",
+    "telegram": "Telegram"
+  }
+}

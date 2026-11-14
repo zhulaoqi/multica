@@ -145,6 +145,7 @@
   "account": {
     "trigger": "帳戶",
     "profile": "個人資料",
+    "console": "管理後台",
     "theme": "主題",
     "themes": {
       "light": "淺色",

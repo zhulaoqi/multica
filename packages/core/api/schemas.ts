@@ -2734,6 +2734,7 @@ export const UserSchema = z.object({
   // No default: absence is the "server cannot track" signal. A malformed
   // value degrades to that state instead of discarding the whole user.
   whats_new_seen_version: z.string().nullable().optional().catch(undefined),
+  is_operator: z.boolean().default(false).catch(false),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();
@@ -2748,6 +2749,7 @@ export const EMPTY_USER: User = {
   language: null,
   profile_description: "",
   timezone: null,
+  is_operator: false,
   created_at: "",
   updated_at: "",
 };
@@ -4042,4 +4044,67 @@ export const EMPTY_LARK_INSTALLATION: LarkInstallation = {
   installed_at: "",
   created_at: "",
   updated_at: "",
+};
+
+// --- Platform console (operator) ---
+// `GET /api/operator/overview` is read-only and only reachable by the
+// developer account. Every field carries a default: a workspace the console
+// cannot fully account for still gets a row instead of vanishing from the
+// table, and a drifted payload degrades to an empty overview rather than a
+// blank page.
+
+export const OperatorChannelCountSchema = z.object({
+  type: z.string().default(""),
+  active: z.number().default(0),
+  revoked: z.number().default(0),
+}).loose();
+
+export const OperatorUsageSummarySchema = z.object({
+  task_count: z.number().default(0),
+  input_tokens: z.number().default(0),
+  output_tokens: z.number().default(0),
+  cache_read_tokens: z.number().default(0),
+  cache_write_tokens: z.number().default(0),
+  /** 1e-10 USD per tick. */
+  cost_usd_ticks: z.number().default(0),
+}).loose();
+
+export type OperatorChannelCount = z.infer<typeof OperatorChannelCountSchema>;
+export type OperatorUsageSummary = z.infer<typeof OperatorUsageSummarySchema>;
+
+export const EMPTY_OPERATOR_USAGE_SUMMARY: OperatorUsageSummary = {
+  task_count: 0,
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_tokens: 0,
+  cache_write_tokens: 0,
+  cost_usd_ticks: 0,
+};
+
+export const OperatorWorkspaceOverviewSchema = z.object({
+  id: z.string().default(""),
+  slug: z.string().default(""),
+  name: z.string().default(""),
+  created_at: z.string().default(""),
+  owner_emails: z.array(z.string()).default([]),
+  owner_count: z.number().default(0),
+  admin_count: z.number().default(0),
+  member_count: z.number().default(0),
+  agent_count: z.number().default(0),
+  channels: z.array(OperatorChannelCountSchema).default([]),
+  usage_7d: OperatorUsageSummarySchema.default(EMPTY_OPERATOR_USAGE_SUMMARY),
+}).loose();
+
+export type OperatorWorkspaceOverview = z.infer<typeof OperatorWorkspaceOverviewSchema>;
+
+export const OperatorOverviewSchema = z.object({
+  workspaces: z.array(OperatorWorkspaceOverviewSchema).default([]),
+  generated_at: z.string().default(""),
+}).loose();
+
+export type OperatorOverview = z.infer<typeof OperatorOverviewSchema>;
+
+export const EMPTY_OPERATOR_OVERVIEW: OperatorOverview = {
+  workspaces: [],
+  generated_at: "",
 };

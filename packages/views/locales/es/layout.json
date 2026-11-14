@@ -149,6 +149,7 @@
   "account": {
     "trigger": "Cuenta",
     "profile": "Perfil",
+    "console": "Consola de plataforma",
     "theme": "Tema",
     "themes": {
       "light": "Claro",

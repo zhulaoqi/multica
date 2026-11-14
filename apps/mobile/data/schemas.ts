@@ -499,6 +499,7 @@ export const UserSchema: z.ZodType<User> = z.object({
   language: z.string().nullable().default(null),
   profile_description: z.string().default(""),
   timezone: z.string().nullable().default(null),
+  is_operator: z.boolean().default(false).catch(false),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 }).loose();
@@ -516,6 +517,7 @@ export const EMPTY_USER: User = {
   language: null,
   profile_description: "",
   timezone: null,
+  is_operator: false,
   created_at: "",
   updated_at: "",
 };

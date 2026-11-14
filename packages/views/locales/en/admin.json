@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Platform console",
+    "back": "Back to workspace",
+    "refresh": "Refresh",
+    "loadFailed": "Could not load the overview.",
+    "retry": "Retry",
+    "empty": "No workspaces yet."
+  },
+  "summary": {
+    "workspaces": "Workspaces",
+    "members": "Members",
+    "agents": "Agents",
+    "activeBots": "Active bots",
+    "cost7d": "Cost · 7d"
+  },
+  "table": {
+    "workspace": "Workspace",
+    "owners": "Owners",
+    "members": "Members",
+    "agents": "Agents",
+    "channels": "Channel bots",
+    "usage7d": "Usage · 7d",
+    "actions": "Actions",
+    "none": "None",
+    "revokedCount": "{{revoked}} revoked",
+    "roleBreakdown": "{{owners}} owners · {{admins}} admins · {{members}} members",
+    "usageBreakdown": "{{tasks}} tasks · {{tokens}} tokens",
+    "channelsAction": "Channels",
+    "membersAction": "Members",
+    "usageAction": "Usage"
+  },
+  "channels": {
+    "feishu": "Feishu",
+    "slack": "Slack",
+    "dingtalk": "DingTalk",
+    "wecom": "WeCom",
+    "telegram": "Telegram"
+  }
+}

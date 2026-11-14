@@ -92,6 +92,12 @@ function LoginPageContent() {
       router.replace(nextUrl);
       return;
     }
+    // The developer account's workspace is the console; its member pages are
+    // reached from there.
+    if (user.is_operator) {
+      router.replace("/admin");
+      return;
+    }
     // Fetch instead of reading the cache: on a fresh page load the cache is
     // cold, and `getQueryData() ?? []` would misroute a user who does have
     // workspaces to /workspaces/new. On fetch failure fall back to [] —

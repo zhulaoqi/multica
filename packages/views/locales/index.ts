@@ -25,6 +25,7 @@ import enUi from "./en/ui.json";
 import enSquads from "./en/squads.json";
 import enBilling from "./en/billing.json";
 import enOrg from "./en/org.json";
+import enAdmin from "./en/admin.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
@@ -51,6 +52,7 @@ import zhHansUi from "./zh-Hans/ui.json";
 import zhHansSquads from "./zh-Hans/squads.json";
 import zhHansBilling from "./zh-Hans/billing.json";
 import zhHansOrg from "./zh-Hans/org.json";
+import zhHansAdmin from "./zh-Hans/admin.json";
 import zhHantCommon from "./zh-Hant/common.json";
 import zhHantAuth from "./zh-Hant/auth.json";
 import zhHantSettings from "./zh-Hant/settings.json";
@@ -77,6 +79,7 @@ import zhHantUi from "./zh-Hant/ui.json";
 import zhHantSquads from "./zh-Hant/squads.json";
 import zhHantBilling from "./zh-Hant/billing.json";
 import zhHantOrg from "./zh-Hant/org.json";
+import zhHantAdmin from "./zh-Hant/admin.json";
 import koCommon from "./ko/common.json";
 import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
@@ -103,6 +106,7 @@ import koUi from "./ko/ui.json";
 import koSquads from "./ko/squads.json";
 import koBilling from "./ko/billing.json";
 import koOrg from "./ko/org.json";
+import koAdmin from "./ko/admin.json";
 import jaCommon from "./ja/common.json";
 import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
@@ -129,6 +133,7 @@ import jaUi from "./ja/ui.json";
 import jaSquads from "./ja/squads.json";
 import jaBilling from "./ja/billing.json";
 import jaOrg from "./ja/org.json";
+import jaAdmin from "./ja/admin.json";
 import frCommon from "./fr/common.json";
 import frAuth from "./fr/auth.json";
 import frSettings from "./fr/settings.json";
@@ -155,6 +160,7 @@ import frUi from "./fr/ui.json";
 import frSquads from "./fr/squads.json";
 import frBilling from "./fr/billing.json";
 import frOrg from "./fr/org.json";
+import frAdmin from "./fr/admin.json";
 import esCommon from "./es/common.json";
 import esAuth from "./es/auth.json";
 import esSettings from "./es/settings.json";
@@ -181,6 +187,7 @@ import esUi from "./es/ui.json";
 import esSquads from "./es/squads.json";
 import esBilling from "./es/billing.json";
 import esOrg from "./es/org.json";
+import esAdmin from "./es/admin.json";
 
 // Single source of truth for the resource bundle. Both apps (web layout +
 // desktop App.tsx) import from here so adding a locale or namespace happens
@@ -212,6 +219,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: enUi,
     squads: enSquads,
     org: enOrg,
+    admin: enAdmin,
     billing: enBilling,
   },
   "zh-Hans": {
@@ -240,6 +248,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: zhHansUi,
     squads: zhHansSquads,
     org: zhHansOrg,
+    admin: zhHansAdmin,
     billing: zhHansBilling,
   },
   "zh-Hant": {
@@ -268,6 +277,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: zhHantUi,
     squads: zhHantSquads,
     org: zhHantOrg,
+    admin: zhHantAdmin,
     billing: zhHantBilling,
   },
   ko: {
@@ -296,6 +306,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: koUi,
     squads: koSquads,
     org: koOrg,
+    admin: koAdmin,
     billing: koBilling,
   },
   ja: {
@@ -324,6 +335,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: jaUi,
     squads: jaSquads,
     org: jaOrg,
+    admin: jaAdmin,
     billing: jaBilling,
   },
   fr: {
@@ -352,6 +364,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: frUi,
     squads: frSquads,
     org: frOrg,
+    admin: frAdmin,
     billing: frBilling,
   },
   es: {
@@ -380,6 +393,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: esUi,
     squads: esSquads,
     org: esOrg,
+    admin: esAdmin,
     billing: esBilling,
   },
 };

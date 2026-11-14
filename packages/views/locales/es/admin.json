@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "Consola de plataforma",
+    "back": "Volver al espacio de trabajo",
+    "refresh": "Actualizar",
+    "loadFailed": "No se pudo cargar la vista general.",
+    "retry": "Reintentar",
+    "empty": "Aún no hay espacios de trabajo."
+  },
+  "summary": {
+    "workspaces": "Espacios",
+    "members": "Miembros",
+    "agents": "Agentes",
+    "activeBots": "Bots activos",
+    "cost7d": "Coste · 7 d"
+  },
+  "table": {
+    "workspace": "Espacio de trabajo",
+    "owners": "Propietarios",
+    "members": "Miembros",
+    "agents": "Agentes",
+    "channels": "Bots de canal",
+    "usage7d": "Uso · 7 d",
+    "actions": "Acciones",
+    "none": "Ninguno",
+    "revokedCount": "{{revoked}} revocados",
+    "roleBreakdown": "{{owners}} propietarios · {{admins}} administradores · {{members}} miembros",
+    "usageBreakdown": "{{tasks}} tareas · {{tokens}} tokens",
+    "channelsAction": "Canales",
+    "membersAction": "Miembros",
+    "usageAction": "Uso"
+  },
+  "channels": {
+    "feishu": "Feishu",
+    "slack": "Slack",
+    "dingtalk": "DingTalk",
+    "wecom": "WeCom",
+    "telegram": "Telegram"
+  }
+}

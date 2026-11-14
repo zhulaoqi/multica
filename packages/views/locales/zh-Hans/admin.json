@@ -1,0 +1,40 @@
+{
+  "page": {
+    "title": "平台控制台",
+    "back": "返回工作区",
+    "refresh": "刷新",
+    "loadFailed": "概览加载失败。",
+    "retry": "重试",
+    "empty": "还没有工作区。"
+  },
+  "summary": {
+    "workspaces": "工作区",
+    "members": "成员",
+    "agents": "Agent",
+    "activeBots": "活跃 bot",
+    "cost7d": "成本 · 7 天"
+  },
+  "table": {
+    "workspace": "工作区",
+    "owners": "所有者",
+    "members": "成员",
+    "agents": "Agent",
+    "channels": "渠道 bot",
+    "usage7d": "用量 · 7 天",
+    "actions": "操作",
+    "none": "无",
+    "revokedCount": "{{revoked}} 个已撤销",
+    "roleBreakdown": "{{owners}} 所有者 · {{admins}} 管理员 · {{members}} 成员",
+    "usageBreakdown": "{{tasks}} 次任务 · {{tokens}} tokens",
+    "channelsAction": "渠道",
+    "membersAction": "成员",
+    "usageAction": "用量"
+  },
+  "channels": {
+    "feishu": "飞书",
+    "slack": "Slack",
+    "dingtalk": "钉钉",
+    "wecom": "企业微信",
+    "telegram": "Telegram"
+  }
+}

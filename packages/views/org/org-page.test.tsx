@@ -85,6 +85,7 @@ function signIn(userID: string) {
       language: null,
       profile_description: "",
       timezone: null,
+      is_operator: false,
       created_at: new Date(NOW).toISOString(),
       updated_at: new Date(NOW).toISOString(),
     },

@@ -150,6 +150,7 @@
   "account": {
     "trigger": "Account",
     "profile": "Profile",
+    "console": "Platform console",
     "theme": "Theme",
     "themes": {
       "light": "Light",
