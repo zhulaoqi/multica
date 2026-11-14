@@ -9,8 +9,7 @@ import { CliInstallInstructions } from "./cli-install-instructions";
 
 const TEST_RESOURCES = { en: { common: enCommon, onboarding: enOnboarding } };
 
-const WINDOWS_CMD =
-  "irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex";
+const WINDOWS_CMD = `irm ${window.location.origin}/install/install.ps1 | iex`;
 
 const clipboard = vi.hoisted(() => ({ copyText: vi.fn() }));
 vi.mock("@multica/ui/lib/clipboard", () => ({ copyText: clipboard.copyText }));

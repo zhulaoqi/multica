@@ -69,8 +69,7 @@ const wsEventState = vi.hoisted(() => ({
   reconnect: null as (() => void) | null,
 }));
 
-const WINDOWS_CMD =
-  "irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex";
+const WINDOWS_CMD = `irm ${window.location.origin}/install/install.ps1 | iex`;
 
 vi.mock("@multica/core/realtime", () => ({
   useWSEvent: (_event: string, handler: (payload: unknown) => void) => {
@@ -82,6 +81,7 @@ vi.mock("@multica/core/realtime", () => ({
 const navigationState = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("../../navigation", () => ({
   useNavigation: () => ({ push: navigationState.push }),
+  useAppOrigin: () => null,
 }));
 
 function makeRuntime(overrides: Partial<AgentRuntime> = {}): AgentRuntime {

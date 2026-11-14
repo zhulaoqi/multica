@@ -40,6 +40,11 @@ const allowedDevOrigins = process.env.CORS_ALLOWED_ORIGINS
 
 const nextConfig: NextConfig = {
   ...(process.env.STANDALONE === "true" ? { output: "standalone" as const } : {}),
+  // The install route reads these at runtime, so the standalone image has to
+  // carry them; they are not statically imported anywhere.
+  outputFileTracingIncludes: {
+    "/install/[script]": ["./install-scripts/**"],
+  },
   // Feishu organisation sync is a single long POST (the directory crawl takes
   // minutes). Next's rewrite proxy defaults to 30s and aborted every in-UI sync
   // half-way, so the browser saw a 500 while the API logged a cancelled request.

@@ -1,10 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import {
-  CLI_INSTALL_COMMANDS,
-  CliInstallCommand,
-} from "./cli-install-command";
+import { CliInstallCommand, cliInstallCommands } from "./cli-install-command";
+
+const COMMANDS = cliInstallCommands(window.location.origin);
 
 const LABELS = {
   group: "Choose your platform",
@@ -20,6 +19,22 @@ function renderSwitch() {
   );
 }
 
+describe("cliInstallCommands", () => {
+  it("installs from the deployment origin, not a public code host", () => {
+    expect(cliInstallCommands("https://multica.internal")).toEqual({
+      macosLinux:
+        "curl -fsSL https://multica.internal/install/install.sh | bash",
+      windows: "irm https://multica.internal/install/install.ps1 | iex",
+    });
+  });
+
+  it("tolerates a trailing slash on the origin", () => {
+    expect(cliInstallCommands("https://multica.internal/").macosLinux).toBe(
+      "curl -fsSL https://multica.internal/install/install.sh | bash",
+    );
+  });
+});
+
 describe("CliInstallCommand", () => {
   it("defaults to the macOS / Linux installer", () => {
     renderSwitch();
@@ -32,9 +47,9 @@ describe("CliInstallCommand", () => {
       "true",
     );
     expect(
-      screen.getByText(CLI_INSTALL_COMMANDS.macosLinux),
+      screen.getByText(COMMANDS.macosLinux),
     ).toBeInTheDocument();
-    expect(screen.queryByText(CLI_INSTALL_COMMANDS.windows)).toBeNull();
+    expect(screen.queryByText(COMMANDS.windows)).toBeNull();
   });
 
   it("hands the Windows command to the row when that tab is picked", async () => {
@@ -47,8 +62,8 @@ describe("CliInstallCommand", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText(CLI_INSTALL_COMMANDS.windows)).toBeInTheDocument();
-    expect(screen.queryByText(CLI_INSTALL_COMMANDS.macosLinux)).toBeNull();
+    expect(screen.getByText(COMMANDS.windows)).toBeInTheDocument();
+    expect(screen.queryByText(COMMANDS.macosLinux)).toBeNull();
   });
 
   // A real tablist: arrow keys move between platforms without a click.
@@ -59,6 +74,6 @@ describe("CliInstallCommand", () => {
     await user.click(screen.getByRole("tab", { name: "macOS / Linux" }));
     await user.keyboard("{ArrowRight}");
 
-    expect(screen.getByText(CLI_INSTALL_COMMANDS.windows)).toBeInTheDocument();
+    expect(screen.getByText(COMMANDS.windows)).toBeInTheDocument();
   });
 });

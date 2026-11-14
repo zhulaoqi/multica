@@ -83,3 +83,7 @@ __pycache__/
 perf-report/
 # The production example is a tracked template; `.env*` above would hide it.
 !apps/mobile/.env.production.example
+
+# CLI release assets are published into the web image at deploy time by
+# scripts/publish-cli-assets.sh, never committed.
+apps/web/public/releases/

@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@multica/ui/components/ui/tabs";
+import { useAppOrigin } from "../navigation";
 
 /**
  * The Multica CLI install commands, one per platform family.
@@ -14,17 +15,44 @@ import {
  * Three surfaces render install instructions — the runtimes "add computer"
  * dialog, onboarding's CLI card, and the landing download page. They read the
  * commands from here instead of each hardcoding a string, which is how Windows
- * silently went missing from all of them while scripts/install.ps1 sat in the
- * repo. The scripts' own headers are the source of truth.
+ * silently went missing from all of them while the PowerShell installer sat in
+ * the repo. The deployment's web app serves both scripts, so the command only
+ * needs the origin it is shown on; nothing points at a public code host.
  */
-export const CLI_INSTALL_COMMANDS = {
-  macosLinux:
-    "curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash",
-  windows:
-    "irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex",
+const INSTALL_PATHS = {
+  macosLinux: "/install/install.sh",
+  windows: "/install/install.ps1",
 } as const;
 
-export type CliInstallPlatform = keyof typeof CLI_INSTALL_COMMANDS;
+export type CliInstallPlatform = keyof typeof INSTALL_PATHS;
+
+/** Shell command that installs the CLI from the given deployment origin. */
+export function cliInstallCommands(
+  origin: string,
+): Record<CliInstallPlatform, string> {
+  const base = origin.replace(/\/+$/, "");
+  return {
+    macosLinux: `curl -fsSL ${base}${INSTALL_PATHS.macosLinux} | bash`,
+    windows: `irm ${base}${INSTALL_PATHS.windows} | iex`,
+  };
+}
+
+function subscribeToOriginChange(): () => void {
+  return () => {};
+}
+
+/**
+ * Origin the commands must target. On the web that is the page's own origin;
+ * inside the desktop app the renderer is loaded from `file://`, so the
+ * connected environment's app URL comes from the platform adapter instead.
+ * `useSyncExternalStore` keeps the server render and the hydrated render from
+ * disagreeing about the first value.
+ */
+function currentOrigin(appOrigin: string | null): string {
+  if (typeof window === "undefined") return "";
+  if (window.location.protocol === "file:") return appOrigin ?? "";
+  return window.location.origin;
+}
 
 /** Tab order. macOS / Linux stays first so the default matches the old single command. */
 const PLATFORMS = [
@@ -58,6 +86,14 @@ export function CliInstallCommand({
   classNames?: { list?: string; trigger?: string };
   children: (command: string) => ReactNode;
 }) {
+  const appOrigin = useAppOrigin();
+  const origin = useSyncExternalStore(
+    subscribeToOriginChange,
+    () => currentOrigin(appOrigin),
+    () => "",
+  );
+  const commands = cliInstallCommands(origin);
+
   return (
     <Tabs defaultValue={PLATFORMS[0]}>
       <TabsList
@@ -77,7 +113,7 @@ export function CliInstallCommand({
       </TabsList>
       {PLATFORMS.map((platform) => (
         <TabsContent key={platform} value={platform}>
-          {children(CLI_INSTALL_COMMANDS[platform])}
+          {children(commands[platform])}
         </TabsContent>
       ))}
     </Tabs>
