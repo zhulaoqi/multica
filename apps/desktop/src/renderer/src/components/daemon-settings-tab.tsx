@@ -174,11 +174,15 @@ export function DaemonSettingsTab() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                window.desktopAPI.openExternal(
-                  "https://github.com/multica-ai/multica#cli-installation",
-                )
-              }
+              onClick={() => {
+                // Same deployment, same docs site as the web app.
+                const config = window.desktopAPI.runtimeConfig;
+                if (!config.ok) return;
+                const appUrl = config.config.appUrl.replace(/\/+$/, "");
+                void window.desktopAPI.openExternal(
+                  `${appUrl}/docs/install-agent-runtime`,
+                );
+              }}
             >
               {t(($) => $.desktop.daemon.installation_guide)}
             </Button>

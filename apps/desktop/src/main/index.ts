@@ -19,6 +19,7 @@ import {
   resumeDaemonAfterAbortedUpdateInstall,
   setupDaemonManager,
 } from "./daemon-manager";
+import { cliDownloadBase } from "./cli-bootstrap";
 import { setupLocalDirectory } from "./local-directory";
 import { configureLinuxFileDialogs } from "./linux-file-dialog";
 import { openExternalSafely, downloadURLSafely } from "./external-url";
@@ -1052,6 +1053,13 @@ if (!gotTheLock) {
     setupDaemonManager(
       () => mainWindows.mostRecent(),
       () => mainWindows.all(),
+      {
+        // Published CLI builds sit next to the install scripts on the
+        // connected deployment, so installs never reach a public code host.
+        cliDownloadBase: runtimeConfigResult.ok
+          ? cliDownloadBase(runtimeConfigResult.config.appUrl)
+          : undefined,
+      },
     );
     setupLocalDirectory(() => mainWindows.mostRecent());
 

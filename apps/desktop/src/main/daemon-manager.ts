@@ -98,6 +98,9 @@ let statusPollInProgress = false;
 let cachedCliBinary: string | null | undefined = undefined;
 let cliResolvePromise: Promise<string | null> | null = null;
 let cachedCliBinaryVersion: string | null | undefined = undefined;
+// Where published CLI builds live for the connected deployment. Unset until
+// setupDaemonManager receives it from the loaded runtime config.
+let managedCliDownloadBase: string | undefined;
 // Set when a CLI version mismatch was detected but the running daemon is
 // busy executing tasks. The poll loop retries the check on each tick and
 // fires the restart once active_task_count drops to 0.
@@ -556,6 +559,7 @@ async function resolveCliBinary(): Promise<string | null> {
     try {
       const installed = await ensureManagedCli({
         forceInstall: existsSync(managed),
+        downloadBase: managedCliDownloadBase,
       });
       const version = await probeCliBinary(installed, "managed");
       if (version) {
@@ -1449,9 +1453,11 @@ export function setupDaemonManager(
     const window = windowGetter();
     return window ? [window] : [];
   },
+  options: { cliDownloadBase?: string } = {},
 ): void {
   getMainWindow = windowGetter;
   getStatusWindows = statusWindowsGetter;
+  managedCliDownloadBase = options.cliDownloadBase;
 
   ipcMain.handle("daemon:set-target-api-url", async (_e, url: string) => {
     const normalized = url || null;

@@ -14,8 +14,14 @@ import { selectPlatformReleaseAssetName } from "./cli-release-asset";
 // same-repo builds, but it can also repair or bootstrap a managed copy in
 // userData on first launch when the bundled binary is missing or unusable.
 
-const GITHUB_LATEST_BASE =
-  "https://github.com/multica-ai/multica/releases/latest/download";
+/**
+ * Release-asset directory for the connected deployment. The web app serves
+ * published CLI builds under `/releases/latest/download` next to the install
+ * scripts, so the desktop app never reaches a public code host.
+ */
+export function cliDownloadBase(appUrl: string): string {
+  return `${appUrl.replace(/\/+$/, "")}/releases/latest/download`;
+}
 
 function binaryName(): string {
   return process.platform === "win32" ? "multica.exe" : "multica";
@@ -44,8 +50,8 @@ async function downloadToFile(url: string, dest: string): Promise<void> {
 
 // Fetch goreleaser's published checksums.txt and parse it into a
 // filename → sha256 lookup. Format is `<hex>  <filename>` per line.
-async function fetchChecksums(): Promise<Map<string, string>> {
-  const url = `${GITHUB_LATEST_BASE}/checksums.txt`;
+async function fetchChecksums(base: string): Promise<Map<string, string>> {
+  const url = `${base}/checksums.txt`;
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) {
     throw new Error(
@@ -90,9 +96,9 @@ async function extractArchive(archive: string, dest: string): Promise<void> {
   await run("tar", ["-xf", archive, "-C", dest]);
 }
 
-async function installFresh(): Promise<string> {
+async function installFresh(downloadBase: string): Promise<string> {
   const target = managedCliPath();
-  const checksums = await fetchChecksums();
+  const checksums = await fetchChecksums(downloadBase);
   const assetName = selectPlatformReleaseAssetName(checksums.keys());
   const expectedChecksum = checksums.get(assetName);
   if (!expectedChecksum) {
@@ -100,7 +106,7 @@ async function installFresh(): Promise<string> {
       `no checksum for ${assetName} in checksums.txt — refusing to install unverified binary`,
     );
   }
-  const url = `${GITHUB_LATEST_BASE}/${assetName}`;
+  const url = `${downloadBase}/${assetName}`;
 
   const workDir = join(tmpdir(), `multica-cli-${Date.now()}`);
   await mkdir(workDir, { recursive: true });
@@ -149,9 +155,12 @@ async function installFresh(): Promise<string> {
  * the latest release asset for the current platform and installs it.
  */
 export async function ensureManagedCli(
-  options: { forceInstall?: boolean } = {},
+  options: { forceInstall?: boolean; downloadBase?: string } = {},
 ): Promise<string> {
   const target = managedCliPath();
   if (existsSync(target) && !options.forceInstall) return target;
-  return installFresh();
+  if (!options.downloadBase) {
+    throw new Error("no CLI download base for this deployment");
+  }
+  return installFresh(options.downloadBase);
 }
