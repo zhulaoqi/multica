@@ -18,6 +18,20 @@
       "queued": "排隊中",
       "idle": "閒置",
       "offline": "離線"
+    },
+    "interact": {
+      "hint": "按 {{key}} 與 {{name}} 聊天",
+      "chat": "聊天",
+      "task": "派任務",
+      "detail": "詳情",
+      "close": "關閉",
+      "task_placeholder": "描述要派給它的任務…",
+      "task_send": "傳送",
+      "task_more_options": "更多選項",
+      "cancel": "取消",
+      "task_error": "任務建立失敗，請重試。",
+      "task_error_agent_unavailable": "這個智能體暫時無法接任務。",
+      "task_error_issue_limit": "這個工作區的任務數已達上限。"
     }
   }
 }

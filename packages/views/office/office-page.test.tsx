@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
+import { forwardRef, useImperativeHandle } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@multica/core/i18n/react";
@@ -20,6 +21,17 @@ const room = vi.hoisted(() => ({
   sendMove: vi.fn(),
 }));
 const push = vi.hoisted(() => vi.fn());
+const canvas = vi.hoisted(() => ({
+  visitAgent: vi.fn(),
+  playEmote: vi.fn(),
+}));
+const openAgentChat = vi.hoisted(() => vi.fn());
+const quickCreate = vi.hoisted(() => vi.fn());
+const draftStore = vi.hoisted(() => ({
+  setAgent: vi.fn(),
+  setActiveMode: vi.fn(),
+}));
+const openModal = vi.hoisted(() => vi.fn());
 
 vi.mock("@multica/core/auth", () => ({
   useAuthStore: (select: (state: unknown) => unknown) =>
@@ -46,6 +58,25 @@ vi.mock("@multica/core/office", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@multica/core/office")>();
   return { ...actual, useOfficeRoom: () => room };
 });
+vi.mock("@multica/core/api", () => ({
+  api: { quickCreateIssue: quickCreate },
+  ApiError: class ApiError extends Error {
+    body: unknown;
+    constructor(message: string, body?: unknown) {
+      super(message);
+      this.body = body;
+    }
+  },
+}));
+vi.mock("@multica/core/issues/stores", () => ({
+  useIssueDraftStore: { getState: () => draftStore },
+}));
+vi.mock("@multica/core/modals", () => ({
+  useModalStore: { getState: () => ({ open: openModal }) },
+}));
+vi.mock("./use-open-agent-chat", () => ({
+  useOpenAgentChat: () => openAgentChat,
+}));
 vi.mock("../navigation", () => ({
   useNavigation: () => ({ push }),
   AppLink: ({ href, children }: { href: string; children: ReactNode }) => (
@@ -56,9 +87,26 @@ vi.mock("../layout", () => ({
   CollectionPageHeader: ({ title }: { title: ReactNode }) => <h1>{title}</h1>,
 }));
 vi.mock("./components/office-canvas", () => ({
-  OfficeCanvas: ({ peers }: { peers: unknown[] }) => (
-    <div data-testid="office-canvas">{peers.length}</div>
-  ),
+  OfficeCanvas: forwardRef(function MockOfficeCanvas(
+    {
+      peers,
+      onFocusAgentChange,
+    }: {
+      peers: unknown[];
+      onFocusAgentChange: (agentId: string | null) => void;
+    },
+    ref: Ref<unknown>,
+  ) {
+    useImperativeHandle(ref, () => canvas);
+    return (
+      <div data-testid="office-canvas">
+        {peers.length}
+        <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
+          focus-agent
+        </button>
+      </div>
+    );
+  }),
 }));
 
 function makeMember(overrides: Partial<MemberWithUser> = {}): MemberWithUser {
@@ -122,6 +170,11 @@ function renderPage({
   );
 }
 
+async function openPanel(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /Atlas/ }));
+  return screen.getByRole("dialog");
+}
+
 describe("OfficePage", () => {
   beforeEach(() => {
     room.peers = [];
@@ -129,6 +182,13 @@ describe("OfficePage", () => {
     room.error = null;
     room.sendMove.mockClear();
     push.mockClear();
+    canvas.visitAgent.mockClear();
+    canvas.playEmote.mockClear();
+    openAgentChat.mockClear();
+    quickCreate.mockReset();
+    draftStore.setAgent.mockClear();
+    draftStore.setActiveMode.mockClear();
+    openModal.mockClear();
   });
 
   it("lists the signed-in member, peers and agents", () => {
@@ -144,13 +204,106 @@ describe("OfficePage", () => {
     expect(screen.getByTestId("office-canvas")).toHaveTextContent("1");
   });
 
-  it("opens an agent from the roster", async () => {
+  it("opens the interaction panel from the roster and walks over", async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: /Atlas/ }));
+    const panel = await openPanel(user);
 
+    expect(within(panel).getByText("Atlas")).toBeInTheDocument();
+    expect(canvas.visitAgent).toHaveBeenCalledWith("agent-1");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens the agent chat and detail from the panel", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const panel = await openPanel(user);
+    await user.click(within(panel).getByRole("button", { name: /Chat/ }));
+    expect(openAgentChat).toHaveBeenCalledWith("agent-1");
+
+    await user.click(within(panel).getByRole("button", { name: /Details/ }));
     expect(push).toHaveBeenCalledWith("/workspace-test/agents/agent-1");
+  });
+
+  it("hints at T when the player stands next to an agent", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "focus-agent" }));
+    expect(screen.getByText("Press T to talk to Atlas")).toBeInTheDocument();
+
+    await user.keyboard("t");
+    expect(canvas.visitAgent).toHaveBeenCalledWith("agent-1");
+  });
+
+  it("assigns a quick task from the panel", async () => {
+    quickCreate.mockResolvedValue({ task_id: "task-1" });
+    const user = userEvent.setup();
+    renderPage();
+
+    const panel = await openPanel(user);
+    await user.click(within(panel).getByRole("button", { name: /Assign task/ }));
+
+    const input = within(panel).getByRole("textbox", { name: "Describe the task…" });
+    await user.type(input, "Summarise the open bugs");
+    await user.click(within(panel).getByRole("button", { name: /Send/ }));
+
+    await waitFor(() =>
+      expect(quickCreate).toHaveBeenCalledWith({
+        agent_id: "agent-1",
+        prompt: "Summarise the open bugs",
+      }),
+    );
+    expect(canvas.playEmote).toHaveBeenCalledWith("agent-1", "check");
+    await waitFor(() =>
+      expect(
+        within(panel).queryByRole("textbox", { name: "Describe the task…" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("reports a failed quick task inline", async () => {
+    quickCreate.mockRejectedValue(new Error("offline"));
+    const user = userEvent.setup();
+    renderPage();
+
+    const panel = await openPanel(user);
+    await user.click(within(panel).getByRole("button", { name: /Assign task/ }));
+    await user.type(
+      within(panel).getByRole("textbox", { name: "Describe the task…" }),
+      "Do the thing",
+    );
+    await user.click(within(panel).getByRole("button", { name: /Send/ }));
+
+    expect(
+      await within(panel).findByText("Couldn't create the task. Try again."),
+    ).toBeInTheDocument();
+    expect(canvas.playEmote).not.toHaveBeenCalled();
+  });
+
+  it("hands the brief to the full create dialog", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const panel = await openPanel(user);
+    await user.click(within(panel).getByRole("button", { name: /Assign task/ }));
+    await user.type(
+      within(panel).getByRole("textbox", { name: "Describe the task…" }),
+      "Plan the release",
+    );
+    await user.click(within(panel).getByRole("button", { name: /More options/ }));
+
+    expect(draftStore.setAgent).toHaveBeenCalledWith({
+      prompt: "Plan the release",
+      actorType: "agent",
+      actorId: "agent-1",
+    });
+    expect(draftStore.setActiveMode).toHaveBeenCalledWith("agent");
+    expect(openModal).toHaveBeenCalledWith("quick-create-issue", {
+      agent_id: "agent-1",
+    });
   });
 
   it("explains an empty room and reports the hint once connected", () => {

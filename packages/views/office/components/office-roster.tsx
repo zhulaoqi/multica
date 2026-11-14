@@ -1,9 +1,9 @@
 "use client";
 
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
-import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../../i18n";
 import type { AgentDeskStatus } from "../scene/characters";
+import { AgentStatusBadge, initials } from "./agent-status";
 
 export interface OfficeRosterMember {
   userId: string;
@@ -21,21 +21,10 @@ export interface OfficeRosterProps {
   members: OfficeRosterMember[];
   agents: OfficeRosterAgent[];
   joined: boolean;
-  onAgentClick: (agentId: string) => void;
+  onAgentSelect: (agentId: string) => void;
 }
 
-const STATUS_DOT: Record<AgentDeskStatus, string> = {
-  working: "bg-brand",
-  queued: "bg-warning",
-  idle: "bg-muted-foreground/40",
-  offline: "bg-muted-foreground/40",
-};
-
-function initials(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
-
-export function OfficeRoster({ members, agents, joined, onAgentClick }: OfficeRosterProps) {
+export function OfficeRoster({ members, agents, joined, onAgentSelect }: OfficeRosterProps) {
   const { t } = useT("office");
 
   return (
@@ -91,7 +80,7 @@ export function OfficeRoster({ members, agents, joined, onAgentClick }: OfficeRo
               <li key={agent.id}>
                 <button
                   type="button"
-                  onClick={() => onAgentClick(agent.id)}
+                  onClick={() => onAgentSelect(agent.id)}
                   className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <ActorAvatar
@@ -101,13 +90,7 @@ export function OfficeRoster({ members, agents, joined, onAgentClick }: OfficeRo
                     size="sm"
                   />
                   <span className="min-w-0 flex-1 truncate text-body">{agent.name}</span>
-                  <span className="flex items-center gap-1.5 text-caption text-muted-foreground">
-                    <span
-                      aria-hidden="true"
-                      className={cn("size-1.5 rounded-full", STATUS_DOT[agent.status])}
-                    />
-                    {t(($) => $.page.status[agent.status])}
-                  </span>
+                  <AgentStatusBadge status={agent.status} />
                 </button>
               </li>
             ))}

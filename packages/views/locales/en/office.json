@@ -19,6 +19,20 @@
       "queued": "Waiting",
       "idle": "Idle",
       "offline": "Offline"
+    },
+    "interact": {
+      "hint": "Press {{key}} to talk to {{name}}",
+      "chat": "Chat",
+      "task": "Assign task",
+      "detail": "Details",
+      "close": "Close",
+      "task_placeholder": "Describe the task…",
+      "task_send": "Send",
+      "task_more_options": "More options",
+      "cancel": "Cancel",
+      "task_error": "Couldn't create the task. Try again.",
+      "task_error_agent_unavailable": "This agent can't take work right now.",
+      "task_error_issue_limit": "This workspace has reached its issue limit."
     }
   }
 }

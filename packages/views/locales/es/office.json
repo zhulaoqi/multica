@@ -19,6 +19,20 @@
       "queued": "En cola",
       "idle": "Inactivo",
       "offline": "Desconectado"
+    },
+    "interact": {
+      "hint": "Pulsa {{key}} para hablar con {{name}}",
+      "chat": "Chatear",
+      "task": "Asignar tarea",
+      "detail": "Detalles",
+      "close": "Cerrar",
+      "task_placeholder": "Describe la tarea…",
+      "task_send": "Enviar",
+      "task_more_options": "Más opciones",
+      "cancel": "Cancelar",
+      "task_error": "No se pudo crear la tarea. Inténtalo de nuevo.",
+      "task_error_agent_unavailable": "Este agente no puede aceptar trabajo ahora mismo.",
+      "task_error_issue_limit": "Este espacio de trabajo alcanzó su límite de tareas."
     }
   }
 }

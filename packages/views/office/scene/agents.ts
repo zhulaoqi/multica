@@ -32,6 +32,7 @@ import {
   meetingStations,
   type Station,
 } from "./stations";
+import type { InteractableAgent } from "./interactions";
 import { hashSeed } from "./room";
 
 const WALK_SPEED = 74;
@@ -43,6 +44,7 @@ const CHAT_COOLDOWN_SPREAD_MS = 4500;
 const ERRAND_MIN_MS = 5000;
 const ERRAND_SPREAD_MS = 6000;
 const SPAWN_STAGGER_MS = 280;
+const EMOTE_MS = 1600;
 const GLOW_COLOR = 0x9fe3f5;
 
 export interface OfficeAgentView {
@@ -74,6 +76,9 @@ interface Avatar {
   leisureSpot: Station | null;
   chatUntil: number;
   nextChatAt: number;
+  /** One-off reaction (ack, success) that outranks the routine balloon. */
+  emoteKind: BubbleKind | null;
+  emoteUntil: number;
   moving: boolean;
   glow: Graphics | null;
   /** Wall clock at which the avatar steps through the doorway; null while queued. */
@@ -85,7 +90,7 @@ export interface OfficeAgentsOptions {
   layout: OfficeLayout;
   world: Container;
   createLabel: (text: string) => PixiText;
-  onAgentClick: (agentId: string) => void;
+  onAgentActivate: (agentId: string) => void;
 }
 
 export class OfficeAgents {
@@ -93,20 +98,21 @@ export class OfficeAgents {
   private readonly layout: OfficeLayout;
   private readonly world: Container;
   private readonly createLabel: (text: string) => PixiText;
-  private readonly onAgentClick: (agentId: string) => void;
+  private readonly onAgentActivate: (agentId: string) => void;
   private readonly homes: Station[];
   private readonly meeting: Station[];
   private readonly leisure: Station[];
   private readonly glowByIndex = new Map<number, Graphics>();
   private readonly avatars = new Map<string, Avatar>();
   private spawnQueue = 0;
+  private engagedId: string | null = null;
 
   constructor(options: OfficeAgentsOptions) {
     this.pixi = options.pixi;
     this.layout = options.layout;
     this.world = options.world;
     this.createLabel = options.createLabel;
-    this.onAgentClick = options.onAgentClick;
+    this.onAgentActivate = options.onAgentActivate;
 
     this.meeting = meetingStations(options.layout);
     this.leisure = leisureStations(options.layout);
@@ -161,7 +167,7 @@ export class OfficeAgents {
       view.container.hitArea = new this.pixi.Rectangle(-8, -30, 16, 32);
       view.container.on("pointerdown", (event) => {
         event.stopPropagation();
-        this.onAgentClick(agent.id);
+        this.onAgentActivate(agent.id);
       });
       this.world.addChild(view.container);
       this.avatars.set(agent.id, {
@@ -181,6 +187,8 @@ export class OfficeAgents {
         leisureSpot: null,
         chatUntil: 0,
         nextChatAt: 0,
+        emoteKind: null,
+        emoteUntil: 0,
         moving: false,
         glow: this.glowByIndex.get(index) ?? null,
         spawnAt: null,
@@ -192,6 +200,39 @@ export class OfficeAgents {
       this.dispose(avatar);
       this.avatars.delete(id);
     }
+  }
+
+  /**
+   * Marks the agent the panel is open for. Engagement stops idle wandering and
+   * turns the agent toward the nearest human; null returns it to its routine.
+   * The id is kept even if the avatar is not on stage yet.
+   */
+  engage(agentId: string | null) {
+    this.engagedId = agentId;
+  }
+
+  /** Visible agents, in world space, for proximity checks in the scene. */
+  positions(): InteractableAgent[] {
+    const positions: InteractableAgent[] = [];
+    for (const avatar of this.avatars.values()) {
+      if (!avatar.view.container.visible) continue;
+      positions.push({ id: avatar.id, x: avatar.x, y: avatar.y });
+    }
+    return positions;
+  }
+
+  positionOf(agentId: string): InteractableAgent | null {
+    const avatar = this.avatars.get(agentId);
+    if (!avatar || !avatar.view.container.visible) return null;
+    return { id: avatar.id, x: avatar.x, y: avatar.y };
+  }
+
+  /** Shows a one-off balloon, e.g. a check after a task is assigned. */
+  playEmote(agentId: string, kind: BubbleKind, nowMs: number, durationMs = EMOTE_MS) {
+    const avatar = this.avatars.get(agentId);
+    if (!avatar) return;
+    avatar.emoteKind = kind;
+    avatar.emoteUntil = nowMs + durationMs;
   }
 
   update(dtSeconds: number, nowMs: number, humans: OfficeHuman[]) {
@@ -210,14 +251,24 @@ export class OfficeAgents {
     for (const avatar of this.avatars.values()) {
       if (avatar.spawnAt !== null && nowMs < avatar.spawnAt) continue;
       if (!avatar.view.container.visible) avatar.view.container.visible = true;
-      const target = this.stationFor(avatar, nowMs);
-      if (target.key !== avatar.goalKey) {
-        avatar.goalKey = target.key;
-        avatar.path = findPath(
-          this.layout,
-          { x: avatar.x, y: avatar.y },
-          { x: target.x, y: target.y },
-        );
+
+      let target: Station;
+      if (this.holdsPosition(avatar)) {
+        // Talking to the local player: stay put and drop the routine so
+        // leaving the conversation replans from wherever it stopped.
+        target = this.holdStation(avatar, humans);
+        avatar.goalKey = "";
+        avatar.path = [];
+      } else {
+        target = this.stationFor(avatar, nowMs);
+        if (target.key !== avatar.goalKey) {
+          avatar.goalKey = target.key;
+          avatar.path = findPath(
+            this.layout,
+            { x: avatar.x, y: avatar.y },
+            { x: target.x, y: target.y },
+          );
+        }
       }
 
       const moving = this.advance(avatar, dtSeconds, target);
@@ -319,6 +370,32 @@ export class OfficeAgents {
     };
   }
 
+  /** Engaged agents pause their routine once they finish the current step. */
+  private holdsPosition(avatar: Avatar): boolean {
+    return (
+      avatar.id === this.engagedId &&
+      !avatar.moving &&
+      avatar.path.length === 0
+    );
+  }
+
+  private holdStation(avatar: Avatar, humans: OfficeHuman[]): Station {
+    const human = nearestHuman(humans, avatar.x, avatar.y);
+    const canTurn = avatar.status !== "working" && avatar.status !== "offline";
+    return {
+      key: "engage",
+      x: avatar.x,
+      y: avatar.y,
+      dir:
+        canTurn && human
+          ? directionFor(human.x - avatar.x, human.y - avatar.y) ?? avatar.home.dir
+          : avatar.home.dir,
+      kind: avatar.home.kind,
+      // Seated routines keep their pose; everyone else turns to face the player.
+      seat: !canTurn,
+    };
+  }
+
   private stationFor(avatar: Avatar, nowMs: number): Station {
     switch (avatar.status) {
       case "working":
@@ -348,12 +425,15 @@ export class OfficeAgents {
   private poseFor(avatar: Avatar, target: Station): CharacterPose {
     if (avatar.status === "offline") return "sleep";
     if (avatar.status === "working") return "type";
+    if (avatar.id === this.engagedId) return "stand";
     if (avatar.status === "queued") return "read";
     return target.seat ? "read" : "stand";
   }
 
   private bubbleFor(avatar: Avatar, nowMs: number): BubbleKind | null {
+    if (nowMs < avatar.emoteUntil && avatar.emoteKind) return avatar.emoteKind;
     if (avatar.status === "offline") return "sleep";
+    if (avatar.id === this.engagedId) return "chat";
     if (nowMs < avatar.chatUntil) return "chat";
     if (avatar.status === "queued") return "dots";
     return null;

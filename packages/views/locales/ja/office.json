@@ -18,6 +18,20 @@
       "queued": "待機中",
       "idle": "アイドル",
       "offline": "オフライン"
+    },
+    "interact": {
+      "hint": "{{key}} で {{name}} と話す",
+      "chat": "チャット",
+      "task": "タスク依頼",
+      "detail": "詳細",
+      "close": "閉じる",
+      "task_placeholder": "タスクの内容を入力…",
+      "task_send": "送信",
+      "task_more_options": "その他のオプション",
+      "cancel": "キャンセル",
+      "task_error": "タスクを作成できませんでした。もう一度お試しください。",
+      "task_error_agent_unavailable": "このエージェントは現在タスクを受け付けられません。",
+      "task_error_issue_limit": "このワークスペースはタスク数の上限に達しています。"
     }
   }
 }

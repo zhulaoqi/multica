@@ -121,11 +121,16 @@ export function buildOfficeLayout(): OfficeLayout {
   };
 }
 
-function tileOf(worldX: number, worldY: number): { tx: number; ty: number } {
+export function tileAtWorld(worldX: number, worldY: number): { tx: number; ty: number } {
   return {
     tx: Math.min(Math.max(Math.floor(worldX / TILE), 0), COLS - 1),
     ty: Math.min(Math.max(Math.floor(worldY / TILE), 0), ROWS - 1),
   };
+}
+
+/** Feet position at a tile, matching the centres `findPath` returns. */
+export function feetAtTile(tx: number, ty: number): { x: number; y: number } {
+  return { x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 2 };
 }
 
 function isObstacleTile(layout: OfficeLayout, tx: number, ty: number): boolean {
@@ -151,7 +156,7 @@ export function isWalkableWorld(
   worldX: number,
   worldY: number,
 ): boolean {
-  const { tx, ty } = tileOf(worldX, worldY);
+  const { tx, ty } = tileAtWorld(worldX, worldY);
   return isWalkableTile(layout, tx, ty);
 }
 
@@ -175,8 +180,8 @@ export function findPath(
   from: { x: number; y: number },
   to: { x: number; y: number },
 ): { x: number; y: number }[] {
-  const start = tileOf(from.x, from.y);
-  const goal = tileOf(to.x, to.y);
+  const start = tileAtWorld(from.x, from.y);
+  const goal = tileAtWorld(to.x, to.y);
   if (!isWalkableTile(layout, goal.tx, goal.ty)) return [];
   if (start.tx === goal.tx && start.ty === goal.ty) return [];
 
@@ -194,7 +199,7 @@ export function findPath(
       while (node !== key(start.tx, start.ty)) {
         const tx = node % width;
         const ty = Math.floor(node / width);
-        path.push({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 2 });
+        path.push(feetAtTile(tx, ty));
         node = cameFrom.get(node)!;
       }
       return path.reverse();

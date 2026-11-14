@@ -6,7 +6,7 @@ import type {
 } from "pixi.js";
 import type { OfficeDir, OfficePeer, OfficePosition } from "@multica/core/office";
 import { OFFICE_WORLD } from "@multica/core/office";
-import { createCharacter, type CharacterView } from "./characters";
+import { createCharacter, type BubbleKind, type CharacterView } from "./characters";
 import {
   buildOfficeLayout,
   directionFor,
@@ -16,6 +16,8 @@ import {
   type OfficeLayout,
 } from "./layout";
 import { OfficeAgents, type OfficeAgentView, type OfficeHuman } from "./agents";
+import { nearestAgent, nearestVisitSlot } from "./interactions";
+import { isTypingTarget } from "./input";
 import { drawRoom } from "./room";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
@@ -25,6 +27,10 @@ const PEER_LERP = 12;
 const PEER_REPATH_DISTANCE = 8;
 const HUMAN_CHAT_RADIUS = 20;
 const HUMAN_CHAT_MS = 1100;
+/** How close the player must stand to see "press T" on an agent. */
+const FOCUS_RADIUS = 30;
+/** Standing this close counts as "at the agent", so the panel opens now. */
+const ENGAGE_RADIUS = 48;
 const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
 
 export type { OfficeAgentView };
@@ -41,7 +47,10 @@ export interface OfficeSceneOptions {
   localName: string;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
-  onAgentClick: (agentId: string) => void;
+  /** The player reached an agent and wants to talk to it. */
+  onAgentActivate: (agentId: string) => void;
+  /** Nearest agent to the player changed, so the HUD can hint at interact. */
+  onFocusAgentChange: (agentId: string | null) => void;
 }
 
 interface LocalAvatar {
@@ -88,6 +97,11 @@ export class OfficeScene {
   private keys = new Set<string>();
   private destroyed = false;
   private readonly onLocalMove: (position: OfficePosition) => void;
+  private readonly onAgentActivate: (agentId: string) => void;
+  private readonly onFocusAgentChange: (agentId: string | null) => void;
+  private focusedAgentId: string | null = null;
+  /** Agent the player is walking toward; activated once close enough. */
+  private pendingAgentId: string | null = null;
 
   private constructor(
     pixi: typeof import("pixi.js"),
@@ -104,6 +118,8 @@ export class OfficeScene {
     this.layout = layout;
     this.zoom = options.zoom;
     this.onLocalMove = options.onLocalMove;
+    this.onAgentActivate = options.onAgentActivate;
+    this.onFocusAgentChange = options.onFocusAgentChange;
 
     this.local = {
       view: createCharacter(pixi, { kind: "human", seed: "local-player" }),
@@ -123,7 +139,7 @@ export class OfficeScene {
       layout,
       world,
       createLabel: (text) => this.createLabel(text),
-      onAgentClick: options.onAgentClick,
+      onAgentActivate: (agentId) => this.activateAgent(agentId),
     });
   }
 
@@ -208,6 +224,107 @@ export class OfficeScene {
     this.syncLabels();
   }
 
+  /**
+   * Walks the player to an agent and opens the interaction panel once they are
+   * there. If the agent is already close the panel opens immediately; if there
+   * is no reachable side to stand on, it opens without the walk.
+   */
+  activateAgent(agentId: string) {
+    if (this.destroyed) return;
+    const agent = this.agents.positionOf(agentId);
+    if (!agent) {
+      this.onAgentActivate(agentId);
+      return;
+    }
+
+    const distance = Math.hypot(agent.x - this.local.x, agent.y - this.local.y);
+    if (distance <= ENGAGE_RADIUS) {
+      this.pendingAgentId = null;
+      this.local.path = [];
+      this.face(agent.x, agent.y);
+      this.onAgentActivate(agentId);
+      return;
+    }
+
+    const slot = nearestVisitSlot(this.layout, agent, {
+      x: this.local.x,
+      y: this.local.y,
+    });
+    if (!slot) {
+      this.onAgentActivate(agentId);
+      return;
+    }
+
+    this.pendingAgentId = agentId;
+    this.local.path = findPath(this.layout, { x: this.local.x, y: this.local.y }, slot);
+  }
+
+  /** Pauses the agent's routine and turns it toward the player. */
+  setEngagedAgent(agentId: string | null) {
+    if (this.destroyed) return;
+    this.agents.engage(agentId);
+  }
+
+  playEmote(agentId: string, kind: BubbleKind) {
+    if (this.destroyed) return;
+    this.agents.playEmote(agentId, kind, performance.now());
+  }
+
+  private face(x: number, y: number) {
+    this.local.dir =
+      directionFor(x - this.local.x, y - this.local.y) ?? this.local.dir;
+  }
+
+  /**
+   * Finishes a click-to-visit: opens the panel when close, and replans if the
+   * idle agent wandered off while the player was walking over.
+   */
+  private stepPendingInteract() {
+    const agentId = this.pendingAgentId;
+    if (!agentId) return;
+
+    const agent = this.agents.positionOf(agentId);
+    if (!agent) {
+      this.pendingAgentId = null;
+      return;
+    }
+
+    const distance = Math.hypot(agent.x - this.local.x, agent.y - this.local.y);
+    if (distance <= ENGAGE_RADIUS) {
+      this.pendingAgentId = null;
+      this.local.path = [];
+      this.face(agent.x, agent.y);
+      this.onAgentActivate(agentId);
+      return;
+    }
+
+    // Still walking: keep the current path.
+    if (this.local.path.length > 0) return;
+
+    const slot = nearestVisitSlot(this.layout, agent, {
+      x: this.local.x,
+      y: this.local.y,
+    });
+    if (!slot) {
+      this.pendingAgentId = null;
+      return;
+    }
+    this.local.path = findPath(this.layout, { x: this.local.x, y: this.local.y }, slot);
+  }
+
+  /** Emits focus changes only, so the HUD does not re-render every frame. */
+  private updateFocus() {
+    const agent = nearestAgent(
+      this.agents.positions(),
+      { x: this.local.x, y: this.local.y },
+      FOCUS_RADIUS,
+    );
+    const id = agent?.id ?? null;
+    if (id === this.focusedAgentId) return;
+    this.focusedAgentId = id;
+    this.onFocusAgentChange(id);
+  }
+
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -246,6 +363,7 @@ export class OfficeScene {
 
     const now = performance.now();
     this.stepLocal(dt);
+    this.stepPendingInteract();
     this.stepPeers(dt);
     this.stepHumanChat(now);
 
@@ -254,6 +372,7 @@ export class OfficeScene {
       ...Array.from(this.peers.values(), (peer) => ({ x: peer.x, y: peer.y })),
     ];
     this.agents.update(dt, now, humans);
+    this.updateFocus();
 
     this.local.view.tick(now);
     for (const peer of this.peers.values()) peer.view.tick(now);
@@ -291,7 +410,9 @@ export class OfficeScene {
     let moved = false;
 
     if (input.dx !== 0 || input.dy !== 0) {
+      // Taking over the controls cancels a click-to-visit.
       this.local.path = [];
+      this.pendingAgentId = null;
       const length = Math.hypot(input.dx, input.dy);
       const stepX = (input.dx / length) * WALK_SPEED * dt;
       const stepY = (input.dy / length) * WALK_SPEED * dt;
@@ -440,7 +561,9 @@ export class OfficeScene {
       { x: this.local.x, y: this.local.y },
       point,
     );
-    if (path.length > 0) this.local.path = path;
+    if (path.length === 0) return;
+    this.pendingAgentId = null;
+    this.local.path = path;
   };
 
   private handleKeyDown = (event: KeyboardEvent) => {
@@ -459,11 +582,4 @@ export class OfficeScene {
   private handleBlur = () => {
     this.keys.clear();
   };
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
