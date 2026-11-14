@@ -29,7 +29,7 @@ If Xcode or the on-device development environment isn't set up yet, complete Exp
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/multica-ai/multica.git
+git clone https://gitlab.yeahmobi.com/yeahcloudadrd/multica.git
 cd multica
 pnpm install
 ```
@@ -77,7 +77,7 @@ pnpm ios:mobile:device:prod:release
 
 ## Connecting to a self-hosted instance
 
-Release builds bake the API address into the app. `apps/mobile/.env.production` is committed with the public multica.ai defaults, so a fresh clone builds against production as-is.
+Release builds bake the API address into the app. `apps/mobile/.env.production` is committed with the public defaults, so a fresh clone builds against the public deployment as-is.
 
 To connect to a self-hosted instance:
 
@@ -90,7 +90,7 @@ EXPO_PUBLIC_API_URL=https://api.example.com
 EXPO_PUBLIC_WEB_URL=https://app.example.com
 ```
 
-The `.local` file overrides the committed defaults key by key and is gitignored, so personal endpoints never reach the repository. `EXPO_PUBLIC_API_URL` is required. `EXPO_PUBLIC_WEB_URL` powers entries like "Copy link" and "Open on web". Set both: a key you leave out falls back to the multica.ai default, so those entries would open multica.ai instead of your instance.
+The `.local` file overrides the committed defaults key by key and is gitignored, so personal endpoints never reach the repository. `EXPO_PUBLIC_API_URL` is required. `EXPO_PUBLIC_WEB_URL` powers entries like "Copy link" and "Open on web". Set both: a key you leave out falls back to the public default, so those entries would open the public deployment instead of your instance.
 </Step>
 <Step>
 Re-run the build command `pnpm ios:mobile:device:prod:release`. The iPhone must be able to reach the API address; when using a LAN address, don't write `localhost`, which on the iPhone points at the phone itself.
@@ -101,7 +101,7 @@ Re-run the build command `pnpm ios:mobile:device:prod:release`. The iPhone must 
 Editing `.env.production` directly changes the production configuration of the current checkout. Keep personal values in the gitignored `.env.production.local`.
 </Callout>
 
-For mobile development, using the Simulator, or connecting to staging, see [`apps/mobile/README.md`](https://github.com/multica-ai/multica/blob/main/apps/mobile/README.md) in the repository.
+For mobile development, using the Simulator, or connecting to staging, see [`apps/mobile/README.md`](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/apps/mobile/README.md) in the repository.
 
 ## Next steps
 

@@ -29,7 +29,7 @@ Xcode や実機の開発環境がまだ設定されていない場合は、先�
 リポジトリをクローンして依存関係をインストールします:
 
 ```bash
-git clone https://github.com/multica-ai/multica.git
+git clone https://gitlab.yeahmobi.com/yeahcloudadrd/multica.git
 cd multica
 pnpm install
 ```
@@ -77,7 +77,7 @@ pnpm ios:mobile:device:prod:release
 
 ## セルフホストインスタンスへの接続
 
-Release ビルドは API アドレスをアプリに埋め込みます。`apps/mobile/.env.production` は公開されている multica.ai のデフォルト値とともにコミットされているため、新しくクローンした状態でも本番ビルドができます。
+Release ビルドは API アドレスをアプリに埋め込みます。`apps/mobile/.env.production` は公開デフォルト値とともにコミットされているため、新しくクローンした状態でも本番ビルドができます。
 
 セルフホストインスタンスに接続するには:
 
@@ -90,7 +90,7 @@ EXPO_PUBLIC_API_URL=https://api.example.com
 EXPO_PUBLIC_WEB_URL=https://app.example.com
 ```
 
-`.local` ファイルはコミット済みのデフォルトをキーごとに上書きし、gitignore されるため、個人の API アドレスがリポジトリに入ることはありません。`EXPO_PUBLIC_API_URL` は必須です。`EXPO_PUBLIC_WEB_URL` は "Copy link" や "Open on web" などの入口に使われます。両方を設定してください。書かなかったキーには multica.ai のデフォルト値が使われるため、これらの入口がセルフホストインスタンスではなく multica.ai を開きます。
+`.local` ファイルはコミット済みのデフォルトをキーごとに上書きし、gitignore されるため、個人の API アドレスがリポジトリに入ることはありません。`EXPO_PUBLIC_API_URL` は必須です。`EXPO_PUBLIC_WEB_URL` は "Copy link" や "Open on web" などの入口に使われます。両方を設定してください。書かなかったキーには公開デフォルト値が使われるため、これらの入口がセルフホストインスタンスではなく公開環境を開きます。
 </Step>
 <Step>
 ビルドコマンド `pnpm ios:mobile:device:prod:release` を再実行します。iPhone がこの API アドレスに到達できる必要があります。LAN のアドレスを使う場合は `localhost` と書かないでください。iPhone 上では iPhone 自身を指します。
@@ -101,7 +101,7 @@ EXPO_PUBLIC_WEB_URL=https://app.example.com
 `.env.production` を直接編集すると、現在のチェックアウトの本番設定が変わります。個人の値は gitignore された `.env.production.local` に書いてください。
 </Callout>
 
-モバイルの開発、Simulator の使用、staging への接続については、リポジトリの [`apps/mobile/README.md`](https://github.com/multica-ai/multica/blob/main/apps/mobile/README.md) を参照してください。
+モバイルの開発、Simulator の使用、staging への接続については、リポジトリの [`apps/mobile/README.md`](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/apps/mobile/README.md) を参照してください。
 
 ## 次のステップ
 

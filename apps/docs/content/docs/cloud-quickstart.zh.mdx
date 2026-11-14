@@ -16,7 +16,7 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 ## 登录，进入工作区 [#1-登录进入工作区]
 
-用 Web（[multica.ai](https://multica.ai)）或 [Multica Desktop](https://multica.ai/download) 登录，支持邮箱验证码和 Google。用 Desktop 登录的话，下一步可以自动连接这台电脑；用 Web 则要在下一步通过命令行连接。
+用 Web 或 [Multica Desktop](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/releases) 登录，支持邮箱验证码和 Google。用 Desktop 登录的话，下一步可以自动连接这台电脑；用 Web 则要在下一步通过命令行连接。
 
 </Step>
 <Step>
@@ -32,7 +32,7 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 multica setup
 ```
 
@@ -40,7 +40,7 @@ multica setup
 <Tab value="Windows">
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 multica setup
 ```
 

@@ -17,7 +17,7 @@ L'auto-hébergement de Multica comporte deux parties :
 
 Il peut s'agir de la même machine ou de machines distinctes. L'auto-hébergement ne remplace que la partie Multica Cloud.
 
-Ce guide utilise Docker Compose. Pour un déploiement sur Kubernetes, consultez le [guide d'auto-hébergement](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md#kubernetes-deployment-alternative) dans le dépôt.
+Ce guide utilise Docker Compose. Pour un déploiement sur Kubernetes, consultez le [guide d'auto-hébergement](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md#kubernetes-deployment-alternative) dans le dépôt.
 
 ## Avant de commencer
 
@@ -46,7 +46,7 @@ L'ordinateur doit également disposer d'au moins un [outil de codage IA](/provid
 Sur la machine qui fera tourner le service :
 
 ```bash
-git clone --depth 1 https://github.com/multica-ai/multica.git
+git clone --depth 1 https://gitlab.yeahmobi.com/yeahcloudadrd/multica.git
 cd multica
 make selfhost
 ```
@@ -266,14 +266,14 @@ Installez d'abord le CLI Multica :
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 ```
 
 </Tab>
 <Tab value="Windows">
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 ```
 
 </Tab>
@@ -455,7 +455,7 @@ La version que vous exécutez au final est déterminée par `docker compose pull
 
 Helm a son propre chemin de mise à niveau : définissez `images.backend.tag` / `images.frontend.tag` sur la version souhaitée dans votre fichier de valeurs, puis lancez `helm upgrade`. Changer le tag modifie la spécification du pod : Kubernetes télécharge donc la nouvelle image et redéploie progressivement les Deployments. C'est la méthode fiable.
 
-`kubectl -n multica rollout restart` n'est **pas** une mise à niveau en soi. Le chart est livré avec `pullPolicy: IfNotPresent` (`deploy/helm/multica/values.yaml`) : un nœud qui a déjà ce tag en cache réutilise donc l'ancienne image, et le redémarrage ne change silencieusement rien, le même type de piège qu'un `MULTICA_IMAGE_TAG` figé. Si vous voulez suivre un tag flottant de cette manière, définissez d'abord `images.backend.pullPolicy` / `images.frontend.pullPolicy` sur `Always`. Consultez le [guide d'auto-hébergement](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md#kubernetes-deployment-alternative).
+`kubectl -n multica rollout restart` n'est **pas** une mise à niveau en soi. Le chart est livré avec `pullPolicy: IfNotPresent` (`deploy/helm/multica/values.yaml`) : un nœud qui a déjà ce tag en cache réutilise donc l'ancienne image, et le redémarrage ne change silencieusement rien, le même type de piège qu'un `MULTICA_IMAGE_TAG` figé. Si vous voulez suivre un tag flottant de cette manière, définissez d'abord `images.backend.pullPolicy` / `images.frontend.pullPolicy` sur `Always`. Consultez le [guide d'auto-hébergement](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md#kubernetes-deployment-alternative).
 
 </Accordion>
 </Accordions>
@@ -476,5 +476,5 @@ Pour d'autres scénarios, consultez [Dépannage](/troubleshooting).
 
 - [Configuration de l'authentification](/auth-setup) — configurer l'e-mail, la connexion Google et le périmètre d'inscription.
 - [Variables d'environnement](/environment-variables) — la référence complète de configuration du serveur.
-- [Guide d'auto-hébergement](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md) — Kubernetes, mises à niveau et déploiement manuel.
+- [Guide d'auto-hébergement](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md) — Kubernetes, mises à niveau et déploiement manuel.
 - [Application de bureau](/desktop-app) — connecter l'application de bureau à un service auto-hébergé.

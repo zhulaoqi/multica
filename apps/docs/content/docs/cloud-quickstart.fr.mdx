@@ -16,7 +16,7 @@ Avant qu'un agent puisse s'exécuter, l'ordinateur qui l'exécute doit disposer 
 
 ## Connectez-vous et ouvrez votre espace de travail [#1-connectez-vous-et-ouvrez-votre-espace-de-travail]
 
-Connectez-vous sur le web ([multica.ai](https://multica.ai)) ou avec [Multica Desktop](https://multica.ai/download). La connexion par code de vérification envoyé par e-mail et la connexion Google sont toutes deux prises en charge. Avec Desktop, l'étape suivante peut connecter cet ordinateur automatiquement ; sur le web, vous le connectez depuis la ligne de commande.
+Connectez-vous sur le web ou avec [Multica Desktop](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/releases). La connexion par code de vérification envoyé par e-mail et la connexion Google sont toutes deux prises en charge. Avec Desktop, l'étape suivante peut connecter cet ordinateur automatiquement ; sur le web, vous le connectez depuis la ligne de commande.
 
 </Step>
 <Step>
@@ -32,7 +32,7 @@ Les agents exécutent le travail sur les ordinateurs que vous connectez. Ouvrez 
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 multica setup
 ```
 
@@ -40,7 +40,7 @@ multica setup
 <Tab value="Windows">
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 multica setup
 ```
 

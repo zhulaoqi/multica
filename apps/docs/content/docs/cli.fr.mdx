@@ -14,14 +14,9 @@ Le CLI Multica sert à la fois à connecter des runtimes locaux et à gérer, de
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 ```
 
-Si Homebrew est installé, vous pouvez aussi exécuter :
-
-```bash
-brew install multica-ai/tap/multica
-```
 
 </Tab>
 <Tab value="Windows">
@@ -29,11 +24,13 @@ brew install multica-ai/tap/multica
 Dans PowerShell, exécutez :
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 ```
 
 </Tab>
 </Tabs>
+
+L'adresse `multica.example.com` représente l'hôte de ce déploiement ; la boîte de dialogue **Ajouter un runtime** affiche la commande avec la vraie adresse.
 
 Vérifiez l'installation :
 
@@ -436,13 +433,13 @@ Les tableaux ci-dessous couvrent toutes les commandes de premier niveau actuelle
 
 ## Piloter Multica depuis un autre agent de codage
 
-Si l'essentiel de votre travail se passe déjà dans Codex, Claude Code ou Cursor, vous pouvez piloter Multica depuis ces outils au lieu de basculer vers un terminal. Le [skill Multica CLI](https://github.com/multica-ai/multica-cli) apprend à ces agents à utiliser les commandes de cette page en toute sécurité : lire les tâches et les fils de commentaires sans gaspiller de tokens, écrire les commentaires via un fichier, et gérer les effets de bord qu'entraînent les mentions, les changements de statut et les assignations.
+Si l'essentiel de votre travail se passe déjà dans Codex, Claude Code ou Cursor, vous pouvez piloter Multica depuis ces outils au lieu de basculer vers un terminal. Le [skill Multica CLI](https://gitlab.yeahmobi.com/yeahcloudadrd/multica-cli) apprend à ces agents à utiliser les commandes de cette page en toute sécurité : lire les tâches et les fils de commentaires sans gaspiller de tokens, écrire les commentaires via un fichier, et gérer les effets de bord qu'entraînent les mentions, les changements de statut et les assignations.
 
 Il passe entièrement par votre CLI authentifié et n'accorde aucun accès qui lui soit propre : les permissions proviennent toujours de votre connexion, du profil sélectionné et de l'espace de travail. Il nécessite le CLI v0.4.26 ou ultérieur. Le README du dépôt explique l'installation via la marketplace de plugins de Claude Code, l'installateur de skills de Codex, Cursor et tout autre outil qui charge des instructions Markdown.
 
 ## Étapes suivantes
 
-- [Skill Multica CLI](https://github.com/multica-ai/multica-cli) — piloter Multica depuis Codex, Claude Code ou Cursor.
+- [Skill Multica CLI](https://gitlab.yeahmobi.com/yeahcloudadrd/multica-cli) — piloter Multica depuis Codex, Claude Code ou Cursor.
 - [Authentification et jetons](/auth-tokens) — créer, renouveler et révoquer des PAT.
 - [Dépannage](/troubleshooting) — diagnostiquer les erreurs de commande et les exécutions qui ne démarrent jamais.
 - [Créer et configurer un agent](/agents-create) — la sémantique complète de chaque champ de `agent create`.

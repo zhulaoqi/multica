@@ -202,13 +202,13 @@ Multica 清理執行環境時不會刪除關聯的本地目錄。AI 代理對該
 # 建立專案時關聯倉庫
 multica project create \
  --title "Agent UX" \
- --repo https://github.com/multica-ai/multica
+ --repo https://gitlab.example.com/acme/campaign-site
 
 # 檢視和新增資源
 multica project resource list <project-id>
 multica project resource add <project-id> \
  --type github_repo \
- --url https://github.com/multica-ai/multica \
+ --url https://gitlab.example.com/acme/campaign-site \
  --ref main
 
 # 關聯指定守護程序上的本地目錄

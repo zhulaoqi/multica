@@ -80,7 +80,7 @@ curl -fsS <server-url>/health
 </Accordion>
 <Accordion title={<><code>multica login</code>이 TLS 핸드셰이크 시간 초과로 실패함</>} id="multica-login-fails-with-a-tls-handshake-timeout" value="multica-login-fails-with-a-tls-handshake-timeout">
 
-`multica login`이 브라우저를 열고 웹 로그인은 완료되지만 CLI는 "Sign-in did not complete" 또는 "TLS handshake timed out"으로 실패합니다. `multica --debug login`은 `POST /api/tokens`에서 `net/http: TLS handshake timeout`을 표시하며, 같은 컴퓨터의 `curl.exe -I https://api.multica.ai`나 브라우저는 정상적으로 연결됩니다.
+`multica login`이 브라우저를 열고 웹 로그인은 완료되지만 CLI는 "Sign-in did not complete" 또는 "TLS handshake timed out"으로 실패합니다. `multica --debug login`은 `POST /api/tokens`에서 `net/http: TLS handshake timeout`을 표시하며, 같은 컴퓨터의 `curl.exe -I https://multica.example.com`나 브라우저는 정상적으로 연결됩니다.
 
 TCP 연결은 열리지만 TLS 핸드셰이크가 끝나지 않습니다. Multica CLI와 데몬을 포함한 Go 클라이언트는 기본적으로 TLS ClientHello에 양자내성 키 교환을 포함하므로 ClientHello가 약 1.5 KB가 되어 두 패킷으로 나뉩니다. 일부 보안 소프트웨어, VPN, 라우터, 방화벽은 이런 핸드셰이크를 버립니다. curl의 ClientHello는 훨씬 작아서 통과합니다.
 
@@ -323,7 +323,7 @@ multica daemon stop
 multica daemon start --foreground
 ```
 
-그래도 원인을 찾지 못하면 [GitHub Issues](https://github.com/multica-ai/multica/issues)에서 기존 문제를 검색하거나 새 issue를 제출하세요.
+그래도 원인을 찾지 못하면 [GitLab Issues](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/issues)에서 기존 문제를 검색하거나 새 issue를 제출하세요.
 
 ## 다음 단계
 

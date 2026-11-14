@@ -53,6 +53,9 @@ export const metadata: Metadata = {
   },
   description:
     "Documentation for Multica — the source-available managed agents platform.",
+  // Internal deployment: the docs site is reachable only inside the company
+  // network, so nothing here should end up in a search index.
+  robots: { index: false, follow: false },
 };
 
 export function generateStaticParams() {

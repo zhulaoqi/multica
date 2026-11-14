@@ -17,7 +17,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 它們可以是同一臺機器，也可以分開。自託管替換的只是 Multica Cloud 部分。
 
-這篇文件使用 Docker Compose。Kubernetes 部署見倉庫中的 [Self-hosting guide](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md#kubernetes-deployment-alternative)。
+這篇文件使用 Docker Compose。Kubernetes 部署見倉庫中的 [Self-hosting guide](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md#kubernetes-deployment-alternative)。
 
 ## 開始前
 
@@ -46,7 +46,7 @@ Multica 使用 Compose v2，也就是 `docker compose`。舊版的 `docker-compo
 在準備執行服務的機器上執行：
 
 ```bash
-git clone --depth 1 https://github.com/multica-ai/multica.git
+git clone --depth 1 https://gitlab.yeahmobi.com/yeahcloudadrd/multica.git
 cd multica
 make selfhost
 ```
@@ -265,14 +265,14 @@ docker compose -f docker-compose.selfhost.yml logs backend \
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 ```
 
 </Tab>
 <Tab value="Windows">
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 ```
 
 </Tab>
@@ -454,7 +454,7 @@ curl -s localhost:8080/readyz
 
 Helm 有自己的升級路徑：在 values 檔案裡把 `images.backend.tag` / `images.frontend.tag` 設成你要的版本，然後 `helm upgrade`。改 tag 就改了 pod spec，Kubernetes 會拉新映象並捲動更新，這是可靠的做法。
 
-`kubectl -n multica rollout restart` 本身**不是**升級。chart 預設 `pullPolicy: IfNotPresent`（`deploy/helm/multica/values.yaml`），節點上已經快取過這個 tag 的話，restart 只會用回舊映象，什麼都沒變，和釘死 `MULTICA_IMAGE_TAG` 是同一類坑。真要靠浮動 tag 走這條路，得先把 `images.backend.pullPolicy` / `images.frontend.pullPolicy` 設成 `Always`。詳見倉庫的 [Self-hosting guide](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md#kubernetes-deployment-alternative)。
+`kubectl -n multica rollout restart` 本身**不是**升級。chart 預設 `pullPolicy: IfNotPresent`（`deploy/helm/multica/values.yaml`），節點上已經快取過這個 tag 的話，restart 只會用回舊映象，什麼都沒變，和釘死 `MULTICA_IMAGE_TAG` 是同一類坑。真要靠浮動 tag 走這條路，得先把 `images.backend.pullPolicy` / `images.frontend.pullPolicy` 設成 `Always`。詳見倉庫的 [Self-hosting guide](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md#kubernetes-deployment-alternative)。
 
 </Accordion>
 </Accordions>
@@ -475,5 +475,5 @@ Helm 有自己的升級路徑：在 values 檔案裡把 `images.backend.tag` / `
 
 - [登入與註冊配置](/auth-setup) — 配置郵件、Google 登入和註冊範圍。
 - [環境變數](/environment-variables) — 檢視完整的服務端配置。
-- [Self-hosting guide](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING.md) — Kubernetes、升級和手動部署。
+- [Self-hosting guide](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING.md) — Kubernetes、升級和手動部署。
 - [桌面應用](/desktop-app) — 讓 Desktop 連線自託管服務。

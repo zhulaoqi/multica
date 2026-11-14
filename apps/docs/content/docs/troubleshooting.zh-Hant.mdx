@@ -80,7 +80,7 @@ curl -fsS <server-url>/health
 </Accordion>
 <Accordion title={<><code>multica login</code> 報告 TLS 握手超時</>} id="multica-login-fails-with-a-tls-handshake-timeout" value="multica-login-fails-with-a-tls-handshake-timeout">
 
-`multica login` 能開啟瀏覽器、網頁登入也能完成，但 CLI 仍以 "Sign-in did not complete" 或 "TLS 握手超時" 失敗。`multica --debug login` 在 `POST /api/tokens` 上顯示 `net/http: TLS handshake timeout`，而同一臺機器上的 `curl.exe -I https://api.multica.ai` 或瀏覽器都能正常連線。
+`multica login` 能開啟瀏覽器、網頁登入也能完成，但 CLI 仍以 "Sign-in did not complete" 或 "TLS 握手超時" 失敗。`multica --debug login` 在 `POST /api/tokens` 上顯示 `net/http: TLS handshake timeout`，而同一臺機器上的 `curl.exe -I https://multica.example.com` 或瀏覽器都能正常連線。
 
 TCP 連線已建立，但 TLS 握手始終沒有完成。Go 客戶端（包括 Multica CLI 和守護程序）預設在 TLS ClientHello 中攜帶後量子金鑰交換，報文約 1.5 KB，會拆成兩個包傳送。部分安全軟體、VPN、路由器和防火牆會丟棄這種握手；curl 的 ClientHello 小得多，所以能透過。
 
@@ -334,7 +334,7 @@ multica daemon stop
 multica daemon start --foreground
 ```
 
-仍然無法定位時，到 [GitHub Issues](https://github.com/multica-ai/multica/issues) 搜尋已有問題，或提交新的 issue。
+仍然無法定位時，到 [GitLab Issues](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/issues) 搜尋已有問題，或提交新的 issue。
 
 ## 接下來
 

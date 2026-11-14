@@ -69,7 +69,7 @@ Webhook 金鑰只顯示一次，請在離開頁面前複製。重新連線同一
 
 ### 例項使用私有 CA
 
-如果點選 **連線** 後提示提供方的憑證 "is signed by a certificate authority this server does not trust"，說明例項的 HTTPS 憑證由內部 CA 簽發（或是自簽名憑證），而 Multica 服務端不信任這個 CA。需要由服務端管理員把該 CA 加入後端的信任庫：使用 Helm 時設定 `backend.extraCACerts.configMap`；使用 Docker Compose 時掛載 CA 並設定 `SSL_CERT_DIR`。具體步驟見 [Private CA certificates](https://github.com/multica-ai/multica/blob/main/SELF_HOSTING_ADVANCED.md#private-ca-certificates-optional)。後端還會把該 CA 下發給守護程序，使守護程序的 git 也能克隆同一例項上的倉庫。
+如果點選 **連線** 後提示提供方的憑證 "is signed by a certificate authority this server does not trust"，說明例項的 HTTPS 憑證由內部 CA 簽發（或是自簽名憑證），而 Multica 服務端不信任這個 CA。需要由服務端管理員把該 CA 加入後端的信任庫：使用 Helm 時設定 `backend.extraCACerts.configMap`；使用 Docker Compose 時掛載 CA 並設定 `SSL_CERT_DIR`。具體步驟見 [Private CA certificates](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/SELF_HOSTING_ADVANCED.md#private-ca-certificates-optional)。後端還會把該 CA 下發給守護程序，使守護程序的 git 也能克隆同一例項上的倉庫。
 
 Multica 不提供跳過憑證校驗的選項，因為連線請求會攜帶你的訪問令牌。如果提示憑證與主機名不匹配，或憑證校驗失敗（例如已過期），需要修復憑證本身，信任 CA 解決不了。
 

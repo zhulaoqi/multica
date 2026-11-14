@@ -201,13 +201,13 @@ Multica ne supprime jamais un répertoire local rattaché lors du nettoyage des 
 # Rattacher un dépôt lors de la création d'un projet
 multica project create \
   --title "Agent UX" \
-  --repo https://github.com/multica-ai/multica
+  --repo https://gitlab.example.com/acme/campaign-site
 
 # Lister et ajouter des ressources
 multica project resource list <project-id>
 multica project resource add <project-id> \
   --type github_repo \
-  --url https://github.com/multica-ai/multica \
+  --url https://gitlab.example.com/acme/campaign-site \
   --ref main
 
 # Rattacher un répertoire local sur un daemon précis

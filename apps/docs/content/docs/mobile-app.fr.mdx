@@ -29,7 +29,7 @@ Si Xcode ou l'environnement de développement sur appareil n'est pas encore conf
 Clonez le dépôt et installez les dépendances :
 
 ```bash
-git clone https://github.com/multica-ai/multica.git
+git clone https://gitlab.yeahmobi.com/yeahcloudadrd/multica.git
 cd multica
 pnpm install
 ```
@@ -77,7 +77,7 @@ pnpm ios:mobile:device:prod:release
 
 ## Se connecter à une instance auto-hébergée
 
-Les builds Release intègrent l'adresse de l'API dans l'application. `apps/mobile/.env.production` est commité avec les valeurs publiques par défaut de multica.ai : un clone neuf compile donc directement la version de production.
+Les builds Release intègrent l'adresse de l'API dans l'application. `apps/mobile/.env.production` est commité avec les valeurs publiques par défaut : un clone neuf compile donc directement la version de production.
 
 Pour vous connecter à une instance auto-hébergée :
 
@@ -90,7 +90,7 @@ EXPO_PUBLIC_API_URL=https://api.example.com
 EXPO_PUBLIC_WEB_URL=https://app.example.com
 ```
 
-Le fichier `.local` remplace les valeurs commitées clé par clé et est ignoré par git : vos adresses personnelles n'arrivent jamais dans le dépôt. `EXPO_PUBLIC_API_URL` est obligatoire. `EXPO_PUBLIC_WEB_URL` alimente des entrées comme « Copy link » et « Open on web ». Définissez les deux : une clé omise reprend la valeur par défaut de multica.ai, et ces entrées ouvriraient alors multica.ai au lieu de votre instance.
+Le fichier `.local` remplace les valeurs commitées clé par clé et est ignoré par git : vos adresses personnelles n'arrivent jamais dans le dépôt. `EXPO_PUBLIC_API_URL` est obligatoire. `EXPO_PUBLIC_WEB_URL` alimente des entrées comme « Copy link » et « Open on web ». Définissez les deux : une clé omise reprend la valeur publique par défaut, et ces entrées ouvriraient alors l'environnement public au lieu de votre instance.
 </Step>
 <Step>
 Relancez la commande de compilation `pnpm ios:mobile:device:prod:release`. L'iPhone doit pouvoir joindre l'adresse de l'API ; si vous utilisez une adresse du réseau local, n'écrivez pas `localhost`, qui désigne sur l'iPhone le téléphone lui-même.
@@ -101,7 +101,7 @@ Relancez la commande de compilation `pnpm ios:mobile:device:prod:release`. L'iPh
 Modifier directement `.env.production` change la configuration de production de la copie de travail actuelle. Gardez vos valeurs personnelles dans `.env.production.local`, ignoré par git.
 </Callout>
 
-Pour le développement mobile, l'utilisation du Simulateur ou la connexion à l'environnement de staging, consultez [`apps/mobile/README.md`](https://github.com/multica-ai/multica/blob/main/apps/mobile/README.md) dans le dépôt.
+Pour le développement mobile, l'utilisation du Simulateur ou la connexion à l'environnement de staging, consultez [`apps/mobile/README.md`](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/apps/mobile/README.md) dans le dépôt.
 
 ## Étapes suivantes
 

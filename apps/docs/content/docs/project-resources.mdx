@@ -201,13 +201,13 @@ Multica never deletes a linked local directory when cleaning up run environments
 # Link a repository when creating a project
 multica project create \
   --title "Agent UX" \
-  --repo https://github.com/multica-ai/multica
+  --repo https://gitlab.example.com/acme/campaign-site
 
 # List and add resources
 multica project resource list <project-id>
 multica project resource add <project-id> \
   --type github_repo \
-  --url https://github.com/multica-ai/multica \
+  --url https://gitlab.example.com/acme/campaign-site \
   --ref main
 
 # Link a local directory on a specific daemon

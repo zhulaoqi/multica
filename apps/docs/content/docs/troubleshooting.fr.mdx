@@ -80,7 +80,7 @@ curl -fsS <server-url>/health
 </Accordion>
 <Accordion title={<><code>multica login</code> échoue avec un dépassement de délai de la poignée de main TLS</>} id="multica-login-fails-with-a-tls-handshake-timeout" value="multica-login-fails-with-a-tls-handshake-timeout">
 
-`multica login` ouvre le navigateur et la connexion web aboutit, mais le CLI échoue quand même avec « Sign-in did not complete » ou « TLS handshake timed out ». `multica --debug login` affiche `net/http: TLS handshake timeout` sur `POST /api/tokens`, alors que `curl.exe -I https://api.multica.ai` ou un navigateur sur la même machine se connecte sans problème.
+`multica login` ouvre le navigateur et la connexion web aboutit, mais le CLI échoue quand même avec « Sign-in did not complete » ou « TLS handshake timed out ». `multica --debug login` affiche `net/http: TLS handshake timeout` sur `POST /api/tokens`, alors que `curl.exe -I https://multica.example.com` ou un navigateur sur la même machine se connecte sans problème.
 
 La connexion TCP s'ouvre, mais la poignée de main TLS n'aboutit jamais. Les clients Go, dont le CLI et le daemon Multica, envoient par défaut un partage de clé post-quantique dans le ClientHello TLS, ce qui porte sa taille à environ 1,5 Ko et le répartit sur deux paquets. Certains logiciels de sécurité, VPN, routeurs et pare-feu abandonnent ces poignées de main ; curl envoie un ClientHello beaucoup plus petit et passe.
 
@@ -323,7 +323,7 @@ multica daemon stop
 multica daemon start --foreground
 ```
 
-Si vous ne parvenez toujours pas à cerner le problème, recherchez parmi les issues existantes ou ouvrez-en une nouvelle sur [GitHub Issues](https://github.com/multica-ai/multica/issues).
+Si vous ne parvenez toujours pas à cerner le problème, recherchez parmi les issues existantes ou ouvrez-en une nouvelle sur [GitLab Issues](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/issues).
 
 ## Étapes suivantes
 

@@ -55,19 +55,19 @@ Placez le PAT dans l'en-tête `Authorization` :
 ```bash
 export MULTICA_TOKEN='mul_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 
-curl https://api.multica.ai/api/me \
+curl https://multica.example.com/api/me \
   -H "Authorization: Bearer $MULTICA_TOKEN"
 ```
 
 Les appels d'API au niveau de l'espace de travail nécessitent aussi l'espace de travail, selon ce qu'exige le point de terminaison :
 
 ```bash
-curl https://api.multica.ai/api/issues \
+curl https://multica.example.com/api/issues \
   -H "Authorization: Bearer $MULTICA_TOKEN" \
   -H "X-Workspace-ID: $MULTICA_WORKSPACE_ID"
 ```
 
-Dans les scripts, récupérez le jeton depuis un gestionnaire de secrets ou une variable d'environnement protégée — ne l'écrivez jamais en dur. Sur les instances auto-hébergées, remplacez le domaine par votre propre adresse d'API publique.
+Dans les scripts, récupérez le jeton depuis un gestionnaire de secrets ou une variable d'environnement protégée — ne l'écrivez jamais en dur. Remplacez le domaine par l'adresse d'API de ce déploiement.
 
 ## Déconnexion et révocation
 

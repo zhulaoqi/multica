@@ -55,19 +55,19 @@ multica login --token
 ```bash
 export MULTICA_TOKEN='mul_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 
-curl https://api.multica.ai/api/me \
+curl https://multica.example.com/api/me \
   -H "Authorization: Bearer $MULTICA_TOKEN"
 ```
 
 呼叫工作區級 API 時，還需要按介面要求提供工作區：
 
 ```bash
-curl https://api.multica.ai/api/issues \
+curl https://multica.example.com/api/issues \
   -H "Authorization: Bearer $MULTICA_TOKEN" \
   -H "X-Workspace-ID: $MULTICA_WORKSPACE_ID"
 ```
 
-指令碼中的令牌取自 secret manager 或受保護的環境變數，不要硬編碼。自託管例項把網域替換為自己的公開 API 地址。
+指令碼中的令牌取自 secret manager 或受保護的環境變數，不要硬編碼。把網域替換為本部署的 API 位址。
 
 ## 退出登入與吊銷
 

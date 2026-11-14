@@ -89,7 +89,7 @@ Multica 當前會檢測以下命令：
 
 先安裝 Node.js 20+ 並執行 `npm install -g @deepseek-ai/dsh`，再為它安裝 Multica 執行時 profile。這個 bundle 實現了 Multica 驅動的 `--stdio` 協議，單獨的 `dsh` 因此無法直接使用。啟動守護程序前，設定 `DEEPSEEK_API_KEY`（或儲存在 dsh 自身的設定中）。
 
-**安裝 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 設為要安裝的 bundle，守護程序會替你安裝；也可以自己執行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目錄，或打包好的 tarball。Multica 自己的橋接實現在 [multica-ai/dsh-multica-runtime](https://github.com/multica-ai/dsh-multica-runtime)，目前還沒有釋出到公共 npm registry（[multica#6936](https://github.com/multica-ai/multica/issues/6936)）。現階段自託管團隊從該倉庫自行構建，把變數指向構建產物目錄；執行守護程序的機器和構建機器不是同一臺時，指向 `npm pack` 產出的 tarball。橋接釋出之後，直接填包名最省事。
+**安裝 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 設為要安裝的 bundle，守護程序會替你安裝；也可以自己執行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目錄，或打包好的 tarball。Multica 自己的橋接實現在 multica-ai/dsh-multica-runtime，目前還沒有釋出到公共 npm registry。現階段自託管團隊從該倉庫自行構建，把變數指向構建產物目錄；執行守護程序的機器和構建機器不是同一臺時，指向 `npm pack` 產出的 tarball。橋接釋出之後，直接填包名最省事。
 
 **遷移現有 profile。** 先備份 profile，按橋接倉庫 README 構建與你的 DSH 版本相容的 bundle。手動安裝這個目錄或 tarball，再確認 `dsh.profile.bundles` 載入了 `@multica-ai/dsh-runtime`：有 `dsh-profile-multica` 時替換它；兩者都有時移除 `dsh-profile-multica`。只在依賴列表宣告包名不會載入執行時。`MULTICA_DSH_PROFILE_BUNDLE` 不會遷移現有橋接配置。完成後用 `dsh --profile multica --probe` 驗證。
 

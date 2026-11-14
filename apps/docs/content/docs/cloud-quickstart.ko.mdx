@@ -16,7 +16,7 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 ## 로그인하고 워크스페이스 열기 [#1-로그인하고-워크스페이스-열기]
 
-Web([multica.ai](https://multica.ai)) 또는 [Multica Desktop](https://multica.ai/download)에서 로그인합니다. 이메일 인증 코드와 Google 로그인을 지원합니다. Desktop으로 로그인하면 다음 단계에서 이 컴퓨터를 자동으로 연결할 수 있고, Web으로 로그인하면 명령줄로 연결합니다.
+Web 또는 [Multica Desktop](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/releases)에서 로그인합니다. 이메일 인증 코드와 Google 로그인을 지원합니다. Desktop으로 로그인하면 다음 단계에서 이 컴퓨터를 자동으로 연결할 수 있고, Web으로 로그인하면 명령줄로 연결합니다.
 
 </Step>
 <Step>
@@ -32,7 +32,7 @@ Web([multica.ai](https://multica.ai)) 또는 [Multica Desktop](https://multica.a
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 multica setup
 ```
 
@@ -40,7 +40,7 @@ multica setup
 <Tab value="Windows">
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 multica setup
 ```
 

@@ -80,7 +80,7 @@ curl -fsS <server-url>/health
 </Accordion>
 <Accordion title={<><code>multica login</code> fails with a TLS handshake timeout</>} id="multica-login-fails-with-a-tls-handshake-timeout" value="multica-login-fails-with-a-tls-handshake-timeout">
 
-`multica login` opens the browser and the web sign-in completes, but the CLI still fails with "Sign-in did not complete" or "TLS handshake timed out". `multica --debug login` shows `net/http: TLS handshake timeout` on `POST /api/tokens`, while `curl.exe -I https://api.multica.ai` or a browser on the same machine connects fine.
+`multica login` opens the browser and the web sign-in completes, but the CLI still fails with "Sign-in did not complete" or "TLS handshake timed out". `multica --debug login` shows `net/http: TLS handshake timeout` on `POST /api/tokens`, while `curl.exe -I https://multica.example.com` or a browser on the same machine connects fine.
 
 The TCP connection opens, but the TLS handshake never completes. Go clients, including the Multica CLI and daemon, send a post-quantum key share in the TLS ClientHello by default, which makes it about 1.5 KB and splits it across two packets. Some security software, VPNs, routers, and firewalls drop such handshakes; curl sends a much smaller ClientHello and gets through.
 
@@ -334,7 +334,7 @@ multica daemon stop
 multica daemon start --foreground
 ```
 
-If you still cannot pin it down, search existing issues or file a new one on [GitHub Issues](https://github.com/multica-ai/multica/issues).
+If you still cannot pin it down, search existing issues or file a new one on [GitLab Issues](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/issues).
 
 ## Next steps
 

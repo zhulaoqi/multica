@@ -9,7 +9,6 @@ import { NumberedCards, NumberedCard, NumberedSteps, Step } from "@/components/e
 import { VideoEmbed } from "@/components/video-embed";
 import { i18n, type Lang } from "@/lib/i18n";
 import { homeCopy } from "@/lib/translations";
-import { docsAlternates } from "@/lib/site";
 import { DocsLocaleProvider, LocaleLink } from "@/components/locale-link";
 
 function asLang(lang: string): Lang {
@@ -87,6 +86,5 @@ export async function generateMetadata({
   return {
     title: page.data.title,
     description: page.data.description,
-    alternates: docsAlternates([]),
   };
 }

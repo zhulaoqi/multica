@@ -9,7 +9,6 @@ import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { ImageZoom, type ImageZoomProps } from "fumadocs-ui/components/image-zoom";
 import type { Metadata } from "next";
-import { docsAlternates } from "@/lib/site";
 import { i18n, type Lang } from "@/lib/i18n";
 import { DocsLocaleProvider, LocaleLink } from "@/components/locale-link";
 import { VideoEmbed } from "@/components/video-embed";
@@ -68,6 +67,5 @@ export async function generateMetadata(props: {
   return {
     title: page.data.title,
     description: page.data.description,
-    alternates: docsAlternates(params.slug),
   };
 }

@@ -14,14 +14,9 @@ Multica CLI 既負責連線本機執行時，也可以在終端中管理工作�
 <Tab value="macOS / Linux">
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
+curl -fsSL https://multica.example.com/install/install.sh | bash
 ```
 
-安裝了 Homebrew 時也可以執行：
-
-```bash
-brew install multica-ai/tap/multica
-```
 
 </Tab>
 <Tab value="Windows">
@@ -29,11 +24,13 @@ brew install multica-ai/tap/multica
 在 PowerShell 中執行：
 
 ```powershell
-irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
+irm https://multica.example.com/install/install.ps1 | iex
 ```
 
 </Tab>
 </Tabs>
+
+`multica.example.com` 代表本部署自己的位址；**新增執行時** 對話框中顯示的命令會帶上真實位址。
 
 確認安裝成功：
 
@@ -444,13 +441,13 @@ CLI 配置檔案包含可代表你訪問 Multica 的令牌。不要提交到倉�
 
 ## 在其他編碼 AI 代理裡操作 Multica
 
-如果你的工作大多發生在 Codex、Claude Code 或 Cursor 裡，可以直接在那裡操作 Multica，不必切回終端。[Multica CLI skill](https://github.com/multica-ai/multica-cli) 會教這些 AI 代理安全地使用本頁的命令：讀任務和評論執行緒時少耗 token、透過檔案寫評論，以及正確處理 mention、狀態變更和指派帶來的副作用。
+如果你的工作大多發生在 Codex、Claude Code 或 Cursor 裡，可以直接在那裡操作 Multica，不必切回終端。Multica CLI skill 會教這些 AI 代理安全地使用本頁的命令：讀任務和評論執行緒時少耗 token、透過檔案寫評論，以及正確處理 mention、狀態變更和指派帶來的副作用。
 
 它完全透過你已認證的 CLI 執行，本身不授予任何權限，權限仍然只來自你的登入、所選 profile 和工作區。要求 CLI 版本不低於 v0.4.26。該倉庫的 README 說明了 Claude Code 外掛市場、Codex skill 安裝器、Cursor 以及其他任何載入 Markdown 指令的工具的安裝方式。
 
 ## 接下來
 
-- [Multica CLI skill](https://github.com/multica-ai/multica-cli) — 在 Codex、Claude Code 或 Cursor 裡操作 Multica。
+- Multica CLI skill — 在 Codex、Claude Code 或 Cursor 裡操作 Multica。
 - [認證與令牌](/auth-tokens) — PAT 的建立、續期和吊銷。
 - [故障排查](/troubleshooting) — 命令報錯和執行不開始的排查路徑。
 - [建立和配置 AI 代理](/agents-create) — `agent create` 各欄位的完整語義。
