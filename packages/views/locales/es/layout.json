@@ -10,6 +10,7 @@
     "agents": "Agentes",
     "org": "Organización",
     "squads": "Squads",
+    "office": "Oficina",
     "usage": "Analítica",
     "runtimes": "Runtimes",
     "skills": "Skills",
@@ -60,7 +61,8 @@
     "hold_for_history": "Mantén pulsado para ver el historial",
     "back_history": "Historial hacia atrás",
     "forward_history": "Historial hacia delante"
-  },  "spaces": {
+  },
+  "spaces": {
     "work": "Trabajo",
     "team": "Equipo"
   },
@@ -132,7 +134,9 @@
       "running_tasks_other": "{{count}} ejecuciones en curso",
       "all_agents": "Todos los agentes",
       "my_agents": "Mis agentes",
+      "team_agents": "Agentes del equipo",
       "squads_and_members": "Squads y miembros",
+      "collaboration": "Colaboración",
       "members_one": "{{count}} miembro",
       "members_other": "{{count}} miembros",
       "resources": "Recursos",

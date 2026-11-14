@@ -1,0 +1,23 @@
+{
+  "page": {
+    "title": "오피스",
+    "connecting": "오피스에 연결하는 중…",
+    "hint": "WASD 또는 방향키로 이동하고, 바닥을 클릭해도 걸어갑니다.",
+    "error": "오피스 연결이 끊어졌습니다. 다시 연결하는 중…",
+    "roster": {
+      "title": "오피스에 있는 사람",
+      "empty": "아직 다른 사람이 없습니다.",
+      "you": "나",
+      "agents": "에이전트",
+      "no_agents": "이 워크스페이스에는 아직 에이전트가 없습니다.",
+      "member": "멤버",
+      "count_other": "{{count}}명"
+    },
+    "status": {
+      "working": "작업 중",
+      "queued": "대기 중",
+      "idle": "유휴",
+      "offline": "오프라인"
+    }
+  }
+}

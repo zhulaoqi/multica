@@ -1,0 +1,24 @@
+{
+  "page": {
+    "title": "Oficina",
+    "connecting": "Conectando a la oficina…",
+    "hint": "Muévete con WASD o las flechas, o haz clic en el suelo para caminar.",
+    "error": "Conexión con la oficina perdida. Reconectando…",
+    "roster": {
+      "title": "En la oficina",
+      "count_one": "{{count}} persona",
+      "count_other": "{{count}} personas",
+      "empty": "Todavía no hay nadie más.",
+      "you": "Tú",
+      "agents": "Agentes",
+      "no_agents": "Aún no hay agentes en este espacio de trabajo.",
+      "member": "Miembro"
+    },
+    "status": {
+      "working": "Trabajando",
+      "queued": "En cola",
+      "idle": "Inactivo",
+      "offline": "Desconectado"
+    }
+  }
+}

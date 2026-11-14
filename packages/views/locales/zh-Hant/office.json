@@ -1,0 +1,23 @@
+{
+  "page": {
+    "title": "辦公室",
+    "connecting": "正在連接辦公室…",
+    "hint": "用 WASD 或方向鍵移動，也可以點擊地面走過去。",
+    "error": "辦公室連線已中斷，正在重新連線…",
+    "roster": {
+      "title": "在辦公室",
+      "empty": "還沒有其他人在線。",
+      "you": "你",
+      "agents": "智能體",
+      "no_agents": "這個工作區還沒有智能體。",
+      "member": "成員",
+      "count_other": "{{count}} 人"
+    },
+    "status": {
+      "working": "工作中",
+      "queued": "排隊中",
+      "idle": "閒置",
+      "offline": "離線"
+    }
+  }
+}

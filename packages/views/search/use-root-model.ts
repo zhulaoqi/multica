@@ -46,6 +46,7 @@ const PAGE_KEYWORDS: Record<WorkspacePageKey, string[]> = {
   squads: ["squads", "teams", "小队", "团队"],
   usage: ["usage", "analytics", "stats", "metrics", "统计", "分析", "用量"],
   runtimes: ["runtimes", "environments", "machines", "运行时"],
+  office: ["office", "collaboration", "办公室", "协作"],
   skills: ["skills", "library", "技能"],
   settings: ["settings", "config", "preferences", "设置", "配置"],
 };

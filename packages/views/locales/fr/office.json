@@ -1,0 +1,24 @@
+{
+  "page": {
+    "title": "Bureau",
+    "connecting": "Connexion au bureau…",
+    "hint": "Déplacez-vous avec WASD ou les flèches, ou cliquez sur le sol pour marcher.",
+    "error": "Connexion au bureau perdue. Reconnexion…",
+    "roster": {
+      "title": "Au bureau",
+      "count_one": "{{count}} personne",
+      "count_other": "{{count}} personnes",
+      "empty": "Personne d'autre pour l'instant.",
+      "you": "Vous",
+      "agents": "Agents",
+      "no_agents": "Aucun agent dans cet espace de travail.",
+      "member": "Membre"
+    },
+    "status": {
+      "working": "En cours",
+      "queued": "En attente",
+      "idle": "Disponible",
+      "offline": "Hors ligne"
+    }
+  }
+}
