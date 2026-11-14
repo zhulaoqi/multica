@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, BookOpenText, Bot, Monitor, Network, Plus, User, UserPlus, Users } from "@multica/ui/icons";
+import { BarChart3, BookOpenText, Bot, Building2, Monitor, Network, Plus, User, UserPlus, Users } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { IconButton } from "@multica/ui/components/common/icon-button";
@@ -17,6 +17,7 @@ import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import type { Agent, AgentTask } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
 import { availabilityConfig } from "../../agents/presence";
+import { teamUserIdsFor } from "../../agents/team-scope";
 import { useT } from "../../i18n";
 import { buildRuntimeMachines, runtimeMachineCounts } from "../../runtimes/components/runtime-machines";
 import {
@@ -130,6 +131,13 @@ export function TeamPanel() {
   const mineCount = userId ? agents.filter((agent) => agent.owner_id === userId).length : 0;
   const myRole = members.find((member) => member.user_id === userId)?.role;
   const canManageMembers = myRole === "owner" || myRole === "admin";
+  const teamUserIds = useMemo(
+    () => teamUserIdsFor(orgTree, userId, canManageMembers),
+    [orgTree, userId, canManageMembers],
+  );
+  const teamAgentCount = teamUserIds
+    ? agents.filter((agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id)).length
+    : 0;
   const onAgents = pathname === p.agents();
   // Member pages live under /members/:id; the list itself is a Settings tab.
   const membersRoot = p.memberDetail("").replace(/\/$/, "");
@@ -204,8 +212,29 @@ export function TeamPanel() {
           </PanelSection>
         )}
 
+        <PanelSection label={t(($) => $.panels.team.collaboration)}>
+          <PanelList>
+            <PanelLink
+              href={p.office()}
+              icon={<Building2 />}
+              label={t(($) => $.nav.office)}
+              active={isPathWithin(pathname, p.office())}
+            />
+          </PanelList>
+        </PanelSection>
+
         <PanelSection label={t(($) => $.nav.agents)}>
           <PanelList>
+            {teamUserIds && (
+              <PanelLink
+                href={p.agents()}
+                icon={<Users />}
+                label={t(($) => $.panels.team.team_agents)}
+                active={onAgents && agentsScope === "team"}
+                trailing={<PanelCount value={teamAgentCount} />}
+                onNavigate={() => setAgentsScope("team")}
+              />
+            )}
             <PanelLink
               href={p.agents()}
               icon={<Bot />}

@@ -68,6 +68,7 @@ import {
   type CollectionSort,
 } from "../../layout/collection-list";
 import { availabilityConfig } from "../presence";
+import { teamUserIdsFor } from "../team-scope";
 import { AgentRowActions } from "./agent-row-actions";
 import { AgentSetupChecklist } from "./agent-setup-checklist";
 import {
@@ -453,25 +454,12 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     (orgTree?.units.some((unit) => unit.can_manage) ?? false);
 
   // "My team" users: members of the units this viewer leads, including
-  // themselves. `can_manage` is inherited by descendants server-side, so the
-  // set covers the lead's whole subtree without walking parents here. The
-  // org tree only lists members of units the viewer may see, which is
-  // exactly the subtree here. Workspace admins skip the lens — "all" already
-  // shows everything.
-  const teamUserIds = useMemo<ReadonlySet<string> | null>(() => {
-    if (!orgTree || !currentUser || isWorkspaceAdmin) return null;
-    const managedUnitIds = new Set(
-      orgTree.units.filter((unit) => unit.can_manage).map((unit) => unit.id),
-    );
-    if (managedUnitIds.size === 0) return null;
-    const ids = new Set<string>([currentUser.id]);
-    for (const member of orgTree.members ?? []) {
-      if (member.unit_id && managedUnitIds.has(member.unit_id)) {
-        ids.add(member.user_id);
-      }
-    }
-    return ids;
-  }, [orgTree, currentUser, isWorkspaceAdmin]);
+  // themselves. Workspace admins skip the lens — "all" already shows
+  // everything.
+  const teamUserIds = useMemo<ReadonlySet<string> | null>(
+    () => teamUserIdsFor(orgTree, currentUser?.id, isWorkspaceAdmin),
+    [orgTree, currentUser, isWorkspaceAdmin],
+  );
 
   // Leads land on "team" until they pick a scope themselves. A stale value
   // from a less privileged session never leaks through: non-managers are
