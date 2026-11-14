@@ -12,14 +12,18 @@ import type { AccessScope } from "../effective-access";
 // session-scoped on purpose (same rationale as the skills/autopilots view
 // stores).
 
-// Scope mixes the ownership lens (mine/all) with the archived lifecycle
-// stage. Impure on paper, but the three are mutually exclusive in practice
-// and "mine" is the historical product default; the archived view ignores
-// the ownership lens entirely (showing only *my* archived agents would hide
+// Scope mixes the ownership lens (mine/team/all) with the archived lifecycle
+// stage. Impure on paper, but they are mutually exclusive in practice and
+// "mine" is the historical product default; the archived view ignores the
+// ownership lens entirely (showing only *my* archived agents would hide
 // other people's archived agents with no UI to explain why).
-export type AgentsScope = "mine" | "all" | "archived";
+//
+// "team" is the department lead's lens: agents owned by members of the units
+// the viewer leads. It only exists for leads (see agents-page) and defaults
+// on for them until they pick a scope themselves.
+export type AgentsScope = "mine" | "team" | "all" | "archived";
 
-export const AGENT_SCOPES: AgentsScope[] = ["mine", "all", "archived"];
+export const AGENT_SCOPES: AgentsScope[] = ["mine", "team", "all", "archived"];
 
 export type AgentSortField = "lastActive" | "name" | "runs" | "created";
 
@@ -85,12 +89,16 @@ export const AGENT_DEFAULT_HIDDEN_COLUMNS: AgentColumnKey[] = [
 ];
 
 /** Persist schema version. v0 hid the model column by default; v1 shows it;
- *  v2 also hides owner and access by default. */
-const AGENT_VIEW_STORE_VERSION = 2;
+ *  v2 also hides owner and access by default; v3 adds `scopeTouched`. */
+const AGENT_VIEW_STORE_VERSION = 3;
 
 export interface AgentsViewState
   extends CollectionViewCore<AgentSortField, AgentColumnKey, AgentListFilters> {
   scope: AgentsScope;
+  /** The user picked a scope themselves. Department leads get "team" as
+   *  their default view until they do; without this flag a lead could not
+   *  switch back to "mine" permanently. */
+  scopeTouched: boolean;
   setScope: (scope: AgentsScope) => void;
 }
 
@@ -98,7 +106,7 @@ export const useAgentsViewStore = createCollectionViewStore<
   AgentSortField,
   AgentColumnKey,
   AgentListFilters,
-  { scope: AgentsScope },
+  { scope: AgentsScope; scopeTouched: boolean },
   { setScope: (scope: AgentsScope) => void }
 >({
   name: "multica_agents_view",
@@ -108,6 +116,8 @@ export const useAgentsViewStore = createCollectionViewStore<
   // on, so un-hide it once; the user can re-hide it from the Display panel.
   // v1 → v2: a payload still on the v1 default (only "created" hidden) moves
   // to the new default; any other column choice is the user's and stays.
+  // v2 → v3: anything beyond the original "mine" default was an explicit
+  // choice, so it must not be overridden by the lead's new "team" default.
   // Other persisted prefs pass through untouched.
   migrate: (persisted, version) => {
     let p = (persisted ?? {}) as Partial<AgentsViewState>;
@@ -122,6 +132,9 @@ export const useAgentsViewStore = createCollectionViewStore<
     ) {
       p = { ...p, hiddenColumns: [...AGENT_DEFAULT_HIDDEN_COLUMNS] };
     }
+    if (version < 3) {
+      p = { ...p, scopeTouched: p.scope !== undefined && p.scope !== "mine" };
+    }
     return p;
   },
   defaultSortField: "lastActive",
@@ -129,15 +142,18 @@ export const useAgentsViewStore = createCollectionViewStore<
   defaultHiddenColumns: AGENT_DEFAULT_HIDDEN_COLUMNS,
   emptyFilters: EMPTY_AGENT_FILTERS,
   // "mine" is the historical default — most members care about their own
-  // agents first; admins flip to "all".
-  extraState: { scope: "mine" },
+  // agents first; admins flip to "all", and department leads land on "team"
+  // until they pick a scope themselves (agents-page resolves that).
+  extraState: { scope: "mine", scopeTouched: false },
   // "Mine" is the clean personal view: entering it clears all filters, so
-  // Mine never carries filters. Switching to all/archived leaves filters
+  // Mine never carries filters. Switching to team/all/archived leaves filters
   // intact (you can carry "owner = Bob" between them).
   extraActions: (set) => ({
     setScope: (scope) =>
       set(
-        scope === "mine" ? { scope, filters: EMPTY_AGENT_FILTERS } : { scope },
+        scope === "mine"
+          ? { scope, scopeTouched: true, filters: EMPTY_AGENT_FILTERS }
+          : { scope, scopeTouched: true },
       ),
   }),
   // Applying any filter leaves the clean "mine" view for "all". Archived

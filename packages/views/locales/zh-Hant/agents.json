@@ -10,6 +10,7 @@
     "try_again": "重試",
     "scope_title": {
       "mine": "我的 AI 代理",
+      "team": "我的團隊",
       "all": "全部 AI 代理",
       "archived": "已歸檔 AI 代理"
     }

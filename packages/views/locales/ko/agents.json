@@ -10,6 +10,7 @@
     "try_again": "다시 시도",
     "scope_title": {
       "mine": "내 에이전트",
+      "team": "팀 에이전트",
       "all": "모든 에이전트",
       "archived": "보관된 에이전트"
     }

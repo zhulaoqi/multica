@@ -10,6 +10,7 @@
     "search": "Buscar agentes",
     "scope_title": {
       "mine": "Mis agentes",
+      "team": "Agentes del equipo",
       "all": "Todos los agentes",
       "archived": "Agentes archivados"
     }

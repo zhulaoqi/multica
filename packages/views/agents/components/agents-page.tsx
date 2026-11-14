@@ -405,6 +405,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     new Set(),
   );
   const rawScope = useAgentsViewStore((s) => s.scope);
+  const scopeTouched = useAgentsViewStore((s) => s.scopeTouched);
   const setScope = useAgentsViewStore((s) => s.setScope);
   const sortField = useAgentsViewStore((s) => s.sortField);
   const sortDirection = useAgentsViewStore((s) => s.sortDirection);
@@ -450,20 +451,56 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   const canViewAllAgents =
     isWorkspaceAdmin ||
     (orgTree?.units.some((unit) => unit.can_manage) ?? false);
-  const scope: AgentsScope = canViewAllAgents
-    ? AGENT_SCOPES.includes(rawScope)
-      ? rawScope
-      : "mine"
-    : "mine";
-  const scopeOptions = AGENT_SCOPES.filter(
-    (value) => value !== "all" || canViewAllAgents,
-  );
+
+  // "My team" users: members of the units this viewer leads, including
+  // themselves. `can_manage` is inherited by descendants server-side, so the
+  // set covers the lead's whole subtree without walking parents here. The
+  // org tree only lists members of units the viewer may see, which is
+  // exactly the subtree here. Workspace admins skip the lens — "all" already
+  // shows everything.
+  const teamUserIds = useMemo<ReadonlySet<string> | null>(() => {
+    if (!orgTree || !currentUser || isWorkspaceAdmin) return null;
+    const managedUnitIds = new Set(
+      orgTree.units.filter((unit) => unit.can_manage).map((unit) => unit.id),
+    );
+    if (managedUnitIds.size === 0) return null;
+    const ids = new Set<string>([currentUser.id]);
+    for (const member of orgTree.members ?? []) {
+      if (member.unit_id && managedUnitIds.has(member.unit_id)) {
+        ids.add(member.user_id);
+      }
+    }
+    return ids;
+  }, [orgTree, currentUser, isWorkspaceAdmin]);
+
+  // Leads land on "team" until they pick a scope themselves. A stale value
+  // from a less privileged session never leaks through: non-managers are
+  // pinned to "mine", and "team" collapses to "mine" when the viewer no
+  // longer leads anyone.
+  const rawScopeIsValid =
+    AGENT_SCOPES.includes(rawScope) &&
+    (rawScope !== "team" || teamUserIds !== null);
+  const scope: AgentsScope = !canViewAllAgents
+    ? "mine"
+    : !rawScopeIsValid
+      ? "mine"
+      : scopeTouched
+        ? rawScope
+        : teamUserIds !== null
+          ? "team"
+          : "mine";
+  const scopeOptions = AGENT_SCOPES.filter((value) => {
+    if (value === "all") return canViewAllAgents;
+    if (value === "team") return teamUserIds !== null;
+    return true;
+  });
 
   // Scope counts come from the FULL set (filters never affect them).
   // Archived ignores the ownership lens for managers; members still only
   // count their own archived agents.
   const scopeCounts = useMemo<Record<AgentsScope, number>>(() => {
     let mine = 0;
+    let team = 0;
     let all = 0;
     let archived = 0;
     for (const a of agents) {
@@ -474,9 +511,10 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       }
       all++;
       if (isMine) mine++;
+      if (a.owner_id && teamUserIds?.has(a.owner_id)) team++;
     }
-    return { mine, all, archived };
-  }, [agents, currentUser, canViewAllAgents]);
+    return { mine, team, all, archived };
+  }, [agents, currentUser, canViewAllAgents, teamUserIds]);
 
   // Rows within the current scope, unfiltered, fully assembled — the
   // filter menu's option lists derive from this; cells never pull their
@@ -493,6 +531,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       if (a.archived_at) return false;
       if (scope === "mine") {
         return !!currentUser && a.owner_id === currentUser.id;
+      }
+      if (scope === "team") {
+        return !!a.owner_id && (teamUserIds?.has(a.owner_id) ?? false);
       }
       return true;
     });
@@ -522,6 +563,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     runCountsById,
     isWorkspaceAdmin,
     canViewAllAgents,
+    teamUserIds,
   ]);
 
   // Visible rows: search and filters, then sort.
@@ -687,6 +729,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   };
   const scopeTitles: Record<AgentsScope, string> = {
     mine: t(($) => $.page.scope_title.mine),
+    team: t(($) => $.page.scope_title.team),
     all: t(($) => $.page.scope_title.all),
     archived: t(($) => $.page.scope_title.archived),
   };

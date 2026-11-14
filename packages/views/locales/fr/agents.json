@@ -10,6 +10,7 @@
     "try_again": "Réessayer",
     "scope_title": {
       "mine": "Mes agents",
+      "team": "Agents de l'équipe",
       "all": "Tous les agents",
       "archived": "Agents archivés"
     }

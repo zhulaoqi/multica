@@ -26,7 +26,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   localStorage.clear();
-  useAgentsViewStore.setState({ scope: "mine", search: "" });
+  useAgentsViewStore.setState({ scope: "mine", scopeTouched: false, search: "" });
   setCurrentWorkspace(null, null);
 });
 
@@ -48,6 +48,7 @@ describe("useAgentsViewStore", () => {
       "filters",
       "hiddenColumns",
       "scope",
+      "scopeTouched",
       "sortDirection",
       "sortField",
     ]);
@@ -185,6 +186,46 @@ describe("useAgentsViewStore", () => {
       expect(useAgentsViewStore.getState().filters.access).toEqual([]);
     });
   });
+  describe("team scope (department leads)", () => {
+    it("marks the scope as user-chosen on setScope", async () => {
+      setCurrentWorkspace("acme", "ws_a");
+      await flush();
+
+      expect(useAgentsViewStore.getState().scopeTouched).toBe(false);
+      useAgentsViewStore.getState().setScope("team");
+      expect(useAgentsViewStore.getState().scopeTouched).toBe(true);
+      useAgentsViewStore.getState().setScope("mine");
+      expect(useAgentsViewStore.getState().scopeTouched).toBe(true);
+    });
+
+    it("treats an explicitly saved v2 scope as user-chosen", async () => {
+      localStorage.setItem(
+        "multica_agents_view:acme",
+        JSON.stringify({ state: { scope: "all" }, version: 2 }),
+      );
+
+      setCurrentWorkspace("acme", "ws_a");
+      await flush();
+      await flush();
+
+      expect(useAgentsViewStore.getState().scope).toBe("all");
+      expect(useAgentsViewStore.getState().scopeTouched).toBe(true);
+    });
+
+    it("leaves the original v2 default untouched", async () => {
+      localStorage.setItem(
+        "multica_agents_view:acme",
+        JSON.stringify({ state: { scope: "mine" }, version: 2 }),
+      );
+
+      setCurrentWorkspace("acme", "ws_a");
+      await flush();
+      await flush();
+
+      expect(useAgentsViewStore.getState().scopeTouched).toBe(false);
+    });
+  });
+
   describe("model column default (GitHub #9500)", () => {
     it("shows the model column by default", async () => {
       setCurrentWorkspace("acme", "ws_a");

@@ -25,7 +25,10 @@ const mocks = vi.hoisted(() => ({
   // Org tree decides whether the caller may open the full agent list.
   // Defaults to a caller who manages a department so the legacy scope
   // behavior (all agents visible) is what most tests here pin.
-  orgTree: { units: [] as Array<{ can_manage: boolean }> },
+  orgTree: {
+    units: [] as Array<{ id: string; can_manage: boolean }>,
+    members: [] as Array<{ user_id: string; unit_id: string }>,
+  },
   activity: {
     byAgent: new Map<string, AgentActivity>(),
     loading: false,
@@ -36,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   },
   viewState: {
     scope: "all",
+    scopeTouched: true,
     sortField: "lastActive" as string,
     sortDirection: "desc" as string,
     hiddenColumns: ["created"] as string[],
@@ -118,7 +122,7 @@ vi.mock("@multica/core/agents/stores", () => ({
   useAgentsViewStore: (selector: (state: unknown) => unknown) =>
     selector(mocks.viewState),
   AGENT_DEFAULT_HIDDEN_COLUMNS: ["created"],
-  AGENT_SCOPES: ["mine", "all", "archived"],
+  AGENT_SCOPES: ["mine", "team", "all", "archived"],
 }));
 
 vi.mock("@multica/core/api", () => ({
@@ -257,7 +261,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.agents = [ALPHA, BETA];
   mocks.agentsLoading = false;
-  mocks.orgTree = { units: [{ can_manage: true }] };
+  mocks.orgTree = { units: [{ id: "unit-a", can_manage: true }], members: [] };
+  mocks.viewState.scopeTouched = true;
   mocks.runCounts = [];
   mocks.runCountsPending = false;
   mocks.activity = { byAgent: new Map(), loading: false };
@@ -397,6 +402,7 @@ describe("AgentsPage header", () => {
     const options = screen.getAllByRole("menuitemradio");
     expect(options.map((option) => option.textContent)).toEqual([
       "My agents2",
+      "Team agents2",
       "All agents2",
       "Archived agents0",
     ]);
@@ -420,7 +426,7 @@ describe("AgentsPage header", () => {
       makeAgent({ id: "a-gamma", name: "Gamma Agent", owner_id: "user-2" }),
     ];
     // Not a workspace admin and leads no department.
-    mocks.orgTree = { units: [{ can_manage: false }] };
+    mocks.orgTree = { units: [{ id: "unit-a", can_manage: false }], members: [] };
     renderPage();
 
     const header = screen.getByRole("banner");
@@ -515,5 +521,78 @@ describe("AgentsPage model column (GitHub #9500)", () => {
 
     expect(screen.getByText("Model")).toBeInTheDocument();
     expect(screen.getAllByText("claude").length).toBeGreaterThan(0);
+  });
+});
+
+describe("AgentsPage team scope", () => {
+  const TEAMMATE_AGENT = makeAgent({
+    id: "a-team",
+    name: "Team Agent",
+    owner_id: "user-2",
+  });
+  const OUTSIDER_AGENT = makeAgent({
+    id: "a-out",
+    name: "Outsider Agent",
+    owner_id: "user-3",
+  });
+
+  function renderAsLead() {
+    mocks.orgTree = {
+      units: [{ id: "unit-a", can_manage: true }],
+      members: [
+        { user_id: "user-1", unit_id: "unit-a" },
+        { user_id: "user-2", unit_id: "unit-a" },
+      ],
+    };
+    mocks.agents = [ALPHA, TEAMMATE_AGENT, OUTSIDER_AGENT];
+    mocks.viewState.sortField = "name";
+    mocks.viewState.scope = "mine";
+  }
+
+  it("defaults a department lead to their team's agents", () => {
+    renderAsLead();
+    mocks.viewState.scopeTouched = false;
+
+    renderPage();
+
+    expect(
+      screen.getByRole("heading", { name: "Team agents", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
+    expect(screen.getByText("Team Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Outsider Agent")).not.toBeInTheDocument();
+  });
+
+  it("honours the lead's own scope choice over the team default", () => {
+    renderAsLead();
+    mocks.viewState.scopeTouched = true;
+
+    renderPage();
+
+    expect(
+      screen.getByRole("heading", { name: "My agents", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Team Agent")).not.toBeInTheDocument();
+  });
+
+  it("keeps a plain member on their own agents", () => {
+    renderAsLead();
+    mocks.viewState.scopeTouched = false;
+    mocks.orgTree = {
+      units: [{ id: "unit-a", can_manage: false }],
+      members: [
+        { user_id: "user-1", unit_id: "unit-a" },
+        { user_id: "user-2", unit_id: "unit-a" },
+      ],
+    };
+
+    renderPage();
+
+    expect(
+      screen.getByRole("heading", { name: "My agents", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Team Agent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Outsider Agent")).not.toBeInTheDocument();
   });
 });

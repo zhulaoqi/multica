@@ -10,6 +10,7 @@
     "try_again": "Try again",
     "scope_title": {
       "mine": "My agents",
+      "team": "Team agents",
       "all": "All agents",
       "archived": "Archived agents"
     }
