@@ -40,6 +40,7 @@ const AGENT_CHAT_RADIUS = 18;
 const CHAT_MS = 1200;
 const ERRAND_MIN_MS = 5000;
 const ERRAND_SPREAD_MS = 6000;
+const SPAWN_STAGGER_MS = 280;
 const GLOW_COLOR = 0x9fe3f5;
 
 export interface OfficeAgentView {
@@ -71,6 +72,8 @@ interface Avatar {
   leisureSpot: Station | null;
   chatUntil: number;
   glow: Graphics | null;
+  /** Wall clock at which the avatar steps through the doorway; null while queued. */
+  spawnAt: number | null;
 }
 
 export interface OfficeAgentsOptions {
@@ -92,6 +95,7 @@ export class OfficeAgents {
   private readonly leisure: Station[];
   private readonly glowByIndex = new Map<number, Graphics>();
   private readonly avatars = new Map<string, Avatar>();
+  private spawnQueue = 0;
 
   constructor(options: OfficeAgentsOptions) {
     this.pixi = options.pixi;
@@ -146,6 +150,7 @@ export class OfficeAgents {
       // Agents walk in from the doorway instead of popping into their chairs.
       const entrance = this.entranceFor(index);
       view.container.position.set(entrance.x, entrance.y);
+      view.container.visible = false;
       view.setDir("up");
       view.container.eventMode = "static";
       view.container.cursor = "pointer";
@@ -172,6 +177,7 @@ export class OfficeAgents {
         leisureSpot: null,
         chatUntil: 0,
         glow: this.glowByIndex.get(index) ?? null,
+        spawnAt: null,
       });
     });
 
@@ -183,8 +189,21 @@ export class OfficeAgents {
   }
 
   update(dtSeconds: number, nowMs: number, humans: OfficeHuman[]) {
+    // Newcomers file through the doorway one at a time instead of walking in
+    // as a clump; a whole batch arriving later still gets spaced out.
+    let queuedSpawns = 0;
+    for (const avatar of this.avatars.values()) {
+      if (avatar.spawnAt !== null) continue;
+      avatar.spawnAt = nowMs + this.spawnQueue * SPAWN_STAGGER_MS;
+      this.spawnQueue += 1;
+      queuedSpawns += 1;
+    }
+    if (queuedSpawns === 0) this.spawnQueue = 0;
+
     this.assignSharedSpots();
     for (const avatar of this.avatars.values()) {
+      if (avatar.spawnAt !== null && nowMs < avatar.spawnAt) continue;
+      if (!avatar.view.container.visible) avatar.view.container.visible = true;
       const target = this.stationFor(avatar, nowMs);
       if (target.key !== avatar.goalKey) {
         avatar.goalKey = target.key;
@@ -239,6 +258,7 @@ export class OfficeAgents {
 
   syncLabels(zoom: number) {
     for (const avatar of this.avatars.values()) {
+      avatar.label.visible = avatar.view.container.visible;
       avatar.label.position.set(
         Math.round(avatar.view.container.x * zoom),
         Math.round(avatar.view.container.y * zoom) + 16,
