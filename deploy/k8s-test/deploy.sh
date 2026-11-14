@@ -128,6 +128,14 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
   docker build --platform linux/amd64 -f "${repo}/docker/agent-api/Dockerfile" \
     --build-arg GO_RUNTIME="${go_runtime}" \
     -t "${api_image}" "${repo}"
+  # CLI archives are build inputs for the web image: the install scripts in it
+  # download them from the same origin. Without this directory the image still
+  # builds, but the install commands have nothing to fetch.
+  if [ -n "${MULTICA_CLI_ASSETS:-}" ]; then
+    "${repo}/scripts/publish-cli-assets.sh" "${MULTICA_CLI_ASSETS}"
+  else
+    echo "MULTICA_CLI_ASSETS 未设置，Web 镜像不含 CLI 安装包"
+  fi
   "${repo}/docker/agent-web/build.sh"
   docker build --platform linux/amd64 -f "${repo}/docker/agent-web/Dockerfile" \
     --build-arg NODE_RUNTIME="${node_runtime}" \
