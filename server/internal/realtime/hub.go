@@ -253,6 +253,13 @@ type Client struct {
 	dedupMu  sync.Mutex
 	seenIDs  map[string]struct{}
 	seenList []string
+
+	// officeJoined marks that this connection registered in its workspace's
+	// office room, so a disconnect only removes an avatar it actually owns.
+	// Office fields are only touched from the read pump.
+	officeJoined     bool
+	officeTokens     float64
+	officeRefilledAt time.Time
 }
 
 const dedupCapacity = 128
@@ -305,6 +312,10 @@ type Hub struct {
 
 	authorizer ScopeAuthorizer
 
+	// office holds the in-process /office room state: member positions per
+	// workspace. Broadcast-only, never persisted.
+	office *officeRegistry
+
 	// Subscription lifecycle hooks. Both can be nil.
 	onFirstSubscriber SubscriptionCallback
 	onLastSubscriber  SubscriptionCallback
@@ -317,6 +328,7 @@ func NewHub() *Hub {
 		clients:         make(map[*Client]bool),
 		broadcast:       make(chan []byte),
 		register:        make(chan *Client),
+		office:          newOfficeRegistry(),
 		unregister:      make(chan *Client),
 		writeMembership: make(chan membershipWriteRequest, maxMembershipBatch),
 		memberRemovals:  make(chan memberRemovalJob, memberRemovalQueueSize),
@@ -380,6 +392,16 @@ func (h *Hub) removeClient(client *Client) {
 	cb := h.onLastSubscriber
 	total := len(h.clients)
 	h.mu.Unlock()
+
+	if client.officeJoined {
+		client.officeJoined = false
+		if client.leaveOffice() {
+			client.hub.broadcastOffice(client.workspaceID, map[string]any{
+				"type":    "office_peer_leave",
+				"payload": map[string]string{"user_id": client.userID},
+			})
+		}
+	}
 
 	M.DisconnectsTotal.Add(1)
 	M.ActiveConnections.Add(-1)
@@ -987,6 +1009,12 @@ func (c *Client) handleFrame(raw []byte) {
 		} else {
 			c.handleUnsubscribe(p.Scope, p.ID)
 		}
+	case "office_join":
+		c.handleOfficeJoin(f.Payload)
+	case "office_move":
+		c.handleOfficeMove(f.Payload)
+	case "office_leave":
+		c.handleOfficeLeave()
 	case "ping":
 		c.sendJSON(map[string]string{"type": "pong"})
 	default:
