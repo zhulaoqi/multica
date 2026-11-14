@@ -339,6 +339,82 @@ func TestAuth_StripsForgedAgentIdentityHeaders(t *testing.T) {
 	}
 }
 
+// TestAuth_StripsClientSuppliedOperatorHeader pins the developer-console
+// boundary: X-Operator is server-set only. Before the strip moved to the top
+// of Auth, only the JWT branch cleared it, so a mul_ PAT plus a forged
+// `X-Operator: 1` was accepted as the owner of every workspace.
+func TestAuth_StripsClientSuppliedOperatorHeader(t *testing.T) {
+	rdb := newRedisTestClient(t)
+	cache := auth.NewPATCache(rdb)
+
+	const rawToken = "mul_operator_header_test_token"
+	cache.Set(context.Background(), auth.HashToken(rawToken), "cached-user-id", auth.AuthCacheTTL)
+
+	var gotOperator string
+	// nil queries — this test only exercises the PAT cache-hit branch, so a
+	// non-cache-hit path would panic, proving the assertion is meaningful.
+	mw := Auth(nil, cache, nil, nil)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotOperator = r.Header.Get(auth.OperatorHeader)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/operator/overview", nil)
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	req.Header.Set(auth.OperatorHeader, "1")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if gotOperator != "" {
+		t.Fatalf("X-Operator must be cleared on PAT paths, got %q", gotOperator)
+	}
+}
+
+// TestAuth_JWTOnlyStampsOperatorForOperatorEmail keeps the one legitimate
+// writer honest: a human session gets X-Operator back only when its address
+// is the developer account, and never from what the client sent.
+func TestAuth_JWTOnlyStampsOperatorForOperatorEmail(t *testing.T) {
+	t.Setenv("MULTICA_OPERATOR_NAME", "devops")
+	t.Setenv("MULTICA_OPERATOR_PASSWORD", "secret")
+
+	cases := []struct {
+		name  string
+		email string
+		want  string
+	}{
+		{name: "operator", email: auth.OperatorMailbox(), want: "1"},
+		{name: "regular", email: "someone@example.com", want: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotOperator string
+			handler := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotOperator = r.Header.Get(auth.OperatorHeader)
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			claims := validClaims()
+			claims["email"] = tc.email
+			req := httptest.NewRequest("GET", "/api/me", nil)
+			req.Header.Set("Authorization", "Bearer "+generateToken(claims, auth.JWTSecret()))
+			req.Header.Set(auth.OperatorHeader, "1")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			if gotOperator != tc.want {
+				t.Fatalf("X-Operator = %q, want %q", gotOperator, tc.want)
+			}
+		})
+	}
+}
+
 // TestAuth_PATCacheHit pins the optimization: when the PAT cache already
 // holds an entry for this token, the middleware MUST NOT call into queries
 // — it short-circuits before the DB lookup and the last_used_at update.

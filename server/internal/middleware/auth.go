@@ -83,6 +83,13 @@ func Auth(queries *db.Queries, patCache *auth.PATCache, cloudPAT *auth.CloudPATV
 			r.Header.Del("X-Agent-ID")
 			r.Header.Del("X-Task-ID")
 
+			// Developer-console identity is server-set only. Before this
+			// strip existed it was cleared inside the JWT branch alone, so
+			// a mul_ PAT — or any other branch that returns early — could
+			// carry a client-supplied `X-Operator: 1` and be treated as the
+			// owner of every workspace.
+			r.Header.Del(auth.OperatorHeader)
+
 			tokenString, fromCookie := extractToken(r)
 			if tokenString == "" {
 				slog.Debug("auth: no token found", "path", r.URL.Path)
@@ -289,7 +296,6 @@ func Auth(queries *db.Queries, patCache *auth.PATCache, cloudPAT *auth.CloudPATV
 				return
 			}
 			r.Header.Set("X-User-ID", sub)
-			r.Header.Del(auth.OperatorHeader)
 			if email != "" {
 				r.Header.Set("X-User-Email", email)
 			}
