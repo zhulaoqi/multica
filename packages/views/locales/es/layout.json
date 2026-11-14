@@ -33,11 +33,7 @@
   },
   "help": {
     "trigger": "Ayuda",
-    "download_desktop": "App de escritorio",
     "docs": "Documentación",
-    "changelog": "Registro de cambios",
-    "discord": "Discord",
-    "feedback": "Comentarios",
     "server_version": "Versión del servidor {{version}}"
   },
   "workspace_loader": {
@@ -64,31 +60,7 @@
     "hold_for_history": "Mantén pulsado para ver el historial",
     "back_history": "Historial hacia atrás",
     "forward_history": "Historial hacia delante"
-  },
-  "whats_new": {
-    "trigger": "Novedades",
-    "card": {
-      "eyebrow": "Multica se ha actualizado · {{range}}",
-      "title_one": "{{count}} función nueva desde tu última visita",
-      "title_other": "{{count}} funciones nuevas desde tu última visita",
-      "dismiss": "Descartar",
-      "view_details": "Ver detalles",
-      "got_it": "Entendido"
-    },
-    "panel": {
-      "title": "Novedades",
-      "close": "Cerrar",
-      "new": "Nuevo",
-      "release_notes": "Notas de la versión v{{version}}",
-      "full_changelog": "Registro completo de cambios"
-    },
-    "action": {
-      "try": "Probar",
-      "open": "Abrir",
-      "learn_more": "Más información"
-    }
-  },
-  "spaces": {
+  },  "spaces": {
     "work": "Trabajo",
     "team": "Equipo"
   },

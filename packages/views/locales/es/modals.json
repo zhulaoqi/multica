@@ -18,20 +18,7 @@
     "deleting": "Eliminando...",
     "toast_deleted": "Tarea eliminada",
     "toast_delete_failed": "No se ha podido eliminar la tarea"
-  },
-  "feedback": {
-    "title": "Comentarios",
-    "placeholder": "Cuéntanos tu experiencia, errores que hayas encontrado o funciones que te gustaría ver…",
-    "toast_uploading": "Espera a que terminen las subidas…",
-    "toast_too_long": "El mensaje es demasiado largo",
-    "toast_sent": "¡Gracias por tus comentarios!",
-    "toast_failed": "No se han podido enviar los comentarios",
-    "send": "Enviar comentarios",
-    "sending": "Enviando…",
-    "github_hint_prefix": "También puedes enviar comentarios en ",
-    "github_hint_link": "GitHub"
-  },
-  "issue_picker": {
+  },  "issue_picker": {
     "search_placeholder": "Buscar tareas...",
     "searching": "Buscando...",
     "no_results": "No se encontraron tareas.",

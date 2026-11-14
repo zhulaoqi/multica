@@ -30,8 +30,7 @@
     "unfold_all_comments": "Desplegar todos los comentarios",
     "new_autopilot": "Nueva automatización",
     "chat_with_agent": "Conversar con un agente",
-    "change_theme": "Cambiar tema...",
-    "send_feedback": "Enviar comentarios"
+    "change_theme": "Cambiar tema..."
   },
   "toast": {
     "link_copied": "Enlace copiado",

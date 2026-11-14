@@ -28,20 +28,7 @@
     "title_required": "タイトルを入力してください",
     "toast_renamed": "タスク名を変更しました",
     "toast_failed": "タスク名を変更できませんでした"
-  },
-  "feedback": {
-    "title": "フィードバック",
-    "placeholder": "使用感、見つけたバグ、追加してほしい機能などをお聞かせください…",
-    "toast_uploading": "アップロードが完了するまでお待ちください…",
-    "toast_too_long": "メッセージが長すぎます",
-    "toast_sent": "フィードバックをありがとうございます！",
-    "toast_failed": "フィードバックを送信できませんでした",
-    "send": "フィードバックを送信",
-    "sending": "送信中…",
-    "github_hint_prefix": "こちらでもフィードバックを送れます：",
-    "github_hint_link": "GitHub"
-  },
-  "issue_picker": {
+  },  "issue_picker": {
     "search_placeholder": "タスクを検索...",
     "searching": "検索中...",
     "no_results": "タスクが見つかりません。",

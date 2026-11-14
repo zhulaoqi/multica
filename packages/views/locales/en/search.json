@@ -39,7 +39,6 @@
     "new_autopilot": "New autopilot",
     "chat_with_agent": "Chat with an agent",
     "change_theme": "Change theme...",
-    "send_feedback": "Send feedback",
     "copy_issue_link": "Copy issue link",
     "copy_identifier": "Copy identifier ({{identifier}})",
     "fold_all_comments": "Fold all comments",

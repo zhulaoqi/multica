@@ -28,20 +28,7 @@
     "title_required": "請輸入標題",
     "toast_renamed": "任務名稱已更新",
     "toast_failed": "重新命名任務失敗"
-  },
-  "feedback": {
-    "title": "反饋",
-    "placeholder": "聊聊你的體驗、遇到的 bug，或想看到的功能...",
-    "toast_uploading": "請等待上傳完成...",
-    "toast_too_long": "內容過長",
-    "toast_sent": "感謝反饋！",
-    "toast_failed": "傳送反饋失敗",
-    "send": "傳送反饋",
-    "sending": "傳送中...",
-    "github_hint_prefix": "也可在以下平臺提交反饋：",
-    "github_hint_link": "GitHub"
-  },
-  "issue_picker": {
+  },  "issue_picker": {
     "search_placeholder": "搜尋任務...",
     "searching": "搜尋中...",
     "no_results": "未找到任務。",

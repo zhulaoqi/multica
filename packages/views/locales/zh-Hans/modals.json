@@ -28,20 +28,7 @@
     "title_required": "请输入标题",
     "toast_renamed": "任务名称已更新",
     "toast_failed": "重命名任务失败"
-  },
-  "feedback": {
-    "title": "反馈",
-    "placeholder": "聊聊你的体验、遇到的 bug，或想看到的功能...",
-    "toast_uploading": "请等待上传完成...",
-    "toast_too_long": "内容过长",
-    "toast_sent": "感谢反馈！",
-    "toast_failed": "发送反馈失败",
-    "send": "发送反馈",
-    "sending": "发送中...",
-    "github_hint_prefix": "也可在以下平台提交反馈：",
-    "github_hint_link": "GitHub"
-  },
-  "issue_picker": {
+  },  "issue_picker": {
     "search_placeholder": "搜索任务...",
     "searching": "搜索中...",
     "no_results": "未找到任务。",

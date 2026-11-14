@@ -38,7 +38,6 @@
     "new_autopilot": "新建自动化",
     "chat_with_agent": "和智能体对话",
     "change_theme": "切换主题...",
-    "send_feedback": "发送反馈",
     "copy_issue_link": "复制任务链接",
     "copy_identifier": "复制标识符 ({{identifier}})",
     "fold_all_comments": "收起全部评论",

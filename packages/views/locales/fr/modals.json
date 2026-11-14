@@ -28,20 +28,7 @@
     "title_required": "Saisissez un titre",
     "toast_renamed": "Tâche renommée",
     "toast_failed": "Échec du renommage de la tâche"
-  },
-  "feedback": {
-    "title": "Faire un retour",
-    "placeholder": "Parlez-nous de votre expérience, des bugs rencontrés ou des fonctionnalités que vous aimeriez voir…",
-    "toast_uploading": "Veuillez attendre la fin des envois…",
-    "toast_too_long": "Le message est trop long",
-    "toast_sent": "Merci pour votre retour !",
-    "toast_failed": "Échec de l'envoi du retour",
-    "send": "Envoyer le retour",
-    "sending": "Envoi…",
-    "github_hint_prefix": "Vous pouvez aussi envoyer vos commentaires sur ",
-    "github_hint_link": "GitHub"
-  },
-  "issue_picker": {
+  },  "issue_picker": {
     "search_placeholder": "Rechercher des tâches...",
     "searching": "Recherche...",
     "no_results": "Aucune tâche trouvée.",
