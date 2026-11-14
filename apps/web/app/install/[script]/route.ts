@@ -19,6 +19,29 @@ const SCRIPTS = {
 
 const ORIGIN_PLACEHOLDER = "__MULTICA_ORIGIN__";
 
+// The standalone server binds `HOSTNAME=0.0.0.0` and builds request URLs from
+// it, so `request.nextUrl.origin` is the container's bind address, not the
+// address the client used. Take the origin from the request headers instead
+// (proxies in front of the pod set the forwarded pair).
+const BIND_ADDRESSES = new Set(["0.0.0.0", "::", "[::]"]);
+
+function requestOrigin(request: NextRequest): string | null {
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const proto =
+    request.headers.get("x-forwarded-proto") ??
+    request.nextUrl.protocol.replace(/:$/, "");
+  if (!host || (proto !== "http" && proto !== "https")) return null;
+  let url: URL;
+  try {
+    url = new URL(`${proto}://${host}`);
+  } catch {
+    return null;
+  }
+  if (BIND_ADDRESSES.has(url.hostname)) return null;
+  return url.origin;
+}
+
 // `next start` from the app directory and the standalone server started from
 // the deployment root resolve the scripts differently; try both, in order.
 function scriptDirs(): string[] {
@@ -61,7 +84,11 @@ export async function GET(
     return new Response("Install script unavailable\n", { status: 500 });
   }
 
-  const origin = request.nextUrl.origin.replace(/\/+$/, "");
+  const origin = requestOrigin(request);
+  if (!origin) {
+    console.error("[install] could not determine the request origin");
+    return new Response("Install script unavailable\n", { status: 500 });
+  }
   return new Response(template.replaceAll(ORIGIN_PLACEHOLDER, origin), {
     headers: {
       "content-type": entry.contentType,
