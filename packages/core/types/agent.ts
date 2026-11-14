@@ -92,6 +92,14 @@ export interface RuntimeDevice {
    * own limit still applies. Older backends omit the field.
    */
   max_concurrent_tasks?: number | null;
+  /**
+   * True when the row is listed only because the caller leads the department
+   * its owner belongs to. The machine is visible as status metadata (name,
+   * online state, bound agents) but the per-runtime read/write gates stay
+   * owner-only, so the UI must not offer detail navigation or management
+   * actions. Older backends omit the field.
+   */
+  read_only?: boolean;
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;

@@ -125,6 +125,20 @@ export function buildRuntimeMachines(
   return machines.sort(compareRuntimeMachines);
 }
 
+/**
+ * A machine is read-only when every runtime on it is listed only because
+ * the viewer leads the owner's department. Such machines have no runtime
+ * the viewer may open or manage, so the row must not navigate to the
+ * detail page (the per-runtime read gate answers 404 to non-owners).
+ * A machine mixing own/shared runtimes with team ones stays navigable.
+ */
+export function isReadOnlyMachine(machine: RuntimeMachine): boolean {
+  return (
+    machine.runtimes.length > 0 &&
+    machine.runtimes.every((runtime) => runtime.read_only === true)
+  );
+}
+
 function placeholderLocalMachine(
   options: RuntimeMachineOptions,
 ): RuntimeMachine {

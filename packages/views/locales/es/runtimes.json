@@ -62,7 +62,22 @@
       "connect": "Conectar",
       "not_connected": "Sin conectar",
       "provided_by": "Por {{vendor}}",
-      "no_matches": "Ninguna máquina ni servicio en la nube coincide"
+      "no_matches": "Ninguna máquina ni servicio en la nube coincide",
+      "read_only": "Solo lectura"
+    },
+    "team": {
+      "read_only_notice": "Esta máquina pertenece a un miembro de tu equipo. Puedes ver su estado, pero los detalles y la gestión siguen siendo de su propietario.",
+      "owner": "Propietario",
+      "health": "Estado",
+      "system": "Sistema",
+      "daemon": "Demonio",
+      "cli_version": "Versión de CLI",
+      "runtimes": "Runtimes",
+      "agents": "Agentes",
+      "no_agents": "Ningún agente usa todavía esta máquina.",
+      "workload": "{{running}} en ejecución · {{queued}} en cola",
+      "idle": "Inactivo",
+      "unknown_owner": "Miembro desconocido"
     },
     "filters": {
       "all": "Todos los runtimes",

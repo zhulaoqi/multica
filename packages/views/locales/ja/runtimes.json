@@ -62,7 +62,22 @@
       "connect": "接続",
       "not_connected": "未接続",
       "provided_by": "{{vendor}} 提供",
-      "no_matches": "一致するマシンやクラウドサービスはありません"
+      "no_matches": "一致するマシンやクラウドサービスはありません",
+      "read_only": "閲覧のみ"
+    },
+    "team": {
+      "read_only_notice": "このマシンはチームメンバーの所有です。ステータスは確認できますが、詳細と管理は所有者が行います。",
+      "owner": "所有者",
+      "health": "ステータス",
+      "system": "システム",
+      "daemon": "デーモン",
+      "cli_version": "CLI バージョン",
+      "runtimes": "ランタイム",
+      "agents": "エージェント",
+      "no_agents": "このマシンを使うエージェントはまだありません。",
+      "workload": "実行中 {{running}} · 待機 {{queued}}",
+      "idle": "アイドル",
+      "unknown_owner": "不明なメンバー"
     },
     "filters": {
       "all": "すべてのランタイム",

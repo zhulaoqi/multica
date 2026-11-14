@@ -7,6 +7,7 @@ import {
   countRuntimeMachines,
   filterRuntimeMachines,
   runtimeMachineCounts,
+  isReadOnlyMachine,
   runtimeRowLabel,
   sharedCustomName,
   splitRuntimeName,
@@ -485,5 +486,37 @@ describe("runtimeRowLabel", () => {
         "Dev Box",
       ),
     ).toBe("just this one");
+  });
+});
+
+describe("isReadOnlyMachine", () => {
+  it("marks a machine read-only when every runtime is team-only", () => {
+    const [machine] = buildRuntimeMachines(
+      [
+        makeRuntime({ id: "rt-a", read_only: true }),
+        makeRuntime({ id: "rt-b", provider: "codex", read_only: true }),
+      ],
+      { now: NOW },
+    );
+
+    expect(isReadOnlyMachine(machine!)).toBe(true);
+  });
+
+  it("keeps a machine navigable when it also holds a readable runtime", () => {
+    const [machine] = buildRuntimeMachines(
+      [makeRuntime({ id: "rt-a" }), makeRuntime({ id: "rt-b", read_only: true })],
+      { now: NOW },
+    );
+
+    expect(isReadOnlyMachine(machine!)).toBe(false);
+  });
+
+  it("never marks a synthesized placeholder machine read-only", () => {
+    const [machine] = buildRuntimeMachines([], {
+      now: NOW,
+      ensureLocalMachine: true,
+    });
+
+    expect(isReadOnlyMachine(machine!)).toBe(false);
   });
 });

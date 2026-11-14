@@ -9,7 +9,7 @@ import { chatSessionsOptions } from "@multica/core/chat/queries";
 import { runtimeProfileListOptions } from "@multica/core/runtimes";
 import { qoderOptions, type QoderConnection } from "@multica/core/runtimes/qoder";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
-import type { AgentRuntime } from "@multica/core/types";
+import type { AgentRuntime, MemberWithUser } from "@multica/core/types";
 import {
   agentListOptions,
   memberListOptions,
@@ -99,17 +99,33 @@ function qoder(overrides: Partial<QoderConnection> = {}): QoderConnection {
   };
 }
 
+function makeMember(overrides: Partial<MemberWithUser> = {}): MemberWithUser {
+  return {
+    id: "member-1",
+    workspace_id: WS,
+    user_id: "user-1",
+    role: "member",
+    created_at: new Date(NOW).toISOString(),
+    name: "Alex Doe",
+    email: "alex@multica.test",
+    avatar_url: null,
+    ...overrides,
+  };
+}
+
 function renderPage({
   runtimes = [makeRuntime()],
   connection = qoder(),
   desktop = false,
   cloudRuntimeEnabled = false,
+  members = [],
 }: {
   /** `null` leaves the runtime list unseeded, so the page renders loading. */
   runtimes?: AgentRuntime[] | null;
   connection?: QoderConnection;
   desktop?: boolean;
   cloudRuntimeEnabled?: boolean;
+  members?: MemberWithUser[];
 } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -117,7 +133,7 @@ function renderPage({
   if (runtimes) qc.setQueryData(runtimeListOptions(WS).queryKey, runtimes);
   qc.setQueryData(runtimeProfileListOptions(WS).queryKey, []);
   qc.setQueryData(agentListOptions(WS).queryKey, []);
-  qc.setQueryData(memberListOptions(WS).queryKey, []);
+  qc.setQueryData(memberListOptions(WS).queryKey, members);
   qc.setQueryData(agentTaskSnapshotOptions(WS).queryKey, []);
   qc.setQueryData(chatSessionsOptions(WS).queryKey, []);
   qc.setQueryData(qoderOptions(WS).queryKey, connection);
@@ -330,5 +346,55 @@ describe("RuntimesPage", () => {
       ).toHaveTextContent("1");
       unmount();
     }
+  });
+
+  it("shows a subordinate's machine read-only and inspects it in a drawer", async () => {
+    const user = userEvent.setup();
+    renderPage({
+      runtimes: [
+        makeRuntime({
+          id: "rt-team",
+          daemon_id: "daemon-team",
+          name: "Claude (team-box.local)",
+          device_info: "team-box.local · claude 1.0.0",
+          owner_id: "user-2",
+          read_only: true,
+        }),
+      ],
+      members: [
+        makeMember({
+          id: "member-2",
+          user_id: "user-2",
+          name: "Jamie Chen",
+          email: "jamie@multica.test",
+        }),
+      ],
+    });
+
+    expect(screen.getByText("View only")).toBeInTheDocument();
+    // Read-only rows must not link to the detail page: its read gate answers
+    // 404 for machines the viewer only sees through their department lead role.
+    expect(screen.queryByRole("link", { name: /team-box.local/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("team-box.local"));
+
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("Jamie Chen")).toBeInTheDocument();
+    expect(
+      within(drawer).getByText(/belongs to a member of your team/),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByText("No agents use this machine yet."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps own machines navigating instead of opening the read-only drawer", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(screen.queryByText("View only")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("dev-machine.local"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

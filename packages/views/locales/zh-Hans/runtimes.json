@@ -62,7 +62,22 @@
       "connect": "连接",
       "not_connected": "未连接",
       "provided_by": "由 {{vendor}} 提供",
-      "no_matches": "没有匹配的机器或云服务"
+      "no_matches": "没有匹配的机器或云服务",
+      "read_only": "仅查看"
+    },
+    "team": {
+      "read_only_notice": "这台机器属于你团队的成员。你可以看到它的状态，但详情和管理仍归其所有者。",
+      "owner": "归属成员",
+      "health": "状态",
+      "system": "系统",
+      "daemon": "守护进程",
+      "cli_version": "CLI 版本",
+      "runtimes": "运行时",
+      "agents": "智能体",
+      "no_agents": "还没有智能体使用这台机器。",
+      "workload": "{{running}} 运行 · {{queued}} 排队",
+      "idle": "空闲",
+      "unknown_owner": "未知成员"
     },
     "filters": {
       "all": "全部运行时",

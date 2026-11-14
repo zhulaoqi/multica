@@ -93,7 +93,8 @@ import { ProviderLogo } from "./provider-logo";
 import { RuntimeList, buildWorkloadIndex } from "./runtime-list";
 import { RuntimesIntro } from "./runtimes-intro";
 import { pendingRuntimeFromProfile } from "./pending-runtime";
-import { buildRuntimeMachines, type RuntimeMachine } from "./runtime-machines";
+import { buildRuntimeMachines, isReadOnlyMachine, type RuntimeMachine } from "./runtime-machines";
+import { TeamRuntimeDrawer } from "./team-runtime-drawer";
 import {
   HealthIcon,
   ProviderIconStack,
@@ -190,6 +191,9 @@ export function RuntimesPage({
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showCloudRuntimeDialog, setShowCloudRuntimeDialog] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // Machine selected in the read-only drawer. Stored by id so WS-driven
+  // list refreshes keep the drawer's contents live.
+  const [inspectMachineId, setInspectMachineId] = useState<string | null>(null);
 
   const { data: runtimes = [], isLoading: runtimesLoading } = useQuery(
     runtimeListOptions(wsId),
@@ -283,6 +287,10 @@ export function RuntimesPage({
     ),
   ).length;
   const localMachine = machineList.find((machine) => machine.isCurrent);
+  const inspectMachine =
+    inspectMachineId === null
+      ? null
+      : (machineList.find((machine) => machine.id === inspectMachineId) ?? null);
 
   const filtering = statusFilter !== "all";
   const matchesStatus = (online: boolean) =>
@@ -452,12 +460,21 @@ export function RuntimesPage({
             ]
           : []),
       ];
+  // Read-only machines have no runtime the viewer may open — the detail
+  // page's read gate answers 404 — so they activate the drawer instead.
   const rowHref = (row: RuntimeRow) =>
     row.kind === "machine"
-      ? paths.runtimeDetail(row.machine.id)
+      ? isReadOnlyMachine(row.machine)
+        ? null
+        : paths.runtimeDetail(row.machine.id)
       : row.kind === "qoder" && row.connection.configured
         ? qoderHref
         : null;
+  const handleRowOpen = (row: RuntimeRow) => {
+    if (row.kind === "machine" && isReadOnlyMachine(row.machine)) {
+      setInspectMachineId(row.machine.id);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -505,6 +522,7 @@ export function RuntimesPage({
             loading={listLoading}
             getRowId={(row) => row.id}
             getRowHref={rowHref}
+            onRowOpen={handleRowOpen}
             getRowTitle={(row) =>
               row.kind === "machine"
                 ? row.machine.title
@@ -553,6 +571,15 @@ export function RuntimesPage({
       {cloudRuntimeEnabled && showCloudRuntimeDialog && (
         <CloudRuntimeDialog onClose={() => setShowCloudRuntimeDialog(false)} />
       )}
+      <TeamRuntimeDrawer
+        machine={inspectMachine}
+        agents={agents}
+        members={members}
+        currentUserId={currentUserId ?? null}
+        workloadByRuntimeId={workloadIndex}
+        now={now}
+        onClose={() => setInspectMachineId(null)}
+      />
     </div>
   );
 }
@@ -724,7 +751,9 @@ function RuntimeNameCell({
           icon={<Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
           title={machine.title}
           badges={
-            machine.isCurrent ? (
+            isReadOnlyMachine(machine) ? (
+              <CollectionTag>{t(($) => $.page.rows.read_only)}</CollectionTag>
+            ) : machine.isCurrent ? (
               <CollectionTag>{t(($) => $.machine.this_machine)}</CollectionTag>
             ) : undefined
           }

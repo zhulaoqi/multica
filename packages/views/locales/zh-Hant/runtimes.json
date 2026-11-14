@@ -62,7 +62,22 @@
       "connect": "連線",
       "not_connected": "未連線",
       "provided_by": "由 {{vendor}} 提供",
-      "no_matches": "沒有匹配的機器或雲服務"
+      "no_matches": "沒有匹配的機器或雲服務",
+      "read_only": "僅檢視"
+    },
+    "team": {
+      "read_only_notice": "這臺機器屬於你團隊的成員。你可以看到它的狀態，但詳細資訊和管理仍歸其擁有者。",
+      "owner": "歸屬成員",
+      "health": "狀態",
+      "system": "系統",
+      "daemon": "守護程序",
+      "cli_version": "CLI 版本",
+      "runtimes": "執行時",
+      "agents": "AI 代理",
+      "no_agents": "尚無 AI 代理使用這臺機器。",
+      "workload": "{{running}} 執行 · {{queued}} 排隊",
+      "idle": "閒置",
+      "unknown_owner": "未知成員"
     },
     "filters": {
       "all": "全部執行時",
