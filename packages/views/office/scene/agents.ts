@@ -38,6 +38,8 @@ const WALK_SPEED = 74;
 const CHAT_RADIUS = 26;
 const AGENT_CHAT_RADIUS = 18;
 const CHAT_MS = 1200;
+const CHAT_COOLDOWN_MS = 3500;
+const CHAT_COOLDOWN_SPREAD_MS = 4500;
 const ERRAND_MIN_MS = 5000;
 const ERRAND_SPREAD_MS = 6000;
 const SPAWN_STAGGER_MS = 280;
@@ -71,6 +73,8 @@ interface Avatar {
   meetingSeat: Station | null;
   leisureSpot: Station | null;
   chatUntil: number;
+  nextChatAt: number;
+  moving: boolean;
   glow: Graphics | null;
   /** Wall clock at which the avatar steps through the doorway; null while queued. */
   spawnAt: number | null;
@@ -176,6 +180,8 @@ export class OfficeAgents {
         meetingSeat: null,
         leisureSpot: null,
         chatUntil: 0,
+        nextChatAt: 0,
+        moving: false,
         glow: this.glowByIndex.get(index) ?? null,
         spawnAt: null,
       });
@@ -215,6 +221,7 @@ export class OfficeAgents {
       }
 
       const moving = this.advance(avatar, dtSeconds, target);
+      avatar.moving = moving;
       avatar.view.setWalking(moving);
       if (moving) {
         avatar.view.setPose("stand");
@@ -224,12 +231,16 @@ export class OfficeAgents {
       }
 
       const human = nearestHuman(humans, avatar.x, avatar.y);
-      if (human) {
-        avatar.chatUntil = nowMs + CHAT_MS;
-        if (!moving && !target.seat) {
+      if (human && !moving) {
+        if (!target.seat) {
           avatar.view.setDir(
             directionFor(human.x - avatar.x, human.y - avatar.y) ?? target.dir,
           );
+        }
+        // Greet in bursts rather than chattering non-stop while someone stands nearby.
+        if (nowMs >= avatar.nextChatAt) {
+          avatar.chatUntil = nowMs + CHAT_MS;
+          avatar.nextChatAt = nowMs + CHAT_MS + this.chatCooldown(avatar.id);
         }
       }
 
@@ -244,16 +255,26 @@ export class OfficeAgents {
 
   /** Two agents standing together chat, which is the "talking shop" beat. */
   private stepAgentChat(nowMs: number) {
-    const list = [...this.avatars.values()];
+    const list = [...this.avatars.values()].filter(
+      (avatar) => !avatar.moving && avatar.view.container.visible,
+    );
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i]!;
         const b = list[j]!;
+        if (nowMs < a.nextChatAt || nowMs < b.nextChatAt) continue;
         if (Math.hypot(a.x - b.x, a.y - b.y) >= AGENT_CHAT_RADIUS) continue;
+        const cooldown = this.chatCooldown(`${a.id}:${b.id}`);
         a.chatUntil = nowMs + CHAT_MS;
         b.chatUntil = nowMs + CHAT_MS;
+        a.nextChatAt = nowMs + CHAT_MS + cooldown;
+        b.nextChatAt = nowMs + CHAT_MS + cooldown;
       }
     }
+  }
+
+  private chatCooldown(seed: string): number {
+    return CHAT_COOLDOWN_MS + (hashSeed(seed) % CHAT_COOLDOWN_SPREAD_MS);
   }
 
   syncLabels(zoom: number) {
