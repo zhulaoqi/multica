@@ -48,6 +48,7 @@ export class WSClient {
   // on each connect() so a fresh connection logs once again.
   private badFrameLogged = false;
   private onReconnectCallbacks = new Set<() => void>();
+  private statusCallbacks = new Set<(connected: boolean) => void>();
   private anyHandlers = new Set<(msg: WSMessage) => void>();
   private logger: Logger;
 
@@ -157,6 +158,10 @@ export class WSClient {
     };
 
     this.ws.onclose = () => {
+      // Listeners that push state over the socket (the office room) must know
+      // the connection is gone, otherwise they keep writing into a dead
+      // socket after the server has already dropped their session.
+      this.emitStatus(false);
       this.scheduleReconnect();
     };
 
@@ -192,6 +197,7 @@ export class WSClient {
 
   private onAuthenticated() {
     this.logger.info("connected");
+    this.emitStatus(true);
     const recoveredConnection = this.hasConnectedBefore || this.reconnectAttempt > 0;
     this.reconnectAttempt = 0;
     if (recoveredConnection) {
@@ -207,6 +213,7 @@ export class WSClient {
   }
 
   disconnect() {
+    this.emitStatus(false);
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -223,6 +230,17 @@ export class WSClient {
     this.handlers.clear();
     this.anyHandlers.clear();
     this.onReconnectCallbacks.clear();
+    this.statusCallbacks.clear();
+  }
+
+  private emitStatus(connected: boolean) {
+    for (const cb of this.statusCallbacks) {
+      try {
+        cb(connected);
+      } catch {
+        // ignore status listener errors
+      }
+    }
   }
 
   on(event: WSEventType, handler: EventHandler) {
@@ -242,6 +260,14 @@ export class WSClient {
     };
   }
 
+  /** Reports every transition to authenticated / disconnected. */
+  onStatus(callback: (connected: boolean) => void) {
+    this.statusCallbacks.add(callback);
+    return () => {
+      this.statusCallbacks.delete(callback);
+    };
+  }
+
   onReconnect(callback: () => void) {
     this.onReconnectCallbacks.add(callback);
     return () => {
@@ -253,5 +279,21 @@ export class WSClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     }
+  }
+
+  /**
+   * Sends a frame outside the typed server-event union. Used by features that
+   * own a small protocol on the same socket (the office room), where the
+   * frame names are not server → client events.
+   */
+  sendFrame(type: string, payload: unknown) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type, payload }));
+    }
+  }
+
+  /** Same as `on`, for frame names outside the typed event union. */
+  onFrame(type: string, handler: EventHandler) {
+    return this.on(type as WSEventType, handler);
   }
 }

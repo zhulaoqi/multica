@@ -28,6 +28,12 @@ type EventHandler = (payload: unknown, actorId?: string, actorType?: string) => 
 interface WSContextValue {
   subscribe: (event: WSEventType, handler: EventHandler) => () => void;
   onReconnect: (callback: () => void) => () => void;
+  /** True while the socket is authenticated, false between disconnect and reconnect. */
+  connected: boolean;
+  /** Sends a frame whose name is not part of the typed server-event union. */
+  sendFrame: (type: string, payload: unknown) => void;
+  /** Listens for the same kind of frame. */
+  onFrame: (type: string, handler: EventHandler) => () => void;
 }
 
 const WSContext = createContext<WSContextValue | null>(null);
@@ -70,6 +76,7 @@ export function WSProvider({
   );
   const wsId = useSyncExternalStore(subscribeToCurrentSlug, getCurrentWsId, () => null);
   const [wsClient, setWsClient] = useState<WSClient | null>(null);
+  const [connected, setConnected] = useState(false);
 
   // Depend on identity primitives instead of the object reference so a parent
   // re-render that passes a new `{ platform, version, os }` literal does not
@@ -104,12 +111,15 @@ export function WSProvider({
           : undefined,
     });
     ws.setAuth(token, wsSlug);
+    const unsubscribeStatus = ws.onStatus(setConnected);
     setWsClient(ws);
     ws.connect();
 
     return () => {
+      unsubscribeStatus();
       ws.disconnect();
       setWsClient(null);
+      setConnected(false);
     };
   }, [
     user,
@@ -146,8 +156,31 @@ export function WSProvider({
     [wsClient],
   );
 
+  const sendFrame = useCallback(
+    (type: string, payload: unknown) => {
+      wsClient?.sendFrame(type, payload);
+    },
+    [wsClient],
+  );
+
+  const onFrame = useCallback(
+    (type: string, handler: EventHandler) => {
+      if (!wsClient) return () => {};
+      return wsClient.onFrame(type, handler);
+    },
+    [wsClient],
+  );
+
   return (
-    <WSContext.Provider value={{ subscribe, onReconnect: onReconnectCb }}>
+    <WSContext.Provider
+      value={{
+        subscribe,
+        onReconnect: onReconnectCb,
+        connected,
+        sendFrame,
+        onFrame,
+      }}
+    >
       {children}
     </WSContext.Provider>
   );

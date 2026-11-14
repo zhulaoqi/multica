@@ -141,6 +141,7 @@
     "./lark": "./lark/index.ts",
     "./lark/queries": "./lark/queries.ts",
     "./operator": "./operator/index.ts",
+    "./office": "./office/index.ts",
     "./operator/queries": "./operator/queries.ts",
     "./composio": "./composio/index.ts",
     "./composio/queries": "./composio/queries.ts",
