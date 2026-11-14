@@ -38,7 +38,9 @@ func TestOperatorOverviewReportsWorkspaceCounts(t *testing.T) {
 	})
 
 	usageRow := func(hoursAgo int, taskCount, costTicks int64) {
-		dbfx.Insert(t, "task_usage_hourly", testutil.Cols{
+		// task_usage_hourly keys on (bucket_hour, workspace_id, runtime_id,
+		// agent_id, project_id, provider, model) and has no id column.
+		dbfx.InsertNoID(t, "task_usage_hourly", testutil.Cols{
 			"bucket_hour":        testutil.Raw(fmt.Sprintf("date_trunc('hour', now()) - interval '%d hour'", hoursAgo)),
 			"workspace_id":       workspaceID,
 			"runtime_id":         testRuntimeID,
@@ -51,7 +53,7 @@ func TestOperatorOverviewReportsWorkspaceCounts(t *testing.T) {
 			"cache_write_tokens": 5,
 			"task_count":         taskCount,
 			"cost_usd_ticks":     costTicks,
-		})
+		}, "workspace_id = $1 AND agent_id = $2", workspaceID, agentID)
 	}
 	usageRow(1, 3, 100)
 	usageRow(2, 2, 250)
