@@ -6,11 +6,7 @@ import type {
 } from "pixi.js";
 import type { OfficeDir, OfficePeer, OfficePosition } from "@multica/core/office";
 import { OFFICE_WORLD } from "@multica/core/office";
-import {
-  createCharacter,
-  type AgentDeskStatus,
-  type CharacterView,
-} from "./characters";
+import { createCharacter, type CharacterView } from "./characters";
 import {
   buildOfficeLayout,
   directionFor,
@@ -19,18 +15,19 @@ import {
   stepTowards,
   type OfficeLayout,
 } from "./layout";
+import { OfficeAgents, type OfficeAgentView, type OfficeHuman } from "./agents";
 import { drawRoom } from "./room";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
 const WALK_SPEED = 92;
+const PEER_SPEED = 110;
 const PEER_LERP = 12;
+const PEER_REPATH_DISTANCE = 8;
+const HUMAN_CHAT_RADIUS = 20;
+const HUMAN_CHAT_MS = 1100;
 const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
 
-export interface OfficeAgentView {
-  id: string;
-  name: string;
-  status: AgentDeskStatus;
-}
+export type { OfficeAgentView };
 
 export interface OfficePeerView extends OfficePeer {
   /** Display name resolved from the member list. */
@@ -56,19 +53,18 @@ interface LocalAvatar {
   path: { x: number; y: number }[];
   walking: boolean;
   lastReported: string;
+  chatUntil: number;
 }
 
 interface PeerAvatar {
   view: CharacterView;
   label: PixiText;
+  x: number;
+  y: number;
   target: OfficePosition;
-  walking: boolean;
-}
-
-interface AgentAvatar {
-  id: string;
-  view: CharacterView;
-  label: PixiText;
+  path: { x: number; y: number }[];
+  pathTarget: { x: number; y: number };
+  chatUntil: number;
 }
 
 /**
@@ -76,7 +72,7 @@ interface AgentAvatar {
  *
  * React hands it peers and agents; it never fetches. The only data flowing
  * back out is the local position (throttled by the room hook) and agent
- * clicks.
+ * clicks. Agents animate themselves through OfficeAgents.
  */
 export class OfficeScene {
   private readonly app: Application;
@@ -86,13 +82,12 @@ export class OfficeScene {
   private readonly overlay: Container;
   private readonly local: LocalAvatar;
   private readonly peers = new Map<string, PeerAvatar>();
-  private agents: AgentAvatar[] = [];
+  private readonly agents: OfficeAgents;
   private zoom: number;
   private accumulator = 0;
   private keys = new Set<string>();
   private destroyed = false;
   private readonly onLocalMove: (position: OfficePosition) => void;
-  private readonly onAgentClick: (agentId: string) => void;
 
   private constructor(
     pixi: typeof import("pixi.js"),
@@ -109,7 +104,6 @@ export class OfficeScene {
     this.layout = layout;
     this.zoom = options.zoom;
     this.onLocalMove = options.onLocalMove;
-    this.onAgentClick = options.onAgentClick;
 
     this.local = {
       view: createCharacter(pixi, { kind: "human", seed: "local-player" }),
@@ -120,8 +114,17 @@ export class OfficeScene {
       path: [],
       walking: false,
       lastReported: "",
+      chatUntil: 0,
     };
     this.applyLocalPosition();
+
+    this.agents = new OfficeAgents({
+      pixi,
+      layout,
+      world,
+      createLabel: (text) => this.createLabel(text),
+      onAgentClick: options.onAgentClick,
+    });
   }
 
   static async create(options: OfficeSceneOptions): Promise<OfficeScene> {
@@ -172,8 +175,12 @@ export class OfficeScene {
       this.peers.set(peer.userId, {
         view,
         label: this.createLabel(peer.name),
+        x: peer.x,
+        y: peer.y,
         target: { x: peer.x, y: peer.y, dir: peer.dir },
-        walking: false,
+        path: [],
+        pathTarget: { x: peer.x, y: peer.y },
+        chatUntil: 0,
       });
     }
     for (const [userId, peer] of this.peers) {
@@ -186,37 +193,8 @@ export class OfficeScene {
 
   setAgents(agents: OfficeAgentView[]) {
     if (this.destroyed) return;
-    for (const avatar of this.agents) {
-      avatar.view.container.destroy({ children: true });
-      avatar.label.destroy();
-    }
-    this.agents = [];
-
-    const spots = [
-      ...this.layout.agents,
-      ...this.layout.overflowSpots.map((spot) => ({ ...spot, desk: null })),
-    ];
-    agents.slice(0, spots.length).forEach((agent, index) => {
-      const spot = spots[index];
-      if (!spot) return;
-      const view = createCharacter(this.pixi, {
-        kind: "agent",
-        seed: agent.id,
-        status: agent.status,
-      });
-      view.container.position.set(spot.x, spot.y);
-      view.setDir(spot.dir);
-      view.container.eventMode = "static";
-      view.container.cursor = "pointer";
-      view.container.hitArea = new this.pixi.Rectangle(-8, -30, 16, 32);
-      view.container.on("pointerdown", (event: FederatedPointerEvent) => {
-        event.stopPropagation();
-        this.onAgentClick(agent.id);
-      });
-      this.world.addChild(view.container);
-      this.agents.push({ id: agent.id, view, label: this.createLabel(agent.name) });
-    });
-    this.syncLabels();
+    this.agents.setAgents(agents);
+    this.agents.syncLabels(this.zoom);
   }
 
   setZoom(zoom: number) {
@@ -235,6 +213,7 @@ export class OfficeScene {
     this.destroyed = true;
     this.detachInput();
     this.app.ticker.remove(this.update);
+    this.agents.destroy();
     try {
       this.app.destroy({ removeView: true }, { children: true });
     } catch {
@@ -268,10 +247,34 @@ export class OfficeScene {
     const now = performance.now();
     this.stepLocal(dt);
     this.stepPeers(dt);
+    this.stepHumanChat(now);
+
+    const humans: OfficeHuman[] = [
+      { x: this.local.x, y: this.local.y },
+      ...Array.from(this.peers.values(), (peer) => ({ x: peer.x, y: peer.y })),
+    ];
+    this.agents.update(dt, now, humans);
+
     this.local.view.tick(now);
     for (const peer of this.peers.values()) peer.view.tick(now);
     this.syncLabels();
   };
+
+  /** Humans standing next to each other trade chat balloons. */
+  private stepHumanChat(now: number) {
+    let localChatting = false;
+    for (const peer of this.peers.values()) {
+      const distance = Math.hypot(peer.x - this.local.x, peer.y - this.local.y);
+      if (distance >= HUMAN_CHAT_RADIUS) continue;
+      localChatting = true;
+      peer.chatUntil = now + HUMAN_CHAT_MS;
+    }
+    if (localChatting) this.local.chatUntil = now + HUMAN_CHAT_MS;
+    this.local.view.setBubble(now < this.local.chatUntil ? "chat" : null);
+    for (const peer of this.peers.values()) {
+      peer.view.setBubble(now < peer.chatUntil ? "chat" : null);
+    }
+  }
 
   private readInput(): { dx: number; dy: number } {
     let dx = 0;
@@ -339,26 +342,57 @@ export class OfficeScene {
   }
 
   private stepPeers(dt: number) {
-    const factor = Math.min(1, dt * PEER_LERP);
     for (const peer of this.peers.values()) {
-      const view = peer.view.container;
-      const dx = peer.target.x - view.x;
-      const dy = peer.target.y - view.y;
-      const distance = Math.hypot(dx, dy);
-      if (distance < 0.5) {
-        view.position.set(peer.target.x, peer.target.y);
-        if (peer.walking) {
-          peer.walking = false;
-          peer.view.setWalking(false);
+      if (
+        Math.hypot(
+          peer.target.x - peer.pathTarget.x,
+          peer.target.y - peer.pathTarget.y,
+        ) > PEER_REPATH_DISTANCE
+      ) {
+        peer.path = findPath(
+          this.layout,
+          { x: peer.x, y: peer.y },
+          { x: peer.target.x, y: peer.target.y },
+        );
+        peer.pathTarget = { x: peer.target.x, y: peer.target.y };
+      }
+
+      let remaining = PEER_SPEED * dt;
+      let moved = false;
+      while (remaining > 0 && peer.path.length > 0) {
+        const waypoint = peer.path[0]!;
+        const distance = Math.hypot(waypoint.x - peer.x, waypoint.y - peer.y);
+        const step = stepTowards({ x: peer.x, y: peer.y }, waypoint, remaining);
+        peer.x = step.x;
+        peer.y = step.y;
+        if (step.dir) peer.view.setDir(step.dir);
+        moved = true;
+        if (step.arrived) {
+          peer.path.shift();
+          remaining -= distance;
+        } else {
+          remaining = 0;
         }
-        continue;
       }
-      view.position.set(view.x + dx * factor, view.y + dy * factor);
-      if (!peer.walking) {
-        peer.walking = true;
-        peer.view.setWalking(true);
+
+      if (peer.path.length === 0) {
+        const distance = Math.hypot(peer.target.x - peer.x, peer.target.y - peer.y);
+        if (distance > 0.5) {
+          // Smooth the last stretch so a peer restarting does not snap.
+          const factor = Math.min(1, dt * PEER_LERP);
+          peer.x += (peer.target.x - peer.x) * factor;
+          peer.y += (peer.target.y - peer.y) * factor;
+          peer.view.setDir(directionFor(peer.target.x - peer.x, peer.target.y - peer.y));
+          moved = true;
+        } else {
+          peer.x = peer.target.x;
+          peer.y = peer.target.y;
+          peer.view.setDir(peer.target.dir);
+        }
       }
-      peer.view.setDir(directionFor(dx, dy));
+
+      peer.view.container.position.set(Math.round(peer.x), Math.round(peer.y));
+      peer.view.setWalking(moved);
     }
   }
 
@@ -374,12 +408,7 @@ export class OfficeScene {
         Math.round(peer.view.container.y * zoom) + 8,
       );
     }
-    for (const agent of this.agents) {
-      agent.label.position.set(
-        Math.round(agent.view.container.x * zoom),
-        Math.round(agent.view.container.y * zoom) + 16,
-      );
-    }
+    this.agents.syncLabels(zoom);
   }
 
   private attachInput() {
