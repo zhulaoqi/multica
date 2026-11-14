@@ -379,6 +379,39 @@ describe("SettingsPage information architecture", () => {
     expect(within(labels).queryByLabelText(/Only owners/)).toBeNull();
   });
 
+  it("hides the members page from plain members across every entry point", () => {
+    // Membership is an owner/admin job; a department lead reads their team on
+    // the Org page instead of a workspace-wide roster here.
+    shell.role = "member";
+    renderWithI18n(<SettingsPage />);
+
+    expect(
+      within(nav()).queryByRole("link", { name: "Members" }),
+    ).not.toBeInTheDocument();
+    const selector = screen.getByRole("combobox", {
+      name: "Go to settings page",
+    });
+    expect(
+      within(selector).queryByRole("option", { name: "Members" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search settings" }),
+      { target: { value: "members" } },
+    );
+    expect(screen.getByText("No matching settings")).toBeInTheDocument();
+  });
+
+  it("falls back from a direct members URL when the viewer cannot manage members", () => {
+    shell.role = "member";
+    navigationState.search = "tab=members";
+
+    renderWithI18n(<SettingsPage />);
+
+    expect(screen.queryByText("MembersTab")).not.toBeInTheDocument();
+    expect(screen.getByText("AccountTab")).toBeInTheDocument();
+  });
+
   it("places platform settings in a device group", () => {
     renderWithI18n(
       <SettingsPage

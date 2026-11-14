@@ -108,6 +108,9 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
   const workspaceName = workspace?.name ?? t(($) => $.page.workspace_fallback);
   const { role } = useCurrentMember(workspace?.id ?? "");
   const isMember = role === "member";
+  // Membership is managed by owners and admins only; everyone else reads the
+  // roster on the Org page, where it is already scoped to their department.
+  const canManageWorkspace = role === "owner" || role === "admin";
   const navigation = useNavigation();
   const listCollapsed = useListColumnCollapsed();
   const pluginsEnabled = useFeatureEnabled(PLUGINS_V1_FLAG, false);
@@ -170,9 +173,16 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
             entry("workspace", t(($) => $.page.tabs.general), Settings, <WorkspaceTab />, {
               adminOnly: true,
             }),
-            entry("members", t(($) => $.page.tabs.members), Users, <MembersTab />, {
-              adminOnly: true,
-            }),
+            ...(canManageWorkspace
+              ? [
+                  entry(
+                    "members",
+                    t(($) => $.page.tabs.members),
+                    Users,
+                    <MembersTab />,
+                  ),
+                ]
+              : []),
             ...(billingEnabled
               ? [
                   entry(

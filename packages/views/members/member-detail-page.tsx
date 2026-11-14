@@ -7,6 +7,7 @@ import { ListTodo, UserRound, Users } from "@multica/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { MemberRole, MemberWithUser } from "@multica/core/types";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentMember } from "@multica/core/permissions";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import {
@@ -59,13 +60,19 @@ export function MemberDetailPage({ userId }: { userId: string }) {
   const wsId = useWorkspaceId();
   const paths = useWorkspacePaths();
   const { data: members = [], isLoading } = useQuery(memberListOptions(wsId));
+  const { role } = useCurrentMember(wsId);
   const member = members.find((m) => m.user_id === userId) ?? null;
-  const segments = [
-    {
-      href: `${paths.settings()}?tab=members`,
-      label: t(($) => $.detail.members_breadcrumb),
-    },
-  ];
+  // The members list in settings is managed by owners and admins; for everyone
+  // else the crumb would link to a page they cannot open.
+  const canManageMembers = role === "owner" || role === "admin";
+  const segments = canManageMembers
+    ? [
+        {
+          href: `${paths.settings()}?tab=members`,
+          label: t(($) => $.detail.members_breadcrumb),
+        },
+      ]
+    : [];
 
   if (member) return <MemberIssues member={member} segments={segments} />;
 

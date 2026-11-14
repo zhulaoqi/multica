@@ -92,7 +92,6 @@ import { useLocale, useT } from "../../i18n";
 import { ObjectSectionEmpty } from "../../layout/object-page";
 import {
   SettingsCard,
-  SettingsReadOnlyNotice,
   SettingsTab,
   SettingsViewTabs,
 } from "./settings-layout";
@@ -918,9 +917,6 @@ export function MembersTab() {
         ) : undefined
       }
     >
-      {currentMember && !canManageWorkspace ? (
-        <SettingsReadOnlyNotice wsId={wsId} />
-      ) : null}
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <SettingsViewTabs

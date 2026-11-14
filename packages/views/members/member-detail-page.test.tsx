@@ -13,8 +13,14 @@ import { MemberDetailPage } from "./member-detail-page";
 
 const WS = "ws-test";
 const surfaceProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
+const permissions = vi.hoisted(() => ({
+  role: "admin" as "owner" | "admin" | "member" | null,
+}));
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-test" }));
+vi.mock("@multica/core/permissions", () => ({
+  useCurrentMember: () => ({ role: permissions.role }),
+}));
 vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({
     settings: () => "/acme/settings",
@@ -92,6 +98,7 @@ function renderPage(userId = "user-1", members: MemberWithUser[] | null = [MEMBE
 describe("MemberDetailPage", () => {
   beforeEach(() => {
     surfaceProps.current = null;
+    permissions.role = "admin";
     actorIssuesViewStore.getState().setScope("assigned");
   });
 
@@ -116,6 +123,16 @@ describe("MemberDetailPage", () => {
       actorId: "user-1",
       relation: "assigned",
     });
+  });
+
+  it("drops the members crumb for viewers who cannot manage members", () => {
+    // The crumb points at a settings page only owners and admins can open.
+    permissions.role = "member";
+    renderPage();
+
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByRole("link", { name: "Members" })).not.toBeInTheDocument();
+    expect(header).toHaveTextContent("Ada Lovelace");
   });
 
   it("shows who the member is in the properties panel", () => {

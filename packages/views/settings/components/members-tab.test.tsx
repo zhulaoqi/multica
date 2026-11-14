@@ -242,17 +242,4 @@ describe("MembersTab", () => {
       "/acme/settings?tab=billing",
     );
   });
-
-  it("gives members a read-only view without invite or share-link controls", () => {
-    data.members = [
-      member("user-1", "Ada Lovelace", "member"),
-      member("user-2", "Grace Hopper", "owner"),
-    ];
-    renderWithI18n(<MembersTab />);
-
-    expect(screen.getByRole("note")).toHaveTextContent("Ask Grace Hopper");
-    expect(screen.queryByRole("button", { name: "Invite member" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: /Share links/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Actions for/ })).toBeNull();
-  });
 });
