@@ -4,10 +4,10 @@ import { ChangelogPageClient } from "@/features/landing/components/changelog-pag
 export const metadata: Metadata = {
   title: "Changelog",
   description:
-    "See what's new in 易研 — latest features, improvements, and fixes.",
+    "See what's new in yiyan — latest features, improvements, and fixes.",
   openGraph: {
-    title: "Changelog | 易研",
-    description: "Latest updates and releases from 易研.",
+    title: "Changelog | yiyan",
+    description: "Latest updates and releases from yiyan.",
     url: "/changelog",
   },
   alternates: {

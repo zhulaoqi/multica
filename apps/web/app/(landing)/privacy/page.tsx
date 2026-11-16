@@ -4,11 +4,11 @@ import { PrivacyPageClient } from "@/features/landing/components/privacy-page-cl
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "How 易研 collects, uses, and protects personal information on multica.ai and 易研 Cloud.",
+    "How yiyan collects, uses, and protects personal information on multica.ai and yiyan Cloud.",
   openGraph: {
-    title: "Privacy Policy — 易研",
+    title: "Privacy Policy — yiyan",
     description:
-      "How 易研 collects, uses, and protects personal information.",
+      "How yiyan collects, uses, and protects personal information.",
     url: "/privacy",
   },
   alternates: {

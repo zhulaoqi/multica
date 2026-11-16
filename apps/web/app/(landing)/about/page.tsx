@@ -4,11 +4,11 @@ import { AboutPageClient } from "@/features/landing/components/about-page-client
 export const metadata: Metadata = {
   title: "About",
   description:
-    "Learn about 易研 — multiplexed information and computing agent. A source-available project management platform for human + agent teams.",
+    "Learn about yiyan — multiplexed information and computing agent. A source-available project management platform for human + agent teams.",
   openGraph: {
-    title: "About 易研",
+    title: "About yiyan",
     description:
-      "The story behind 易研 and why we're building project management for human + agent teams.",
+      "The story behind yiyan and why we're building project management for human + agent teams.",
     url: "/about",
   },
   alternates: {

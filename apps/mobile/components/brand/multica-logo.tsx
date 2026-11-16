@@ -1,5 +1,5 @@
 /**
- * Multica wordmark. Vector copy of WORDMARK in packages/ui/lib/multica-brand.ts
+ * 易研 wordmark. Vector copy of WORDMARK in packages/ui/lib/multica-brand.ts
  * (mobile does not depend on @multica/ui) — keep the two in sync.
  *
  * react-native-svg does not resolve CSS `currentColor`, so callers must pass
@@ -7,6 +7,7 @@
  * `THEME` token from `@/lib/theme`.
  */
 import Svg, { Circle, G, Path } from "react-native-svg";
+import { useLocale } from "@/lib/i18n/use-locale";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -29,15 +30,17 @@ interface MulticaLogoProps {
 
 export function MulticaLogo({ size = 24, color }: MulticaLogoProps) {
   const { isDarkColorScheme } = useColorScheme();
+  const locale = useLocale();
   const resolvedColor =
     color ?? (isDarkColorScheme ? THEME.dark.foreground : THEME.light.foreground);
+  const label = locale.toLowerCase().startsWith("zh") ? "易研" : "yiyan";
 
   return (
     <Svg
       width={(size * VIEW_BOX.w) / VIEW_BOX.h}
       height={size}
       viewBox={`${VIEW_BOX.x} ${VIEW_BOX.y} ${VIEW_BOX.w} ${VIEW_BOX.h}`}
-      accessibilityLabel="Multica"
+      accessibilityLabel={label}
     >
       <G fill="none" stroke={resolvedColor} strokeWidth={16}>
         {LETTERS.map((d) => (

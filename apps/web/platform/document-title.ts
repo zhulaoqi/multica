@@ -15,7 +15,7 @@
 import { BRAND } from "@multica/ui/lib/multica-brand";
 
 /** Root fallback — the title of a page that has nothing more specific to say. */
-export const SITE_TITLE = `${BRAND.short} — ${BRAND.full}`;
+export const SITE_TITLE = BRAND.short;
 
 /** Appended to every page-specific title. */
 export const TITLE_SUFFIX = ` | ${BRAND.short}`;

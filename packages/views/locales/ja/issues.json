@@ -974,7 +974,7 @@
       "remove_item": "{{value}} を削除",
       "archived_hint": "アーカイブ済みプロパティ — 値は読み取り専用です",
       "unknown_value": "表示できません",
-      "unknown_value_hint": "この値は新しいバージョンの ECP で設定されており、ここでは編集できません。アプリを更新するか、値をクリアしてください"
+      "unknown_value_hint": "この値は新しいバージョンの yiyan で設定されており、ここでは編集できません。アプリを更新するか、値をクリアしてください"
     },
     "filter_options_aria": "フィルターオプション",
     "no_results": "結果なし",
@@ -1418,7 +1418,7 @@
     "link_placeholder": "PR の URL を貼り付け",
     "link_hint": "タイトルかブランチ名に {{identifier}} を含む PR は自動で関連付けられます。",
     "link_submit": "関連付け",
-    "link_not_found": "ECP はまだこの PR を受け取っていません。リポジトリが接続されているか確認してください。",
+    "link_not_found": "yiyan はまだこの PR を受け取っていません。リポジトリが接続されているか確認してください。",
     "link_failed": "PR を関連付けられませんでした。",
     "row_menu": "PR の操作",
     "section_menu": "PR の自動化",

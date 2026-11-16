@@ -130,7 +130,7 @@ describe("RuntimeMachineFilterDropdown", () => {
       }),
       makeMachine({
         id: "m-cloud",
-        title: "ECP cloud",
+        title: "yiyan cloud",
         section: "cloud",
         isCurrent: false,
         mode: "cloud",
@@ -153,7 +153,7 @@ describe("RuntimeMachineFilterDropdown", () => {
     // The menu items themselves also render.
     expect(screen.getByText("dev.local")).toBeTruthy();
     expect(screen.getByText("build-server")).toBeTruthy();
-    expect(screen.getByText("ECP cloud")).toBeTruthy();
+    expect(screen.getByText("yiyan cloud")).toBeTruthy();
   });
 
   it("fires onChange(null) when the All-runtimes row is clicked", () => {

@@ -88,7 +88,7 @@ export const metadata: Metadata = {
     template: TITLE_TEMPLATE,
   },
   description:
-    "易点研发协同平台：人和智能体在同一个工作区协同完成任务，统一派发任务、跟踪进度、沉淀技能。",
+    "易研：人和智能体在同一个工作区协同完成任务，统一派发任务、跟踪进度、沉淀技能。",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     shortcut: ["/favicon.svg"],

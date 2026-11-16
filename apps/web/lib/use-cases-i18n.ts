@@ -17,10 +17,10 @@ export const useCaseText: Record<SupportedLocale, UseCaseText> = {
   en: {
     indexTitle: "Use cases",
     indexSubtitle:
-      "See how teams organize people and agents together with ECP.",
+      "See how teams organize people and agents together with yiyan.",
     indexMetadataTitle: "Use cases",
     indexMetadataDescription:
-      "See how teams put people and agents to work together with ECP.",
+      "See how teams put people and agents to work together with yiyan.",
     cardReadMore: "Read →",
     tableOfContents: "On this page",
   },
@@ -45,40 +45,40 @@ export const useCaseText: Record<SupportedLocale, UseCaseText> = {
   ko: {
     indexTitle: "사용 사례",
     indexSubtitle:
-      "팀이 ECP로 사람과 에이전트를 함께 구성하는 방법을 확인해 보세요.",
+      "팀이 yiyan로 사람과 에이전트를 함께 구성하는 방법을 확인해 보세요.",
     indexMetadataTitle: "사용 사례",
     indexMetadataDescription:
-      "팀이 ECP로 사람과 에이전트를 함께 일하게 만드는 방법을 확인해 보세요.",
+      "팀이 yiyan로 사람과 에이전트를 함께 일하게 만드는 방법을 확인해 보세요.",
     cardReadMore: "읽기 →",
     tableOfContents: "이 페이지에서",
   },
   ja: {
     indexTitle: "ユースケース",
     indexSubtitle:
-      "チームが ECP で人とエージェントをどう組み合わせて動かしているかをご覧ください。",
+      "チームが yiyan で人とエージェントをどう組み合わせて動かしているかをご覧ください。",
     indexMetadataTitle: "ユースケース",
     indexMetadataDescription:
-      "チームが ECP で人とエージェントを一緒に働かせる方法をご覧ください。",
+      "チームが yiyan で人とエージェントを一緒に働かせる方法をご覧ください。",
     cardReadMore: "続きを読む →",
     tableOfContents: "このページの内容",
   },
   es: {
     indexTitle: "Casos de uso",
     indexSubtitle:
-      "Descubre cómo los equipos organizan a personas y agentes con ECP.",
+      "Descubre cómo los equipos organizan a personas y agentes con yiyan.",
     indexMetadataTitle: "Casos de uso",
     indexMetadataDescription:
-      "Descubre cómo los equipos hacen trabajar juntas a personas y agentes con ECP.",
+      "Descubre cómo los equipos hacen trabajar juntas a personas y agentes con yiyan.",
     cardReadMore: "Leer →",
     tableOfContents: "En esta página",
   },
   fr: {
     indexTitle: "Cas d'usage",
     indexSubtitle:
-      "Découvrez comment les équipes organisent humains et agents ensemble avec ECP.",
+      "Découvrez comment les équipes organisent humains et agents ensemble avec yiyan.",
     indexMetadataTitle: "Cas d'usage",
     indexMetadataDescription:
-      "Découvrez comment les équipes font travailler humains et agents ensemble avec ECP.",
+      "Découvrez comment les équipes font travailler humains et agents ensemble avec yiyan.",
     cardReadMore: "Lire →",
     tableOfContents: "Sur cette page",
   },

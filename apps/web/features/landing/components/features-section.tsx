@@ -20,7 +20,7 @@ import {
 } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
 import { ImageIcon } from "./shared";
-import { useLocale } from "../i18n";
+import { isZhLocale, useLocale } from "../i18n";
 import type { LandingDict } from "../i18n";
 import { StatusIcon, PriorityIcon } from "@multica/views/issues/components";
 import { BUILT_IN_STATUS_LABEL } from "@multica/core/issues/config/status";
@@ -148,7 +148,12 @@ const statusCycle: BuiltInIssueStatus[] = [
 ];
 const priorityCycle: IssuePriority[] = ["none", "low", "medium", "high", "urgent"];
 
+function demoBrand(locale: Parameters<typeof isZhLocale>[0]): string {
+  return isZhLocale(locale) ? "易研" : "yiyan";
+}
+
 function TeammatesVisual() {
+  const { locale } = useLocale();
   const [status, setStatus] = useState<BuiltInIssueStatus>("in_progress");
   const [priority, setPriority] = useState<IssuePriority>("medium");
   const [assignee, setAssignee] = useState<Assignee>(allAssignees[3]!); // Claude
@@ -171,7 +176,7 @@ function TeammatesVisual() {
       {/* Header bar */}
       <div className="flex h-10 shrink-0 items-center border-b bg-background px-4 text-body">
         <div className="flex items-center gap-1.5 min-w-0 text-caption">
-          <span className="text-muted-foreground">易研 Demo</span>
+          <span className="text-muted-foreground">{demoBrand(locale)} Demo</span>
           <ChevronRight className="h-3 w-3 text-faint-foreground shrink-0" />
           <span className="text-muted-foreground">MUL-18</span>
           <ChevronRight className="h-3 w-3 text-faint-foreground shrink-0" />
@@ -423,6 +428,7 @@ const mockTaskHistory = [
 ];
 
 function AutonomousVisual() {
+  const { locale } = useLocale();
   const [expanded, setExpanded] = useState<number | null>(null);
 
   return (
@@ -430,7 +436,7 @@ function AutonomousVisual() {
       {/* Header bar */}
       <div className="flex h-10 shrink-0 items-center border-b bg-background px-4 text-body">
         <div className="flex items-center gap-1.5 min-w-0 text-caption">
-          <span className="text-muted-foreground">易研 Demo</span>
+          <span className="text-muted-foreground">{demoBrand(locale)} Demo</span>
           <ChevronRight className="h-3 w-3 text-faint-foreground shrink-0" />
           <span className="text-muted-foreground">MUL-18</span>
           <ChevronRight className="h-3 w-3 text-faint-foreground shrink-0" />

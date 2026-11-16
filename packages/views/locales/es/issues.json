@@ -931,7 +931,7 @@
       "open_link": "Abrir enlace",
       "archived_hint": "Propiedad archivada; el valor es de solo lectura",
       "unknown_value": "No disponible",
-      "unknown_value_hint": "Este valor lo estableció una versión más reciente de ECP y no se puede editar aquí; actualiza la app o bórralo",
+      "unknown_value_hint": "Este valor lo estableció una versión más reciente de yiyan y no se puede editar aquí; actualiza la app o bórralo",
       "url_scheme_required": "La URL debe empezar por http:// o https://.",
       "remove_item": "Quitar {{value}}"
     },
@@ -1381,7 +1381,7 @@
     "link_placeholder": "Pega la URL de un pull request",
     "link_hint": "Los PR con {{identifier}} en el título o el nombre de la rama se enlazan automáticamente.",
     "link_submit": "Enlazar",
-    "link_not_found": "ECP aún no ha recibido este PR. Comprueba que su repositorio esté conectado.",
+    "link_not_found": "yiyan aún no ha recibido este PR. Comprueba que su repositorio esté conectado.",
     "link_failed": "No se ha podido enlazar el pull request.",
     "row_menu": "Acciones del pull request",
     "section_menu": "Automatización de pull request",

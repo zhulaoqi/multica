@@ -14,7 +14,7 @@
  * historical names so existing installs and deployments keep working.
  */
 export const BRAND = {
-  full: "易点研发协同平台",
+  full: "易研",
   short: "易研",
 } as const;
 

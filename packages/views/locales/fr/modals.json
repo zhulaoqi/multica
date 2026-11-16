@@ -230,7 +230,7 @@
       "search_placeholder": "Rechercher des agents et des squads…",
       "agents_group": "Agents",
       "squads_group": "Squads",
-      "version_missing": "Le daemon de cet agent ne communique pas de version du CLI. La création avec un agent exige le CLI multica ≥ {{min}}. Mettez le daemon à jour et reconnectez-vous, ou passez à la création manuelle.",
+      "version_missing": "Le daemon de cet agent ne communique pas de version du CLI. La création avec un agent exige le CLI yiyan ≥ {{min}}. Mettez le daemon à jour et reconnectez-vous, ou passez à la création manuelle.",
       "version_below": "Le CLI du daemon de cet agent est en {{current}} — la création avec un agent exige ≥ {{min}}. Mettez le daemon à jour, ou passez à la création manuelle.",
       "prompt_placeholder": "Dites à l'agent quoi faire, par exemple « confier à Bohan la lenteur de chargement de la boîte de réception dans le projet Web »",
       "source_context_prompt_placeholder": "Indiquez à l'agent quoi faire de ce contexte, par exemple « poursuivez l'enquête et corrigez le problème décrit ici »",

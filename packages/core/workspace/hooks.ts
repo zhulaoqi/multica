@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { Agent, MemberWithUser, Squad, Workspace } from "../types";
 import { useWorkspaceId } from "../hooks";
 import {
@@ -28,6 +29,11 @@ import { pluginInstallationsOptions } from "../plugins";
 const EMPTY_MEMBERS: MemberWithUser[] = [];
 const EMPTY_AGENTS: Agent[] = [];
 const EMPTY_SQUADS: Squad[] = [];
+
+/** Chinese UI uses 易研. Every other locale uses the English name. */
+export function productNameForLanguage(language: string | undefined): string {
+  return language?.toLowerCase().startsWith("zh") ? "易研" : "yiyan";
+}
 const EMPTY_WORKSPACES: Workspace[] = [];
 
 /**
@@ -72,7 +78,10 @@ export function buildActorNameResolver(directories: {
    * vague, but not wrong the way "System" would be.
    */
   plugins?: readonly { id: string; name: string }[];
+  /** Name shown for system-authored rows. Defaults to the Chinese product name. */
+  productName?: string;
 }) {
+  const productName = directories.productName ?? "易研";
   const memberNames = new Map(directories.members.map((m) => [m.user_id, m.name]));
   const agentNames = new Map(directories.agents.map((a) => [a.id, a.name]));
   const squadNames = new Map(directories.squads.map((s) => [s.id, s.name]));
@@ -86,12 +95,14 @@ export function buildActorNameResolver(directories: {
     // would be a lie the audit trail cannot undo. An id that no longer
     // resolves means the plugin was uninstalled — the row stays readable.
     if (type === "plugin") return pluginNames.get(id) ?? "Plugin";
-    if (type === "system") return "Multica";
+    if (type === "system") return productName;
     return "System";
   };
 }
 
 export function useActorName() {
+  const { i18n } = useTranslation();
+  const productName = productNameForLanguage(i18n.resolvedLanguage ?? i18n.language);
   const wsId = useWorkspaceId();
   const { data: memberData } = useQuery(memberListOptions(wsId));
   const { data: agentData } = useQuery(agentListOptions(wsId));
@@ -123,8 +134,14 @@ export function useActorName() {
   }, [squads]);
 
   const getActorName = useMemo(
-    () => buildActorNameResolver({ members, agents, squads, plugins: pluginData?.plugins }),
-    [agents, members, squads, pluginData],
+    () => buildActorNameResolver({
+      members,
+      agents,
+      squads,
+      plugins: pluginData?.plugins,
+      productName,
+    }),
+    [agents, members, pluginData, productName, squads],
   );
 
   const getActorInitials = useCallback(

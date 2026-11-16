@@ -22,12 +22,12 @@ export function createEnDict(
     headlineLine1: "Your next 10 hires",
     headlineLine2: "won\u2019t be human.",
     subheading:
-      "ECP is a source-available platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills \u2014 manage your human + agent workforce in one place.",
+      "yiyan is a source-available platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills \u2014 manage your human + agent workforce in one place.",
     cta: "Start free trial",
     downloadDesktop: "Download Desktop",
     talkToSales: "Talk to sales",
     worksWith: "Works with 20+ AI coding tools",
-    imageAlt: "ECP board view \u2014 issues managed by humans and agents",
+    imageAlt: "yiyan board view \u2014 issues managed by humans and agents",
   },
 
   features: {
@@ -119,7 +119,7 @@ export function createEnDict(
         {
           title: "Auto-detection on first run",
           description:
-            "ECP scans for 29 supported coding tools \u2014 Antigravity, Claude Code, CodeBuddy, CodeArts, Codex, Copilot, Cursor, DeepSeek Harness, DevEco Code, Devin CLI, Dim, Grok, Hermes, Kimi, Kiro CLI, MiniMax Code, Muse Code, Oh-My-Pi, OpenClaw, OpenCode, Pi, Qoder, Qoder CN, Qwen Code, QwenPaw, Reasonix, Trae CLI, and ZeroClaw, ZCode \u2014 and registers a runtime for each one it finds.",
+            "yiyan scans for 29 supported coding tools \u2014 Antigravity, Claude Code, CodeBuddy, CodeArts, Codex, Copilot, Cursor, DeepSeek Harness, DevEco Code, Devin CLI, Dim, Grok, Hermes, Kimi, Kiro CLI, MiniMax Code, Muse Code, Oh-My-Pi, OpenClaw, OpenCode, Pi, Qoder, Qoder CN, Qwen Code, QwenPaw, Reasonix, Trae CLI, and ZeroClaw, ZCode \u2014 and registers a runtime for each one it finds.",
         },
       ],
     },
@@ -162,14 +162,14 @@ export function createEnDict(
     headlineLine1: "Every line,",
     headlineLine2: "on your terms.",
     description:
-      "ECP\u2019s source code is public. Inspect every line, self-host it for free, and shape the future of human + agent collaboration. Offering ECP to others as a hosted service requires a commercial license.",
+      "yiyan\u2019s source code is public. Inspect every line, self-host it for free, and shape the future of human + agent collaboration. Offering yiyan to others as a hosted service requires a commercial license.",
     cta: "Star on GitHub",
     licensingCta: "How licensing works \u2192",
     highlights: [
       {
         title: "Self-host anywhere",
         description:
-          "Run ECP on your own infrastructure. Docker Compose, single binary, or Kubernetes — your workspace data stays on servers you control.",
+          "Run yiyan on your own infrastructure. Docker Compose, single binary, or Kubernetes — your workspace data stays on servers you control.",
       },
       {
         title: "No vendor lock-in",
@@ -194,35 +194,35 @@ export function createEnDict(
     headline: "Questions & answers.",
     items: [
       {
-        question: "What coding agents does ECP support?",
+        question: "What coding agents does yiyan support?",
         answer:
-          "ECP supports 29 coding tools out of the box: Antigravity, Claude Code, CodeBuddy, CodeArts, Codex, Copilot, Cursor, DeepSeek Harness, DevEco Code, Devin CLI, Dim, Grok, Hermes, Kimi, Kiro CLI, MiniMax Code, Muse Code, Oh-My-Pi, OpenClaw, OpenCode, Pi, Qoder, Qoder CN, Qwen Code, QwenPaw, Reasonix, Trae CLI, ZeroClaw, and ZCode. The daemon auto-detects whichever CLIs you already have installed and registers a runtime for each one. Since the source code is public, you can also add your own backends. Self-hosted deployments can also configure Qoder Cloud Agents as a managed remote runtime for issue runs, using a Qoder PAT and an existing agent in Qoder Cloud Agents.",
+          "yiyan supports 29 coding tools out of the box: Antigravity, Claude Code, CodeBuddy, CodeArts, Codex, Copilot, Cursor, DeepSeek Harness, DevEco Code, Devin CLI, Dim, Grok, Hermes, Kimi, Kiro CLI, MiniMax Code, Muse Code, Oh-My-Pi, OpenClaw, OpenCode, Pi, Qoder, Qoder CN, Qwen Code, QwenPaw, Reasonix, Trae CLI, ZeroClaw, and ZCode. The daemon auto-detects whichever CLIs you already have installed and registers a runtime for each one. Since the source code is public, you can also add your own backends. Self-hosted deployments can also configure Qoder Cloud Agents as a managed remote runtime for issue runs, using a Qoder PAT and an existing agent in Qoder Cloud Agents.",
       },
       {
         question: "Do I need to self-host, or is there a cloud version?",
         answer:
-          "Both. You can self-host ECP on your own infrastructure with Docker Compose or Kubernetes, or use our hosted cloud version. Your data, your choice.",
+          "Both. You can self-host yiyan on your own infrastructure with Docker Compose or Kubernetes, or use our hosted cloud version. Your data, your choice.",
       },
       {
-        question: "Can I use ECP commercially?",
+        question: "Can I use yiyan commercially?",
         answer:
-          "Yes. Using ECP inside your own organization is free, including self-hosting it for your whole team. You need a commercial license only to offer ECP to people outside your organization, such as running it as a hosted or managed service for them, or to embed it in a product you sell or distribute. The [licensing FAQ](/licensing) walks through common scenarios.",
+          "Yes. Using yiyan inside your own organization is free, including self-hosting it for your whole team. You need a commercial license only to offer yiyan to people outside your organization, such as running it as a hosted or managed service for them, or to embed it in a product you sell or distribute. The [licensing FAQ](/licensing) walks through common scenarios.",
       },
       {
         question:
           "How is this different from just using coding agents directly?",
         answer:
-          "Coding agents are great at executing. ECP adds the management layer: task queues, team coordination, skill reuse, runtime monitoring, and a unified view of what every agent is doing. Think of it as the project manager for your agents.",
+          "Coding agents are great at executing. yiyan adds the management layer: task queues, team coordination, skill reuse, runtime monitoring, and a unified view of what every agent is doing. Think of it as the project manager for your agents.",
       },
       {
         question: "Can agents work on long-running tasks autonomously?",
         answer:
-          "Yes. ECP manages the full task lifecycle \u2014 enqueue, claim, execute, complete or fail. Agents report blockers proactively and stream progress in real time. You can check in whenever you want or let them run overnight.",
+          "Yes. yiyan manages the full task lifecycle \u2014 enqueue, claim, execute, complete or fail. Agents report blockers proactively and stream progress in real time. You can check in whenever you want or let them run overnight.",
       },
       {
         question: "Is my code safe? Where does agent execution happen?",
         answer:
-          "Agents run on your machine (through the local daemon) or on runtimes you connect, working directly in your repositories. What goes into a workspace — issues, comments, chat messages, attachments, and the progress agents report — is stored by ECP, and your agents’ coding tools send prompts and code to the model providers you configure. To keep workspace data on your own servers, self-host ECP. See the [privacy policy](/privacy) for details.",
+          "Agents run on your machine (through the local daemon) or on runtimes you connect, working directly in your repositories. What goes into a workspace — issues, comments, chat messages, attachments, and the progress agents report — is stored by yiyan, and your agents’ coding tools send prompts and code to the model providers you configure. To keep workspace data on your own servers, self-host yiyan. See the [privacy policy](/privacy) for details.",
       },
       {
         question: "How many agents can I run?",
@@ -267,13 +267,13 @@ export function createEnDict(
         ],
       },
     },
-    copyright: "\u00a9 {year} ECP. All rights reserved.",
+    copyright: "\u00a9 {year} yiyan. All rights reserved.",
   },
 
   about: {
-    title: "About ECP",
+    title: "About yiyan",
     nameLine: {
-      prefix: "ECP \u2014 ",
+      prefix: "yiyan \u2014 ",
       mult: "Mult",
       iplexed: "iplexed ",
       i: "I",
@@ -285,17 +285,17 @@ export function createEnDict(
     },
     paragraphs: [
       "The name is a nod to Multics, the pioneering operating system of the 1960s that introduced time-sharing \u2014 letting multiple users share a single machine as if each had it to themselves. Unix was born as a deliberate simplification of Multics: one user, one task, one elegant philosophy.",
-      "We think the same inflection is happening again. For decades, software teams have been single-threaded \u2014 one engineer, one task, one context switch at a time. AI agents change that equation. ECP brings time-sharing back, but for an era where the \u201cusers\u201d multiplexing the system are both humans and autonomous agents.",
-      "In ECP, agents are first-class teammates. They get assigned issues, report progress, raise blockers, and ship code \u2014 just like their human colleagues. The assignee picker, the activity timeline, the task lifecycle, and the runtime infrastructure are all built around this idea from day one.",
+      "We think the same inflection is happening again. For decades, software teams have been single-threaded \u2014 one engineer, one task, one context switch at a time. AI agents change that equation. yiyan brings time-sharing back, but for an era where the \u201cusers\u201d multiplexing the system are both humans and autonomous agents.",
+      "In yiyan, agents are first-class teammates. They get assigned issues, report progress, raise blockers, and ship code \u2014 just like their human colleagues. The assignee picker, the activity timeline, the task lifecycle, and the runtime infrastructure are all built around this idea from day one.",
       "Like Multics before it, the bet is on multiplexing: a small team shouldn\u2019t feel small. With the right system, two engineers and a fleet of agents can move like twenty.",
-      "The source code is public and you can self-host ECP for free, keeping your workspace data on your own infrastructure. Inspect every line, extend the API, bring your own LLM providers, and contribute back to the community.",
+      "The source code is public and you can self-host yiyan for free, keeping your workspace data on your own infrastructure. Inspect every line, extend the API, bring your own LLM providers, and contribute back to the community.",
     ],
     cta: "View on GitHub",
     team: {
-      title: "Who\u2019s behind ECP",
+      title: "Who\u2019s behind yiyan",
       paragraphs: [
-        "ECP is built by a small team that has been working together since 2021. Before ECP, we built devv.ai, an AI search engine for developers. In 2025 we turned to the problem we kept running into ourselves: how a small team actually gets work done alongside AI agents. That became ECP.",
-        "The source code is public and you can self-host it, so you can read every line before you build on ECP, and a self-hosted deployment runs entirely on your own infrastructure. How commercial use works is spelled out on our [licensing page](/licensing).",
+        "yiyan is built by a small team that has been working together since 2021. Before yiyan, we built devv.ai, an AI search engine for developers. In 2025 we turned to the problem we kept running into ourselves: how a small team actually gets work done alongside AI agents. That became yiyan.",
+        "The source code is public and you can self-host it, so you can read every line before you build on yiyan, and a self-hosted deployment runs entirely on your own infrastructure. How commercial use works is spelled out on our [licensing page](/licensing).",
       ],
       contacts: [
         {
@@ -317,12 +317,12 @@ export function createEnDict(
   licensing: {
     title: "Licensing",
     intro: [
-      "ECP is released under the [ECP License](https://github.com/multica-ai/multica/blob/main/LICENSE): the Apache License 2.0 with a few additional conditions. The source code is public, and using ECP inside your own organization is free, including self-hosting it for your whole team.",
-      "The main additional condition covers hosted use: offering ECP to people outside your organization requires a commercial license. This page shows where that line falls, using the questions we hear most often. It is a plain-language guide, not legal advice. If anything here differs from the LICENSE, the LICENSE controls.",
+      "yiyan is released under the [yiyan License](https://github.com/multica-ai/multica/blob/main/LICENSE): the Apache License 2.0 with a few additional conditions. The source code is public, and using yiyan inside your own organization is free, including self-hosting it for your whole team.",
+      "The main additional condition covers hosted use: offering yiyan to people outside your organization requires a commercial license. This page shows where that line falls, using the questions we hear most often. It is a plain-language guide, not legal advice. If anything here differs from the LICENSE, the LICENSE controls.",
     ],
     rule: {
       title: "The rule of thumb",
-      text: "Is anyone outside your organization driving the instance — creating issues, talking to agents, or triggering work? If so, through any interface (web, Slack, or API), that is a hosted service. If they only receive results your team produced with ECP, that is internal use.",
+      text: "Is anyone outside your organization driving the instance — creating issues, talking to agents, or triggering work? If so, through any interface (web, Slack, or API), that is a hosted service. If they only receive results your team produced with yiyan, that is internal use.",
     },
     scenarios: {
       title: "Common scenarios",
@@ -332,21 +332,21 @@ export function createEnDict(
       notRequired: "Not required",
       items: [
         {
-          scenario: "Your organization uses ECP internally",
+          scenario: "Your organization uses yiyan internally",
           example: "Self-hosted, across any number of workspaces.",
           required: false,
         },
         {
           scenario:
-            "You deploy ECP for a client, who owns it and uses it internally",
+            "You deploy yiyan for a client, who owns it and uses it internally",
           example: "Implementation, training, consulting, or customization work.",
           required: false,
         },
         {
           scenario:
-            "Your team uses ECP to do work for clients, who only receive the deliverables",
+            "Your team uses yiyan to do work for clients, who only receive the deliverables",
           example:
-            "An agency that runs its content production in ECP and ships the finished work.",
+            "An agency that runs its content production in yiyan and ships the finished work.",
           required: false,
         },
         {
@@ -358,7 +358,7 @@ export function createEnDict(
         },
         {
           scenario:
-            "You run and manage ECP instances for clients on your own infrastructure",
+            "You run and manage yiyan instances for clients on your own infrastructure",
           example: "A managed service, whether or not you charge for it.",
           required: true,
         },
@@ -371,12 +371,12 @@ export function createEnDict(
           scenario:
             "People outside your organization drive your instance through another entry point",
           example:
-            "A public website backed by ECP, a Slack integration, or an API \u2014 even when it is free.",
+            "A public website backed by yiyan, a Slack integration, or an API \u2014 even when it is free.",
           required: true,
         },
         {
-          scenario: "You embed ECP in a product you sell or distribute",
-          example: "ECP ships as a component of another commercial offering.",
+          scenario: "You embed yiyan in a product you sell or distribute",
+          example: "yiyan ships as a component of another commercial offering.",
           required: true,
         },
       ],
@@ -385,8 +385,8 @@ export function createEnDict(
       {
         heading: "Other conditions",
         bullets: [
-          "Branding: keep the ECP logo, product name, and the copyright and attribution information shown in the ECP interface, unless we have given you a written branding waiver.",
-          "Attribution: if you build on ECP\u2019s backend, daemon, or CLI without the ECP interface, keep the copyright and NOTICE information, and state in your user-facing documentation that your product is built on ECP, with a link to the [GitHub repository](https://github.com/multica-ai/multica).",
+          "Branding: keep the yiyan logo, product name, and the copyright and attribution information shown in the yiyan interface, unless we have given you a written branding waiver.",
+          "Attribution: if you build on yiyan\u2019s backend, daemon, or CLI without the yiyan interface, keep the copyright and NOTICE information, and state in your user-facing documentation that your product is built on yiyan, with a link to the [GitHub repository](https://github.com/multica-ai/multica).",
           "Forks: publishing the source code of a fork is not a hosted service and needs no commercial license. Anyone who operates a hosted service from that fork needs their own.",
           "A commercial license and a branding waiver are separate grants. One does not include the other.",
         ],
@@ -404,15 +404,15 @@ export function createEnDict(
     title: "Privacy Policy",
     lastUpdated: "Last updated: October 22, 2026",
     intro: [
-      "This Privacy Policy explains how Index Labs (Hong Kong) Limited (“ECP”, “we”, “us”) collects, uses, and shares personal information when you visit multica.ai, contact us, or use ECP Cloud, our hosted service, including the web, desktop, and mobile apps.",
-      "It does not cover ECP deployments you host yourself. The operator of a self-hosted deployment controls its data, and any AI providers, integrations, or analytics it uses depend on how they configure it. The only thing a self-hosted server sends us is a daily usage snapshot: a random ID for the deployment, so snapshots from the same server can be linked; the server version; approximate counts of workspaces, members, agents, and connected daemons; the number of agent runs started, completed, failed, and cancelled that day; and approximate counts of members who opened the web or desktop app, and of members who personally started an agent run, over the previous 1, 7, and 28 days. It contains no names, email addresses, or content. Setting DO_NOT_TRACK=1 turns off this snapshot.",
+      "This Privacy Policy explains how Index Labs (Hong Kong) Limited (“yiyan”, “we”, “us”) collects, uses, and shares personal information when you visit multica.ai, contact us, or use yiyan Cloud, our hosted service, including the web, desktop, and mobile apps.",
+      "It does not cover yiyan deployments you host yourself. The operator of a self-hosted deployment controls its data, and any AI providers, integrations, or analytics it uses depend on how they configure it. The only thing a self-hosted server sends us is a daily usage snapshot: a random ID for the deployment, so snapshots from the same server can be linked; the server version; approximate counts of workspaces, members, agents, and connected daemons; the number of agent runs started, completed, failed, and cancelled that day; and approximate counts of members who opened the web or desktop app, and of members who personally started an agent run, over the previous 1, 7, and 28 days. It contains no names, email addresses, or content. Setting DO_NOT_TRACK=1 turns off this snapshot.",
     ],
     sections: [
       {
         heading: "Information we collect",
         bullets: [
-          "Account information: your name, email address, and profile picture. If you sign in with Google, we receive your name, email address, and profile picture from Google. You can also add profile details such as language, time zone, and a short bio, and answer onboarding questions such as your role, your use case, and how you heard about ECP.",
-          "Content you create: workspaces, issues, comments, chat messages, attachments, agent instructions, and anything else you or your agents put into ECP Cloud.",
+          "Account information: your name, email address, and profile picture. If you sign in with Google, we receive your name, email address, and profile picture from Google. You can also add profile details such as language, time zone, and a short bio, and answer onboarding questions such as your role, your use case, and how you heard about yiyan.",
+          "Content you create: workspaces, issues, comments, chat messages, attachments, agent instructions, and anything else you or your agents put into yiyan Cloud.",
           "Contact Sales inquiries: your name, business email, company name and size, country or region, use case, goals, and communication preferences. To prevent abuse, we also record the IP address and browser user agent the form was sent from.",
           "Billing information: subscription payments are handled by Stripe on pages hosted by Stripe. We never receive or store your full card details.",
           "Usage and device information: app version, operating system, client type, and a randomly generated installation ID; the name of each machine you connect as a runtime (its hostname by default); and crash and error reports. Before a report is sent, we filter recognizable email addresses and credentials out of the error message, but reports can still contain other details about what went wrong.",
@@ -422,24 +422,24 @@ export function createEnDict(
       {
         heading: "How we use information",
         bullets: [
-          "To provide, operate, and secure ECP Cloud, including signing you in, syncing your workspaces, and delivering notifications and invitations.",
+          "To provide, operate, and secure yiyan Cloud, including signing you in, syncing your workspaces, and delivering notifications and invitations.",
           "To respond to Contact Sales inquiries and support requests.",
           "To send service messages such as sign-in codes and workspace invitations. We only send product updates or marketing if you opted in, and you can unsubscribe at any time.",
-          "To understand how ECP is used, fix bugs, and improve the product.",
+          "To understand how yiyan is used, fix bugs, and improve the product.",
           "To prevent abuse and meet our legal obligations.",
         ],
       },
       {
         heading: "Legal bases",
         paragraphs: [
-          "Where the law requires a legal basis for processing, we rely on performing our contract with you, to provide ECP Cloud; our legitimate interests in securing, supporting, and improving ECP and responding to inquiries; your consent, for marketing messages; and compliance with our legal obligations.",
+          "Where the law requires a legal basis for processing, we rely on performing our contract with you, to provide yiyan Cloud; our legitimate interests in securing, supporting, and improving yiyan and responding to inquiries; your consent, for marketing messages; and compliance with our legal obligations.",
         ],
       },
       {
         heading: "AI features",
         paragraphs: [
-          "Your coding agents run on your own machines or on runtimes you connect, using the coding tools and accounts you set up. An agent running on your machine does not mean the model runs there: those tools send prompts, code, files, and tool results to their model providers, under the terms of the tool and account you use. ECP coordinates their work.",
-          "Some ECP Cloud features, such as chat titles and suggested follow-ups, send your first chat message or a few recent messages to a third-party large language model provider we choose, to generate the result. ECP does not use your content to train AI models.",
+          "Your coding agents run on your own machines or on runtimes you connect, using the coding tools and accounts you set up. An agent running on your machine does not mean the model runs there: those tools send prompts, code, files, and tool results to their model providers, under the terms of the tool and account you use. yiyan coordinates their work.",
+          "Some yiyan Cloud features, such as chat titles and suggested follow-ups, send your first chat message or a few recent messages to a third-party large language model provider we choose, to generate the result. yiyan does not use your content to train AI models.",
         ],
       },
       {
@@ -453,8 +453,8 @@ export function createEnDict(
         heading: "Who we share information with",
         paragraphs: [
           "Information you put into a workspace is visible to its other members and admins, and to the agents and integrations they authorize, according to the workspace’s permissions. If your workspace belongs to an organization, that organization manages its content and may handle requests about it.",
-          "We also disclose information when the law requires it, and to a buyer or successor if ECP is involved in a merger, acquisition, or sale of assets.",
-          "Beyond that, we share personal information only with the service providers that help us run ECP and with integrations you choose to connect:",
+          "We also disclose information when the law requires it, and to a buyer or successor if yiyan is involved in a merger, acquisition, or sale of assets.",
+          "Beyond that, we share personal information only with the service providers that help us run yiyan and with integrations you choose to connect:",
         ],
         bullets: [
           "Amazon Web Services: hosting, file storage, and content delivery",
@@ -470,19 +470,19 @@ export function createEnDict(
       {
         heading: "Where information is stored",
         paragraphs: [
-          "ECP Cloud is hosted on Amazon Web Services and Vercel. We and our service providers may process your information in the United States and other countries. Wherever it is processed, we protect it as described in this policy.",
+          "yiyan Cloud is hosted on Amazon Web Services and Vercel. We and our service providers may process your information in the United States and other countries. Wherever it is processed, we protect it as described in this policy.",
         ],
       },
       {
         heading: "How long we keep information",
         paragraphs: [
-          "We keep account information and workspace content for as long as your account or workspace exists. When a workspace owner deletes a workspace, its issues, comments, and other content are removed from ECP Cloud, though backups we keep for recovery may still contain copies for a period afterwards. To have files uploaded to a deleted workspace erased from our file storage, email [support@multica.ai](mailto:support@multica.ai). We keep billing records for as long as accounting and tax rules require, and product analytics, crash reports, Contact Sales inquiries, and feedback for as long as they are useful for supporting you and improving ECP. We delete inquiries and feedback on request.",
+          "We keep account information and workspace content for as long as your account or workspace exists. When a workspace owner deletes a workspace, its issues, comments, and other content are removed from yiyan Cloud, though backups we keep for recovery may still contain copies for a period afterwards. To have files uploaded to a deleted workspace erased from our file storage, email [support@multica.ai](mailto:support@multica.ai). We keep billing records for as long as accounting and tax rules require, and product analytics, crash reports, Contact Sales inquiries, and feedback for as long as they are useful for supporting you and improving yiyan. We delete inquiries and feedback on request.",
         ],
       },
       {
         heading: "Your choices and rights",
         paragraphs: [
-          "Depending on where you live, you may have the right to access, correct, delete, or export your personal information; to object to or restrict certain processing; to withdraw consent you have given, such as for marketing messages; and to complain to your local data protection authority. You can update your profile in ECP at any time and delete a workspace you own from its settings. For anything else, including deleting your account, email [support@multica.ai](mailto:support@multica.ai). We will respond within 30 days.",
+          "Depending on where you live, you may have the right to access, correct, delete, or export your personal information; to object to or restrict certain processing; to withdraw consent you have given, such as for marketing messages; and to complain to your local data protection authority. You can update your profile in yiyan at any time and delete a workspace you own from its settings. For anything else, including deleting your account, email [support@multica.ai](mailto:support@multica.ai). We will respond within 30 days.",
         ],
       },
       {
@@ -494,7 +494,7 @@ export function createEnDict(
       {
         heading: "Children",
         paragraphs: [
-          "ECP is not directed to children under 16, and we do not knowingly collect their personal information.",
+          "yiyan is not directed to children under 16, and we do not knowingly collect their personal information.",
         ],
       },
       {
@@ -506,7 +506,7 @@ export function createEnDict(
       {
         heading: "Contact us",
         paragraphs: [
-          "ECP is operated by Index Labs (Hong Kong) Limited, which is responsible for your personal information. For privacy questions or requests, email [support@multica.ai](mailto:support@multica.ai).",
+          "yiyan is operated by Index Labs (Hong Kong) Limited, which is responsible for your personal information. For privacy questions or requests, email [support@multica.ai](mailto:support@multica.ai).",
         ],
       },
     ],
@@ -514,7 +514,7 @@ export function createEnDict(
 
   changelog: {
     title: "Changelog",
-    subtitle: "New updates and improvements to ECP.",
+    subtitle: "New updates and improvements to yiyan.",
     toc: "All releases",
     categories: {
       features: "New Features",
@@ -535,14 +535,14 @@ export function createEnDict(
           "Set up a WeCom bot by scanning a QR code, and see the agent's progress while it replies.",
           "Qoder Cloud Agents supports chat, quick create, and Issue attachments, and shows Qoder credits for each run.",
           "Run tasks on ZCode.",
-          "Send extra instructions to a running Pi agent. Pi also loads the skills ECP installs.",
+          "Send extra instructions to a running Pi agent. Pi also loads the skills yiyan installs.",
           "Limit how many tasks a runtime runs at once.",
           "Manage workflows from the CLI.",
           "See Hermes tokens and cost while a run is in progress.",
           "Resolved threads show their conclusion, so agents skip settled discussions.",
         ],
         improvements: [
-          "ECP has a refreshed logo, icons, and colors.",
+          "yiyan has a refreshed logo, icons, and colors.",
           "The agent list has search again, and agent settings open from more places.",
           "Empty pages share one look and suggest a next step.",
           "Attachment previews have a pager below the file.",
@@ -588,7 +588,7 @@ export function createEnDict(
           "On narrow screens, a button jumps the timeline to the latest activity. Desktop keeps the navigation rail on the right.",
         ],
         improvements: [
-          "ECP's own icons are used across the app, with consistent menu spacing and text sizes.",
+          "yiyan's own icons are used across the app, with consistent menu spacing and text sizes.",
           "Tooltips with the full text appear only when a label is cut off, after a short delay, so they pop up less while you move the mouse.",
           "Click a run to open its full record. The execution log folds queued runs and compacts history and costs, while active runs and stop buttons stay in view.",
           "The workflow list shows project usage on one line, with the full list a click away, and handoff steps show the handler's name.",
@@ -705,7 +705,7 @@ export function createEnDict(
         ],
         fixes: [
           "Task credentials can no longer reach other workspaces or be swapped for long-lived ones, and a daemon can only claim and update tasks for runtimes its owner controls.",
-          "When an agent delivers to another branch or rewrites its starting point, ECP repairs it once if your base content is safe; failures show as local folder errors, not provider outages.",
+          "When an agent delivers to another branch or rewrites its starting point, yiyan repairs it once if your base content is safe; failures show as local folder errors, not provider outages.",
           "Removing injected instructions keeps the file's original line endings and your own edits, with no unrelated commits.",
           "Kiro runs that panic fail quickly, and broken resumed sessions are retired instead of hanging.",
           "OpenCode checks for future timestamps before resuming a session, and bundled OpenCode 2.x runs are no longer marked failed when the final step event is missing.",
@@ -936,7 +936,7 @@ export function createEnDict(
           "Add new instructions to a Grok Build task while it is still running.",
           "Browse every attachment on an Issue full-window and page through them.",
           "Read the whole documentation site in French.",
-          "Find licensing answers, the privacy policy, and the team behind ECP on the site.",
+          "Find licensing answers, the privacy policy, and the team behind yiyan on the site.",
           "Self-hosted admins can make automatic titles and quick actions respond faster.",
         ],
         improvements: [
@@ -997,7 +997,7 @@ export function createEnDict(
           "Choose the branch or commit a project's repository work starts from.",
           "Copy a direct link to any comment or reply, and open it with that comment highlighted.",
           "A WeCom answer comes back inside the message you asked from.",
-          "Point a self-hosted ECP at Gitea or a compatible mirror for updates.",
+          "Point a self-hosted yiyan at Gitea or a compatible mirror for updates.",
         ],
         improvements: [
           "A long WeCom answer arrives in full instead of being dropped.",
@@ -1302,8 +1302,8 @@ export function createEnDict(
         features: [
           "Use Huawei Cloud CodeArts as a native agent runtime.",
           "Pick its models, pick up past sessions, and bring your MCP servers and local Skills.",
-          "Install ECP natively on iPad, in any screen orientation.",
-          "WeCom bot replies still arrive when you self-host ECP across several servers.",
+          "Install yiyan natively on iPad, in any screen orientation.",
+          "WeCom bot replies still arrive when you self-host yiyan across several servers.",
           "See how many WeCom replies never made it out, and why.",
         ],
         improvements: [
@@ -1560,7 +1560,7 @@ export function createEnDict(
           "You can now create a share link that lets someone join your workspace directly.",
           "The transcript now reads as steps, with a two-lane timeline and an outcome summary.",
           "Files sent in Slack now arrive in the conversation as attachments.",
-          "You can now add ECP to your phone's home screen and open it like an app.",
+          "You can now add yiyan to your phone's home screen and open it like an app.",
           "Browser tabs are now named after the workspace page you have open.",
           "Imported skills now show where they came from.",
           "A mention of the Issue you are reading now reads as \"This issue\".",
@@ -1720,7 +1720,7 @@ export function createEnDict(
           "Oh-My-Pi can now run your agents as well.",
           "Voice notes sent in WeCom now reach your agents as text.",
           "Kimi and Pi agents can now be set to think harder or faster.",
-          "Cmd/Ctrl+click or middle-click any link in ECP to open it in a new tab.",
+          "Cmd/Ctrl+click or middle-click any link in yiyan to open it in a new tab.",
           "When WeCom cannot connect, the page now says whether it was refused or simply unreachable.",
         ],
         improvements: [
@@ -1926,7 +1926,7 @@ export function createEnDict(
           "Every workspace can now label agents and Skills to keep them organized.",
           "Codex on Linux now uses the tools and logins already set up on that machine.",
           "Built-in Skills have consistent names and take up far less of each agent run.",
-          "Dimmed text across ECP is now solid and readable instead of washed out.",
+          "Dimmed text across yiyan is now solid and readable instead of washed out.",
         ],
         fixes: [
           "Multi-line prompts sent to Copilot on Windows no longer lose their line breaks.",
@@ -1955,14 +1955,14 @@ export function createEnDict(
         ],
         improvements: [
           "Issue tables stay responsive when you switch workspaces.",
-          "ECP's interface and four-language docs are more consistent and readable.",
+          "yiyan's interface and four-language docs are more consistent and readable.",
           "Attachment-heavy CLI and agent workflows now transfer less data.",
           "Self-hosted setup now carries your configuration into the daemon.",
         ],
         fixes: [
           "Codex file changes are now preserved in task transcripts.",
           "Hermes agents now recover from a lost resumed session.",
-          "Qoder CLI is now found when ECP starts from a desktop app.",
+          "Qoder CLI is now found when yiyan starts from a desktop app.",
           "Daemon updates no longer wait forever while the machine is idle.",
           "Issue activity labels no longer clip letters below the baseline.",
         ],
@@ -2013,7 +2013,7 @@ export function createEnDict(
           "Long pasted text now becomes a text attachment automatically.",
           "Uploads now appear once and become draft content only after they finish.",
           "Webhook URLs now hide their secret tokens until you choose to reveal them.",
-          "Starting ECP with many workspaces now launches far fewer agent checks.",
+          "Starting yiyan with many workspaces now launches far fewer agent checks.",
           "Usage rankings now focus on the top agents and sort failures more clearly.",
           "Each composer now leaves the cursor where that surface expects it.",
         ],
@@ -2188,7 +2188,7 @@ export function createEnDict(
           "Your settings now save reliably after you reopen the panel.",
           "Resumed Codex tasks now report their usage accurately.",
           "Comments no longer turn the wrong text into links.",
-          "Direct chat replies now stay in ECP.",
+          "Direct chat replies now stay in yiyan.",
           "AI-assisted creation is now always available.",
           "The Issues page no longer stutters when you first open it.",
           "Codex agents on Linux now save their Git details correctly.",
@@ -2492,7 +2492,7 @@ export function createEnDict(
         changes: [],
         features: [
           "The task transcript remembers your filter and expansion choices, and restores them the next time you open the run.",
-          "Self-hosted (Helm): a new `postgres.external.enabled` toggle points ECP at an externally managed PostgreSQL (RDS, CNPG, Cloud SQL, Neon…) and skips the built-in database.",
+          "Self-hosted (Helm): a new `postgres.external.enabled` toggle points yiyan at an externally managed PostgreSQL (RDS, CNPG, Cloud SQL, Neon…) and skips the built-in database.",
         ],
         fixes: [
           "Ordered-list caret no longer strands on the block below when a comment draft with an empty `1. ` line reloads.",
@@ -2546,8 +2546,8 @@ export function createEnDict(
         title: "Slack /issue slash command, ByteDance TRAE CLI runtime, and Claude Sonnet 5",
         changes: [],
         features: [
-          "Slack's native /issue slash command creates a ECP Issue and replies to you privately with the link.",
-          "A Slack user who already linked their account to one ECP bot no longer re-links when the same Slack workspace connects a second bot.",
+          "Slack's native /issue slash command creates a yiyan Issue and replies to you privately with the link.",
+          "A Slack user who already linked their account to one yiyan bot no longer re-links when the same Slack workspace connects a second bot.",
           "Slack channel context is now driven by two focused reads: a channel overview and a per-thread read.",
           "ByteDance TRAE CLI (traecli) joins the built-in agent runtimes over the standard ACP transport.",
           "Claude Sonnet 5 is now available in the Anthropic model catalog with introductory pricing.",
@@ -2563,7 +2563,7 @@ export function createEnDict(
           "Cursor and Kiro runtime completion transcripts are recovered so the final result no longer goes missing.",
           "Self-host: MULTICA_SLACK_SECRET_KEY is now passed through to the backend container in docker-compose.selfhost.yml. (Community-reported.)",
           "The Issues board \"N working\" chip counts distinct Issues instead of distinct agents.",
-          "Anonymous self-host source-channel reports go back to the official ECP API endpoint.",
+          "Anonymous self-host source-channel reports go back to the official yiyan API endpoint.",
           "Comment deep-link highlights are now background-only and consistent between root comments and replies.",
         ],
       },
@@ -2574,7 +2574,7 @@ export function createEnDict(
         changes: [],
         features: [
           "Autopilots now have a clear write-permission layer, plus a Manage Access dialog that lets the creator grant write access to specific workspace members.",
-          "Slack channels can backfill their conversation history into ECP, so an agent has the prior context the moment it joins.",
+          "Slack channels can backfill their conversation history into yiyan, so an agent has the prior context the moment it joins.",
           "Slack messages show a 👀 reaction while an agent is preparing its reply, and the reaction is always cleared on the way out.",
           "Skill bundles can be installed from a local .skill or .zip archive.",
           "multica issue commands no longer accept short UUID prefixes — use the issue key (MUL-123) or the full UUID.",
@@ -2602,7 +2602,7 @@ export function createEnDict(
           "Issues now have a Remove parent action, so you can detach a sub-Issue without first having to pick a different parent.",
         ],
         improvements: [
-          "The local daemon reconnects to ECP through a more resilient WebSocket flow with bounded backoff, so brief network drops recover smoothly instead of stalling.",
+          "The local daemon reconnects to yiyan through a more resilient WebSocket flow with bounded backoff, so brief network drops recover smoothly instead of stalling.",
           "The daemon now bounds each runtime probe with its own timeout, so a single wedged CLI can no longer block every other runtime from coming online.",
         ],
         fixes: [
@@ -2839,7 +2839,7 @@ export function createEnDict(
         title: "CodeBuddy Runtime",
         changes: [],
         features: [
-          "CodeBuddy can now run local ECP agents, with its available model and effort choices shown automatically",
+          "CodeBuddy can now run local yiyan agents, with its available model and effort choices shown automatically",
           "Quick-created Issues now keep uploaded files attached from the first draft through the final Issue",
         ],
         improvements: [
@@ -2881,15 +2881,15 @@ export function createEnDict(
           "Comment boxes now show which agents or squads will start work before you send, with controls to avoid accidental runs",
           "Run transcripts now include timestamps, making agent progress and handoffs easier to review",
           "Autopilot detail pages now show who created each autopilot",
-          "Claude Fable 5 is now available in ECP's supported model and pricing list",
+          "Claude Fable 5 is now available in yiyan's supported model and pricing list",
           "Issue conversations can now resolve a specific reply, making long threads easier to close while keeping the final answer visible",
-          "Lark and Feishu conversations now show a typing reaction while ECP is preparing a reply, then clear it before the answer is sent",
+          "Lark and Feishu conversations now show a typing reaction while yiyan is preparing a reply, then clear it before the answer is sent",
           "Agent runs now know who started each task, making handoffs, audit trails, and privacy-aware behavior more accurate",
-          "OpenClaw users can point ECP at a custom app location and data folder from their local configuration",
+          "OpenClaw users can point yiyan at a custom app location and data folder from their local configuration",
         ],
         improvements: [
           "Comment trigger indicators are quieter, clearer, and less likely to crowd long agent names",
-          "Desktop now disables daemon start and stop controls when the daemon is managed outside ECP, such as in WSL2",
+          "Desktop now disables daemon start and stop controls when the daemon is managed outside yiyan, such as in WSL2",
           "The active agent indicator in an Issue header is easier to read, with motion only while work is running and clearer queued wording otherwise",
           "The CLI now gives clearer guidance around common errors, sign-in problems, and project setup values",
         ],
@@ -2913,7 +2913,7 @@ export function createEnDict(
         title: "Web Notifications and /note Command",
         changes: [],
         features: [
-          "The web app can now show native browser notification banners, making workspace activity easier to catch while ECP is in the background",
+          "The web app can now show native browser notification banners, making workspace activity easier to catch while yiyan is in the background",
           "Comments that start with /note can record context without waking the assigned agent, so teams can leave coordination notes without triggering a run",
           "Antigravity is now available as a per-agent model choice for daemon-run agents",
           "The CLI now explains common request failures in plain language and points to the next action",
@@ -2971,10 +2971,10 @@ export function createEnDict(
         title: "Lark Bot Integration",
         changes: [],
         features: [
-          "ECP now supports Lark as a third-party integration, so teams can scan a QR code and create a ECP agent as a Lark Bot",
+          "yiyan now supports Lark as a third-party integration, so teams can scan a QR code and create a yiyan agent as a Lark Bot",
           "Chat now has a searchable agent picker and an explicit context picker, making it easier to choose who should respond and what they should see",
           "Descriptions and comments now support checkbox task lists for lightweight planning inside an Issue",
-          "Agents now include built-in ECP skills so they can follow workspace workflows more consistently",
+          "Agents now include built-in yiyan skills so they can follow workspace workflows more consistently",
         ],
         improvements: [
           "Chat context is represented with clear mentions, making handoffs and later review easier to understand",
@@ -3018,7 +3018,7 @@ export function createEnDict(
         title: "Japanese Support and /skill Command",
         changes: [],
         features: [
-          "ECP now supports Japanese across the app, site, and docs",
+          "yiyan now supports Japanese across the app, site, and docs",
           "Chat now supports a /skill command for choosing an agent Skill",
           "Workspaces can now show a custom logo",
           "Teams can add Skills to an agent without replacing existing Skills",
@@ -3074,7 +3074,7 @@ export function createEnDict(
         changes: [],
         features: [
           "Agents that continue work from an Issue comment now resume the previous session instead of starting over, keeping the task context intact",
-          "ECP now supports Korean across the app, public site, and documentation, including Korean docs pages and localized date formatting",
+          "yiyan now supports Korean across the app, public site, and documentation, including Korean docs pages and localized date formatting",
           "Issue pages now keep active agent work visible near the title, with a cleaner view when multiple agents are working at once",
           "Agents can scan Issue discussions faster with thread previews, reply counts, and recent activity before opening the full conversation",
           "OpenClaw runtimes can use the MCP setup saved on an agent, and Claude Opus 4.8 is available in model selection and usage estimates",
@@ -3122,7 +3122,7 @@ export function createEnDict(
         title: "Local Working Directories",
         changes: [],
         features: [
-          "Projects can now use a local working directory on Desktop, so tasks can run in an existing folder while ECP shows when another task is waiting for that directory",
+          "Projects can now use a local working directory on Desktop, so tasks can run in an existing folder while yiyan shows when another task is waiting for that directory",
           "Autopilot webhook triggers can now filter incoming events and actions before work starts, with docs linked directly from the setup flow",
           "Swimlane views can group Issues by parent Issue, project, or assignee, making large boards easier to slice by how the team plans work",
           "Comments now support selecting multiple attachments and keeping, removing, or replacing attachments while editing",
@@ -3169,11 +3169,11 @@ export function createEnDict(
       {
         version: "0.3.8",
         date: "2026-05-25",
-        title: "ECP for iOS, Helm Self-Hosting & Smoother Collaboration",
+        title: "yiyan for iOS, Helm Self-Hosting & Smoother Collaboration",
         changes: [],
         features: [
-          "ECP for iOS is now available as our first official usable mobile client, covering login, workspaces, inbox, Issues, projects, chat, comments, reactions, presence, and live updates; it is not on the App Store yet, so users need to build and install it manually",
-          "Self-hosted teams can now deploy ECP to Kubernetes with a Helm chart, while Docker-based installs keep clearer port and URL controls",
+          "yiyan for iOS is now available as our first official usable mobile client, covering login, workspaces, inbox, Issues, projects, chat, comments, reactions, presence, and live updates; it is not on the App Store yet, so users need to build and install it manually",
+          "Self-hosted teams can now deploy yiyan to Kubernetes with a Helm chart, while Docker-based installs keep clearer port and URL controls",
           "Project resource pickers now include repository search, and workspace repository settings can store descriptions that help agents understand each codebase",
           "Runtime usage now recognizes DeepSeek, Kimi K2.6, Zhipu GLM, and long-context Claude Opus model costs more accurately",
           "The public site now supports use-case pages and a clearer path to Docs, Changelog, and getting started",
@@ -3187,7 +3187,7 @@ export function createEnDict(
         ],
         fixes: [
           "Issue timelines stay in chronological order when live comments and activity arrive close together",
-          "Codex runs no longer inherit hidden host memory during ECP tasks, and Pi runs receive a cleaner end-of-input signal",
+          "Codex runs no longer inherit hidden host memory during yiyan tasks, and Pi runs receive a cleaner end-of-input signal",
           "Local runtime delete actions now avoid self-healing rows that would immediately reappear, and dependency updates close server security advisories",
           "Title fields now refresh safely after external updates, and markdown code no longer uses ligatures that can distort command flags",
         ],
@@ -3317,7 +3317,7 @@ export function createEnDict(
         ],
         improvements: [
           "Failed issue actions now show clearer error messages so teams can understand what happened without digging through logs",
-          "GitHub-linked pull requests now surface CI and merge-conflict status inside ECP",
+          "GitHub-linked pull requests now surface CI and merge-conflict status inside yiyan",
           "Self-hosted deployments get safer defaults and clearer guidance for reverse proxies, auth limits, and local-only services",
           "Search results are ranked more usefully and include better snippets",
         ],
@@ -3409,7 +3409,7 @@ export function createEnDict(
         title: "GitHub Integration, Chat Attachments & Safer Issue Navigation",
         changes: [],
         features: [
-          "Connect GitHub so linked pull requests appear on ECP issues, sync their status, and close the ECP issue automatically when the PR closes",
+          "Connect GitHub so linked pull requests appear on yiyan issues, sync their status, and close the yiyan issue automatically when the PR closes",
           "Chat messages can include file attachments and image previews",
           "Agents and runtimes can now be kept public or private for clearer team access",
           "Stopping a single agent task now asks for confirmation before it is terminated",
@@ -3420,7 +3420,7 @@ export function createEnDict(
           "Long issue timelines scroll more smoothly",
           "The feedback dialog now points contributors toward GitHub discussions and issues",
           "Self-hosted Caddy guidance now calls out real-time connection requirements",
-          "Linux desktop packages show the ECP app icon again",
+          "Linux desktop packages show the yiyan app icon again",
         ],
         fixes: [
           "Downloaded attachments keep their original filenames",
@@ -3522,7 +3522,7 @@ export function createEnDict(
           "Linux daemon self-restart uses `brew prefix` symlinks, so Homebrew Cellar deletion no longer orphans runtimes",
           "CLI short IDs now route correctly — copied prefixes no longer 404",
           "Windows non-ASCII comment / description input lands via new `--content-file` / `--description-file` flags",
-          "Windows / Linux desktop replaces the Electron placeholder icon with the ECP asterisk",
+          "Windows / Linux desktop replaces the Electron placeholder icon with the yiyan asterisk",
           "Orphaned timeline replies are now correctly surfaced",
           "Timeline comment pagination budget excludes activities, so heavy activity no longer crowds out real comments",
         ],
@@ -3626,7 +3626,7 @@ export function createEnDict(
         ],
         improvements: [
           "Daemon `/tasks/claim` polling uses a Redis empty-claim fast-path, dropping idle DB load and reclaiming disk on long-open issues",
-          "ECP Agent commits include a `Co-authored-by` trailer for proper Git attribution",
+          "yiyan Agent commits include a `Co-authored-by` trailer for proper Git attribution",
           "Desktop blocks Cmd+R / Ctrl+R / F5 from reloading the app and shows the real version in dev and Updates settings",
         ],
         fixes: [
@@ -4229,29 +4229,29 @@ export function createEnDict(
   download: {
     hero: {
       macArm64: {
-        title: "ECP for macOS",
+        title: "yiyan for macOS",
         sub: "Apple Silicon · bundled daemon, zero setup",
         primary: "Download (.dmg)",
         altZip: "or download .zip",
       },
       macIntel: {
-        title: "ECP for macOS",
+        title: "yiyan for macOS",
         sub: "Intel · bundled daemon, zero setup",
         primary: "Download (.dmg)",
         altZip: "or download .zip",
       },
       winX64: {
-        title: "ECP for Windows",
+        title: "yiyan for Windows",
         sub: "Bundled daemon, zero setup",
         primary: "Download (.exe)",
       },
       winArm64: {
-        title: "ECP for Windows",
+        title: "yiyan for Windows",
         sub: "ARM · bundled daemon, zero setup",
         primary: "Download (.exe)",
       },
       linux: {
-        title: "ECP for Linux",
+        title: "yiyan for Linux",
         sub: "Bundled daemon, zero setup",
         primary: "Download AppImage",
         altFormats: "or .deb / .rpm",
@@ -4305,7 +4305,7 @@ export function createEnDict(
   contactSales: {
     pageTitle: "Contact Sales",
     pageDescription:
-      "Talk to the ECP team about rolling out human + agent workflows at your company.",
+      "Talk to the yiyan team about rolling out human + agent workflows at your company.",
     eyebrow: "Contact Sales",
     title: "Let’s understand your needs",
     fields: {
@@ -4317,7 +4317,7 @@ export function createEnDict(
       companyName: "Company name",
       companySize: "Company size",
       countryRegion: "Country / Region",
-      useCase: "How do you plan to use or collaborate with ECP?",
+      useCase: "How do you plan to use or collaborate with yiyan?",
       goals: "Your goals or challenges",
       selectPlaceholder: "Please select",
       submit: "Submit",
@@ -4332,10 +4332,10 @@ export function createEnDict(
       { value: "1000+", label: "1,000+ employees" },
     ],
     useCases: [
-      { value: "evaluate", label: "Evaluating ECP for my team" },
-      { value: "adopt_team", label: "Rolling out ECP to a team or company" },
+      { value: "evaluate", label: "Evaluating yiyan for my team" },
+      { value: "adopt_team", label: "Rolling out yiyan to a team or company" },
       { value: "self_host", label: "Self-hosting on our own infrastructure" },
-      { value: "integrate", label: "Integrating ECP with existing tools" },
+      { value: "integrate", label: "Integrating yiyan with existing tools" },
       { value: "partner", label: "Partnership or reseller inquiry" },
       { value: "other", label: "Something else" },
     ],
@@ -4383,22 +4383,22 @@ export function createEnDict(
     ],
     consent: {
       intro:
-        "ECP respects your privacy. We’ll use your personal information only to manage your account and deliver the products or services you’ve requested. Occasionally, we’d love to share product updates, best practices, and insights that may be relevant to you. Please let us know below if you’d like to hear from us.",
+        "yiyan respects your privacy. We’ll use your personal information only to manage your account and deliver the products or services you’ve requested. Occasionally, we’d love to share product updates, best practices, and insights that may be relevant to you. Please let us know below if you’d like to hear from us.",
       outreach:
-        "I’d like to receive one-to-one communication from ECP, including service updates, support inquiries, and business-related follow-ups.",
+        "I’d like to receive one-to-one communication from yiyan, including service updates, support inquiries, and business-related follow-ups.",
       updates:
-        "I’d like to receive product updates, insights, and event invitations from ECP.",
+        "I’d like to receive product updates, insights, and event invitations from yiyan.",
       unsubscribe:
         "You can unsubscribe from our communications at any time. For more details on how we handle your data and privacy rights, please review our",
       submitConsent:
-        "By clicking “Submit,” you consent to allow ECP to store and process your information for the purpose of delivering the requested content.",
+        "By clicking “Submit,” you consent to allow yiyan to store and process your information for the purpose of delivering the requested content.",
       privacyLinkLabel: "Privacy Policy.",
       privacyLinkHref: "/privacy",
     },
     success: {
       title: "Thanks — we got it.",
       message:
-        "A member of the ECP team will respond within three business days. In the meantime, feel free to explore the docs or star us on GitHub.",
+        "A member of the yiyan team will respond within three business days. In the meantime, feel free to explore the docs or star us on GitHub.",
       cta: "Back to home",
     },
     errors: {

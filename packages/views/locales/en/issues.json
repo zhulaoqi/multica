@@ -1019,7 +1019,7 @@
       "remove_item": "Remove {{value}}",
       "archived_hint": "Archived property — value is read-only",
       "unknown_value": "Unavailable",
-      "unknown_value_hint": "This value was set by a newer version of ECP and can't be edited here — update the app, or clear it"
+      "unknown_value_hint": "This value was set by a newer version of yiyan and can't be edited here — update the app, or clear it"
     },
     "filter_options_aria": "Filter options",
     "no_results": "No results",
@@ -1467,7 +1467,7 @@
     "link_placeholder": "Paste a pull request URL",
     "link_hint": "PRs with {{identifier}} in the title or branch name link automatically.",
     "link_submit": "Link",
-    "link_not_found": "ECP hasn’t received this PR yet. Check that its repository is connected.",
+    "link_not_found": "yiyan hasn’t received this PR yet. Check that its repository is connected.",
     "link_failed": "Couldn’t link the pull request.",
     "row_menu": "Pull request actions",
     "section_menu": "Pull request automation",

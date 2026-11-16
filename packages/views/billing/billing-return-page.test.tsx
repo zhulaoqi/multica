@@ -145,7 +145,7 @@ describe("BillingReturnPage", () => {
     expectNoOutcomeClaim();
     expect(mockReplace).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: "Go to ECP" }));
+    await userEvent.click(screen.getByRole("button", { name: "Go to yiyan" }));
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 

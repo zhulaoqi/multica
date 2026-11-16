@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     template: `%s | ${BRAND.short} Docs`,
     default: `${BRAND.short} Docs`,
   },
-  description: `${BRAND.full}文档：人和智能体协同工作的使用说明。`,
+  description: `${BRAND.short} 文档：人和智能体协同工作的使用说明。`,
   // Internal deployment: the docs site is reachable only inside the company
   // network, so nothing here should end up in a search index.
   robots: { index: false, follow: false },

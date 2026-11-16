@@ -24,11 +24,11 @@ export const INSTALL_RUNTIME_ISSUE_TITLE = {
   ja: "runtime を接続して Mika と始める",
 } as const;
 
-const en = `Welcome to ECP.
+const en = `Welcome to yiyan.
 
-Agents need a runtime before they can execute work. You can still use ECP as a lightweight project-management workspace while you install one.
+Agents need a runtime before they can execute work. You can still use yiyan as a lightweight project-management workspace while you install one.
 
-## Try ECP first
+## Try yiyan first
 
 Before the runtime is ready, you can:
 
@@ -53,7 +53,7 @@ For English users, the fastest first path is Codex:
 4. Confirm your terminal can find it:
    which codex
    codex --version
-5. Wait for ECP to pick it up. A running daemon re-checks for newly
+5. Wait for yiyan to pick it up. A running daemon re-checks for newly
    installed CLIs every couple of minutes, so no restart is normally needed.
    To apply it immediately:
    multica daemon restart
@@ -110,11 +110,11 @@ Kimi CLI 官方文档:https://moonshotai.github.io/kimi-cli/zh/guides/getting-st
 
 Mika 会把一个真实目标转化为任务，交给合适的智能体启动执行，并在工作流需要时建议添加可复用的 specialist。`;
 
-const ko = `ECP에 오신 것을 환영합니다.
+const ko = `yiyan에 오신 것을 환영합니다.
 
-agent가 작업을 실행하려면 먼저 runtime이 필요합니다. runtime을 설치하는 동안에도 ECP를 가벼운 프로젝트 관리 워크스페이스로 먼저 사용할 수 있습니다.
+agent가 작업을 실행하려면 먼저 runtime이 필요합니다. runtime을 설치하는 동안에도 yiyan를 가벼운 프로젝트 관리 워크스페이스로 먼저 사용할 수 있습니다.
 
-## 먼저 ECP를 사용해 보기
+## 먼저 yiyan를 사용해 보기
 
 runtime이 준비되기 전에는 다음을 해볼 수 있습니다:
 
@@ -139,7 +139,7 @@ runtime이 준비되기 전에는 다음을 해볼 수 있습니다:
 4. 터미널에서 찾을 수 있는지 확인합니다:
    which codex
    codex --version
-5. ECP가 인식할 때까지 기다립니다. 실행 중인 daemon은 몇 분마다 새로 설치된 CLI를
+5. yiyan가 인식할 때까지 기다립니다. 실행 중인 daemon은 몇 분마다 새로 설치된 CLI를
    다시 확인하므로 보통 재시작이 필요하지 않습니다.
    바로 적용하려면:
    multica daemon restart
@@ -152,11 +152,11 @@ Codex 참고 문서: https://developers.openai.com/codex/cli
 
 Mika가 실제 목표 하나를 태스크로 만들고 적합한 에이전트와 실행을 시작하며, 워크플로에 필요할 때 재사용 가능한 specialist를 제안합니다.`;
 
-const ja = `ECP へようこそ。
+const ja = `yiyan へようこそ。
 
-agent が作業を実行するには、まず runtime が必要です。runtime をインストールしている間も、ECP を軽量なプロジェクト管理ワークスペースとして先に使うことができます。
+agent が作業を実行するには、まず runtime が必要です。runtime をインストールしている間も、yiyan を軽量なプロジェクト管理ワークスペースとして先に使うことができます。
 
-## まず ECP を使ってみる
+## まず yiyan を使ってみる
 
 runtime が準備できる前に、次のことを試せます:
 
@@ -181,7 +181,7 @@ runtime が準備できる前に、次のことを試せます:
 4. ターミナルから見つけられるか確認します:
    which codex
    codex --version
-5. ECP が認識するまで待ちます。動作中の daemon は数分ごとに新しくインストールされた
+5. yiyan が認識するまで待ちます。動作中の daemon は数分ごとに新しくインストールされた
    CLI を再チェックするため、通常は再起動は不要です。
    すぐに反映したい場合:
    multica daemon restart

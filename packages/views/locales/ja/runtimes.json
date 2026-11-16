@@ -33,7 +33,7 @@
       "other_machine_hint": "そのマシンで 2 つのコマンドを実行",
       "cloud_services": "クラウドサービス",
       "qoder_manage_hint": "接続済み · 接続を管理",
-      "cloud_runtime_hint": "ECP がホストするクラウドノードを作成"
+      "cloud_runtime_hint": "yiyan がホストするクラウドノードを作成"
     },
     "columns": {
       "name": "名前",
@@ -275,7 +275,7 @@
   "connect": {
     "title": "マシンを追加",
     "description": "追加したいマシンで、この 2 つのコマンドを実行してください。デーモンがオンラインになった瞬間に検出します。",
-    "step1_label": "ECP CLI をインストール",
+    "step1_label": "yiyan CLI をインストール",
     "platform_group": "プラットフォームを選択",
     "platform_macos_linux": "macOS / Linux",
     "platform_windows": "Windows",
@@ -339,11 +339,11 @@
     "cli_version_label": "CLI バージョン:",
     "version_unknown": "不明",
     "managed_by_desktop": "デスクトップで管理",
-    "managed_by_desktop_title": "CLI バイナリは ECP Desktop で管理されています。CLI をアップグレードするには Desktop を更新してください。",
+    "managed_by_desktop_title": "CLI バイナリは yiyan Desktop で管理されています。CLI をアップグレードするには Desktop を更新してください。",
     "read_only": "読み取り専用",
     "read_only_title": "CLI を更新できるのは、ランタイムの所有者とワークスペース管理者のみです。",
     "local_build": "ローカルビルド",
-    "local_build_title": "このランタイムはリリース版ではないバージョンを報告しているため、ECP はアップグレードの有無を判断できません。マシン上で直接更新してください。",
+    "local_build_title": "このランタイムはリリース版ではないバージョンを報告しているため、yiyan はアップグレードの有無を判断できません。マシン上で直接更新してください。",
     "latest": "最新",
     "available": "利用可能",
     "action": "更新",
@@ -414,7 +414,7 @@
     "builtin_section_aria": "サポートされている組み込みプロトコルファミリー",
     "builtin_reference": "参考",
     "empty_title": "最初のカスタムランタイムを作成",
-    "empty_description": "ベースプロトコルファミリーを選び、ECP が実行するコマンドを指定します。",
+    "empty_description": "ベースプロトコルファミリーを選び、yiyan が実行するコマンドを指定します。",
     "badge_builtin": "組み込み",
     "badge_custom": "カスタム",
     "badge_disabled": "無効",
@@ -538,7 +538,7 @@
   },
   "qoder": {
     "title": "Qoder Cloud Agents runtime",
-    "description": "Connect Qoder Cloud Agents. ECP manages execution and stores credentials encrypted. Workspace administrators can change this configuration.",
+    "description": "Connect Qoder Cloud Agents. yiyan manages execution and stores credentials encrypted. Workspace administrators can change this configuration.",
     "loading": "Loading…",
     "unavailable": "サーバーの設定が必要です：MULTICA_VCS_SECRET_KEY を設定してください。",
     "online": "Online",
@@ -581,7 +581,7 @@
     "cloud_description": "共有接続を使って Qoder クラウドでエージェントを実行します。ローカルホストの管理は不要です。",
     "configure_credentials": "認証情報を設定",
     "add_agent": "エージェントを追加",
-    "add_agent_description": "既存の Qoder Cloud Agents エージェントに関連付ける ECP エージェントを作成します。Qoder クラウドに設定した環境と認証情報を使用します。",
+    "add_agent_description": "既存の Qoder Cloud Agents エージェントに関連付ける yiyan エージェントを作成します。Qoder クラウドに設定した環境と認証情報を使用します。",
     "agent_name": "エージェント名",
     "cancel": "キャンセル",
     "shared_credentials_hint": "認証情報はこのワークスペース内で共有します。PAT は暗号化して保存し、再表示しません。",
@@ -593,7 +593,7 @@
     "concurrency_hint": "上限を超えたタスクはキューで待機します。",
     "run_timeout": "実行タイムアウト（分）",
     "run_timeout_hint": "この時間を過ぎても終わらない実行はキャンセルされ、失敗として記録されます。",
-    "data_disclosure_title": "ECP が Qoder に送信する内容",
+    "data_disclosure_title": "yiyan が Qoder に送信する内容",
     "data_disclosure": "Issue のタイトルと説明、関連コメント、プロジェクトのコンテキスト、エージェントの指示。GitHub トークンは実行時のリポジトリのマウントにのみ使われます。",
     "usage": "実行中 {{active}}/{{limit}} · 待機 {{queued}}",
     "open_settings": "設定を開く",
@@ -623,7 +623,7 @@
       "description_agents_other": "次の {{count}} 件のエージェントは指示と履歴を保持しますが、Qoder を再開するか別のランタイムに移すまで新しいタスクを受けられません。"
     },
     "connect_title": "Qoder Cloud Agents を接続",
-    "connect_description": "ECP は Qoder のサンドボックスでタスクを実行します。",
+    "connect_description": "yiyan は Qoder のサンドボックスでタスクを実行します。",
     "page": {
       "configuration": "設定",
       "agents_title": "エージェント",
@@ -683,14 +683,14 @@
       },
       "cloud": {
         "title": "クラウドノードも使える",
-        "description": "マシンを自分で管理したくないなら、ECP がホストするクラウドノードを作成できます。"
+        "description": "マシンを自分で管理したくないなら、yiyan がホストするクラウドノードを作成できます。"
       }
     },
     "art": {
       "this_computer": "このコンピューター · デスクトップ",
       "detected": "検出された harness",
       "run_there": "そのマシンで実行",
-      "connected": "{{name}} が ECP に接続されました"
+      "connected": "{{name}} が yiyan に接続されました"
     }
   }
 }

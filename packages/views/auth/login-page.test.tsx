@@ -134,10 +134,10 @@ describe("LoginPage", () => {
     expect(screen.queryByText(/your session expired/i)).not.toBeInTheDocument();
   });
 
-  it("renders email form with 'Sign in to ECP' title", () => {
+  it("renders email form with 'Sign in to yiyan' title", () => {
     renderWithI18n(<LoginPage onSuccess={onSuccess} />);
     expect(
-      screen.getByText(/sign in to ecp/i),
+      screen.getByText(/sign in to yiyan/i),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/enter your email to get a login code/i),
@@ -542,7 +542,7 @@ describe("LoginPage", () => {
     );
 
     expect(
-      screen.getByText(/sign in to ecp/i),
+      screen.getByText(/sign in to yiyan/i),
     ).toBeInTheDocument();
   });
 
@@ -723,7 +723,7 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: /back/i }));
 
     expect(
-      screen.getByText(/sign in to ecp/i),
+      screen.getByText(/sign in to yiyan/i),
     ).toBeInTheDocument();
   });
 

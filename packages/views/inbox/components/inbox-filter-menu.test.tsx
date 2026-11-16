@@ -29,7 +29,7 @@ const ACTOR_NAMES: Record<string, string> = { alice: "Alice", bob: "Bob" };
 vi.mock("@multica/core/workspace/hooks", () => ({
   useActorName: () => ({
     getActorName: (type: string, id: string) =>
-      type === "system" ? "Multica" : (ACTOR_NAMES[id] ?? "Unknown"),
+      type === "system" ? "yiyan" : (ACTOR_NAMES[id] ?? "Unknown"),
     getActorInitials: () => "??",
     getActorAvatarUrl: () => null,
   }),

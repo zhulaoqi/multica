@@ -22,6 +22,7 @@ import { useColorScheme } from "nativewind";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { useActorLookup, getInitials } from "@/data/use-actor-name";
+import { useLocale } from "@/lib/i18n/use-locale";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { useAgentPresence } from "@/lib/use-agent-presence";
 import { PresenceDot } from "@/components/ui/presence-dot";
@@ -89,6 +90,7 @@ function BareAvatar({
   size: number;
 }) {
   const { getName, getAvatarUrl } = useActorLookup();
+  const locale = useLocale();
   const { colorScheme } = useColorScheme();
   // Ionicons takes a hex string, not a className — go through THEME so the
   // glyph follows light/dark instead of locking to a single hardcoded zinc.
@@ -116,7 +118,9 @@ function BareAvatar({
       : null
     : avatarUrl;
   const displayName =
-    name ?? (type === "system" ? "Multica" : getName(type, id));
+    name ?? (type === "system"
+      ? (locale.toLowerCase().startsWith("zh") ? "易研" : "yiyan")
+      : getName(type, id));
   const emoji = rawUrl?.startsWith("emoji:")
     ? rawUrl.slice("emoji:".length).trim() || null
     : null;

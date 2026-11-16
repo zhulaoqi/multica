@@ -94,7 +94,7 @@ import { useViewStore } from "@multica/core/issues/stores/view-store-context";
 import { propertyListOptions } from "@multica/core/properties";
 import { projectListOptions } from "@multica/core/projects/queries";
 import { useWorkspacePaths } from "@multica/core/paths";
-import { buildActorNameResolver, useActorName } from "@multica/core/workspace/hooks";
+import { buildActorNameResolver, productNameForLanguage, useActorName } from "@multica/core/workspace/hooks";
 import {
   agentListOptions,
   memberListOptions,
@@ -2380,7 +2380,12 @@ export function TableView({
               queryClient.fetchQuery(agentListOptions(wsId)),
               queryClient.fetchQuery(squadListOptions(wsId)),
             ]).then(([members, agents, squads]) =>
-              buildActorNameResolver({ members, agents, squads }),
+              buildActorNameResolver({
+                members,
+                agents,
+                squads,
+                productName: productNameForLanguage(i18n.resolvedLanguage ?? i18n.language),
+              }),
             )
           : Promise.resolve(getActorName),
       ]);

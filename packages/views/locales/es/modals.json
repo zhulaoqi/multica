@@ -214,7 +214,7 @@
       "search_placeholder": "Buscar agentes y squads…",
       "agents_group": "Agentes",
       "squads_group": "Squads",
-      "version_missing": "El daemon de este agente no informa de la versión de la CLI. Crear con agente requiere multica CLI ≥ {{min}}. Actualiza el daemon y reconéctalo, o cambia a creación manual.",
+      "version_missing": "El daemon de este agente no informa de la versión de la CLI. Crear con agente requiere yiyan CLI ≥ {{min}}. Actualiza el daemon y reconéctalo, o cambia a creación manual.",
       "version_below": "La CLI del daemon de este agente es {{current}}: Crear con agente requiere ≥ {{min}}. Actualiza el daemon o cambia a creación manual.",
       "prompt_placeholder": "Dile al agente qué hacer, p. ej. \"que Bohan arregle la lentitud de carga de la bandeja en el proyecto Web\"",
       "source_context_prompt_placeholder": "Dile al agente qué hacer con este contexto, p. ej. \"continúa investigando y corrige la tarea descrita aquí\"",

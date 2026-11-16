@@ -123,7 +123,7 @@
     "mode_worktree_title": "Ejecutar en paralelo, aislado",
     "mode_worktree_description": "Las ejecuciones se ejecutan a la vez sin tocar tu copia de trabajo. Cada una devuelve una rama agent/… en este repositorio para que la revises y la fusiones.",
     "mode_worktree_needs_git": "Esta carpeta no es un repositorio git, así que no hay dónde crear la rama. Elige un repositorio o sigue editando la carpeta directamente.",
-    "mode_worktree_needs_server_upgrade": "Tu servidor de ECP es demasiado antiguo para ejecutar ejecuciones en paralelo; las ejecutaría en silencio en esta carpeta. Actualiza el servidor y activa esta opción.",
+    "mode_worktree_needs_server_upgrade": "Tu servidor de yiyan es demasiado antiguo para ejecutar ejecuciones en paralelo; las ejecutaría en silencio en esta carpeta. Actualiza el servidor y activa esta opción.",
     "mode_cancel": "Cancelar",
     "mode_save": "Guardar",
     "mode_add": "Añadir carpeta",

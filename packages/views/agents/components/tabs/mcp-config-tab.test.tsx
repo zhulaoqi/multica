@@ -192,7 +192,7 @@ describe("McpConfigTab", () => {
     expect(screen.getByLabelText("Streamable HTTP")).toBeInTheDocument();
     expect(screen.getByText("STDIO")).toBeVisible();
     expect(screen.getByText("Streamable HTTP")).toBeVisible();
-    expect(screen.getByRole("heading", { name: /managed by ecp/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /managed by yiyan/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /inherited from runtime/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/MCP config JSON editor/i)).not.toBeInTheDocument();
   });
@@ -893,7 +893,7 @@ describe("McpConfigTab effective set", () => {
     renderTab({ mcp_config: null }, vi.fn(), onlineRuntime);
 
     expect(
-      await screen.findByText("Overridden by ECP"),
+      await screen.findByText("Overridden by yiyan"),
     ).toBeInTheDocument();
   });
 
@@ -909,7 +909,7 @@ describe("McpConfigTab effective set", () => {
     // "fetch" renders twice — once as the (disabled) assignment, once as the
     // runtime's own server — which is exactly the state under test.
     await waitFor(() => expect(screen.getAllByText("fetch")).toHaveLength(2));
-    expect(screen.queryByText("Overridden by ECP")).toBeNull();
+    expect(screen.queryByText("Overridden by yiyan")).toBeNull();
   });
 
   // Same transport hazard as before, reached through the SAVED config: the
