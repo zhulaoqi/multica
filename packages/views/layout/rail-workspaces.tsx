@@ -116,7 +116,7 @@ function useInvitationActions(invitations: Invitation[]) {
       // the list before its slug can be resolved.
       const list = await queryClient.fetchQuery({ ...workspaceListOptions(), staleTime: 0 });
       const joined = invitation ? list.find((w) => w.id === invitation.workspace_id) : null;
-      if (joined) push(paths.workspace(joined.slug).issues());
+      if (joined) push(paths.workspace(joined.slug).workbench());
     },
     // "Invitation is not pending": it was concluded on another surface while
     // this row was on screen. Refetch so the stale row drops.
@@ -254,7 +254,7 @@ export function RailWorkspaces() {
                       }
                     : undefined
                 }
-                render={<AppLink href={paths.workspace(ws.slug).issues()} />}
+                render={<AppLink href={paths.workspace(ws.slug).workbench()} />}
               >
                 <WorkspaceAvatar name={ws.name} avatarUrl={ws.avatar_url} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{ws.name}</span>

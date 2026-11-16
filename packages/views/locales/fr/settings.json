@@ -243,8 +243,8 @@
         "description": "Ouvrir votre mode de création de tâche préféré."
       },
       "dispatchWork": {
-        "label": "Envoyer du travail",
-        "description": "Choisissez un service et confiez-lui un brief ; son leader répartit le travail et vous tient informé."
+        "label": "Ouvrir l'atelier",
+        "description": "Décrivez le travail avec vos mots ; Multica l'envoie au bon département, dont le responsable le découpe en tâches."
       },
       "toggleSidebar": {
         "label": "Afficher ou masquer la barre latérale gauche",

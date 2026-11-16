@@ -34,7 +34,7 @@
   "commands": {
     "current_theme_aria": "當前主題",
     "new_issue": "新建任務",
-    "dispatch_work": "給部門派活",
+    "dispatch_work": "開啟工作台",
     "new_project": "新建專案",
     "new_autopilot": "新建自動化",
     "chat_with_agent": "和 AI 代理對話",

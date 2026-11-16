@@ -4,13 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithI18n } from "../test/i18n";
 import { DispatchWorkButton, NewIssueButton, SearchButton } from "./global-actions";
 
-const state = vi.hoisted(() => ({ pathname: "/acme/inbox", hasDraft: false, modal: null as string | null }));
+const state = vi.hoisted(() => ({ pathname: "/acme/inbox", hasDraft: false }));
 const openCreateIssueWithPreference = vi.hoisted(() => vi.fn());
 const setSearchOpen = vi.hoisted(() => vi.fn());
-const openModal = vi.hoisted(() => vi.fn());
+const push = vi.hoisted(() => vi.fn());
 
 vi.mock("../navigation", () => ({
-  useNavigation: () => ({ pathname: state.pathname }),
+  useNavigation: () => ({ pathname: state.pathname, push }),
 }));
 vi.mock("@multica/core/issues/stores", () => ({ openCreateIssueWithPreference }));
 vi.mock("@multica/core/issues/stores/draft-store", () => ({
@@ -20,8 +20,8 @@ vi.mock("@multica/core/issues/stores/draft-store", () => ({
 vi.mock("../search/search-store", () => ({
   useSearchStore: { getState: () => ({ setOpen: setSearchOpen }) },
 }));
-vi.mock("@multica/core/modals", () => ({
-  useModalStore: { getState: () => ({ modal: state.modal, open: openModal }) },
+vi.mock("@multica/core/paths", () => ({
+  useWorkspacePaths: () => ({ workbench: () => "/acme/workbench" }),
 }));
 vi.mock("@multica/core/shortcuts", () => ({ useShortcut: () => null }));
 vi.mock("@multica/ui/components/common/tooltip-hint", () => ({
@@ -31,10 +31,9 @@ vi.mock("@multica/ui/components/common/tooltip-hint", () => ({
 beforeEach(() => {
   state.pathname = "/acme/inbox";
   state.hasDraft = false;
-  state.modal = null;
   openCreateIssueWithPreference.mockClear();
   setSearchOpen.mockClear();
-  openModal.mockClear();
+  push.mockClear();
 });
 
 describe("NewIssueButton", () => {
@@ -59,17 +58,17 @@ describe("NewIssueButton", () => {
 });
 
 describe("DispatchWorkButton", () => {
-  it("opens the department dispatch dialog", () => {
+  it("opens the workbench", () => {
     renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Send work" }));
-    expect(openModal).toHaveBeenCalledWith("dispatch-work");
+    fireEvent.click(screen.getByRole("button", { name: "Workbench" }));
+    expect(push).toHaveBeenCalledWith("/acme/workbench");
   });
 
-  it("does not replace an already open modal", () => {
-    state.modal = "create-issue";
+  it("does not push when the workbench is already open", () => {
+    state.pathname = "/acme/workbench";
     renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Send work" }));
-    expect(openModal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Workbench" }));
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

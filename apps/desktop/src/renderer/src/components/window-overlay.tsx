@@ -74,7 +74,7 @@ function WindowOverlayInner() {
             } else if (ws && destination?.kind === "issue") {
               push(paths.workspace(ws.slug).issueDetail(destination.issueId));
             } else if (ws) {
-              push(paths.workspace(ws.slug).issues());
+              push(paths.workspace(ws.slug).workbench());
             }
           }}
         />
@@ -99,7 +99,7 @@ function WindowOverlayInner() {
                 paths.workspace(ws.slug).issueDetail(destination.issueId),
               );
             } else if (ws) {
-              push(paths.workspace(ws.slug).issues());
+              push(paths.workspace(ws.slug).workbench());
             } else {
               push(paths.root());
             }

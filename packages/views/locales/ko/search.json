@@ -34,7 +34,7 @@
   "commands": {
     "current_theme_aria": "현재 테마",
     "new_issue": "새 태스크",
-    "dispatch_work": "부서에 작업 보내기",
+    "dispatch_work": "워크벤치 열기",
     "new_project": "새 프로젝트",
     "new_autopilot": "새 오토파일럿",
     "chat_with_agent": "에이전트와 채팅",

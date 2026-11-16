@@ -1,0 +1,58 @@
+{
+  "page": {
+    "title": "工作台",
+    "history": "最近派活",
+    "new": "新建派活",
+    "empty_title": "告诉团队要做什么",
+    "empty_description": "用一句话描述要做的事，系统会判断交给哪个部门，部门负责人再拆分成任务。",
+    "placeholder": "想做什么？",
+    "send": "发送",
+    "composer_hint": "Enter 发送，Shift+Enter 换行",
+    "routing": "正在判断交给哪个部门…",
+    "selected_department": "仅交给该部门",
+    "route_automatically": "由系统自动选择部门",
+    "open_history": "最近派活",
+    "back": "返回",
+    "unknown_department": "部门",
+    "load_error": "加载最近派活失败。",
+    "examples_label": "可以这样说",
+    "empty_history": "派出的活会出现在这里。",
+    "examples": {
+      "one": "准备下周的客户上线材料",
+      "two": "排查昨天结算失败的原因",
+      "three": "给新看板写一篇发布公告"
+    }
+  },
+  "status": {
+    "queued": "已交给部门，负责人稍后接手。",
+    "decomposing": "部门负责人正在拆解任务…",
+    "progress": "已完成 {{done}}/{{total}} 项任务",
+    "in_review": "部门已交付，等待你验收。",
+    "completed": "已完成。",
+    "failed": "部门负责人未能启动这项工作，已通知该部门。",
+    "cancelled": "这项工作已取消。",
+    "dispatched_at": "{{time}}发送"
+  },
+  "card": {
+    "department": "部门",
+    "view_issue": "查看 issue",
+    "retry": "重新派发",
+    "failure_hint": "可以重试，或到 issue 里跟进。"
+  },
+  "candidates": {
+    "title": "交给哪个部门？",
+    "agents_other": "{{count}} 个 Agent"
+  },
+  "errors": {
+    "ambiguous": "有多个部门可以承接，请选择一个。",
+    "dispatch_text_required": "先写清楚要做什么。",
+    "dispatch_text_too_long": "内容太长了，请控制在 4000 字以内。",
+    "org_dispatch_unit_not_found": "该部门已不存在，请另选一个或交给系统判断。",
+    "org_dispatch_forbidden": "你没有该部门的权限。",
+    "org_dispatch_no_agents": "该部门还没有 Agent，请先到组织页添加。",
+    "org_dispatch_leader_unavailable": "暂时联系不上部门负责人，请稍后再试。",
+    "org_dispatch_unroutable": "无法判断该交给哪个部门，请点名部门或补充说明。",
+    "org_dispatch_failed": "没能把这项工作交给部门。",
+    "generic": "出了点问题，请重试。"
+  }
+}

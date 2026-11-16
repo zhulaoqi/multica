@@ -48,7 +48,9 @@ beforeEach(() => {
   __resetIssueViewTabsForTests();
   useActiveIssueViewStore.setState({ active: {} });
   useTabStore.getState().reset();
-  useTabStore.getState().switchWorkspace("acme");
+  // The issue-view sync only runs on the Issues page, so start the workspace
+  // tab there instead of on the workbench default.
+  useTabStore.getState().switchWorkspace("acme", "/acme/issues");
   initIssueViewTabs();
   rendered = [];
 });

@@ -6,5 +6,5 @@ export default async function Page({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
-  redirect(`/${workspaceSlug}/intake`);
+  redirect(`/${workspaceSlug}/workbench`);
 }

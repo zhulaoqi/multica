@@ -1,0 +1,58 @@
+{
+  "page": {
+    "title": "ワークベンチ",
+    "history": "最近の依頼",
+    "new": "新しい依頼",
+    "empty_title": "チームにやることを伝えましょう",
+    "empty_description": "やることを自分の言葉で書いてください。適切な部署に振り分けられ、その責任者がタスクに分解します。",
+    "placeholder": "何をしますか？",
+    "send": "送信",
+    "composer_hint": "Enter で送信、Shift+Enter で改行",
+    "routing": "担当部署を判断しています…",
+    "selected_department": "この部署のみ",
+    "route_automatically": "部署を自動で選ぶ",
+    "open_history": "最近の依頼",
+    "back": "戻る",
+    "unknown_department": "部署",
+    "load_error": "最近の依頼を読み込めませんでした。",
+    "examples_label": "こんなふうに依頼できます",
+    "empty_history": "依頼した仕事がここに表示されます。",
+    "examples": {
+      "one": "来週の顧客オンボーディング資料を用意する",
+      "two": "昨日の決済失敗の原因を調べる",
+      "three": "新しいダッシュボードのリリース告知を書く"
+    }
+  },
+  "status": {
+    "queued": "部署に送りました。責任者がまもなく着手します。",
+    "decomposing": "部署の責任者がタスクに分解しています…",
+    "progress": "{{total}} 件中 {{done}} 件完了",
+    "in_review": "納品されました。あなたの確認待ちです。",
+    "completed": "完了しました。",
+    "failed": "部署の責任者がこの作業を開始できませんでした。部署に通知済みです。",
+    "cancelled": "この作業はキャンセルされました。",
+    "dispatched_at": "{{time}}に送信"
+  },
+  "card": {
+    "department": "部署",
+    "view_issue": "Issue を表示",
+    "retry": "もう一度依頼",
+    "failure_hint": "再試行するか、Issue でフォローアップできます。"
+  },
+  "candidates": {
+    "title": "どの部署が担当しますか？",
+    "agents_other": "エージェント {{count}} 体"
+  },
+  "errors": {
+    "ambiguous": "複数の部署が担当できます。1 つ選んでください。",
+    "dispatch_text_required": "まずやることを書いてください。",
+    "dispatch_text_too_long": "長すぎます。4,000 文字以内にしてください。",
+    "org_dispatch_unit_not_found": "その部署は存在しません。別の部署を選ぶか自動振り分けにしてください。",
+    "org_dispatch_forbidden": "その部署へのアクセス権がありません。",
+    "org_dispatch_no_agents": "その部署にはまだエージェントがいません。組織ページで追加してください。",
+    "org_dispatch_leader_unavailable": "部署の責任者に現在連絡できません。しばらくしてから再試行してください。",
+    "org_dispatch_unroutable": "どの部署に渡すか判断できませんでした。部署名を指定するか、詳細を追加してください。",
+    "org_dispatch_failed": "部署に作業を渡せませんでした。",
+    "generic": "問題が発生しました。再試行してください。"
+  }
+}

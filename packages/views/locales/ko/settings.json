@@ -241,8 +241,8 @@
         "description": "선호하는 태스크 만들기 흐름을 엽니다."
       },
       "dispatchWork": {
-        "label": "작업 보내기",
-        "description": "부서를 선택해 요청을 보내면 리더가 작업을 나누고 완료 시 알려줍니다."
+        "label": "워크벤치 열기",
+        "description": "할 일을 자신의 말로 적으면 알맞은 부서로 전달되고, 부서 책임자가 작업으로 나눕니다."
       },
       "toggleSidebar": {
         "label": "왼쪽 사이드바 전환",

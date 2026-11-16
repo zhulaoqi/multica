@@ -5,7 +5,7 @@ import { Search, Send, SquarePen } from "@multica/ui/icons";
 import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
 import { openCreateIssueWithPreference } from "@multica/core/issues/stores";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
-import { useModalStore } from "@multica/core/modals";
+import { useWorkspacePaths } from "@multica/core/paths";
 import { useShortcut } from "@multica/core/shortcuts";
 import { ShortcutKeycaps } from "../common/shortcut-keycaps";
 import { useT } from "../i18n";
@@ -63,7 +63,7 @@ export function NewIssueButton({
   );
 }
 
-/** Hands work to a department from anywhere; the leader decomposes it. */
+/** Opens the conversational workbench from anywhere. */
 export function DispatchWorkButton({
   className,
   tooltipSide,
@@ -72,6 +72,8 @@ export function DispatchWorkButton({
   tooltipSide: TooltipSide;
 }) {
   const { t } = useT("layout");
+  const p = useWorkspacePaths();
+  const { pathname, push } = useNavigation();
   const shortcut = useShortcut("dispatchWork");
   const label = t(($) => $.sidebar.dispatch_work);
   return (
@@ -85,8 +87,8 @@ export function DispatchWorkButton({
         aria-label={label}
         data-action="dispatch-work"
         onClick={() => {
-          if (useModalStore.getState().modal) return;
-          useModalStore.getState().open("dispatch-work");
+          const target = p.workbench();
+          if (pathname !== target) push(target);
         }}
         className={className}
       >

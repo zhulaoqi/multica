@@ -65,10 +65,7 @@ export function useGlobalCommands(contexts: readonly CommandBarContext[]): Palet
         icon: Send,
         keywords: ["dispatch", "department", "org", "team", "hand off", "派活", "部门", "组织"],
         shortcut: dispatchWorkShortcut,
-        run: () => {
-          if (useModalStore.getState().modal) return;
-          useModalStore.getState().open("dispatch-work");
-        },
+        run: () => navigation.push(p.workbench()),
       },
       {
         id: "chat-with-agent",

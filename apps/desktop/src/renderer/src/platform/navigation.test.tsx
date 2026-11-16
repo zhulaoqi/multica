@@ -54,7 +54,7 @@ beforeEach(() => {
   overlay.overlay = null;
   auth.logout.mockReset();
   useTabStore.getState().reset();
-  useTabStore.getState().switchWorkspace("acme"); // default tab /acme/issues
+  useTabStore.getState().switchWorkspace("acme"); // default tab /acme/workbench
   Object.defineProperty(window, "desktopAPI", {
     configurable: true,
     value: {
@@ -99,7 +99,7 @@ describe("openInNewTab", () => {
     getAdapter().openInNewTab!("/acme/agents", "Agents");
 
     const group = acmeGroup();
-    expect(group.tabs.map((t) => t.url)).toEqual(["/acme/issues", "/acme/agents"]);
+    expect(group.tabs.map((t) => t.url)).toEqual(["/acme/workbench", "/acme/agents"]);
     expect(group.activeTabId).toBe(activeBefore);
   });
 
@@ -135,7 +135,7 @@ describe("push", () => {
     const active = getActiveTab(useTabStore.getState())!;
     expect(active.url).toBe("/acme/projects?sort=name");
     expect(active.history).toEqual({
-      stack: ["/acme/issues", "/acme/projects?sort=name"],
+      stack: ["/acme/workbench", "/acme/projects?sort=name"],
       index: 1,
     });
   });
@@ -144,7 +144,7 @@ describe("push", () => {
     const getAdapter = renderProvider();
     const before = acmeGroup();
 
-    getAdapter().push("/acme/issues");
+    getAdapter().push("/acme/workbench");
 
     expect(acmeGroup()).toBe(before);
   });
@@ -182,12 +182,14 @@ describe("push", () => {
     },
   );
 
-  it("lands on Issues when switching to a workspace with no tabs yet", () => {
+  it("lands on the workbench when switching to a workspace with no tabs yet", () => {
     const getAdapter = renderProvider();
 
-    getAdapter().push("/butter/issues");
+    getAdapter().push("/butter/workbench");
 
-    expect(getActiveTab(useTabStore.getState())?.url).toBe("/butter/issues");
+    expect(getActiveTab(useTabStore.getState())?.url).toBe(
+      "/butter/workbench",
+    );
   });
 
   it("still opens a deeper cross-workspace path under Issues", () => {
@@ -209,7 +211,7 @@ describe("push", () => {
     getAdapter().push("/login");
 
     expect(auth.logout).toHaveBeenCalledOnce();
-    expect(getActiveTab(useTabStore.getState())?.url).toBe("/acme/issues");
+    expect(getActiveTab(useTabStore.getState())?.url).toBe("/acme/workbench");
   });
 
   it("routes transition paths to the window overlay without touching sessions", () => {
@@ -240,7 +242,7 @@ describe("push with pinned active tab", () => {
     const pinned = group.tabs.find((t) => t.id === pinnedId)!;
     const projects = group.tabs.find((t) => t.url === "/acme/projects")!;
     // The pinned tab stays parked on its url; focus follows the new tab.
-    expect(pinned.url).toBe("/acme/issues");
+    expect(pinned.url).toBe("/acme/workbench");
     expect(group.activeTabId).toBe(projects.id);
   });
 
@@ -248,11 +250,11 @@ describe("push with pinned active tab", () => {
     pinActive();
     const getAdapter = renderProvider();
 
-    getAdapter().push("/acme/issues?filter=open");
+    getAdapter().push("/acme/workbench?filter=open");
 
     const group = acmeGroup();
     expect(group.tabs).toHaveLength(1); // no new tab
-    expect(group.tabs[0].url).toBe("/acme/issues?filter=open");
+    expect(group.tabs[0].url).toBe("/acme/workbench?filter=open");
   });
 
   it("leaves cross-workspace push to the workspace switcher (not pin)", () => {
@@ -275,7 +277,7 @@ describe("back", () => {
     getAdapter().back!();
 
     const active = getActiveTab(useTabStore.getState())!;
-    expect(active.url).toBe("/acme/issues");
+    expect(active.url).toBe("/acme/workbench");
     expect(active.history.index).toBe(0);
   });
 });
@@ -387,7 +389,7 @@ describe("existing reserved workspace navigation", () => {
       });
       expect(useTabStore.getState().activeWorkspaceSlug).toBe("dingtalk");
       expect(getActiveTab(useTabStore.getState())?.url).toBe(
-        action === "push" ? "/dingtalk/issues" : "/dingtalk/issues/ISS-1",
+        action === "push" ? "/dingtalk/workbench" : "/dingtalk/issues/ISS-1",
       );
     },
   );

@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "ワークベンチ",
     "inbox": "インボックス",
     "chat": "チャット",
     "my_issues": "マイタスク",
@@ -58,16 +59,18 @@
     "invitation_decline": "辞退",
     "log_out": "ログアウト",
     "new_issue": "新規タスク",
-    "dispatch_work": "仕事を送る",
+    "dispatch_work": "ワークベンチ",
     "pinned_label": "ピン留め済み",
     "show_more_pins": "さらに {{count}} 件を表示…",
     "show_fewer_pins": "表示を減らす"
   },
   "spaces": {
+    "workbench": "ワークベンチ",
     "work": "作業",
     "team": "チーム"
   },
   "rail": {
+    "workbench": "ワークベンチ",
     "label": "アプリナビゲーション",
     "sheet_description": "スペースとワークスペースを切り替えます。",
     "inbox": "受信箱",

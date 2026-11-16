@@ -334,7 +334,7 @@ export function RootView({
               value={`workspace:${ws.id}`}
               // Web lands on the target's Issues; the desktop adapter reads
               // this same push as "resume the workspace's last active tab".
-              onSelect={() => palette.navigate(paths.workspace(ws.slug).issues())}
+              onSelect={() => palette.navigate(paths.workspace(ws.slug).workbench())}
               className={ROW_CLASS}
             >
               <WorkspaceAvatar name={ws.name} avatarUrl={ws.avatar_url} size="sm" />

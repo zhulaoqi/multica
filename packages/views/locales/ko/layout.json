@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "워크벤치",
     "inbox": "인박스",
     "chat": "채팅",
     "my_issues": "내 태스크",
@@ -58,16 +59,18 @@
     "invitation_decline": "거절",
     "log_out": "로그아웃",
     "new_issue": "새 태스크",
-    "dispatch_work": "작업 보내기",
+    "dispatch_work": "워크벤치",
     "pinned_label": "고정됨",
     "show_more_pins": "{{count}}개 더 보기…",
     "show_fewer_pins": "접기"
   },
   "spaces": {
+    "workbench": "워크벤치",
     "work": "작업",
     "team": "팀"
   },
   "rail": {
+    "workbench": "워크벤치",
     "label": "앱 탐색",
     "sheet_description": "스페이스와 워크스페이스를 전환합니다.",
     "inbox": "인박스",

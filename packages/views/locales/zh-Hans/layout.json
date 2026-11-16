@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "工作台",
     "inbox": "收件箱",
     "chat": "聊天",
     "my_issues": "我的任务",
@@ -58,16 +59,18 @@
     "invitation_decline": "拒绝",
     "log_out": "退出登录",
     "new_issue": "新建任务",
-    "dispatch_work": "派活",
+    "dispatch_work": "工作台",
     "pinned_label": "固定",
     "show_more_pins": "再显示 {{count}} 项...",
     "show_fewer_pins": "收起"
   },
   "spaces": {
+    "workbench": "工作台",
     "work": "工作",
     "team": "团队"
   },
   "rail": {
+    "workbench": "工作台",
     "label": "应用导航",
     "sheet_description": "切换空间和工作区。",
     "inbox": "收件箱",

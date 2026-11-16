@@ -179,6 +179,12 @@ export function AppRail({
   const settingsPeek = usePeekHandlers("settings", space === "settings");
 
   const items: Record<RailSpaceId, { href: string; icon: IconComponent; label: string; fullLabel: string }> = {
+    workbench: {
+      href: p.workbench(),
+      icon: routeIconForPath(p.workbench()),
+      label: t(($) => $.rail.workbench),
+      fullLabel: t(($) => $.nav.workbench),
+    },
     inbox: {
       href: p.inbox(),
       icon: routeIconForPath(p.inbox()),

@@ -370,8 +370,8 @@ function inboxSelectionKeyForUrl(url: string): string | null {
  *     was constructed without the workspace prefix. The router would
  *     interpret `issues` as a workspace slug → NoAccessPage.
  *
- * Normalizes: a bare `/{slug}` (no route segment) becomes `/{slug}/issues` —
- * the workspace's default surface. This replaces the old in-router
+ * Normalizes: a bare `/{slug}` (no route segment) becomes `/{slug}/workbench`
+ * — the workspace's default surface. This replaces the old in-router
  * `<Navigate to="issues">` index redirect (MUL-4741 invariant 1: the router
  * never self-navigates; URLs are normalized before they become sessions).
  *
@@ -396,7 +396,7 @@ export function sanitizeTabPath(path: string, savedGroupSlug?: string): string |
     return null;
   }
   if (segments.length === 1) {
-    return `/${firstSegment}/issues${suffix}`;
+    return `/${firstSegment}/workbench${suffix}`;
   }
   return path;
 }
@@ -426,14 +426,22 @@ function pinnedBoundary(tabs: TabSession[]): number {
   return i;
 }
 
-/** Default entry point for a workspace — its issues list. */
+/** Default entry point for a workspace — the workbench. */
 function defaultPathFor(slug: string): string {
-  return `/${slug}/issues`;
+  return `/${slug}/workbench`;
 }
 
 function defaultTabFor(slug: string): TabSession {
   const path = defaultPathFor(slug);
-  return makeSession(path, "Issues");
+  return makeSession(path, "Workbench");
+}
+
+/** Provisional title for a tab seeded from a path before the route resolves
+ * its real title. The workspace default is the workbench; other seeds keep the
+ * historical placeholder. */
+function seedTitleForPath(path: string): string {
+  const segment = path.split(/[?#]/)[0]?.split("/").filter(Boolean)[1];
+  return segment === "workbench" ? "Workbench" : "Issues";
 }
 
 const BROWSING_HISTORY_MAX_ENTRIES = 100;
@@ -741,7 +749,7 @@ export const useTabStore = create<TabStore>()(
           // First time entering this workspace — create the group.
           const cleanDesired = desiredPath ? sanitizeTabPath(desiredPath) : null;
           const seedPath = cleanDesired ?? defaultPathFor(slug);
-          const tab = makeSession(seedPath, "Issues");
+          const tab = makeSession(seedPath, seedTitleForPath(seedPath));
           const nextGroup = withBrowsingVisit(
             reconcileGroup(null, [tab], tab.id),
             slug,
@@ -781,7 +789,7 @@ export const useTabStore = create<TabStore>()(
               });
               return;
             }
-            const tab = makeSession(clean, "Issues");
+            const tab = makeSession(clean, seedTitleForPath(clean));
             const nextGroup = withBrowsingVisit(
               reconcileGroup(
                 existing,

@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "Centro de trabajo",
     "inbox": "Bandeja de entrada",
     "chat": "Chat",
     "my_issues": "Mis tareas",
@@ -51,7 +52,7 @@
     "invitation_decline": "Rechazar",
     "log_out": "Cerrar sesión",
     "new_issue": "Nueva tarea",
-    "dispatch_work": "Enviar trabajo",
+    "dispatch_work": "Centro de trabajo",
     "pinned_label": "Fijados",
     "show_more_pins": "Mostrar {{count}} más…",
     "show_fewer_pins": "Mostrar menos"
@@ -64,10 +65,12 @@
     "forward_history": "Historial hacia delante"
   },
   "spaces": {
+    "workbench": "Centro de trabajo",
     "work": "Trabajo",
     "team": "Equipo"
   },
   "rail": {
+    "workbench": "Centro",
     "label": "Navegación de la app",
     "sheet_description": "Cambia de sección y de espacio de trabajo.",
     "inbox": "Bandeja de entrada",

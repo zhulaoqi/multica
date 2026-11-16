@@ -723,7 +723,7 @@ describe("SearchCommand", () => {
       await user.type(input(), "acme");
       fireEvent.click(await rowText("Acme Corp"));
 
-      expect(mockPush).toHaveBeenCalledWith("/acme-hq/issues");
+      expect(mockPush).toHaveBeenCalledWith("/acme-hq/workbench");
     });
   });
 
