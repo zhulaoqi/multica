@@ -7,7 +7,6 @@ spec:
   storageClassName: STORAGE_CLASS
   accessModes:
     - ReadWriteOnce
-  storageClassName: local-path
   resources:
     requests:
       storage: 20Gi
