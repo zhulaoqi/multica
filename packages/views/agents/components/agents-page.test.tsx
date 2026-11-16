@@ -143,6 +143,7 @@ vi.mock("@multica/core/paths", () => ({
     newAgent: () => "/test-workspace/agents/new",
     newAgentManual: () => "/test-workspace/agents/new/manual",
     agentDetail: (id: string) => `/test-workspace/agents/${id}`,
+    chatWithAgent: (id: string) => `/test-workspace/chat?agent=${id}`,
     runtimes: () => "/test-workspace/runtimes",
   }),
 }));
@@ -561,6 +562,11 @@ describe("AgentsPage team scope", () => {
     expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
     expect(screen.getByText("Team Agent")).toBeInTheDocument();
     expect(screen.queryByText("Outsider Agent")).not.toBeInTheDocument();
+    // The team lens draws the org chart instead of the flat agent list.
+    expect(screen.getByTestId("team-tree")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Command" })[0],
+    ).toHaveAttribute("href", expect.stringContaining("/chat?agent="));
   });
 
   it("honours the lead's own scope choice over the team default", () => {

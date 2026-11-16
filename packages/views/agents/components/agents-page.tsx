@@ -70,6 +70,7 @@ import {
 import { availabilityConfig } from "../presence";
 import { teamUserIdsFor } from "../team-scope";
 import { AgentRowActions } from "./agent-row-actions";
+import { TeamTreeView } from "./team-tree-view";
 import { AgentSetupChecklist } from "./agent-setup-checklist";
 import {
   AgentListFilterMenu,
@@ -807,6 +808,14 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
               />
             ) : null
           }
+        />
+      ) : scope === "team" && orgTree && rows.length > 0 && listReady && !isLoading ? (
+        // "My team" reads as the org chart, so a lead sees each department,
+        // its lead, and every member's agent with its duties before commanding it.
+        <TeamTreeView
+          rows={rows}
+          orgTree={orgTree}
+          memberName={(userId) => membersById.get(userId)?.name ?? userId.slice(0, 8)}
         />
       ) : (
         <CollectionList

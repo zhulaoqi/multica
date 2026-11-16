@@ -232,7 +232,7 @@ function Stem() {
 }
 
 /** A rail forking the parent card into a grid of child cards. */
-function Branch({ children }: { children: ReactNode }) {
+export function Branch({ children }: { children: ReactNode }) {
   const items = Children.toArray(children);
   return (
     <div className="relative w-full">

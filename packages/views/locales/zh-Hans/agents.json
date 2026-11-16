@@ -8,6 +8,7 @@
     "list_load_failed": "无法加载智能体列表",
     "list_load_failed_default": "获取智能体列表时出错。",
     "try_again": "重试",
+    "team_unassigned": "未分配部门",
     "scope_title": {
       "mine": "我的智能体",
       "team": "我的团队",
@@ -543,12 +544,12 @@
       "intro": "设置每次运行都会使用的 System Prompt，支持 Markdown。",
       "system_prompt_label": "System Prompt",
       "placeholder": "定义这个智能体的角色、专长和工作风格。\n\n# 示例\n你是一名专注 React 和 TypeScript 的前端工程师。\n\n## 工作风格\n- 写小而聚焦的 PR——每个逻辑变更一个 commit\n- 优先组合而不是继承\n- 新组件总是配单元测试\n\n## 约束\n- 未经明确批准不要修改 shared/ 下的 type\n- 遵循 features/ 中现有的组件模式",
-      "system_layer_label": "由 Multica 维护",
-      "system_layer_hint": "随 Multica 版本更新。你无法编辑这部分，你在下面写的内容也永远不会被覆盖。",
+      "system_layer_label": "由 易研 维护",
+      "system_layer_hint": "随 易研 版本更新。你无法编辑这部分，你在下面写的内容也永远不会被覆盖。",
       "system_layer_show": "查看",
       "system_layer_hide": "收起",
       "workspace_notes_label": "工作区补充",
-      "workspace_notes_intro": "在下面补充你们团队的上下文和偏好，它们会叠加在 Multica 为这个智能体维护的指令之上。支持 Markdown。",
+      "workspace_notes_intro": "在下面补充你们团队的上下文和偏好，它们会叠加在 易研 为这个智能体维护的指令之上。支持 Markdown。",
       "workspace_notes_placeholder": "写下这个智能体应该始终知道的上下文。\n\n# 示例\n我们的主仓库是 github.com/acme/platform。\n即使聊天用中文，任务也一律用英文写。\n周五不部署。",
       "mode_aria": "编辑模式",
       "mode_write": "编辑",
@@ -605,12 +606,12 @@
       "save_failed_toast": "保存自定义参数失败"
     },
     "mcp_config": {
-      "managed_title": "由 Multica 管理",
-      "managed_empty": "暂无由 Multica 管理的 MCP Server。",
+      "managed_title": "由 易研 管理",
+      "managed_empty": "暂无由 易研 管理的 MCP Server。",
       "add_action": "添加 MCP Server",
       "agent_disabled_badge": "已对该智能体关闭",
       "runtime_disabled_badge": "已在运行时中关闭",
-      "runtime_overridden_badge": "已由 Multica 覆盖",
+      "runtime_overridden_badge": "已由 易研 覆盖",
       "workspace_title": "工作区 MCP Server",
       "workspace_action_failed": "无法更新该智能体的 MCP Server",
       "workspace_removed_toast": "已从该智能体移除 MCP Server",
@@ -1064,5 +1065,21 @@
       "comment": "修好了：价格卡片在 375px 下改为单列。已开 PR，测试通过。",
       "step_read": "读取 {{file}}"
     }
+  },
+  "team_tree": {
+    "agent_count_other": "{{count}} 个智能体",
+    "department_lead": "负责人",
+    "no_lead": "未设负责人",
+    "owner": "所属成员",
+    "responsibility": "职责",
+    "no_responsibility": "还没有设置职责",
+    "cannot": "不负责",
+    "cannot_prefix": "不负责：",
+    "edit_responsibility": "设置职责",
+    "command": "下发指令",
+    "dialog_title": "{{name}} 的职责",
+    "save": "保存",
+    "cancel": "取消",
+    "save_failed": "职责没有保存成功。"
   }
 }

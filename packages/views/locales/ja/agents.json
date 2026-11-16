@@ -8,6 +8,7 @@
     "list_load_failed": "エージェントを読み込めませんでした",
     "list_load_failed_default": "エージェント一覧の取得中に問題が発生しました。",
     "try_again": "再試行",
+    "team_unassigned": "部署未設定",
     "scope_title": {
       "mine": "自分のエージェント",
       "team": "チームのエージェント",
@@ -385,12 +386,12 @@
       "intro": "すべての実行で使用する System Prompt を設定します。Markdown に対応しています。",
       "system_prompt_label": "System Prompt",
       "placeholder": "このエージェントの役割、専門分野、作業スタイルを定義してください。\n\n# 例\nあなたは React と TypeScript を専門とするフロントエンドエンジニアです。\n\n## 作業スタイル\n- 小さく焦点を絞った PR を作成する — 論理的な変更ごとに1コミット\n- 継承よりコンポジションを優先する\n- 新しいコンポーネントには必ずユニットテストを追加する\n\n## 制約\n- 明示的な承認なしに shared/ の型を変更しない\n- features/ の既存のコンポーネントパターンに従う",
-      "system_layer_label": "Multica が管理",
-      "system_layer_hint": "Multica のリリースごとに更新されます。編集はできず、下に書いた内容が上書きされることもありません。",
+      "system_layer_label": "ECP が管理",
+      "system_layer_hint": "ECP のリリースごとに更新されます。編集はできず、下に書いた内容が上書きされることもありません。",
       "system_layer_show": "表示",
       "system_layer_hide": "隠す",
       "workspace_notes_label": "ワークスペースの補足",
-      "workspace_notes_intro": "チームのコンテキストや好みを下に追加してください。Multica がこのエージェント向けに管理している指示の上に適用されます。Markdown が使えます。",
+      "workspace_notes_intro": "チームのコンテキストや好みを下に追加してください。ECP がこのエージェント向けに管理している指示の上に適用されます。Markdown が使えます。",
       "workspace_notes_placeholder": "このエージェントが常に知っておくべきことを書きます。\n\n# 例\nメインリポジトリは github.com/acme/platform です。\nチャットが日本語でも、タスクは英語で書いてください。\n金曜日はデプロイしません。",
       "mode_aria": "エディターモード",
       "mode_write": "編集",
@@ -447,12 +448,12 @@
       "save_failed_toast": "カスタム引数を保存できませんでした"
     },
     "mcp_config": {
-      "managed_title": "Multica で管理",
-      "managed_empty": "Multica で管理されている MCP Server はありません。",
+      "managed_title": "ECP で管理",
+      "managed_empty": "ECP で管理されている MCP Server はありません。",
       "add_action": "MCP を追加",
       "agent_disabled_badge": "エージェントで無効",
       "runtime_disabled_badge": "ランタイムで無効",
-      "runtime_overridden_badge": "Multica で上書き",
+      "runtime_overridden_badge": "ECP で上書き",
       "workspace_title": "ワークスペースライブラリから",
       "workspace_action_failed": "このエージェントの MCP サーバーを更新できませんでした",
       "workspace_removed_toast": "このエージェントから MCP サーバーを削除しました",
@@ -1064,5 +1065,21 @@
       "comment": "修正しました。375px 以下では料金カードを 1 列にしています。PR を作成し、テストも通っています。",
       "step_read": "{{file}} を読む"
     }
+  },
+  "team_tree": {
+    "agent_count_other": "{{count}} 件のエージェント",
+    "department_lead": "責任者",
+    "no_lead": "責任者なし",
+    "owner": "所有者",
+    "responsibility": "担当業務",
+    "no_responsibility": "担当業務は未設定です",
+    "cannot": "担当外",
+    "cannot_prefix": "担当外：",
+    "edit_responsibility": "担当を設定",
+    "command": "指示する",
+    "dialog_title": "{{name}} の担当業務",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "save_failed": "担当業務を保存できませんでした。"
   }
 }
