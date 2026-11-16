@@ -10,7 +10,8 @@ case "${PROFILE:-test-ali}" in
   *) export PROFILE=test-ali ;;
 esac
 
-./migrate up
+# Schema changes are applied by a DBA from deploy/dba. Startup does not
+# create or alter tables.
 
 # Cloud test and production share this cap. PROFILE only selects the config
 # file. The budget is the pod memory applied on the platform. Keep the soft
