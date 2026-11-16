@@ -59,7 +59,9 @@ type OrgDispatchParams struct {
 	UnitID      pgtype.UUID
 	Title       string
 	Description string
-	Origin      DispatchOriginInfo
+	// ClientRequestID deduplicates in-app retries; chat callers leave it empty.
+	ClientRequestID pgtype.Text
+	Origin          DispatchOriginInfo
 	// Platform tags the IssueCreated analytics event with the caller's surface.
 	Platform string
 }
@@ -96,6 +98,9 @@ type OrgDispatchService struct {
 	Issues    *IssueService
 	Tasks     *TaskService
 	Bus       *events.Bus
+	// LLM routes natural-language workbench requests between departments.
+	// Nil or disabled falls back to deterministic matching.
+	LLM TextGenerator
 }
 
 // Dispatch creates the root issue for one department. The squad leader is the
@@ -165,14 +170,15 @@ func (s *OrgDispatchService) recordOrigin(ctx context.Context, issue db.Issue, u
 		channel = DispatchChannelApp
 	}
 	_, err := s.Queries.CreateDispatchOrigin(ctx, db.CreateDispatchOriginParams{
-		IssueID:        issue.ID,
-		WorkspaceID:    p.WorkspaceID,
-		RequesterID:    p.ActorID,
-		TargetUnitID:   unit.ID,
-		ChannelType:    channel,
-		InstallationID: p.Origin.InstallationID,
-		ChatID:         pgtype.Text{String: p.Origin.ChatID, Valid: p.Origin.ChatID != ""},
-		ThreadID:       pgtype.Text{String: p.Origin.ThreadID, Valid: p.Origin.ThreadID != ""},
+		IssueID:         issue.ID,
+		WorkspaceID:     p.WorkspaceID,
+		RequesterID:     p.ActorID,
+		TargetUnitID:    unit.ID,
+		ChannelType:     channel,
+		InstallationID:  p.Origin.InstallationID,
+		ChatID:          pgtype.Text{String: p.Origin.ChatID, Valid: p.Origin.ChatID != ""},
+		ThreadID:        pgtype.Text{String: p.Origin.ThreadID, Valid: p.Origin.ThreadID != ""},
+		ClientRequestID: p.ClientRequestID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

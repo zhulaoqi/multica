@@ -712,16 +712,17 @@ type DingtalkGroupRoute struct {
 }
 
 type DispatchOrigin struct {
-	IssueID        pgtype.UUID        `json:"issue_id"`
-	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
-	RequesterID    pgtype.UUID        `json:"requester_id"`
-	TargetUnitID   pgtype.UUID        `json:"target_unit_id"`
-	ChannelType    string             `json:"channel_type"`
-	InstallationID pgtype.UUID        `json:"installation_id"`
-	ChatID         pgtype.Text        `json:"chat_id"`
-	ThreadID       pgtype.Text        `json:"thread_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	NotifiedAt     pgtype.Timestamptz `json:"notified_at"`
+	IssueID         pgtype.UUID        `json:"issue_id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	RequesterID     pgtype.UUID        `json:"requester_id"`
+	TargetUnitID    pgtype.UUID        `json:"target_unit_id"`
+	ChannelType     string             `json:"channel_type"`
+	InstallationID  pgtype.UUID        `json:"installation_id"`
+	ChatID          pgtype.Text        `json:"chat_id"`
+	ThreadID        pgtype.Text        `json:"thread_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt      pgtype.Timestamptz `json:"notified_at"`
+	ClientRequestID pgtype.Text        `json:"client_request_id"`
 }
 
 type Feedback struct {

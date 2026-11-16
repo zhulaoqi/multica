@@ -529,7 +529,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		PluginService:          service.NewPluginService(queries, txStarter),
 		IssueService:           issueSvc,
 		OrgDispatchService: &service.OrgDispatchService{
-			Queries: queries, TxStarter: txStarter, Issues: issueSvc, Tasks: taskSvc, Bus: bus,
+			Queries: queries, TxStarter: txStarter, Issues: issueSvc, Tasks: taskSvc, Bus: bus, LLM: llmClient,
 		},
 		AutopilotService:             service.NewAutopilotService(queries, txStarter, bus, taskSvc),
 		EmailService:                 emailService,

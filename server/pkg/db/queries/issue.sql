@@ -95,6 +95,13 @@ WHERE workspace_id = sqlc.arg('workspace_id')
 SELECT * FROM issue
 WHERE id = $1 AND workspace_id = $2;
 
+-- name: ListIssuesByIDs :many
+-- Batch read for callers that already hold workspace-scoped ids (workbench
+-- history). A missing or cross-workspace id is simply absent from the result.
+SELECT * FROM issue
+WHERE workspace_id = sqlc.arg('workspace_id')
+  AND id = ANY(sqlc.arg('issue_ids')::uuid[]);
+
 -- name: GetIssueMetadataInWorkspace :one
 -- Reloads the committed metadata snapshot after a conditional mutation
 -- returns no rows, without fetching the rest of the issue payload.
