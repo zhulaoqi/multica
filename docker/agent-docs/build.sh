@@ -32,6 +32,9 @@ if [ "$install_ok" -ne 1 ]; then
   echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') Installation failed, request the developer to confirm it."
   exit 1
 fi
+# Node 22.6 cannot require() an ES module. fumadocs-mdx's loader is ESM, and
+# Next loads it with require(). Node 22.12+ does this by default.
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-require-module"
 NODE_ENV=production STANDALONE=true pnpm --filter @multica/docs build
 if [ $? -ne 0 ]; then
   echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') Compilation failed, request the developer to confirm it."
