@@ -23,6 +23,7 @@ import { useSearchStore } from "../search/search-store";
 const GLOBAL_ACTIONS: readonly ShortcutActionId[] = [
   "openSearch",
   "createIssue",
+  "dispatchWork",
   "toggleSidebar",
   "toggleChat",
   "goBack",
@@ -124,6 +125,11 @@ export function GlobalShortcuts() {
       if (actionId === "createIssue") {
         if (useModalStore.getState().modal) return;
         openCreateIssueForPath(navigation.pathname);
+        return;
+      }
+      if (actionId === "dispatchWork") {
+        if (useModalStore.getState().modal) return;
+        useModalStore.getState().open("dispatch-work");
         return;
       }
 

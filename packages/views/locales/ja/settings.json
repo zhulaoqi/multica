@@ -240,6 +240,10 @@
         "label": "タスクを作成",
         "description": "優先するタスク作成フローを開きます。"
       },
+      "dispatchWork": {
+        "label": "仕事を送る",
+        "description": "部門を選んで依頼を送ると、リーダーが仕事を分けて結果を報告します。"
+      },
       "toggleSidebar": {
         "label": "左サイドバーを切り替え",
         "description": "左サイドバーの表示を切り替えます。"

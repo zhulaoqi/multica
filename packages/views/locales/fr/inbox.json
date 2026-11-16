@@ -82,7 +82,9 @@
     "quick_create_unconfirmed": "Création avec un agent non confirmée",
     "autopilot_paused": "Automatisation en pause",
     "children_done": "Sous-tâches terminées",
-    "autopilot_quota_exceeded": "Limite d'exécutions d'automatisation atteinte"
+    "dispatch_completed": "Travail du service terminé",
+    "autopilot_quota_exceeded": "Limite d'exécutions d'automatisation atteinte",
+    "squad_leader_failed": "Échec du leader d'escouade"
   },
   "labels": {
     "set_status_to": "Statut défini sur",

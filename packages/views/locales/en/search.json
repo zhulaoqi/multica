@@ -35,6 +35,7 @@
   "commands": {
     "current_theme_aria": "Current theme",
     "new_issue": "New issue",
+    "dispatch_work": "Send work to a department",
     "new_project": "New project",
     "new_autopilot": "New autopilot",
     "chat_with_agent": "Chat with an agent",

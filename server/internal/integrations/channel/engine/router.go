@@ -37,10 +37,11 @@ type Router struct {
 	mu   sync.RWMutex
 	sets map[channel.Type]ResolverSet
 
-	issues    IssueCreator
-	tasks     TaskEnqueuer
-	reader    SessionReader
-	lifecycle ChannelChatLifecycle
+	issues     IssueCreator
+	tasks      TaskEnqueuer
+	reader     SessionReader
+	dispatcher OrgDispatcher
+	lifecycle  ChannelChatLifecycle
 
 	batcher *pendingBatcher
 
@@ -78,6 +79,9 @@ type RouterConfig struct {
 	MediaConcurrency int
 	Logger           *slog.Logger
 	Lifecycle        ChannelChatLifecycle
+	// Dispatcher enables the /dispatch command. Nil leaves /dispatch as an
+	// unavailable command: the message is stored but starts no work.
+	Dispatcher OrgDispatcher
 }
 
 // NewRouter builds a Router around the shared (platform-agnostic) services:
@@ -103,6 +107,7 @@ func NewRouter(issues IssueCreator, tasks TaskEnqueuer, reader SessionReader, cf
 		issues:       issues,
 		tasks:        tasks,
 		reader:       reader,
+		dispatcher:   cfg.Dispatcher,
 		lifecycle:    cfg.Lifecycle,
 		replyTimeout: cfg.ReplyTimeout,
 		mediaTimeout: cfg.MediaTimeout,
@@ -415,8 +420,10 @@ func (r *Router) processClaimed(ctx context.Context, set ResolverSet, msg channe
 
 	mediaPendingSeconds := 0.0
 	var parsedCommand *IssueCommand
+	var parsedDispatch *DispatchCommand
 	if !startChat {
 		parsedCommand, _ = ParseIssueCommand(msg.CommandText)
+		parsedDispatch, _ = ParseDispatchCommand(msg.CommandText)
 	}
 	issueNeedsUsage := parsedCommand != nil && parsedCommand.Title == ""
 	hasMedia := set.Media != nil && set.Media.HasMedia(msg)
@@ -425,7 +432,9 @@ func (r *Router) processClaimed(ctx context.Context, set ResolverSet, msg channe
 	hasSelectedContext := msg.HasSelectedContext && strings.TrimSpace(msg.Text) != ""
 	persistStartedMessage := msg.CommandText != "" || hasSelectedContext || hasMedia
 	bareFresh = bareFresh && !hasSelectedContext && !hasMedia
-	resolveMedia := !issueNeedsUsage && hasMedia
+	// A dispatch command is terminal, like a title-less /issue: its media has
+	// no issue to belong to, so it is not resolved or bound.
+	resolveMedia := !issueNeedsUsage && parsedDispatch == nil && hasMedia
 	localMediaDeadline := time.Now().Add(r.mediaTimeout)
 	if resolveMedia {
 		mediaPendingSeconds = r.mediaTimeout.Seconds()
@@ -591,6 +600,17 @@ func (r *Router) processClaimed(ctx context.Context, set ResolverSet, msg channe
 	var mediaIssue db.Issue
 	var deferredIssueTaskID pgtype.UUID
 
+	// 7a. /dispatch command, if present. The message is already durable and
+	//     the dispatch is synchronous, so it is terminal: no agent run follows
+	//     and the department's own leader is the only agent woken.
+	if appendRes.DispatchCommand != nil {
+		res, err = r.dispatchOrganization(ctx, inst, identity, msg, *appendRes.DispatchCommand, res)
+		if err != nil {
+			return Result{}, postAppendFinalize, err
+		}
+		return res, postAppendFinalize, nil
+	}
+
 	// 7. /issue command, if present. chat_message is already durable; all
 	//    error returns from here signal finalizeNone (or the defensive Mark).
 	if appendRes.IssueCommand != nil {
@@ -722,6 +742,77 @@ func (r *Router) processClaimed(ctx context.Context, set ResolverSet, msg channe
 		r.lifecycle.GenerateChannelChatTitle(inst.WorkspaceID, sessionCreator, sessionID, appendRes.InitialTitle, chatTitleSource(msg.Text, msg.CommandText, !startChat && msg.ForceFresh))
 	}
 	return res, postAppendFinalize, nil
+}
+
+// dispatchOrganization resolves the command's department and creates the
+// dispatch through the same service the in-app dialog uses. A department the
+// sender cannot see answers no-access, never a distinguishing error, so a chat
+// user cannot enumerate the organization. Any further completion notice is
+// delivered later by the dispatch service, not by this reply.
+func (r *Router) dispatchOrganization(ctx context.Context, inst ResolvedInstallation, identity ResolvedIdentity, msg channel.InboundMessage, cmd DispatchCommand, res Result) (Result, error) {
+	if !cmd.Valid() {
+		res.Outcome = OutcomeDispatchUsage
+		return res, nil
+	}
+	if r.dispatcher == nil {
+		return Result{}, errors.New("dispatch command received but no dispatcher is configured")
+	}
+	matches, err := r.dispatcher.ResolveUnits(ctx, inst.WorkspaceID, identity.UserID, cmd.Unit)
+	if err != nil {
+		return Result{}, fmt.Errorf("resolve dispatch unit: %w", err)
+	}
+	switch {
+	case len(matches) == 0:
+		res.Outcome = OutcomeDispatchNoAccess
+		return res, nil
+	case len(matches) > 1:
+		res.Outcome = OutcomeDispatchAmbiguous
+		res.DispatchCandidates = make([]string, 0, len(matches))
+		for _, match := range matches {
+			res.DispatchCandidates = append(res.DispatchCandidates, match.Path)
+		}
+		return res, nil
+	}
+
+	result, err := r.dispatcher.Dispatch(ctx, service.OrgDispatchParams{
+		WorkspaceID: inst.WorkspaceID,
+		ActorID:     identity.UserID,
+		UnitID:      matches[0].Unit.ID,
+		Title:       cmd.Title,
+		Description: cmd.Description(),
+		Origin: service.DispatchOriginInfo{
+			ChannelType:    string(msg.Source.ChannelType),
+			InstallationID: inst.ID,
+			ChatID:         msg.Source.ChatID,
+			ThreadID:       msg.Source.ThreadID,
+		},
+		Platform: string(msg.Source.ChannelType),
+	})
+	switch {
+	case errors.Is(err, service.ErrOrgUnitNotFound),
+		errors.Is(err, service.ErrOrgUnitNoAccess),
+		errors.Is(err, service.ErrDispatchRequesterNotInTeam):
+		res.Outcome = OutcomeDispatchNoAccess
+		return res, nil
+	case errors.Is(err, service.ErrOrgUnitNoAgents):
+		res.Outcome = OutcomeDispatchNoAgents
+		return res, nil
+	case errors.Is(err, service.ErrDispatchLeaderUnavailable):
+		res.Outcome = OutcomeDispatchLeaderUnavailable
+		return res, nil
+	case err != nil:
+		return Result{}, fmt.Errorf("dispatch to org unit: %w", err)
+	}
+
+	prefix, workspaceSlug := r.issueWorkspaceIdentity(ctx, inst.WorkspaceID)
+	res.Outcome = OutcomeDispatchCreated
+	res.IssueID = result.Issue.ID
+	res.IssueNumber = result.Issue.Number
+	res.IssueTitle = result.Issue.Title
+	res.IssueIdentifier = service.IssueIdentifier(prefix, result.Issue.Number)
+	res.IssueWorkspaceSlug = workspaceSlug
+	res.DispatchUnitName = result.Unit.Name
+	return res, nil
 }
 
 func (r *Router) notifyChatStarted(inst ResolvedInstallation, creatorID pgtype.UUID, channelType channel.Type, started StartSessionResult) {

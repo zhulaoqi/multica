@@ -29,6 +29,20 @@ FOR UPDATE;
 -- name: ListSquads :many
 SELECT * FROM squad WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY created_at ASC;
 
+-- name: GetSquadByOrgUnit :one
+-- The department's squad, if one has been generated. Org pages keep one
+-- implicit squad per unit; additional squads stay manual and unbound.
+SELECT * FROM squad
+WHERE workspace_id = $1 AND org_unit_id = $2 AND archived_at IS NULL
+ORDER BY created_at ASC
+LIMIT 1;
+
+-- name: MarkSquadOrgManaged :exec
+-- Adopts a squad into the org mirror. Only generated or explicitly synced
+-- squads mirror their unit subtree; hand-attached squads stay manual.
+UPDATE squad SET org_managed = true
+WHERE id = sqlc.arg('id') AND workspace_id = sqlc.arg('workspace_id');
+
 -- name: ListSquadMemberPreviewRows :many
 -- Static squad membership summary for list/hover previews. This deliberately
 -- excludes derived runtime/task status; the squad detail members-status
@@ -69,6 +83,8 @@ UPDATE squad SET
     leader_id = COALESCE(sqlc.narg('leader_id'), leader_id),
     avatar_url = COALESCE(sqlc.narg('avatar_url'), avatar_url),
     instructions = COALESCE(sqlc.narg('instructions'), instructions),
+    wip_limit = COALESCE(sqlc.narg('wip_limit'), wip_limit),
+    max_children = COALESCE(sqlc.narg('max_children'), max_children),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -83,9 +99,23 @@ INSERT INTO squad_member (squad_id, member_type, member_id, role)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
+-- name: UpsertSquadMember :exec
+-- Org sync re-runs on demand and after department moves; the same member must
+-- settle to one row whose role and provenance follow the latest roster.
+INSERT INTO squad_member (squad_id, member_type, member_id, role, source)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (squad_id, member_type, member_id)
+DO UPDATE SET role = EXCLUDED.role, source = EXCLUDED.source;
+
 -- name: RemoveSquadMember :execrows
 DELETE FROM squad_member
 WHERE squad_id = $1 AND member_type = $2 AND member_id = $3;
+
+-- name: RemoveSyncedSquadMember :execrows
+-- Prunes a member the org sync added but the current department no longer
+-- covers. Manually added members keep source='manual' and survive.
+DELETE FROM squad_member
+WHERE squad_id = $1 AND member_type = $2 AND member_id = $3 AND source = $4;
 
 -- name: ListSquadMembers :many
 SELECT * FROM squad_member WHERE squad_id = $1 ORDER BY created_at ASC;

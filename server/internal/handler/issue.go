@@ -3296,6 +3296,18 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A squad leader fans work out as child issues; the server caps that fan-out
+	// so a looping leader stops here instead of only in its prompt. Humans keep
+	// adding sub-issues freely.
+	if parentIssueID.Valid {
+		if actor, ok := r.Context().Value(wakeupActorKey{}).(wakeupActor); ok && actor.kind == "agent" {
+			if status, msg := h.checkSquadChildGuard(r.Context(), wsUUID, parentIssueID); status != 0 {
+				writeError(w, status, msg)
+				return
+			}
+		}
+	}
+
 	if req.ProjectID != nil {
 		id, ok := parseUUIDOrBadRequest(w, *req.ProjectID, "project_id")
 		if !ok {

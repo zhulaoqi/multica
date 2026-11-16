@@ -58,6 +58,7 @@
     "invitation_decline": "Refuser",
     "log_out": "Se déconnecter",
     "new_issue": "Nouvelle tâche",
+    "dispatch_work": "Envoyer du travail",
     "pinned_label": "Épinglés",
     "show_more_pins": "Afficher {{count}} de plus…",
     "show_fewer_pins": "Afficher moins"

@@ -1538,6 +1538,10 @@ export const CreateIssueResponseSchema = IssueSchema.extend({
   labels: z.array(LabelSchema).optional().catch(undefined),
 }).loose();
 
+export const OrgDispatchResponseSchema = z.object({
+  issue: CreateIssueResponseSchema,
+});
+
 export const EMPTY_LIST_ISSUES_RESPONSE: ListIssuesResponse = {
   issues: [],
   total: 0,

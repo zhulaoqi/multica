@@ -1,0 +1,3 @@
+ALTER TABLE squad_member DROP COLUMN IF EXISTS source;
+ALTER TABLE squad DROP COLUMN IF EXISTS max_children;
+ALTER TABLE squad DROP COLUMN IF EXISTS wip_limit;

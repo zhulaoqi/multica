@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/logger"
+	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -46,7 +47,8 @@ type orgAgentResponse struct {
 
 // orgSquadResponse is a squad attached to a unit. AgentCount and the working
 // count let the client tell "waiting for collaborative scheduling" apart from
-// a squad already busy with work.
+// a squad already busy with work; issue counts feed the department board and
+// the limits show what the server will let the leader dispatch.
 type orgSquadResponse struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -54,6 +56,11 @@ type orgSquadResponse struct {
 	LeaderID      string `json:"leader_id"`
 	AgentCount    int32  `json:"agent_count"`
 	WorkingAgents int32  `json:"working_agents"`
+	WipLimit      int32  `json:"wip_limit"`
+	MaxChildren   int32  `json:"max_children"`
+	ActiveIssues  int32  `json:"active_issues"`
+	ReviewIssues  int32  `json:"review_issues"`
+	BlockedIssues int32  `json:"blocked_issues"`
 }
 
 type orgMemberResponse struct {
@@ -141,7 +148,7 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	}
 	var visible map[pgtype.UUID]bool
 	if !access.admin {
-		visible = visibleOrgUnits(access.units, ownUnitID, access.manages)
+		visible = orgscope.Visible(access.units, ownUnitID, access.userID, false)
 	}
 	for _, unit := range access.units {
 		if visible != nil && !visible[unit.ID] {
@@ -162,11 +169,11 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		resp.Agents = append(resp.Agents, orgAgentResponse{
-			ID:      uuidToString(agent.ID),
-			Name:    agent.Name,
-			UnitID:  uuidToString(agent.OrgUnitID),
-			OwnerID: uuidToString(agent.OwnerID),
-			Can:     textValue(agent.IntakeCan),
+			ID:          uuidToString(agent.ID),
+			Name:        agent.Name,
+			UnitID:      uuidToString(agent.OrgUnitID),
+			OwnerID:     uuidToString(agent.OwnerID),
+			Can:         textValue(agent.IntakeCan),
 			Cannot:      textValue(agent.IntakeCannot),
 			Status:      agent.Status,
 			RuntimeMode: agent.RuntimeMode,
@@ -195,6 +202,11 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			LeaderID:      uuidToString(squad.LeaderID),
 			AgentCount:    squad.AgentCount,
 			WorkingAgents: squad.WorkingAgents,
+			WipLimit:      squad.WipLimit,
+			MaxChildren:   squad.MaxChildren,
+			ActiveIssues:  squad.ActiveIssues,
+			ReviewIssues:  squad.ReviewIssues,
+			BlockedIssues: squad.BlockedIssues,
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -726,6 +738,12 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			return
 		}
 	}
+	// Department squads mirror who their unit subtree covers; a member or
+	// agent moving in or out changes the roster of this unit and every
+	// ancestor squad.
+	if entityType != "squad" {
+		h.syncOrgSquadsAfterPlacement(r.Context(), access.wsUUID, access.units, currentUnit, unitUUID)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -772,7 +790,7 @@ func (a orgAccess) manages(unitID pgtype.UUID) bool {
 	if a.admin {
 		return true
 	}
-	return orgUserLeadsUnit(a.userID, a.units, unitID)
+	return orgscope.Leads(a.units, a.userID, unitID)
 }
 
 // managesAny reports whether the caller may administer at least one unit.
@@ -782,15 +800,7 @@ func (a orgAccess) managesAny() bool {
 	if a.admin {
 		return true
 	}
-	if !a.userID.Valid {
-		return false
-	}
-	for _, unit := range a.units {
-		if unit.LeadUserID == a.userID {
-			return true
-		}
-	}
-	return false
+	return orgscope.LeadsAny(a.units, a.userID)
 }
 
 // ownsAgentPlacement lets a member place their own agent into their own
@@ -800,62 +810,6 @@ func (a orgAccess) ownsAgentPlacement(entityType string, ownerID pgtype.UUID, un
 	return entityType == "agent" &&
 		ownerID.Valid && ownerID == a.userID &&
 		unitID.Valid && unitID == a.ownUnitID
-}
-
-func orgUserLeadsUnit(userID pgtype.UUID, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
-	if !userID.Valid || !unitID.Valid {
-		return false
-	}
-	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
-	for _, unit := range units {
-		byID[unit.ID] = unit
-	}
-	for current, guard := unitID, 0; current.Valid && guard <= len(units); guard++ {
-		unit, ok := byID[current]
-		if !ok {
-			return false
-		}
-		if unit.LeadUserID == userID {
-			return true
-		}
-		current = unit.ParentID
-	}
-	return false
-}
-
-// visibleOrgUnits narrows the tree for callers without workspace management:
-// they see their own department and the departments they lead, each with its
-// descendants. Ancestors stay out: a member should read "my department" as the
-// scope, not browse up into their superiors' structure.
-func visibleOrgUnits(units []db.ListOrgUnitsRow, ownUnitID pgtype.UUID, manages func(pgtype.UUID) bool) map[pgtype.UUID]bool {
-	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
-	children := make(map[pgtype.UUID][]pgtype.UUID, len(units))
-	for _, unit := range units {
-		byID[unit.ID] = unit
-		if unit.ParentID.Valid {
-			children[unit.ParentID] = append(children[unit.ParentID], unit.ID)
-		}
-	}
-	visible := make(map[pgtype.UUID]bool, len(units))
-	var addSubtree func(pgtype.UUID)
-	addSubtree = func(id pgtype.UUID) {
-		if !id.Valid || visible[id] {
-			return
-		}
-		if _, ok := byID[id]; !ok {
-			return
-		}
-		visible[id] = true
-		for _, child := range children[id] {
-			addSubtree(child)
-		}
-	}
-	for _, unit := range units {
-		if unit.ID == ownUnitID || manages(unit.ID) {
-			addSubtree(unit.ID)
-		}
-	}
-	return visible
 }
 
 func (h *Handler) importOrgFailed(w http.ResponseWriter, r *http.Request, err error) {

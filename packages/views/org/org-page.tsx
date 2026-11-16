@@ -257,6 +257,7 @@ export function OrgPage() {
             path={paths.get(selectedNode.unit.id) ?? selectedNode.unit.name}
             myUnitId={data.my_unit_id}
             allMembers={allMembers}
+            allAgents={data.agents}
             unitChoices={unitChoices}
             actions={actions}
             onSelect={setSelected}

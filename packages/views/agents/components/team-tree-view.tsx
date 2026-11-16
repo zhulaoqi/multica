@@ -15,13 +15,14 @@ import {
   DialogTitle,
 } from "@multica/ui/components/ui/dialog";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { Building2, Crown, MessageSquare, Pencil } from "@multica/ui/icons";
+import { Building2, Crown, MessageSquare, Pencil, Send } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { useT } from "../../i18n";
 import { IntroArtCard, IntroArtConnector, IntroArtTag } from "../../layout/feature-intro";
 import { AppLink } from "../../navigation";
 import { Branch } from "../../org/org-canvas";
+import { DispatchDialog } from "../../squads/components/dispatch-dialog";
 import { availabilityConfig } from "../presence";
 import { countDepartmentRows, departmentForest, type DepartmentNode } from "../team-tree";
 import type { AgentListRow } from "./agents-page";
@@ -127,6 +128,7 @@ function TeamAgentCard({ row }: { row: AgentListRow }) {
   const { t } = useT("agents");
   const paths = useWorkspacePaths();
   const [editing, setEditing] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
   const { agent, presence, owner } = row;
   const working = (presence?.runningCount ?? 0) > 0;
   const duty = agent.intake_can?.trim() || agent.description?.trim() || "";
@@ -174,6 +176,10 @@ function TeamAgentCard({ row }: { row: AgentListRow }) {
             {t(($) => $.team_tree.edit_responsibility)}
           </Button>
         ) : null}
+        <Button size="xs" variant="outline" onClick={() => setDispatching(true)}>
+          <Send aria-hidden />
+          {t(($) => $.team_tree.dispatch)}
+        </Button>
         <Button
           size="xs"
           variant="outline"
@@ -184,6 +190,13 @@ function TeamAgentCard({ row }: { row: AgentListRow }) {
           {t(($) => $.team_tree.command)}
         </Button>
       </div>
+      {dispatching ? (
+        <DispatchDialog
+          target={{ type: "agent", id: agent.id, name: agent.name }}
+          open
+          onOpenChange={setDispatching}
+        />
+      ) : null}
       {editing ? <ResponsibilityDialog row={row} onClose={() => setEditing(false)} /> : null}
     </IntroArtCard>
   );

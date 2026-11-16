@@ -5717,6 +5717,9 @@ func (h *Handler) failTask(w http.ResponseWriter, r *http.Request, taskID, works
 		return
 	}
 	h.TaskService.NotifyTaskFinished(*task)
+	// A leader that exhausted its runs may have died before commenting; tell
+	// the department lead rather than leaving the parent silently stalled.
+	h.notifySquadLeaderFailure(r.Context(), *task, workspaceID)
 
 	// Best-effort revoke of the mat_ task token minted at claim. Same
 	// rationale as CompleteTask — eager deletion shrinks the post-

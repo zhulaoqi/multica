@@ -224,6 +224,10 @@
         "label": "Crear tarea",
         "description": "Abre tu flujo de creación de tareas preferido."
       },
+      "dispatchWork": {
+        "label": "Enviar trabajo",
+        "description": "Elige un departamento y envíale una solicitud; su líder reparte el trabajo y avisa al terminar."
+      },
       "toggleSidebar": {
         "label": "Mostrar u ocultar la barra lateral izquierda",
         "description": "Muestra u oculta la barra lateral izquierda."

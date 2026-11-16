@@ -23,6 +23,7 @@
   "commands": {
     "current_theme_aria": "Tema actual",
     "new_issue": "Nueva tarea",
+    "dispatch_work": "Enviar trabajo a un departamento",
     "new_project": "Nuevo proyecto",
     "copy_issue_link": "Copiar enlace de la tarea",
     "copy_identifier": "Copiar identificador ({{identifier}})",

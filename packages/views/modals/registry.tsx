@@ -5,6 +5,7 @@ import { useModalStore } from "@multica/core/modals";
 import { CreateIssueDialog } from "./create-issue-dialog";
 import { CreateProjectModal } from "./create-project";
 import { CreateSquadModal } from "./create-squad";
+import { OrgDispatchDialog } from "../org/org-dispatch-dialog";
 import { SetParentIssueModal } from "./set-parent-issue";
 import { MarkDuplicateIssueModal } from "./mark-duplicate-issue";
 import { AddChildIssueModal } from "./add-child-issue";
@@ -47,6 +48,9 @@ export function ModalRegistry() {
       break;
     case "create-squad":
       activeModal = <CreateSquadModal onClose={close} />;
+      break;
+    case "dispatch-work":
+      activeModal = <OrgDispatchDialog open onOpenChange={(next) => !next && close()} />;
       break;
     case "issue-set-parent":
       activeModal = <SetParentIssueModal onClose={close} data={data} />;

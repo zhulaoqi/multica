@@ -711,6 +711,19 @@ type DingtalkGroupRoute struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type DispatchOrigin struct {
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	RequesterID    pgtype.UUID        `json:"requester_id"`
+	TargetUnitID   pgtype.UUID        `json:"target_unit_id"`
+	ChannelType    string             `json:"channel_type"`
+	InstallationID pgtype.UUID        `json:"installation_id"`
+	ChatID         pgtype.Text        `json:"chat_id"`
+	ThreadID       pgtype.Text        `json:"thread_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt     pgtype.Timestamptz `json:"notified_at"`
+}
+
 type Feedback struct {
 	ID          pgtype.UUID        `json:"id"`
 	UserID      pgtype.UUID        `json:"user_id"`
@@ -1616,6 +1629,9 @@ type Squad struct {
 	AvatarUrl    pgtype.Text        `json:"avatar_url"`
 	Instructions string             `json:"instructions"`
 	OrgUnitID    pgtype.UUID        `json:"org_unit_id"`
+	WipLimit     int32              `json:"wip_limit"`
+	MaxChildren  int32              `json:"max_children"`
+	OrgManaged   bool               `json:"org_managed"`
 }
 
 type SquadMember struct {
@@ -1625,6 +1641,7 @@ type SquadMember struct {
 	MemberID   pgtype.UUID        `json:"member_id"`
 	Role       string             `json:"role"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	Source     string             `json:"source"`
 }
 
 type SysCronExecution struct {

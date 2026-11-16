@@ -58,6 +58,7 @@
     "invitation_decline": "拒绝",
     "log_out": "退出登录",
     "new_issue": "新建任务",
+    "dispatch_work": "派活",
     "pinned_label": "固定",
     "show_more_pins": "再显示 {{count}} 项...",
     "show_fewer_pins": "收起"

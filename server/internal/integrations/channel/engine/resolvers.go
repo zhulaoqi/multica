@@ -35,6 +35,15 @@ const (
 	// refuses the same person at the same point; this is that verdict on the
 	// channel side.
 	OutcomeInvokeDenied Outcome = "invoke_denied"
+	// Dispatch outcomes for the /dispatch command: a created department
+	// dispatch, a malformed command, an unmatched or non-unique department,
+	// and the two refusals the dispatch service can return.
+	OutcomeDispatchUsage             Outcome = "dispatch_usage"
+	OutcomeDispatchCreated           Outcome = "dispatch_created"
+	OutcomeDispatchAmbiguous         Outcome = "dispatch_ambiguous"
+	OutcomeDispatchNoAccess          Outcome = "dispatch_no_access"
+	OutcomeDispatchNoAgents          Outcome = "dispatch_no_agents"
+	OutcomeDispatchLeaderUnavailable Outcome = "dispatch_leader_unavailable"
 )
 
 // DropReason enumerates the drop-audit categories. Values match the legacy
@@ -79,6 +88,12 @@ type Result struct {
 	// message also carried downloadable media. Repliers use it to tell the
 	// sender to include that media again with the corrected command.
 	IssueUsageHadMedia bool
+	// DispatchUnitName is the department a /dispatch was delivered to.
+	DispatchUnitName string
+	// DispatchCandidates lists the department paths a /dispatch could mean
+	// when the query did not resolve to exactly one, so the replier can ask
+	// for a full path.
+	DispatchCandidates []string
 	// runScheduled reports whether this ingest scheduled a normal chat run.
 	// It is Router-internal state: repliers must continue to use Outcome.
 	runScheduled bool
@@ -158,6 +173,9 @@ type AppendResult struct {
 	MessageID pgtype.UUID
 	// IssueCommand is non-nil when the message was an /issue command.
 	IssueCommand *IssueCommand
+	// DispatchCommand is non-nil when the message was a /dispatch command.
+	// Like IssueCommand it excludes the message from agent input.
+	DispatchCommand *DispatchCommand
 	// DedupMarked is true when AppendMessage finalized the dedup claim in its
 	// own tx; the Router then skips the post-pipeline finalize.
 	DedupMarked bool
@@ -469,6 +487,14 @@ type ResolverSet struct {
 type IssueCreator interface {
 	Create(ctx context.Context, p service.IssueCreateParams, opts service.IssueCreateOpts) (service.IssueCreateResult, error)
 	PublishAttachmentsChanged(ctx context.Context, issue db.Issue, actorID pgtype.UUID)
+}
+
+// OrgDispatcher is the narrow subset of service.OrgDispatchService the Router
+// needs for the /dispatch command. Shared across platforms so a chat command
+// and the in-app dialog take the same visibility, squad and leader checks.
+type OrgDispatcher interface {
+	Dispatch(ctx context.Context, p service.OrgDispatchParams) (service.OrgDispatchResult, error)
+	ResolveUnits(ctx context.Context, workspaceID, actorID pgtype.UUID, query string) ([]service.UnitMatch, error)
 }
 
 // TaskEnqueuer is the narrow subset of service.TaskService the Router needs to

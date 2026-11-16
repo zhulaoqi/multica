@@ -82,6 +82,7 @@ vi.mock("@multica/views/layout", () => ({
   AppRail: () => <div data-testid="app-rail" />,
   AppShellProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   CompactNavSheet: () => null,
+  DispatchWorkButton: () => <div data-testid="title-bar-dispatch-work" />,
   GlobalShortcuts: () => <div data-testid="global-shortcuts" />,
   NavigationProgress: () => <div data-testid="navigation-progress" />,
   NewIssueButton: () => <div data-testid="title-bar-new-issue" />,

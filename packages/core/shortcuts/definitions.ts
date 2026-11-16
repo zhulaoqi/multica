@@ -8,6 +8,7 @@ import {
 export type ShortcutActionId =
   | "openSearch"
   | "createIssue"
+  | "dispatchWork"
   | "toggleSidebar"
   | "toggleRightSidebar"
   | "toggleChat"
@@ -79,6 +80,9 @@ const primary = (key: string) =>
 export const SHORTCUT_ACTIONS: readonly ShortcutActionDefinition[] = [
   { id: "openSearch", category: "general", defaultShortcut: primary("K"), allowInEditable: true },
   { id: "createIssue", category: "general", defaultShortcut: createShortcutChord("C"), allowInEditable: false },
+  // Dispatch is the "send work elsewhere" counterpart to New issue: the same
+  // shape plus Shift, on a letter the policy leaves free on every platform.
+  { id: "dispatchWork", category: "general", defaultShortcut: createShortcutChord("O", { primary: true, shift: true }), allowInEditable: false },
   { id: "toggleSidebar", category: "general", defaultShortcut: primary("B"), allowInEditable: false },
   {
     id: "toggleRightSidebar",

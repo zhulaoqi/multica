@@ -1107,6 +1107,7 @@
     "dialog_title": "{{name}}'s responsibilities",
     "save": "Save",
     "cancel": "Cancel",
-    "save_failed": "Couldn't save the responsibilities."
+    "save_failed": "Couldn't save the responsibilities.",
+    "dispatch": "Assign work"
   }
 }

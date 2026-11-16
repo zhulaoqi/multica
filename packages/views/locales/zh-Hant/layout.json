@@ -58,6 +58,7 @@
     "invitation_decline": "拒絕",
     "log_out": "退出登入",
     "new_issue": "新建任務",
+    "dispatch_work": "派活",
     "pinned_label": "固定",
     "show_more_pins": "再顯示 {{count}} 項...",
     "show_fewer_pins": "收起"

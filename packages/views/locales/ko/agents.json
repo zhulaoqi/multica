@@ -1080,6 +1080,7 @@
     "dialog_title": "{{name}}의 담당 업무",
     "save": "저장",
     "cancel": "취소",
-    "save_failed": "담당 업무를 저장하지 못했습니다."
+    "save_failed": "담당 업무를 저장하지 못했습니다.",
+    "dispatch": "작업 할당"
   }
 }
