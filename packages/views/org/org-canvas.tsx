@@ -11,7 +11,9 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@multica/ui/components/ui/dialog";
 import { Input } from "@multica/ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@multica/ui/components/ui/select";
-import { Bot, ChevronRight } from "@multica/ui/icons";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@multica/ui/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@multica/ui/components/ui/popover";
+import { Bot, ChevronDown, ChevronRight } from "@multica/ui/icons";
 import { useT } from "../i18n";
 import { IntroArtCard, IntroArtConnector } from "../layout/feature-intro";
 import { agentAvailability, memberTwin, squadAvailability, type OrgNode } from "./org-tree";
@@ -54,35 +56,56 @@ export function UnitPicker({
   disabled?: boolean;
 }) {
   const { t } = useT("org");
-  const items = [
-    { value: NO_UNIT, label: t(($) => $.unassigned) },
-    ...choices.map((choice) => ({ value: choice.id, label: choice.path })),
-  ];
+  const [open, setOpen] = useState(false);
+  const label = value
+    ? (choices.find((choice) => choice.id === value)?.path ?? t(($) => $.move_to))
+    : t(($) => $.unassigned);
+  const pick = (unitId: string) => {
+    onChange(unitId);
+    setOpen(false);
+  };
   return (
-    <Select
-      items={items}
-      value={value || NO_UNIT}
-      onValueChange={(next) => onChange(!next || next === NO_UNIT ? "" : next)}
-      disabled={disabled}
-    >
-      <SelectTrigger className="h-8 w-44 text-caption">
-        <SelectValue>
-          {() =>
-            value
-              ? (choices.find((choice) => choice.id === value)?.path ?? t(($) => $.move_to))
-              : t(($) => $.unassigned)
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        disabled={disabled}
+        render={
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className="flex h-8 w-44 items-center gap-1.5 rounded-lg border border-input bg-transparent px-2.5 text-left text-caption outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+          />
+        }
+      >
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <Command
+          filter={(itemValue, search) =>
+            itemValue.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()) ? 1 : 0
           }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NO_UNIT}>{t(($) => $.unassigned)}</SelectItem>
-        {choices.map((choice) => (
-          <SelectItem key={choice.id} value={choice.id}>
-            {choice.path}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        >
+          <CommandInput placeholder={t(($) => $.picker_search)} />
+          <CommandList>
+            <CommandEmpty>{t(($) => $.picker_empty)}</CommandEmpty>
+            <CommandItem value={t(($) => $.unassigned)} onSelect={() => pick("")}>
+              {t(($) => $.unassigned)}
+            </CommandItem>
+            {choices.map((choice) => (
+              <CommandItem
+                key={choice.id}
+                value={`${choice.path} ${choice.id}`}
+                onSelect={() => pick(choice.id)}
+              >
+                <span className="truncate">{choice.path}</span>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -33,6 +33,8 @@
   "confirm_delete": "삭제 확인",
   "delete_blocked": "하위 부서와 멤버를 먼저 이동하세요.",
   "move_to": "부서",
+  "picker_search": "부서 검색",
+  "picker_empty": "일치하는 부서가 없습니다",
   "read_only": "자신이 속한 부서만 표시됩니다. 관리자는 전체 조직을 동기화하고 관리합니다.",
   "load_failed": "조직 트리를 불러오지 못했습니다.",
   "action_failed": "변경이 적용되지 않았습니다.",

@@ -7,12 +7,68 @@ import { useWorkspaceSlug } from "@multica/core/paths";
 import { createSafeId } from "@multica/core/utils";
 import { useOptionalWS } from "@multica/core/realtime";
 import type { WSEventType } from "@multica/core/types";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@multica/ui/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@multica/ui/components/ui/popover";
+import { ChevronDown } from "@multica/ui/icons";
 import { AppLink } from "../navigation";
 import { HelpPanel } from "./help-panel";
 import { IntakeBar } from "./intake-bar";
 import { ScheduledList } from "./scheduled-page";
 import { RoutesHeading } from "./routes-page";
 import { OrgPage } from "../org";
+
+function DeptFilter({
+  value,
+  paths,
+  onChange,
+}: {
+  value: string;
+  paths: string[];
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = value === "" ? "全部部门" : value === "__none" ? "未分配" : value;
+  const pick = (next: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            className="flex h-9 min-w-40 items-center gap-1.5 rounded-md border px-3 text-left text-sm"
+          />
+        }
+      >
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <ChevronDown className="size-4 shrink-0" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-0">
+        <Command
+          filter={(itemValue, search) =>
+            itemValue.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()) ? 1 : 0
+          }
+        >
+          <CommandInput placeholder="搜索部门" />
+          <CommandList>
+            <CommandEmpty>没有匹配的部门</CommandEmpty>
+            <CommandItem value="全部部门" onSelect={() => pick("")}>全部部门</CommandItem>
+            <CommandItem value="未分配" onSelect={() => pick("__none")}>未分配</CommandItem>
+            {paths.map((path) => (
+              <CommandItem key={path} value={path} onSelect={() => pick(path)}>
+                <span className="truncate">{path}</span>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function IntakePage({
   focusIssueId,
@@ -313,11 +369,7 @@ export function IntakePage({
             <>
           <div className="flex items-center gap-3">
           <div className="text-sm">我的 Agent</div>
-          <select value={agentDept} onChange={(event) => setAgentDept(event.target.value)} className="h-9 rounded-md border px-3 text-sm">
-            <option value="">全部部门</option>
-            {agentDepts.map((path) => <option key={path} value={path}>{path}</option>)}
-            <option value="__none">未分配</option>
-          </select>
+          <DeptFilter value={agentDept} paths={agentDepts} onChange={setAgentDept} />
           </div>
           <input value={agentName} onChange={(event) => setAgentName(event.target.value)} placeholder="Agent 名称" className="h-9 rounded-md border px-3 text-sm" />
           <input value={agentCan} onChange={(event) => setAgentCan(event.target.value)} placeholder="负责什么" className="h-9 rounded-md border px-3 text-sm" />

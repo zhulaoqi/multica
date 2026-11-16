@@ -33,6 +33,8 @@
   "confirm_delete": "削除を確定",
   "delete_blocked": "サブ部門とメンバーを先に移動してください。",
   "move_to": "部門",
+  "picker_search": "部門を検索",
+  "picker_empty": "一致する部門がありません",
   "read_only": "表示されるのは自分の部署のみです。管理者は組織全体を同期・管理できます。",
   "load_failed": "組織ツリーを読み込めませんでした。",
   "action_failed": "変更が反映されませんでした。",

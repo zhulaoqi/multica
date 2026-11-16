@@ -33,6 +33,8 @@
   "confirm_delete": "Confirmar eliminación",
   "delete_blocked": "Mueve primero sus subdepartamentos y miembros.",
   "move_to": "Departamento",
+  "picker_search": "Buscar departamento",
+  "picker_empty": "Ningún departamento coincide",
   "read_only": "Solo ves tu propio departamento. Los administradores sincronizan y gestionan toda la organización.",
   "load_failed": "No se pudo cargar la organización.",
   "action_failed": "El cambio no se aplicó.",

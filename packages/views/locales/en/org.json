@@ -33,6 +33,8 @@
   "confirm_delete": "Confirm delete",
   "delete_blocked": "Move its sub-departments and members out first.",
   "move_to": "Department",
+  "picker_search": "Search departments",
+  "picker_empty": "No matching departments",
   "read_only": "You only see your own department. Admins sync and manage the whole organization.",
   "load_failed": "Could not load the organisation tree.",
   "action_failed": "That change did not go through.",

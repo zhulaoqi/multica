@@ -33,6 +33,8 @@
   "confirm_delete": "確認刪除",
   "delete_blocked": "先移走下級部門和成員。",
   "move_to": "部門",
+  "picker_search": "搜尋部門",
+  "picker_empty": "沒有相符的部門",
   "read_only": "你只能看到自己所在的部門。管理員可以同步和管理整個組織。",
   "load_failed": "組織架構載入失敗。",
   "action_failed": "修改沒有成功。",

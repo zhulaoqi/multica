@@ -33,6 +33,8 @@
   "confirm_delete": "Confirmer la suppression",
   "delete_blocked": "Déplacez d'abord ses sous-départements et ses membres.",
   "move_to": "Département",
+  "picker_search": "Rechercher un service",
+  "picker_empty": "Aucun service correspondant",
   "read_only": "Vous ne voyez que votre propre service. Les administrateurs synchronisent et gèrent toute l'organisation.",
   "load_failed": "Impossible de charger l'organisation.",
   "action_failed": "La modification n'a pas été appliquée.",

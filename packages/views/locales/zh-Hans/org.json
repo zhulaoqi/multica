@@ -33,6 +33,8 @@
   "confirm_delete": "确认删除",
   "delete_blocked": "先移走下级部门和成员。",
   "move_to": "部门",
+  "picker_search": "搜索部门",
+  "picker_empty": "没有匹配的部门",
   "read_only": "你只能看到自己所在的部门。管理员可以同步和管理整个组织。",
   "load_failed": "组织架构加载失败。",
   "action_failed": "修改没有成功。",
