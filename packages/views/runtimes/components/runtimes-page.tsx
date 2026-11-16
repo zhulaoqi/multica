@@ -41,6 +41,7 @@ import { useWSEvent } from "@multica/core/realtime";
 import {
   agentListOptions,
   memberListOptions,
+  orgTreeOptions,
 } from "@multica/core/workspace/queries";
 import type { AgentRuntime, MemberWithUser } from "@multica/core/types";
 import type { QoderConnection } from "@multica/core/runtimes/qoder";
@@ -94,6 +95,7 @@ import { RuntimeList, buildWorkloadIndex } from "./runtime-list";
 import { RuntimesIntro } from "./runtimes-intro";
 import { pendingRuntimeFromProfile } from "./pending-runtime";
 import { buildRuntimeMachines, isReadOnlyMachine, type RuntimeMachine } from "./runtime-machines";
+import { groupMachinesByDepartment } from "./runtime-departments";
 import { TeamRuntimeDrawer } from "./team-runtime-drawer";
 import {
   HealthIcon,
@@ -205,6 +207,7 @@ export function RuntimesPage({
     agentListOptions(wsId),
   );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: orgTree } = useQuery(orgTreeOptions(wsId));
   const { data: snapshot = [] } = useQuery(agentTaskSnapshotOptions(wsId));
   // The Mika entrypoint is per member, not per workspace: the agent alone does
   // not say whether *this* member's conversation was ever opened and kicked
@@ -405,7 +408,7 @@ export function RuntimesPage({
     [t, currentUserId, members, bootstrapping],
   );
 
-  const machineRows: RuntimeRow[] = visibleMachines.map((machine) => ({
+  const toMachineRow = (machine: RuntimeMachine): RuntimeRow => ({
     kind: "machine",
     id: machine.id,
     machine,
@@ -413,7 +416,28 @@ export function RuntimesPage({
       (sum, runtime) => sum + (agentCountByRuntime.get(runtime.id) ?? 0),
       0,
     ),
-  }));
+  });
+  const machineRows: RuntimeRow[] = visibleMachines.map(toMachineRow);
+  // Leads and admins see machines across departments; band them by the
+  // owner's department so the list reads like the team it serves.
+  const departmentGroups = orgTree
+    ? groupMachinesByDepartment(visibleMachines, orgTree, currentUserId)
+    : null;
+  const machineGroups: CollectionGroup<RuntimeRow>[] = departmentGroups
+    ? departmentGroups.map((department) => ({
+        key: `machines:${department.unitId || "unassigned"}`,
+        label: department.path || t(($) => $.page.groups.machines.unassigned),
+        count: department.machines.length,
+        rows: department.machines.map(toMachineRow),
+      }))
+    : [
+        {
+          key: "machines",
+          label: t(($) => $.page.groups.machines.title),
+          count: machineList.length,
+          rows: machineRows,
+        },
+      ];
   if (showAddMachineRow) {
     machineRows.push({
       kind: "action",
@@ -443,12 +467,7 @@ export function RuntimesPage({
   const groups: CollectionGroup<RuntimeRow>[] = nothingMatches
     ? []
     : [
-        {
-          key: "machines",
-          label: t(($) => $.page.groups.machines.title),
-          count: machineList.length,
-          rows: machineRows,
-        },
+        ...machineGroups,
         ...(showVendorCloudRuntimes && cloudRows.length > 0
           ? [
               {
