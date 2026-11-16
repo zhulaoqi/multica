@@ -2,7 +2,7 @@
   "page": {
     "title": "Bureau",
     "connecting": "Connexion au bureau…",
-    "hint": "Déplacez-vous avec WASD ou les flèches, ou cliquez sur le sol pour marcher.",
+    "hint": "Déplacez-vous avec WASD ou les flèches, zoomez avec la molette et approchez-vous d’un agent pour appuyer sur T.",
     "error": "Connexion au bureau perdue. Reconnexion…",
     "roster": {
       "title": "Au bureau",
@@ -19,6 +19,15 @@
       "queued": "En attente",
       "idle": "Disponible",
       "offline": "Hors ligne"
+    },
+    "rooms": {
+      "meeting": "Salle de réunion",
+      "kitchen": "Cuisine",
+      "server": "Salle serveurs",
+      "office": "Open space",
+      "lounge": "Espace détente",
+      "reception": "Accueil",
+      "print": "Salle d'impression"
     },
     "interact": {
       "hint": "Appuyez sur {{key}} pour parler à {{name}}",

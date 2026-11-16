@@ -35,7 +35,8 @@ describe("visitSlots", () => {
   });
 
   it("returns no slots when the agent is boxed in by walls", () => {
-    const corner = { x: 29 * 16 + 8, y: 17 * 16 + 14 };
+    // The outer corner: two neighbours are walls and two are outside the world.
+    const corner = { x: 8, y: 14 };
     expect(visitSlots(layout, corner)).toEqual([]);
   });
 });
@@ -73,7 +74,7 @@ describe("nearestVisitSlot", () => {
   });
 
   it("returns null when no side of the agent is walkable", () => {
-    const corner = { x: 29 * 16 + 8, y: 17 * 16 + 14 };
+    const corner = { x: 8, y: 14 };
     expect(nearestVisitSlot(layout, corner, layout.spawns[0]!)).toBeNull();
   });
 });

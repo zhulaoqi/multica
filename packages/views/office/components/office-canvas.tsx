@@ -8,8 +8,9 @@ import {
   useState,
 } from "react";
 import { cn } from "@multica/ui/lib/utils";
-import { OFFICE_WORLD, type OfficePosition } from "@multica/core/office";
+import type { OfficePosition } from "@multica/core/office";
 import type { BubbleKind } from "../scene/characters";
+import type { RoomId } from "../scene/layout";
 import {
   OfficeScene,
   type OfficeAgentView,
@@ -20,13 +21,14 @@ export interface OfficeCanvasProps {
   agents: OfficeAgentView[];
   peers: OfficePeerView[];
   localName: string;
+  roomNames: Record<RoomId, string>;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent (walked over or clicked it). */
   onAgentActivate: (agentId: string) => void;
-  /** Nearest agent changed, for the "press T" hint. */
+  /** Nearest agent changed, for the interact hint. */
   onFocusAgentChange: (agentId: string | null) => void;
-  /** Agent whose panel is open; it stops wandering and faces the player. */
+  /** Agent whose panel is open; it pauses and faces the player. */
   engagedAgentId: string | null;
   className?: string;
 }
@@ -37,23 +39,12 @@ export interface OfficeCanvasHandle {
   playEmote: (agentId: string, kind: BubbleKind) => void;
 }
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
-
-/** Rounds to half steps so the pixel grid stays crisp at any container size. */
-function fitZoom(width: number, height: number): number {
-  if (width <= 0 || height <= 0) return MIN_ZOOM;
-  const fit = Math.min(
-    (width - 24) / OFFICE_WORLD.width,
-    (height - 24) / OFFICE_WORLD.height,
-  );
-  const halfStepped = Math.floor(fit * 2) / 2;
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, halfStepped));
-}
-
 /**
  * Mounts the Pixi scene. pixi.js is imported on demand: it is by far the
  * heaviest dependency in the app and only this page needs it.
+ *
+ * The canvas fills its wrapper and the scene owns the camera (follow + wheel
+ * zoom), so the world can be much larger than the window.
  */
 export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
   function OfficeCanvas(
@@ -61,6 +52,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       agents,
       peers,
       localName,
+      roomNames,
       spawn,
       onLocalMove,
       onAgentActivate,
@@ -79,9 +71,10 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     spawnRef.current = spawn;
     const nameRef = useRef(localName);
     nameRef.current = localName;
+    const roomNamesRef = useRef(roomNames);
+    roomNamesRef.current = roomNames;
 
     const [ready, setReady] = useState(false);
-    const [zoom, setZoom] = useState(MIN_ZOOM);
 
     useImperativeHandle(
       ref,
@@ -94,18 +87,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
 
     useEffect(() => {
       const wrapper = wrapperRef.current;
-      if (!wrapper) return;
-      const observer = new ResizeObserver((entries) => {
-        const rect = entries[0]?.contentRect;
-        if (rect) setZoom(fitZoom(rect.width, rect.height));
-      });
-      observer.observe(wrapper);
-      return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
       const host = hostRef.current;
-      if (!host) return;
+      if (!wrapper || !host) return;
 
       let cancelled = false;
       let scene: OfficeScene | null = null;
@@ -113,11 +96,14 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       (async () => {
         const pixi = await import("pixi.js");
         if (cancelled) return;
+        const rect = wrapper.getBoundingClientRect();
         const created = await OfficeScene.create({
           pixi,
           host,
-          zoom,
+          width: Math.max(1, Math.round(rect.width)),
+          height: Math.max(1, Math.round(rect.height)),
           localName: nameRef.current,
+          roomNames: roomNamesRef.current,
           spawn: spawnRef.current,
           onLocalMove: (position) => callbacks.current.onLocalMove(position),
           onAgentActivate: (agentId) =>
@@ -138,20 +124,23 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
         setReady(false);
       });
 
+      const observer = new ResizeObserver((entries) => {
+        const size = entries[0]?.contentRect;
+        if (!size || !scene) return;
+        scene.resize(size.width, size.height);
+      });
+      observer.observe(wrapper);
+
       return () => {
         cancelled = true;
+        observer.disconnect();
         scene?.destroy();
         sceneRef.current = null;
         setReady(false);
       };
-      // The scene owns its lifetime; data and zoom changes are pushed through
-      // the effects below instead of remounting the renderer.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // The scene owns its lifetime; data changes are pushed through the
+      // effects below instead of remounting the renderer.
     }, []);
-
-    useEffect(() => {
-      sceneRef.current?.setZoom(zoom);
-    }, [zoom, ready]);
 
     useEffect(() => {
       sceneRef.current?.setPeers(peers);
@@ -169,25 +158,20 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       <div
         ref={wrapperRef}
         className={cn(
-          "flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden",
+          "relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-muted/30 shadow-sm",
           className,
         )}
       >
         <div
           ref={hostRef}
           data-testid="office-canvas"
-          className="relative shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/30 shadow-sm"
-          style={{
-            width: Math.round(OFFICE_WORLD.width * zoom),
-            height: Math.round(OFFICE_WORLD.height * zoom),
-          }}
-        >
-          {!ready && (
-            <div className="absolute inset-0 flex items-center justify-center text-body text-muted-foreground">
-              <span className="animate-pulse">…</span>
-            </div>
-          )}
-        </div>
+          className="absolute inset-0 overflow-hidden"
+        />
+        {!ready && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-body text-muted-foreground">
+            <span className="animate-pulse">…</span>
+          </div>
+        )}
       </div>
     );
   },

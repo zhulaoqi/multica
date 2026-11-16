@@ -2,7 +2,7 @@
   "page": {
     "title": "Office",
     "connecting": "Connecting to the office…",
-    "hint": "Move with WASD or the arrow keys, or click the floor to walk.",
+    "hint": "Walk with WASD or the arrow keys, scroll to zoom, and walk up to an agent to press T.",
     "error": "Lost the office connection. Reconnecting…",
     "roster": {
       "title": "In the office",
@@ -19,6 +19,15 @@
       "queued": "Waiting",
       "idle": "Idle",
       "offline": "Offline"
+    },
+    "rooms": {
+      "meeting": "Meeting room",
+      "kitchen": "Pantry",
+      "server": "Server room",
+      "office": "Open office",
+      "lounge": "Lounge",
+      "reception": "Reception",
+      "print": "Print room"
     },
     "interact": {
       "hint": "Press {{key}} to talk to {{name}}",

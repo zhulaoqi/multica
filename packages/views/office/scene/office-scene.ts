@@ -10,27 +10,42 @@ import { createCharacter, type BubbleKind, type CharacterView } from "./characte
 import {
   buildOfficeLayout,
   directionFor,
+  feetAtTile,
   findPath,
   isWalkableWorld,
   stepTowards,
   type OfficeLayout,
+  type RoomId,
 } from "./layout";
 import { OfficeAgents, type OfficeAgentView, type OfficeHuman } from "./agents";
 import { nearestAgent, nearestVisitSlot } from "./interactions";
 import { isTypingTarget } from "./input";
-import { drawRoom } from "./room";
+import { buildRoom, type RoomView } from "./room";
+import { loadOfficeTextures } from "./textures";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
-const WALK_SPEED = 92;
+const WALK_SPEED = 96;
 const PEER_SPEED = 110;
 const PEER_LERP = 12;
 const PEER_REPATH_DISTANCE = 8;
 const HUMAN_CHAT_RADIUS = 20;
 const HUMAN_CHAT_MS = 1100;
-/** How close the player must stand to see "press T" on an agent. */
-const FOCUS_RADIUS = 30;
+/** How close the player must stand to see the interact hint on an agent. */
+const FOCUS_RADIUS = 34;
 /** Standing this close counts as "at the agent", so the panel opens now. */
-const ENGAGE_RADIUS = 48;
+const ENGAGE_RADIUS = 52;
+const MIN_ZOOM = 1.25;
+const MAX_ZOOM = 3;
+const CAMERA_LERP = 6;
+/** Room names sit above everything so they stay readable as people walk by. */
+const ROOM_LABEL_Z = 1_000_000;
+/** Floor row just behind the reception desk (desk spans x 22..27 on row 27). */
+const RECEPTION_STAFF_ROW = 26;
+/** Sheets 1 and 7 are the long-haired characters in dresses. */
+const RECEPTIONISTS = [
+  { sheet: 1, tx: 23 },
+  { sheet: 7, tx: 24 },
+] as const;
 const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
 
 export type { OfficeAgentView };
@@ -43,8 +58,11 @@ export interface OfficePeerView extends OfficePeer {
 export interface OfficeSceneOptions {
   pixi: typeof import("pixi.js");
   host: HTMLElement;
-  zoom: number;
+  width: number;
+  height: number;
   localName: string;
+  /** Display name per room, drawn in each room's top-left corner. */
+  roomNames: Record<RoomId, string>;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent and wants to talk to it. */
@@ -77,22 +95,27 @@ interface PeerAvatar {
 }
 
 /**
- * Owns the Pixi application, the room, the avatars, and input.
+ * Owns the Pixi application, the room, the avatars, the camera, and input.
  *
  * React hands it peers and agents; it never fetches. The only data flowing
- * back out is the local position (throttled by the room hook) and agent
- * clicks. Agents animate themselves through OfficeAgents.
+ * back out is the local position (throttled by the room hook), agent
+ * activation, and the focused agent for the interact hint. Agents animate
+ * themselves through OfficeAgents.
  */
 export class OfficeScene {
   private readonly app: Application;
   private readonly pixi: typeof import("pixi.js");
   private readonly layout: OfficeLayout;
+  private readonly camera: Container;
   private readonly world: Container;
-  private readonly overlay: Container;
+  private readonly room: RoomView;
   private readonly local: LocalAvatar;
   private readonly peers = new Map<string, PeerAvatar>();
+  private readonly receptionists: CharacterView[] = [];
   private readonly agents: OfficeAgents;
-  private zoom: number;
+  private zoom = 2;
+  private camX = 0;
+  private camY = 0;
   private accumulator = 0;
   private keys = new Set<string>();
   private destroyed = false;
@@ -106,17 +129,18 @@ export class OfficeScene {
   private constructor(
     pixi: typeof import("pixi.js"),
     app: Application,
+    camera: Container,
     world: Container,
-    overlay: Container,
+    room: RoomView,
     options: OfficeSceneOptions,
     layout: OfficeLayout,
   ) {
     this.pixi = pixi;
     this.app = app;
+    this.camera = camera;
     this.world = world;
-    this.overlay = overlay;
+    this.room = room;
     this.layout = layout;
-    this.zoom = options.zoom;
     this.onLocalMove = options.onLocalMove;
     this.onAgentActivate = options.onAgentActivate;
     this.onFocusAgentChange = options.onFocusAgentChange;
@@ -126,18 +150,23 @@ export class OfficeScene {
       label: this.createLabel(options.localName),
       x: options.spawn.x,
       y: options.spawn.y,
-      dir: "down",
+      dir: "up",
       path: [],
       walking: false,
       lastReported: "",
       chatUntil: 0,
     };
+    this.local.view.container.addChild(this.local.label);
+    this.local.label.position.set(0, -42);
+    this.local.label.style.fontSize = 8.5;
+    this.world.addChild(this.local.view.container);
     this.applyLocalPosition();
 
     this.agents = new OfficeAgents({
       pixi,
       layout,
       world,
+      screens: room.screens,
       createLabel: (text) => this.createLabel(text),
       onAgentActivate: (agentId) => this.activateAgent(agentId),
     });
@@ -147,8 +176,8 @@ export class OfficeScene {
     const { pixi } = options;
     const app = new pixi.Application();
     await app.init({
-      width: Math.round(OFFICE_WORLD.width * options.zoom),
-      height: Math.round(OFFICE_WORLD.height * options.zoom),
+      width: Math.max(1, options.width),
+      height: Math.max(1, options.height),
       backgroundAlpha: 0,
       antialias: false,
       roundPixels: true,
@@ -158,18 +187,28 @@ export class OfficeScene {
     });
     app.canvas.style.display = "block";
     app.canvas.style.imageRendering = "pixelated";
+    app.canvas.style.width = "100%";
+    app.canvas.style.height = "100%";
     options.host.appendChild(app.canvas);
 
+    const camera = new pixi.Container();
     const world = new pixi.Container();
-    const overlay = new pixi.Container();
-    const layout = buildOfficeLayout();
-    world.addChild(drawRoom(pixi, layout));
-    world.scale.set(options.zoom);
-    app.stage.addChild(world, overlay);
+    world.sortableChildren = true;
+    camera.addChild(world);
+    app.stage.addChild(camera);
 
-    const scene = new OfficeScene(pixi, app, world, overlay, options, layout);
-    scene.world.addChild(scene.local.view.container);
+    await loadOfficeTextures(pixi);
+    const layout = buildOfficeLayout();
+    const room = buildRoom(pixi, layout);
+    room.floor.zIndex = -1000;
+    world.addChild(room.floor);
+    for (const prop of room.props) world.addChild(prop);
+
+    const scene = new OfficeScene(pixi, app, camera, world, room, options, layout);
+    scene.addRoomLabels(options.roomNames);
+    scene.addReceptionists();
     scene.attachInput();
+    scene.updateCamera(1, true);
     app.ticker.add(scene.update);
     return scene;
   }
@@ -188,9 +227,12 @@ export class OfficeScene {
       const view = createCharacter(this.pixi, { kind: "human", seed: peer.userId });
       view.container.position.set(peer.x, peer.y);
       this.world.addChild(view.container);
+      const label = this.createLabel(peer.name);
+      label.position.set(0, -42);
+      view.container.addChild(label);
       this.peers.set(peer.userId, {
         view,
-        label: this.createLabel(peer.name),
+        label,
         x: peer.x,
         y: peer.y,
         target: { x: peer.x, y: peer.y, dir: peer.dir },
@@ -202,7 +244,6 @@ export class OfficeScene {
     for (const [userId, peer] of this.peers) {
       if (present.has(userId)) continue;
       peer.view.container.destroy({ children: true });
-      peer.label.destroy();
       this.peers.delete(userId);
     }
   }
@@ -210,18 +251,21 @@ export class OfficeScene {
   setAgents(agents: OfficeAgentView[]) {
     if (this.destroyed) return;
     this.agents.setAgents(agents);
-    this.agents.syncLabels(this.zoom);
   }
 
-  setZoom(zoom: number) {
-    if (this.destroyed || zoom === this.zoom) return;
-    this.zoom = zoom;
-    this.world.scale.set(zoom);
-    this.app.renderer.resize(
-      Math.round(OFFICE_WORLD.width * zoom),
-      Math.round(OFFICE_WORLD.height * zoom),
-    );
-    this.syncLabels();
+  /** The wrapper resized; keep the same world area in view. */
+  resize(width: number, height: number) {
+    if (this.destroyed) return;
+    this.app.renderer.resize(Math.max(1, width), Math.max(1, height));
+    this.app.stage.hitArea = new this.pixi.Rectangle(0, 0, width, height);
+    this.updateCamera(1, true);
+  }
+
+  zoomBy(delta: number) {
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.zoom + delta));
+    if (next === this.zoom) return;
+    this.zoom = next;
+    this.updateCamera(1, true);
   }
 
   /**
@@ -269,6 +313,21 @@ export class OfficeScene {
     if (this.destroyed) return;
     this.agents.playEmote(agentId, kind, performance.now());
   }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.detachInput();
+    this.app.ticker.remove(this.update);
+    this.agents.destroy();
+    try {
+      this.app.destroy({ removeView: true }, { children: true });
+    } catch {
+      // The renderer may already be gone after a hot reload; nothing to do.
+    }
+  }
+
+  // -- internals ---------------------------------------------------------
 
   private face(x: number, y: number) {
     this.local.dir =
@@ -325,16 +384,43 @@ export class OfficeScene {
     this.onFocusAgentChange(id);
   }
 
-  destroy() {
-    if (this.destroyed) return;
-    this.destroyed = true;
-    this.detachInput();
-    this.app.ticker.remove(this.update);
-    this.agents.destroy();
-    try {
-      this.app.destroy({ removeView: true }, { children: true });
-    } catch {
-      // The renderer may already be gone after a hot reload; nothing to do.
+  private addRoomLabels(names: Record<RoomId, string>) {
+    for (const room of this.layout.rooms) {
+      const tag = new this.pixi.Container();
+      const text = new this.pixi.Text({
+        text: names[room.id],
+        style: {
+          fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+          fontSize: 8,
+          fontWeight: "700",
+          fill: 0xf8fafc,
+        },
+      });
+      text.resolution = 4;
+      text.position.set(4, 2);
+      const plate = new this.pixi.Graphics();
+      plate
+        .roundRect(0, 0, Math.ceil(text.width) + 8, Math.ceil(text.height) + 4, 3)
+        .fill({ color: 0x0f172a, alpha: 0.72 });
+      tag.addChild(plate, text);
+      tag.position.set(room.rect.x * OFFICE_WORLD.tile + 3, room.rect.y * OFFICE_WORLD.tile + 3);
+      tag.zIndex = ROOM_LABEL_Z;
+      tag.eventMode = "none";
+      this.world.addChild(tag);
+    }
+  }
+
+  /** Two front-desk staff stand behind the reception desk, clear of the agent station at (26, 26). */
+  private addReceptionists() {
+    for (const { sheet, tx } of RECEPTIONISTS) {
+      const view = createCharacter(this.pixi, { kind: "human", seed: `receptionist-${sheet}`, sheet });
+      const feet = feetAtTile(tx, RECEPTION_STAFF_ROW);
+      view.container.position.set(feet.x, feet.y);
+      view.container.zIndex = Math.round(feet.y);
+      view.container.eventMode = "none";
+      view.setDir("down");
+      this.world.addChild(view.container);
+      this.receptionists.push(view);
     }
   }
 
@@ -343,14 +429,14 @@ export class OfficeScene {
       text,
       style: {
         fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
-        fontSize: 10,
-        fill: 0xffffff,
-        stroke: { color: 0x111827, width: 3 },
+        fontSize: 9,
+        fontWeight: "600",
+        fill: 0xf8fafc,
+        stroke: { color: 0x0f172a, width: 2.5, join: "round" },
       },
     });
-    label.anchor.set(0.5, 1);
+    label.anchor.set(0.5, 0);
     label.resolution = 2;
-    this.overlay.addChild(label);
     return label;
   }
 
@@ -372,12 +458,42 @@ export class OfficeScene {
       ...Array.from(this.peers.values(), (peer) => ({ x: peer.x, y: peer.y })),
     ];
     this.agents.update(dt, now, humans);
+    this.room.update(now);
     this.updateFocus();
+    this.updateCamera(dt);
 
     this.local.view.tick(now);
     for (const peer of this.peers.values()) peer.view.tick(now);
-    this.syncLabels();
+    for (const view of this.receptionists) view.tick(now);
   };
+
+  /** Keeps the player centred, clamped to the world edges. */
+  private updateCamera(dt: number, snap = false) {
+    const zoom = this.zoom;
+    const viewW = this.app.screen.width / zoom;
+    const viewH = this.app.screen.height / zoom;
+    const clampAxis = (value: number, view: number, world: number) => {
+      if (view >= world) return (world - view) / 2;
+      return Math.min(Math.max(value, 0), world - view);
+    };
+    const targetX = clampAxis(this.local.x - viewW / 2, viewW, OFFICE_WORLD.width);
+    const targetY = clampAxis(this.local.y - viewH / 2, viewH, OFFICE_WORLD.height);
+
+    if (snap) {
+      this.camX = targetX;
+      this.camY = targetY;
+    } else {
+      const factor = Math.min(1, dt * CAMERA_LERP);
+      this.camX += (targetX - this.camX) * factor;
+      this.camY += (targetY - this.camY) * factor;
+    }
+
+    this.camera.scale.set(zoom);
+    this.camera.position.set(
+      Math.round(-this.camX * zoom),
+      Math.round(-this.camY * zoom),
+    );
+  }
 
   /** Humans standing next to each other trade chat balloons. */
   private stepHumanChat(now: number) {
@@ -459,6 +575,7 @@ export class OfficeScene {
       Math.round(this.local.x),
       Math.round(this.local.y),
     );
+    this.local.view.container.zIndex = Math.round(this.local.y);
     this.local.view.setDir(this.local.dir);
   }
 
@@ -513,23 +630,9 @@ export class OfficeScene {
       }
 
       peer.view.container.position.set(Math.round(peer.x), Math.round(peer.y));
+      peer.view.container.zIndex = Math.round(peer.y);
       peer.view.setWalking(moved);
     }
-  }
-
-  private syncLabels() {
-    const zoom = this.zoom;
-    this.local.label.position.set(
-      Math.round(this.local.view.container.x * zoom),
-      Math.round(this.local.view.container.y * zoom) + 8,
-    );
-    for (const peer of this.peers.values()) {
-      peer.label.position.set(
-        Math.round(peer.view.container.x * zoom),
-        Math.round(peer.view.container.y * zoom) + 8,
-      );
-    }
-    this.agents.syncLabels(zoom);
   }
 
   private attachInput() {
@@ -538,10 +641,11 @@ export class OfficeScene {
     stage.hitArea = new this.pixi.Rectangle(
       0,
       0,
-      Math.round(OFFICE_WORLD.width * this.zoom),
-      Math.round(OFFICE_WORLD.height * this.zoom),
+      this.app.screen.width,
+      this.app.screen.height,
     );
     stage.on("pointerdown", this.handleStagePointerDown);
+    this.app.canvas.addEventListener("wheel", this.handleWheel, { passive: false });
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("blur", this.handleBlur);
@@ -549,10 +653,16 @@ export class OfficeScene {
 
   private detachInput() {
     this.app.stage?.off("pointerdown", this.handleStagePointerDown);
+    this.app.canvas.removeEventListener("wheel", this.handleWheel);
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleBlur);
   }
+
+  private handleWheel = (event: WheelEvent) => {
+    event.preventDefault();
+    this.zoomBy(event.deltaY < 0 ? 0.25 : -0.25);
+  };
 
   private handleStagePointerDown = (event: FederatedPointerEvent) => {
     const point = this.world.toLocal(event.global);

@@ -1,20 +1,21 @@
 /**
- * Draws and animates one character per agent: working agents walk to their
- * desk and type, queued agents gather at the meeting table (the visible
- * collaboration pose), idle agents drift between their desk and shared spots,
- * and offline agents sit dimmed with a sleep balloon. Anyone standing next to
- * an agent gets a chat balloon from it.
+ * One character per agent, driven by the behaviour runtime.
+ *
+ * Presence decides the root routine: working agents type in bursts and run
+ * errands, queued agents sit at the meeting table, idle agents wander between
+ * lounge spots, and offline agents walk out and vanish. Errands are pushed on
+ * top of the current routine, so an agent that leaves for coffee comes back to
+ * exactly the typing burst it interrupted.
  *
  * Everything here is local presentation: React only hands over id, name, and
  * status, and the module never fetches.
  */
 
-import type { Container, Graphics, Text as PixiText } from "pixi.js";
+import type { Container, Text as PixiText } from "pixi.js";
 import {
   createCharacter,
   type AgentDeskStatus,
   type BubbleKind,
-  type CharacterPose,
   type CharacterView,
 } from "./characters";
 import {
@@ -23,29 +24,39 @@ import {
   stepTowards,
   TILE,
   type OfficeLayout,
-} from "./layout";
-import {
-  assignStations,
-  deskStation,
-  idleErrandAt,
-  leisureStations,
-  meetingStations,
   type Station,
-} from "./stations";
-import type { InteractableAgent } from "./interactions";
-import { hashSeed } from "./room";
+} from "./layout";
+import { nearestVisitSlot, type InteractableAgent } from "./interactions";
+import { pickVisitPair } from "./social";
+import { Behavior, type Action } from "./behavior/behavior";
+import { createRng } from "./behavior/rng";
+import { Reservations } from "./behavior/reservations";
+import {
+  idleRoot,
+  leaveRoutine,
+  meetingRoutine,
+  workRoot,
+  type RoutineEnv,
+} from "./behavior/routines";
+import { hashSeed, type DeskScreen } from "./room";
 
-const WALK_SPEED = 74;
+const WALK_SPEED = 84;
 const CHAT_RADIUS = 26;
-const AGENT_CHAT_RADIUS = 18;
+const AGENT_CHAT_RADIUS = 20;
 const CHAT_MS = 1200;
 const CHAT_COOLDOWN_MS = 3500;
 const CHAT_COOLDOWN_SPREAD_MS = 4500;
-const ERRAND_MIN_MS = 5000;
-const ERRAND_SPREAD_MS = 6000;
-const SPAWN_STAGGER_MS = 280;
-const EMOTE_MS = 1600;
-const GLOW_COLOR = 0x9fe3f5;
+const SPAWN_STAGGER_MS = 320;
+const EMOTE_MS = 1800;
+/** How far apart two agents may be to consider a walk-over chat. */
+const SOCIAL_RADIUS = 260;
+const SOCIAL_COOLDOWN_MS = 13_000;
+const SOCIAL_COOLDOWN_SPREAD_MS = 12_000;
+const FIRST_SOCIAL_DELAY_MS = 9_000;
+const TALK_MS_MIN = 3_800;
+const TALK_MS_SPREAD = 2_600;
+const BUBBLE_MS_MIN = 1_300;
+const BUBBLE_MS_SPREAD = 900;
 
 export interface OfficeAgentView {
   id: string;
@@ -59,36 +70,57 @@ export interface OfficeHuman {
   y: number;
 }
 
+/**
+ * An agent walking over to a colleague's desk for a chat. The visitor's
+ * routine is suspended, not restarted, so it picks up exactly where it left
+ * off after the conversation.
+ */
+interface VisitState {
+  targetId: string;
+  phase: "walk" | "talk" | "return";
+  until: number;
+  nextBubbleAt: number;
+}
+
 interface Avatar {
   id: string;
   view: CharacterView;
   label: PixiText;
   status: AgentDeskStatus;
   home: Station;
+  env: RoutineEnv;
+  brain: Behavior;
   x: number;
   y: number;
   path: { x: number; y: number }[];
   goalKey: string;
-  errandStation: Station | null;
-  errandStep: number;
-  errandUntil: number;
-  meetingSeat: Station | null;
-  leisureSpot: Station | null;
+  moving: boolean;
   chatUntil: number;
   nextChatAt: number;
   /** One-off reaction (ack, success) that outranks the routine balloon. */
   emoteKind: BubbleKind | null;
   emoteUntil: number;
-  moving: boolean;
-  glow: Graphics | null;
-  /** Wall clock at which the avatar steps through the doorway; null while queued. */
+  /** False until the staggered walk-in starts. */
+  active: boolean;
+  /** Wall clock at which the walk-in begins; null while unassigned. */
   spawnAt: number | null;
+  hidden: boolean;
+  screen: DeskScreen | null;
+  /** Colleague this agent is walking over to, when it is the visitor. */
+  visit: VisitState | null;
+  /** Colleague standing right here talking to it, when it is the host. */
+  chatPartnerId: string | null;
+  /** Earliest wall clock at which this agent will start a social visit. */
+  nextVisitAt: number;
+  /** Next chat balloon beat during a conversation. */
+  nextBubbleAt: number;
 }
 
 export interface OfficeAgentsOptions {
   pixi: typeof import("pixi.js");
   layout: OfficeLayout;
   world: Container;
+  screens: DeskScreen[];
   createLabel: (text: string) => PixiText;
   onAgentActivate: (agentId: string) => void;
 }
@@ -99,13 +131,16 @@ export class OfficeAgents {
   private readonly world: Container;
   private readonly createLabel: (text: string) => PixiText;
   private readonly onAgentActivate: (agentId: string) => void;
+  private readonly stations: Station[];
   private readonly homes: Station[];
-  private readonly meeting: Station[];
-  private readonly leisure: Station[];
-  private readonly glowByIndex = new Map<number, Graphics>();
+  private readonly meetingSeats: Station[];
+  private readonly reservations: Reservations;
+  private readonly screens: DeskScreen[];
   private readonly avatars = new Map<string, Avatar>();
   private spawnQueue = 0;
   private engagedId: string | null = null;
+  /** Wall clock before which no new social visit starts. */
+  private nextSocialAt = 0;
 
   constructor(options: OfficeAgentsOptions) {
     this.pixi = options.pixi;
@@ -113,30 +148,25 @@ export class OfficeAgents {
     this.world = options.world;
     this.createLabel = options.createLabel;
     this.onAgentActivate = options.onAgentActivate;
+    this.screens = options.screens;
 
-    this.meeting = meetingStations(options.layout);
-    this.leisure = leisureStations(options.layout);
+    const overflow: Station[] = options.layout.overflowSpots.map((spot, index) => ({
+      key: `overflow:${index}`,
+      x: spot.x,
+      y: spot.y,
+      dir: spot.dir,
+      kind: "desk",
+      seat: false,
+      capacity: 1,
+    }));
+
+    this.stations = [...options.layout.stations, ...overflow];
+    this.meetingSeats = this.stations.filter((station) => station.kind === "meeting");
     this.homes = [
-      ...options.layout.agents.map((slot, index) => deskStation(slot, index)),
-      ...options.layout.overflowSpots.map((spot, index) => ({
-        key: `overflow:${index}`,
-        x: spot.x,
-        y: spot.y,
-        dir: spot.dir,
-        kind: "desk" as const,
-        seat: false,
-      })),
+      ...options.layout.agents.map((_, index) => this.stations.find((s) => s.key === `desk:${index}`)!),
+      ...overflow,
     ];
-
-    options.layout.agents.forEach((slot, index) => {
-      const glow = new this.pixi.Graphics();
-      glow
-        .rect(slot.desk.x * TILE + 7, slot.desk.y * TILE - 13, 18, 13)
-        .fill({ color: GLOW_COLOR, alpha: 0.22 });
-      glow.alpha = 0;
-      this.world.addChild(glow);
-      this.glowByIndex.set(index, glow);
-    });
+    this.reservations = new Reservations(this.stations);
   }
 
   setAgents(agents: OfficeAgentView[]) {
@@ -147,52 +177,25 @@ export class OfficeAgents {
       present.add(agent.id);
       const existing = this.avatars.get(agent.id);
       if (existing) {
-        existing.status = agent.status;
-        existing.view.setStatus(agent.status);
         if (existing.label.text !== agent.name) existing.label.text = agent.name;
+        if (existing.status !== agent.status) {
+          const wasOffline = existing.status === "offline";
+          existing.status = agent.status;
+          existing.view.setStatus(agent.status);
+          // Presence flickers constantly while an agent works. Only a
+          // departure is urgent; any other change waits for the current
+          // routine (and any errand on top of it) to finish, so the agent
+          // never resets mid-walk or mid-pour.
+          if (agent.status === "offline" || wasOffline) {
+            this.cancelSocial(existing, false);
+            this.rebuildRoot(existing);
+          } else {
+            existing.brain.setNextRoot(this.rootFor(existing));
+          }
+        }
         return;
       }
-      const view = createCharacter(this.pixi, {
-        kind: "agent",
-        seed: agent.id,
-        status: agent.status,
-      });
-      // Agents walk in from the doorway instead of popping into their chairs.
-      const entrance = this.entranceFor(index);
-      view.container.position.set(entrance.x, entrance.y);
-      view.container.visible = false;
-      view.setDir("up");
-      view.container.eventMode = "static";
-      view.container.cursor = "pointer";
-      view.container.hitArea = new this.pixi.Rectangle(-8, -30, 16, 32);
-      view.container.on("pointerdown", (event) => {
-        event.stopPropagation();
-        this.onAgentActivate(agent.id);
-      });
-      this.world.addChild(view.container);
-      this.avatars.set(agent.id, {
-        id: agent.id,
-        view,
-        label: this.createLabel(agent.name),
-        status: agent.status,
-        home,
-        x: entrance.x,
-        y: entrance.y,
-        path: [],
-        goalKey: "",
-        errandStation: null,
-        errandStep: 0,
-        errandUntil: 0,
-        meetingSeat: null,
-        leisureSpot: null,
-        chatUntil: 0,
-        nextChatAt: 0,
-        emoteKind: null,
-        emoteUntil: 0,
-        moving: false,
-        glow: this.glowByIndex.get(index) ?? null,
-        spawnAt: null,
-      });
+      this.avatars.set(agent.id, this.createAvatar(agent, home, index));
     });
 
     for (const [id, avatar] of this.avatars) {
@@ -203,27 +206,35 @@ export class OfficeAgents {
   }
 
   /**
-   * Marks the agent the panel is open for. Engagement stops idle wandering and
-   * turns the agent toward the nearest human; null returns it to its routine.
-   * The id is kept even if the avatar is not on stage yet.
+   * Marks the agent the panel is open for. Engagement pauses the routine and
+   * turns the agent toward the nearest human; null resumes it where it left
+   * off.
    */
   engage(agentId: string | null) {
+    if (this.engagedId === agentId) return;
+    const previous = this.engagedId ? this.avatars.get(this.engagedId) : null;
+    if (previous) {
+      this.cancelSocial(previous);
+      previous.brain.resume();
+    }
     this.engagedId = agentId;
+    const next = agentId ? this.avatars.get(agentId) : null;
+    if (next) this.cancelSocial(next);
   }
 
   /** Visible agents, in world space, for proximity checks in the scene. */
   positions(): InteractableAgent[] {
-    const positions: InteractableAgent[] = [];
+    const list: InteractableAgent[] = [];
     for (const avatar of this.avatars.values()) {
-      if (!avatar.view.container.visible) continue;
-      positions.push({ id: avatar.id, x: avatar.x, y: avatar.y });
+      if (!this.isVisible(avatar)) continue;
+      list.push({ id: avatar.id, x: avatar.x, y: avatar.y });
     }
-    return positions;
+    return list;
   }
 
   positionOf(agentId: string): InteractableAgent | null {
     const avatar = this.avatars.get(agentId);
-    if (!avatar || !avatar.view.container.visible) return null;
+    if (!avatar || !this.isVisible(avatar)) return null;
     return { id: avatar.id, x: avatar.x, y: avatar.y };
   }
 
@@ -236,210 +247,238 @@ export class OfficeAgents {
   }
 
   update(dtSeconds: number, nowMs: number, humans: OfficeHuman[]) {
-    // Newcomers file through the doorway one at a time instead of walking in
-    // as a clump; a whole batch arriving later still gets spaced out.
-    let queuedSpawns = 0;
-    for (const avatar of this.avatars.values()) {
-      if (avatar.spawnAt !== null) continue;
-      avatar.spawnAt = nowMs + this.spawnQueue * SPAWN_STAGGER_MS;
-      this.spawnQueue += 1;
-      queuedSpawns += 1;
-    }
-    if (queuedSpawns === 0) this.spawnQueue = 0;
+    const dtMs = Math.min(dtSeconds, 0.1) * 1000;
+    this.scheduleSpawns(nowMs);
 
-    this.assignSharedSpots();
     for (const avatar of this.avatars.values()) {
-      if (avatar.spawnAt !== null && nowMs < avatar.spawnAt) continue;
-      if (!avatar.view.container.visible) avatar.view.container.visible = true;
+      if (!avatar.active) continue;
 
-      let target: Station;
-      if (this.holdsPosition(avatar)) {
-        // Talking to the local player: stay put and drop the routine so
-        // leaving the conversation replans from wherever it stopped.
-        target = this.holdStation(avatar, humans);
-        avatar.goalKey = "";
+      const view = avatar.view;
+      const engaged = avatar.id === this.engagedId;
+      let moving = false;
+
+      if (engaged) {
+        // The player is talking to this agent: hold its whole routine where
+        // it is, face the player, and hand it back afterwards.
+        this.cancelSocial(avatar);
+        avatar.brain.suspend();
         avatar.path = [];
-      } else {
-        target = this.stationFor(avatar, nowMs);
-        if (target.key !== avatar.goalKey) {
-          avatar.goalKey = target.key;
-          avatar.path = findPath(
-            this.layout,
-            { x: avatar.x, y: avatar.y },
-            { x: target.x, y: target.y },
+        avatar.goalKey = "";
+        view.setWalking(false);
+        view.setPose("stand");
+        const human = nearestHuman(humans, avatar.x, avatar.y);
+        if (human) {
+          view.setDir(
+            directionFor(human.x - avatar.x, human.y - avatar.y) ?? "down",
           );
         }
+        avatar.chatUntil = nowMs + 400;
+        view.setProp(avatar.brain.state().prop);
+      } else if (avatar.visit || avatar.chatPartnerId) {
+        // Walking over to a colleague, chatting, or walking back. The
+        // suspended routine resumes seconds later, mid-burst.
+        avatar.brain.suspend();
+        moving = this.stepSocialAvatar(avatar, dtSeconds, nowMs);
+        view.setWalking(moving);
+        view.setPose("stand");
+        view.setProp(avatar.brain.state().prop);
+      } else {
+        avatar.brain.resume();
+        avatar.brain.update(dtMs);
+        const state = avatar.brain.state();
+        avatar.hidden = state.hidden;
+
+        if (state.goal) {
+          const station = this.stationOf(state.goal);
+          if (station) {
+            if (state.goal !== avatar.goalKey) {
+              avatar.goalKey = state.goal;
+              avatar.path = findPath(
+                this.layout,
+                { x: avatar.x, y: avatar.y },
+                { x: station.x, y: station.y },
+              );
+            }
+            moving = this.advance(avatar, dtSeconds, station);
+            if (!moving) {
+              avatar.goalKey = "";
+              avatar.brain.arrived();
+            }
+          }
+        } else {
+          avatar.goalKey = "";
+        }
+
+        view.setWalking(moving);
+
+        if (moving) {
+          view.setPose("stand");
+        } else {
+          const human = nearestHuman(humans, avatar.x, avatar.y);
+          view.setPose(state.pose);
+          if (state.dir) view.setDir(state.dir);
+          if (human && avatar.brain.currentAction()?.kind !== "walk") {
+            if (nowMs >= avatar.nextChatAt) {
+              avatar.chatUntil = nowMs + CHAT_MS;
+              avatar.nextChatAt = nowMs + CHAT_MS + this.chatCooldown(avatar.id);
+            }
+          }
+        }
+
+        view.setProp(state.prop);
       }
 
-      const moving = this.advance(avatar, dtSeconds, target);
       avatar.moving = moving;
-      avatar.view.setWalking(moving);
-      if (moving) {
-        avatar.view.setPose("stand");
-      } else {
-        avatar.view.setPose(this.poseFor(avatar, target));
-        avatar.view.setDir(target.dir);
-      }
-
-      const human = nearestHuman(humans, avatar.x, avatar.y);
-      if (human && !moving) {
-        if (!target.seat) {
-          avatar.view.setDir(
-            directionFor(human.x - avatar.x, human.y - avatar.y) ?? target.dir,
-          );
-        }
-        // Greet in bursts rather than chattering non-stop while someone stands nearby.
-        if (nowMs >= avatar.nextChatAt) {
-          avatar.chatUntil = nowMs + CHAT_MS;
-          avatar.nextChatAt = nowMs + CHAT_MS + this.chatCooldown(avatar.id);
-        }
-      }
-
-      avatar.view.tick(nowMs);
-      this.pulseGlow(avatar, target, nowMs);
+      view.container.visible = avatar.active && !avatar.hidden;
+      view.tick(nowMs);
+      this.pulseScreen(avatar, nowMs);
     }
+
+    this.stepSocialScheduler(nowMs);
     this.stepAgentChat(nowMs);
+
     for (const avatar of this.avatars.values()) {
+      avatar.label.visible = this.isVisible(avatar);
       avatar.view.setBubble(this.bubbleFor(avatar, nowMs));
-    }
-  }
-
-  /** Two agents standing together chat, which is the "talking shop" beat. */
-  private stepAgentChat(nowMs: number) {
-    const list = [...this.avatars.values()].filter(
-      (avatar) => !avatar.moving && avatar.view.container.visible,
-    );
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i]!;
-        const b = list[j]!;
-        if (nowMs < a.nextChatAt || nowMs < b.nextChatAt) continue;
-        if (Math.hypot(a.x - b.x, a.y - b.y) >= AGENT_CHAT_RADIUS) continue;
-        const cooldown = this.chatCooldown(`${a.id}:${b.id}`);
-        a.chatUntil = nowMs + CHAT_MS;
-        b.chatUntil = nowMs + CHAT_MS;
-        a.nextChatAt = nowMs + CHAT_MS + cooldown;
-        b.nextChatAt = nowMs + CHAT_MS + cooldown;
-      }
-    }
-  }
-
-  private chatCooldown(seed: string): number {
-    return CHAT_COOLDOWN_MS + (hashSeed(seed) % CHAT_COOLDOWN_SPREAD_MS);
-  }
-
-  syncLabels(zoom: number) {
-    for (const avatar of this.avatars.values()) {
-      avatar.label.visible = avatar.view.container.visible;
-      avatar.label.position.set(
-        Math.round(avatar.view.container.x * zoom),
-        Math.round(avatar.view.container.y * zoom) + 16,
-      );
     }
   }
 
   destroy() {
     for (const avatar of this.avatars.values()) this.dispose(avatar);
     this.avatars.clear();
-    for (const glow of this.glowByIndex.values()) glow.destroy();
-    this.glowByIndex.clear();
   }
 
-  /** Queued agents take turns at the table; idle agents take turns at spots. */
-  private assignSharedSpots() {
-    const queued = [...this.avatars.values()]
-      .filter((avatar) => avatar.status === "queued")
-      .sort((a, b) => a.id.localeCompare(b.id));
-    queued.forEach((avatar, index) => {
-      avatar.meetingSeat = assignStations(this.meeting, index);
+  // -- avatar lifecycle ---------------------------------------------------
+
+  private createAvatar(agent: OfficeAgentView, home: Station, index: number): Avatar {
+    const view = createCharacter(this.pixi, {
+      kind: "agent",
+      seed: agent.id,
+      status: agent.status,
+    });
+    view.container.position.set(this.layout.door.x, this.layout.door.y);
+    view.container.visible = false;
+    view.setDir("up");
+    view.container.eventMode = "static";
+    view.container.cursor = "pointer";
+    view.container.hitArea = new this.pixi.Rectangle(-8, -32, 16, 33);
+    view.container.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.onAgentActivate(agent.id);
+    });
+    this.world.addChild(view.container);
+
+    const label = this.createLabel(agent.name);
+    label.position.set(0, -42);
+    view.container.addChild(label);
+
+    const env: RoutineEnv = {
+      home: home.key,
+      rng: createRng(`${agent.id}:${index}`),
+      stations: this.stations,
+      isFree: (key) => this.reservations.isFree(key),
+    };
+    const brain = new Behavior(agent.id, {
+      stationExists: (key) => this.stationOf(key) !== null,
+      isFree: (key) => this.reservations.isFree(key),
+      tryReserve: (key, owner) => this.reservations.tryAcquire(key, owner),
+      release: (key, owner) => this.reservations.release(key, owner),
     });
 
-    const idle = [...this.avatars.values()]
-      .filter((avatar) => avatar.status === "idle")
-      .sort((a, b) => a.id.localeCompare(b.id));
-    idle.forEach((avatar, index) => {
-      avatar.leisureSpot = assignStations(this.leisure, index);
-    });
-  }
-
-  /** Walk-in points inside the bottom doorway, spread so avatars never stack. */
-  private entranceFor(index: number): { x: number; y: number } {
     return {
-      x: (13.5 + (index % 4)) * TILE,
-      y: 16 * TILE + 14 - Math.floor(index / 4) * 9,
+      id: agent.id,
+      view,
+      label,
+      status: agent.status,
+      home,
+      env,
+      brain,
+      x: this.layout.door.x,
+      y: this.layout.door.y,
+      path: [],
+      goalKey: "",
+      moving: false,
+      chatUntil: 0,
+      nextChatAt: 0,
+      emoteKind: null,
+      emoteUntil: 0,
+      active: false,
+      spawnAt: null,
+      hidden: false,
+      screen: this.desksFor(index),
+      visit: null,
+      chatPartnerId: null,
+      nextVisitAt: 0,
+      nextBubbleAt: 0,
     };
   }
 
-  /** Engaged agents pause their routine once they finish the current step. */
-  private holdsPosition(avatar: Avatar): boolean {
-    return (
-      avatar.id === this.engagedId &&
-      !avatar.moving &&
-      avatar.path.length === 0
-    );
+  /** Newcomers file through the doorway one at a time. */
+  private scheduleSpawns(nowMs: number) {
+    let waiting = 0;
+    for (const avatar of this.avatars.values()) {
+      if (avatar.active) continue;
+      if (avatar.spawnAt === null) {
+        avatar.spawnAt = nowMs + this.spawnQueue * SPAWN_STAGGER_MS;
+        this.spawnQueue += 1;
+      }
+      waiting += 1;
+      if (nowMs < avatar.spawnAt) continue;
+      avatar.active = true;
+      avatar.nextVisitAt =
+        nowMs + FIRST_SOCIAL_DELAY_MS + (hashSeed(avatar.id) % 9_000);
+      this.rebuildRoot(avatar);
+    }
+    if (waiting === 0) this.spawnQueue = 0;
   }
 
-  private holdStation(avatar: Avatar, humans: OfficeHuman[]): Station {
-    const human = nearestHuman(humans, avatar.x, avatar.y);
-    const canTurn = avatar.status !== "working" && avatar.status !== "offline";
-    return {
-      key: "engage",
-      x: avatar.x,
-      y: avatar.y,
-      dir:
-        canTurn && human
-          ? directionFor(human.x - avatar.x, human.y - avatar.y) ?? avatar.home.dir
-          : avatar.home.dir,
-      kind: avatar.home.kind,
-      // Seated routines keep their pose; everyone else turns to face the player.
-      seat: !canTurn,
-    };
+  private rebuildRoot(avatar: Avatar) {
+    avatar.brain.setRoot(null);
+    avatar.hidden = false;
+    avatar.brain.setRoot(this.rootFor(avatar));
   }
 
-  private stationFor(avatar: Avatar, nowMs: number): Station {
+  /** The loop an agent's presence implies, resolved lazily so it never
+   *  picks a meeting seat or home station before it is actually needed. */
+  private rootFor(avatar: Avatar): (() => Action[]) | null {
     switch (avatar.status) {
       case "working":
-      case "offline":
-        return avatar.home;
+        return workRoot(avatar.env);
       case "queued":
-        return avatar.meetingSeat ?? avatar.home;
-      case "idle": {
-        // Stagger the first errand so the whole room does not stand up at once.
-        if (avatar.errandUntil === 0) {
-          avatar.errandUntil = nowMs + (hashSeed(avatar.id) % ERRAND_SPREAD_MS);
-          return avatar.home;
-        }
-        if (nowMs < avatar.errandUntil && avatar.errandStation) {
-          return avatar.errandStation;
-        }
-        avatar.errandStep += 1;
-        const next = idleErrandAt(avatar.errandStep, avatar.home, avatar.leisureSpot);
-        avatar.errandStation = next;
-        avatar.errandUntil =
-          nowMs + ERRAND_MIN_MS + (hashSeed(`${avatar.id}:${avatar.errandStep}`) % ERRAND_SPREAD_MS);
-        return next;
+        return () => {
+          const seat = this.meetingSeats.find((item) =>
+            this.reservations.isFree(item.key),
+          );
+          if (seat) return meetingRoutine(avatar.env, seat.key);
+          return workRoot(avatar.env)();
+        };
+      case "idle":
+        return idleRoot(avatar.env);
+      case "offline": {
+        let left = false;
+        return () => {
+          if (left) return [];
+          left = true;
+          return leaveRoutine("door");
+        };
       }
     }
   }
 
-  private poseFor(avatar: Avatar, target: Station): CharacterPose {
-    if (avatar.status === "offline") return "sleep";
-    if (avatar.status === "working") return "type";
-    if (avatar.id === this.engagedId) return "stand";
-    if (avatar.status === "queued") return "read";
-    return target.seat ? "read" : "stand";
+  // -- per-frame helpers --------------------------------------------------
+
+  private isVisible(avatar: Avatar) {
+    return avatar.active && !avatar.hidden;
   }
 
-  private bubbleFor(avatar: Avatar, nowMs: number): BubbleKind | null {
-    if (nowMs < avatar.emoteUntil && avatar.emoteKind) return avatar.emoteKind;
-    if (avatar.status === "offline") return "sleep";
-    if (avatar.id === this.engagedId) return "chat";
-    if (nowMs < avatar.chatUntil) return "chat";
-    if (avatar.status === "queued") return "dots";
-    return null;
+  private stationOf(key: string): Station | null {
+    return this.stations.find((station) => station.key === key) ?? null;
   }
 
-  /** Steps toward the station; true while still moving. */
+  private desksFor(index: number): DeskScreen | null {
+    return this.screens[index] ?? null;
+  }
+
   private advance(avatar: Avatar, dtSeconds: number, target: Station): boolean {
     let remaining = WALK_SPEED * dtSeconds;
     const view = avatar.view.container;
@@ -469,26 +508,289 @@ export class OfficeAgents {
         avatar.y = step.y;
         if (step.dir) avatar.view.setDir(step.dir);
         moving = true;
+      } else {
+        avatar.x = target.x;
+        avatar.y = target.y;
+        if (target.dir) avatar.view.setDir(target.dir);
       }
     }
 
     view.position.set(Math.round(avatar.x), Math.round(avatar.y));
+    view.zIndex = Math.round(avatar.y);
     return moving;
   }
 
-  private pulseGlow(avatar: Avatar, target: Station, nowMs: number) {
-    if (!avatar.glow) return;
+  /** Move along `avatar.path` with no station target, for social walks. */
+  private advanceAlong(avatar: Avatar, dtSeconds: number): boolean {
+    let remaining = WALK_SPEED * dtSeconds;
+    let moving = false;
+
+    while (remaining > 0 && avatar.path.length > 0) {
+      const waypoint = avatar.path[0]!;
+      const distance = Math.hypot(waypoint.x - avatar.x, waypoint.y - avatar.y);
+      const step = stepTowards({ x: avatar.x, y: avatar.y }, waypoint, remaining);
+      avatar.x = step.x;
+      avatar.y = step.y;
+      if (step.dir) avatar.view.setDir(step.dir);
+      moving = true;
+      if (step.arrived) {
+        avatar.path.shift();
+        remaining -= distance;
+      } else {
+        remaining = 0;
+      }
+    }
+
+    avatar.view.container.position.set(Math.round(avatar.x), Math.round(avatar.y));
+    avatar.view.container.zIndex = Math.round(avatar.y);
+    return moving;
+  }
+
+  /** One frame of a walk-over conversation: approach, talk, then walk back. */
+  private stepSocialAvatar(avatar: Avatar, dtSeconds: number, nowMs: number): boolean {
+    // Host: stop working, turn toward the colleague, trade speech balloons.
+    if (avatar.chatPartnerId) {
+      avatar.path = [];
+      const visitor = this.avatars.get(avatar.chatPartnerId);
+      if (!visitor || !this.isVisible(visitor)) {
+        avatar.chatPartnerId = null;
+        return false;
+      }
+      const dir = directionFor(visitor.x - avatar.x, visitor.y - avatar.y);
+      if (dir) avatar.view.setDir(dir);
+      if (nowMs >= avatar.nextBubbleAt) {
+        avatar.chatUntil = nowMs + BUBBLE_MS_MIN;
+        avatar.nextBubbleAt =
+          nowMs + BUBBLE_MS_MIN + (hashSeed(avatar.id) % BUBBLE_MS_SPREAD);
+      }
+      return false;
+    }
+
+    const visit = avatar.visit;
+    if (!visit) return false;
+    const target = this.avatars.get(visit.targetId);
+
+    if (visit.phase === "talk") {
+      if (!target || !this.isVisible(target) || target.chatPartnerId !== avatar.id) {
+        this.startReturn(avatar, visit);
+        return false;
+      }
+      const dir = directionFor(target.x - avatar.x, target.y - avatar.y);
+      if (dir) avatar.view.setDir(dir);
+      if (nowMs >= visit.nextBubbleAt) {
+        avatar.chatUntil = nowMs + BUBBLE_MS_MIN;
+        target.chatUntil = nowMs + BUBBLE_MS_MIN;
+        visit.nextBubbleAt =
+          nowMs +
+          BUBBLE_MS_MIN +
+          (hashSeed(`${avatar.id}:${target.id}:${Math.floor(nowMs / 5_000)}`) %
+            BUBBLE_MS_SPREAD);
+      }
+      if (nowMs >= visit.until) this.startReturn(avatar, visit);
+      return false;
+    }
+
+    // Walk over, or walk back after the chat.
+    const moving = this.advanceAlong(avatar, dtSeconds);
+    if (avatar.path.length > 0 || moving) return moving;
+
+    if (visit.phase === "walk") {
+      if (!target || !this.isVisible(target) || target.chatPartnerId !== avatar.id) {
+        this.startReturn(avatar, visit);
+        return false;
+      }
+      visit.phase = "talk";
+      visit.until =
+        nowMs +
+        TALK_MS_MIN +
+        (hashSeed(`${avatar.id}:${target.id}`) % TALK_MS_SPREAD);
+      visit.nextBubbleAt = nowMs;
+      // Open with a hand-off beat: an alert on the visitor and an ack on the
+      // host, so the walk-over reads as bringing news, then as conversation.
+      avatar.emoteKind = "alert";
+      avatar.emoteUntil = nowMs + 900;
+      target.emoteKind = "check";
+      target.emoteUntil = nowMs + 1_300;
+      return false;
+    }
+
+    // Back home: hand control back to the suspended routine.
+    avatar.visit = null;
+    avatar.brain.resume();
+    return false;
+  }
+
+  /** Ends the chat and walks the visitor back to its own desk. */
+  private startReturn(avatar: Avatar, visit: VisitState) {
+    const target = this.avatars.get(visit.targetId);
+    if (target?.chatPartnerId === avatar.id) {
+      target.chatPartnerId = null;
+      target.nextBubbleAt = 0;
+    }
+    visit.phase = "return";
+    avatar.path = findPath(
+      this.layout,
+      { x: avatar.x, y: avatar.y },
+      { x: avatar.home.x, y: avatar.home.y },
+    );
+  }
+
+  /**
+   * Occasionally picks two agents at their desks and sends one over to chat.
+   * Conversations are coordinated as a pair so both turn toward each other and
+   * neither restarts its current task.
+   */
+  private stepSocialScheduler(nowMs: number) {
+    if (this.nextSocialAt === 0) this.nextSocialAt = nowMs + 6_000;
+    if (nowMs < this.nextSocialAt) return;
+
+    const ready = [...this.avatars.values()].filter((avatar) =>
+      this.canSocialize(avatar, nowMs),
+    );
+    const pair = pickVisitPair(ready, SOCIAL_RADIUS);
+    const visitor = pair ? this.avatars.get(pair.visitor.id) : null;
+    const host = pair ? this.avatars.get(pair.host.id) : null;
+    if (!visitor || !host) {
+      this.nextSocialAt = nowMs + 4_000;
+      return;
+    }
+
+    const slot = nearestVisitSlot(
+      this.layout,
+      { x: host.x, y: host.y },
+      { x: visitor.x, y: visitor.y },
+    );
+    const path = slot
+      ? findPath(this.layout, { x: visitor.x, y: visitor.y }, slot)
+      : [];
+    if (!slot || path.length === 0) {
+      this.nextSocialAt = nowMs + 4_000;
+      return;
+    }
+
+    visitor.visit = {
+      targetId: host.id,
+      phase: "walk",
+      until: 0,
+      nextBubbleAt: 0,
+    };
+    visitor.path = path;
+    visitor.goalKey = "";
+    host.chatPartnerId = visitor.id;
+    host.nextBubbleAt = 0;
+
+    this.nextSocialAt =
+      nowMs +
+      SOCIAL_COOLDOWN_MS +
+      (hashSeed(visitor.id + host.id) % SOCIAL_COOLDOWN_SPREAD_MS);
+    visitor.nextVisitAt = nowMs + 35_000 + (hashSeed(visitor.id) % 30_000);
+    host.nextVisitAt = nowMs + 35_000 + (hashSeed(host.id) % 30_000);
+  }
+
+  private canSocialize(avatar: Avatar, nowMs: number): boolean {
+    if (!this.isVisible(avatar)) return false;
+    if (avatar.id === this.engagedId) return false;
+    if (avatar.status !== "working" && avatar.status !== "idle") return false;
+    if (avatar.visit || avatar.chatPartnerId) return false;
+    if (avatar.moving || avatar.path.length > 0) return false;
+    if (nowMs < avatar.nextVisitAt) return false;
+    // Only agents at their own desk take part. The visitor walks home to a
+    // spot that matches the routine it suspended, so it resumes in place.
+    if (Math.hypot(avatar.x - avatar.home.x, avatar.y - avatar.home.y) > TILE) {
+      return false;
+    }
+    const action = avatar.brain.currentAction();
+    return action !== null && action.kind !== "walk";
+  }
+
+  /**
+   * Ends a walk-over or conversation. An interrupted visitor goes home first
+   * and only then resumes its routine, so nobody is left typing in a hallway.
+   * `sendHome = false` is for agents leaving the office entirely.
+   */
+  private cancelSocial(avatar: Avatar, sendHome = true) {
+    if (avatar.visit) {
+      const visit = avatar.visit;
+      const target = this.avatars.get(visit.targetId);
+      if (target?.chatPartnerId === avatar.id) {
+        target.chatPartnerId = null;
+        target.nextBubbleAt = 0;
+      }
+      if (!sendHome) {
+        avatar.visit = null;
+        avatar.path = [];
+      } else if (visit.phase !== "return") {
+        visit.phase = "return";
+        avatar.path = findPath(
+          this.layout,
+          { x: avatar.x, y: avatar.y },
+          { x: avatar.home.x, y: avatar.home.y },
+        );
+      }
+    }
+    if (avatar.chatPartnerId) {
+      const visitor = this.avatars.get(avatar.chatPartnerId);
+      if (visitor?.visit?.targetId === avatar.id) {
+        // The visitor is still on the clock: it walks home and resumes.
+        this.cancelSocial(visitor);
+      }
+      avatar.chatPartnerId = null;
+      avatar.nextBubbleAt = 0;
+    }
+  }
+
+  private pulseScreen(avatar: Avatar, nowMs: number) {
+    if (!avatar.screen) return;
     const atHome =
-      target.kind === "desk" &&
+      avatar.status === "working" &&
       Math.hypot(avatar.x - avatar.home.x, avatar.y - avatar.home.y) < 2;
-    const phase = 0.55 + 0.45 * Math.sin(nowMs / 320);
-    avatar.glow.alpha =
-      avatar.status === "working" && atHome ? 0.22 + 0.2 * phase : 0;
+    avatar.screen.setOn(atHome, nowMs);
+  }
+
+
+  private bubbleFor(avatar: Avatar, nowMs: number): BubbleKind | null {
+    if (!this.isVisible(avatar)) return null;
+    if (nowMs < avatar.emoteUntil && avatar.emoteKind) return avatar.emoteKind;
+    if (avatar.status === "offline" && avatar.brain.currentAction()?.kind === "walk") {
+      return null;
+    }
+    if (avatar.id === this.engagedId) return "chat";
+    const state = avatar.brain.state();
+    if (state.bubble) return state.bubble;
+    if (nowMs < avatar.chatUntil) return "chat";
+    if (avatar.status === "queued" && !avatar.moving) return "dots";
+    return null;
+  }
+
+  /** Two agents standing together chat, which is the "talking shop" beat. */
+  private stepAgentChat(nowMs: number) {
+    const list = [...this.avatars.values()].filter(
+      (avatar) => !avatar.moving && this.isVisible(avatar),
+    );
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i]!;
+        const b = list[j]!;
+        if (nowMs < a.nextChatAt || nowMs < b.nextChatAt) continue;
+        if (Math.hypot(a.x - b.x, a.y - b.y) >= AGENT_CHAT_RADIUS) continue;
+        const cooldown = this.chatCooldown(`${a.id}:${b.id}`);
+        a.chatUntil = nowMs + CHAT_MS;
+        b.chatUntil = nowMs + CHAT_MS;
+        a.nextChatAt = nowMs + CHAT_MS + cooldown;
+        b.nextChatAt = nowMs + CHAT_MS + cooldown;
+      }
+    }
+  }
+
+  private chatCooldown(seed: string): number {
+    return CHAT_COOLDOWN_MS + (hashSeed(seed) % CHAT_COOLDOWN_SPREAD_MS);
   }
 
   private dispose(avatar: Avatar) {
+    this.cancelSocial(avatar, false);
+    this.reservations.releaseAll(avatar.id);
+    avatar.brain.stop();
     avatar.view.container.destroy({ children: true });
-    avatar.label.destroy();
   }
 }
 

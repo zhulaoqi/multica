@@ -312,7 +312,9 @@ describe("OfficePage", () => {
     expect(screen.getByText("Nobody else is here yet.")).toBeInTheDocument();
     expect(screen.getByText("No agents in this workspace yet.")).toBeInTheDocument();
     expect(
-      screen.getByText("Move with WASD or the arrow keys, or click the floor to walk."),
+      screen.getByText(
+        "Walk with WASD or the arrow keys, scroll to zoom, and walk up to an agent to press T.",
+      ),
     ).toBeInTheDocument();
   });
 

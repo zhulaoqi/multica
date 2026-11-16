@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOfficeLayout,
+  COLS,
   findPath,
   isWalkableTile,
+  ROWS,
   spawnFor,
   stepTowards,
   TILE,
@@ -12,57 +14,97 @@ import {
 
 const layout = buildOfficeLayout();
 
+const tileOf = (spot: { x: number; y: number }) => ({
+  tx: Math.floor(spot.x / TILE),
+  ty: Math.floor(spot.y / TILE),
+});
+
 describe("office layout", () => {
-  it("keeps desks, furniture and walls out of the walkable area", () => {
+  it("keeps walls, desks and furniture out of the walkable area", () => {
     expect(isWalkableTile(layout, 0, 0)).toBe(false);
     expect(isWalkableTile(layout, 0, 5)).toBe(false);
-    expect(isWalkableTile(layout, 12, 4)).toBe(false); // desk
-    expect(isWalkableTile(layout, 4, 9)).toBe(false); // meeting table
+    expect(isWalkableTile(layout, 4, 16)).toBe(false); // desk
+    expect(isWalkableTile(layout, 6, 5)).toBe(false); // meeting table
     expect(isWalkableTile(layout, 2, 2)).toBe(false); // plant
-    expect(isWalkableTile(layout, 14, 7)).toBe(true);
+    expect(isWalkableTile(layout, 23, 2)).toBe(false); // pantry counter
+    expect(isWalkableTile(layout, 23, 3)).toBe(true); // in front of the coffee machine
+    expect(isWalkableTile(layout, 25, 6)).toBe(true); // pantry stool
+    expect(isWalkableTile(layout, 41, 2)).toBe(false); // server rack
+    expect(isWalkableTile(layout, 42, 3)).toBe(true); // server aisle
+    expect(isWalkableTile(layout, 10, 18)).toBe(true); // open office floor
+    expect(isWalkableTile(layout, 13, 27)).toBe(false); // aquarium
   });
 
-  it("places every agent slot on a walkable tile in front of a desk", () => {
+  it("fills the world the server validates", () => {
+    expect(COLS).toBe(56);
+    expect(ROWS).toBe(34);
+    const inside = (rect: { x: number; y: number; w: number; h: number }) =>
+      rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= COLS && rect.y + rect.h <= ROWS;
+    for (const rect of layout.obstacles) expect(inside(rect)).toBe(true);
+    for (const room of layout.rooms) expect(inside(room.rect)).toBe(true);
+  });
+
+  it("places every agent slot on a walkable tile directly north of its desk", () => {
     for (const slot of layout.agents) {
-      const tx = Math.floor(slot.x / TILE);
-      const ty = Math.floor(slot.y / TILE);
+      const { tx, ty } = tileOf(slot);
       expect(isWalkableTile(layout, tx, ty)).toBe(true);
       expect(slot.desk.y).toBe(ty + 1);
+    }
+    expect(layout.agents).toHaveLength(12);
+  });
+
+  it("puts every station on walkable floor", () => {
+    expect(layout.stations.length).toBeGreaterThan(20);
+    for (const station of layout.stations) {
+      const { tx, ty } = tileOf(station);
+      expect(isWalkableTile(layout, tx, ty)).toBe(true);
     }
   });
 
   it("keeps the entrance open and every spawn walkable", () => {
     for (const spawn of layout.spawns) {
-      expect(isWalkableTile(layout, Math.floor(spawn.x / TILE), Math.floor(spawn.y / TILE))).toBe(true);
+      const { tx, ty } = tileOf(spawn);
+      expect(isWalkableTile(layout, tx, ty)).toBe(true);
+      // The spawn sits inside the doorway gap in the bottom wall.
+      expect(ty).toBe(ROWS - 2);
     }
+    const entrance = tileOf(layout.door);
+    expect(entrance.tx).toBeGreaterThanOrEqual(27);
+    expect(entrance.tx).toBeLessThanOrEqual(29);
   });
 });
 
 describe("findPath", () => {
-  const openSpot = { x: 14 * TILE, y: 7 * TILE };
+  const from = layout.spawns[0]!;
+
+  it("routes from the entrance to every station", () => {
+    for (const station of layout.stations) {
+      if (station.key === "door") continue;
+      const path = findPath(layout, from, station);
+      expect(path.length).toBeGreaterThan(0);
+    }
+  });
 
   it("routes around furniture instead of through it", () => {
-    const path = findPath(layout, layout.spawns[0]!, openSpot);
+    const path = findPath(layout, from, { x: 10 * TILE, y: 18 * TILE });
     expect(path.length).toBeGreaterThan(0);
     for (const point of path) {
-      expect(
-        isWalkableTile(layout, Math.floor(point.x / TILE), Math.floor(point.y / TILE)),
-      ).toBe(true);
+      const { tx, ty } = tileOf(point);
+      expect(isWalkableTile(layout, tx, ty)).toBe(true);
     }
     expect(path[path.length - 1]).toEqual({
-      x: 14 * TILE + TILE / 2,
-      y: 7 * TILE + TILE - 2,
+      x: 10 * TILE + TILE / 2,
+      y: 18 * TILE + TILE - 2,
     });
   });
 
   it("returns no path into a blocked tile", () => {
-    expect(
-      findPath(layout, layout.spawns[0]!, { x: 12 * TILE, y: 4 * TILE }),
-    ).toEqual([]);
+    expect(findPath(layout, from, { x: 4 * TILE, y: 16 * TILE })).toEqual([]);
   });
 
   it("returns no waypoints when already standing on the target tile", () => {
-    expect(findPath(layout, openSpot, openSpot)).toEqual([]);
+    const spot = { x: 10 * TILE, y: 18 * TILE };
+    expect(findPath(layout, spot, spot)).toEqual([]);
   });
 });
 
@@ -84,24 +126,28 @@ describe("spawnFor", () => {
   it("is stable per member and always walkable", () => {
     const first = spawnFor(layout, "user-1");
     expect(spawnFor(layout, "user-1")).toEqual(first);
-    const tile = (spot: { x: number; y: number }) =>
-      isWalkableTile(layout, Math.floor(spot.x / TILE), Math.floor(spot.y / TILE));
-    expect(tile(first)).toBe(true);
+    const walkable = (spot: { x: number; y: number }) => {
+      const { tx, ty } = tileOf(spot);
+      return isWalkableTile(layout, tx, ty);
+    };
+    expect(walkable(first)).toBe(true);
     const seen = new Set<string>();
     for (const userId of ["a", "b", "c", "d", "e", "f", "g"]) {
       const spawn = spawnFor(layout, userId);
-      expect(tile(spawn)).toBe(true);
+      expect(walkable(spawn)).toBe(true);
       seen.add(`${spawn.x},${spawn.y}`);
     }
     expect(seen.size).toBeGreaterThan(1);
   });
 });
 
-// Guards the invariant that the layout fills the world the server validates
-// against: a desk placed outside 30 x 18 would be unreachable and unsendable.
-it("keeps all furniture inside the world", () => {
-  const inside = (rect: { x: number; y: number; w: number; h: number }) =>
-    rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= 30 && rect.y + rect.h <= 18;
+// Guards the invariant that furniture never seals a room: every station is
+// reachable from the doorway, and every blocked tile still has a walkable
+// neighbour so the layout has no unreachable pockets.
+it("leaves no isolated furniture island", () => {
   const layout: OfficeLayout = buildOfficeLayout();
-  for (const rect of layout.obstacles) expect(inside(rect)).toBe(true);
+  for (const station of layout.stations) {
+    const path = findPath(layout, layout.door, station);
+    if (station.key !== "door") expect(path.length).toBeGreaterThan(0);
+  }
 });

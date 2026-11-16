@@ -2,7 +2,7 @@
   "page": {
     "title": "办公室",
     "connecting": "正在连接办公室…",
-    "hint": "用 WASD 或方向键移动，也可以点击地面走过去。",
+    "hint": "WASD/方向键走动，滚轮缩放，走到智能体旁边按 T 互动。",
     "error": "办公室连接已断开，正在重连…",
     "roster": {
       "title": "在办公室",
@@ -18,6 +18,15 @@
       "queued": "排队中",
       "idle": "空闲",
       "offline": "离线"
+    },
+    "rooms": {
+      "meeting": "会议室",
+      "kitchen": "茶水间",
+      "server": "机房",
+      "office": "办公区",
+      "lounge": "休息区",
+      "reception": "前台",
+      "print": "打印室"
     },
     "interact": {
       "hint": "按 {{key}} 与 {{name}} 聊天",

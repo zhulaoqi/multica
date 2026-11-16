@@ -11,11 +11,11 @@ import (
 // join its own workspace's office.
 const ScopeOffice = "office"
 
-// Logical world size in pixels. Clients render a 16px tile grid at 3x zoom;
+// Logical world size in pixels. Clients render a 16px tile grid on a camera;
 // the server only needs the bounds to reject nonsensical coordinates.
 const (
-	officeWorldWidth  = 480
-	officeWorldHeight = 288
+	officeWorldWidth  = 896
+	officeWorldHeight = 544
 )
 
 // Movement rate limit per connection: a burst for the first frames after a

@@ -1,6 +1,7 @@
-import type { Container } from "pixi.js";
+import type { Container, Graphics, Sprite } from "pixi.js";
 import type { OfficeDir } from "@multica/core/office";
-import { characterColors, hashSeed } from "./room";
+import { hashSeed } from "./room";
+import { CHARACTER_SHEETS, officeTextures, type CharacterRow } from "./textures";
 
 export type AgentDeskStatus = "working" | "queued" | "idle" | "offline";
 
@@ -12,16 +13,105 @@ export const STATUS_COLORS: Record<AgentDeskStatus, number> = {
 };
 
 /** How a character stands, sits, or works at its station. */
-export type CharacterPose = "stand" | "sit" | "type" | "read" | "sleep";
+export type CharacterPose =
+  | "stand"
+  | "sit"
+  | "type"
+  | "read"
+  | "sleep"
+  | "pour"
+  | "drink"
+  | "carry"
+  | "wave";
 
-/** Small speech balloon above the head. Drawn, never text, so it stays pixel-crisp. */
+/** Something a character holds while walking an errand. */
+export type CharacterProp = "none" | "cup" | "paper";
+
+/** Small speech balloon above the head. Drawn as pixels, never text. */
 export type BubbleKind = "dots" | "alert" | "check" | "chat" | "sleep";
 
-const AGENT_SHELL = 0xe2e8ee;
-const AGENT_HANDS = 0x94a3b8;
 const BUBBLE_POP_MS = 180;
-const BUBBLE_HEIGHT = 12;
-const BUBBLE_TOP = -47;
+/** Bottom of the balloon tail, above the name label. */
+const BUBBLE_BOTTOM = -43;
+
+const WALK_FRAMES = [0, 1, 2, 1] as const;
+const WALK_FRAME_MS = 150;
+const TYPE_FRAMES = [3, 4] as const;
+const TYPE_FRAME_MS = 300;
+const READ_FRAMES = [5, 6] as const;
+const READ_FRAME_MS = 600;
+const SEATED_FRAME = 7;
+const STAND_FRAME = 1;
+
+/**
+ * Seated frames are drawn higher in the sheet than walking ones; these offsets
+ * drop each facing onto the chair so the hips meet the seat.
+ */
+const SEATED_OFFSET: Record<CharacterRow, number> = { 0: 4, 1: 5, 2: 2 };
+
+// Pixel-agents balloon art: an 11 x 13 map, B = border, F = fill.
+const BUBBLE_FRAME = [
+  "_BBBBBBBBB_",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "BFFFFFFFFFB",
+  "_BBBBBBBBB_",
+  "____BBB____",
+  "_____B_____",
+] as const;
+const BUBBLE_INK = { border: 0x555566, fill: 0xeeeeff } as const;
+
+/** Icon pixels inside the balloon, as [column, row] pairs. */
+const BUBBLE_ICONS: Record<BubbleKind, { color: number; pixels: [number, number][] }> = {
+  dots: { color: 0x64748b, pixels: [[3, 5], [5, 5], [7, 5]] },
+  chat: { color: 0x4f9bd9, pixels: [[3, 5], [5, 5], [7, 5]] },
+  alert: { color: 0xcca700, pixels: [[5, 2], [5, 3], [5, 4], [5, 5], [5, 7]] },
+  check: { color: 0x44bb66, pixels: [[8, 3], [7, 4], [3, 5], [6, 5], [4, 6], [5, 6]] },
+  sleep: {
+    color: 0x555566,
+    pixels: [
+      [3, 2], [4, 2], [5, 2], [6, 2], [7, 2],
+      [6, 3], [5, 4], [4, 5],
+      [3, 6], [4, 6], [5, 6], [6, 6], [7, 6],
+    ],
+  },
+};
+
+function paintBubble(graphics: Graphics, kind: BubbleKind) {
+  graphics.clear();
+  const left = -5;
+  const top = -BUBBLE_FRAME.length;
+  BUBBLE_FRAME.forEach((line, row) => {
+    for (let col = 0; col < line.length; col++) {
+      const cell = line[col];
+      if (cell === "_") continue;
+      graphics
+        .rect(left + col, top + row, 1, 1)
+        .fill(cell === "B" ? BUBBLE_INK.border : BUBBLE_INK.fill);
+    }
+  });
+  const icon = BUBBLE_ICONS[kind];
+  for (const [col, row] of icon.pixels) {
+    graphics.rect(left + col, top + row, 1, 1).fill(icon.color);
+  }
+}
+
+/** Mean time between blinks, matching pixel-agents' blink cadence. */
+function blinkGap(focused: boolean): number {
+  const gap = Math.min(1.5 - Math.log(1 - Math.random()) * 3.5, 11);
+  return gap * (focused ? 1.5 : 1);
+}
+
+function rowFor(dir: OfficeDir): CharacterRow {
+  if (dir === "down") return 0;
+  if (dir === "up") return 1;
+  return 2;
+}
 
 export interface CharacterView {
   container: Container;
@@ -30,179 +120,160 @@ export interface CharacterView {
   /** Agent availability; people do not use this. */
   setStatus(status: AgentDeskStatus): void;
   setPose(pose: CharacterPose): void;
+  setProp(prop: CharacterProp): void;
   setBubble(kind: BubbleKind | null): void;
-  /** Animates limbs and balloons; call once per rendered frame. */
+  /** Advances frames, blinks, and balloons; call once per rendered frame. */
   tick(timeMs: number): void;
 }
 
 interface CharacterOptions {
   kind: "human" | "agent";
   seed: string;
+  /** Pins a sheet index instead of hashing the seed. */
+  sheet?: number;
   status?: AgentDeskStatus;
 }
 
 /**
- * A 16 x 26 px pixel character drawn from rectangles: legs, body, arms, head,
- * and a hair cap (people) or visor and antenna (agents). Poses reuse the same
- * rig: sitting hides the legs and lowers the torso onto the chair, typing
- * beats the arms, reading raises a booklet, and sleeping tilts the head.
+ * A 16 x 32 sprite character from the pixel-agents sheets: walk, type, read,
+ * and seated frames per facing, plus a closed-eye sheet for blinking. The
+ * sprite is anchored on its feet, so the container position is the floor spot.
  */
 export function createCharacter(
   pixi: typeof import("pixi.js"),
   options: CharacterOptions,
 ): CharacterView {
-  const seed = hashSeed(options.seed);
+  const textures = officeTextures();
+  const sheet = textures.characters[(options.sheet ?? hashSeed(options.seed)) % CHARACTER_SHEETS]!;
+
   const container = new pixi.Container();
+  // Only the rig mirrors when the character faces left. Labels and balloons
+  // stay on the container so they never render backwards.
+  const rig = new pixi.Container();
+  container.addChild(rig);
 
   const shadow = new pixi.Graphics();
-  shadow.rect(-6, -2, 12, 3).fill({ color: 0x2f2a26, alpha: 0.18 });
-  container.addChild(shadow);
+  shadow.rect(-5, -1, 10, 2).fill({ color: 0x000000, alpha: 0.2 });
+  rig.addChild(shadow);
 
-  const pants = options.kind === "agent" ? 0x4b5563 : 0x394050;
-  const hand = options.kind === "agent" ? AGENT_HANDS : characterColors.skin(seed);
-  const leftLeg = new pixi.Graphics();
-  const rightLeg = new pixi.Graphics();
-  leftLeg.rect(-4, -5, 3, 5).fill(pants);
-  rightLeg.rect(1, -5, 3, 5).fill(pants);
-  container.addChild(leftLeg, rightLeg);
+  const sprite: Sprite = new pixi.Sprite(sheet[0]![0]![STAND_FRAME]!);
+  sprite.anchor.set(0.5, 1);
+  sprite.y = 1;
+  rig.addChild(sprite);
 
-  const upper = new pixi.Container();
-  const shirt = characterColors.shirt(seed);
-
-  const body = new pixi.Graphics();
-  body.rect(-5, -14, 10, 9).fill(shirt);
-  body.rect(-5, -14, 10, 2).fill({ color: 0xffffff, alpha: 0.18 });
-  upper.addChild(body);
-
-  const leftArm = new pixi.Graphics();
-  const rightArm = new pixi.Graphics();
-  leftArm.rect(-7, -13, 2, 5).fill(shirt);
-  leftArm.rect(-7, -8, 2, 2).fill(hand);
-  rightArm.rect(5, -13, 2, 5).fill(shirt);
-  rightArm.rect(5, -8, 2, 2).fill(hand);
-  upper.addChild(leftArm, rightArm);
-
-  const head = new pixi.Graphics();
-  if (options.kind === "agent") {
-    head.rect(-4, -21, 8, 7).fill(AGENT_SHELL);
-    head.rect(-3, -19, 6, 2).fill(0x38bdf8);
-    head.rect(0, -25, 1, 4).fill(0x94a3b8);
-    head.circle(0, -26, 1.5).fill(0xd9a34f);
-  } else {
-    head.rect(-4, -21, 8, 7).fill(characterColors.skin(seed));
-    head.rect(-4, -23, 8, 3).fill(characterColors.hair(seed));
-    head.rect(-5, -21, 1, 4).fill(characterColors.hair(seed));
-    head.rect(4, -21, 1, 3).fill(characterColors.hair(seed));
-  }
-  upper.addChild(head);
-
-  const book = new pixi.Graphics();
-  book.rect(-4, -13, 8, 5).fill(0xf4f6f8);
-  book.rect(-4, -13, 1, 5).fill(0xd0d7de);
-  book.rect(-3, -11, 6, 1).fill({ color: 0x94a3b8, alpha: 0.7 });
-  book.visible = false;
-  upper.addChild(book);
+  // Held items hang off the leading hand so pouring and carrying read clearly.
+  const prop = new pixi.Graphics();
+  prop.visible = false;
+  rig.addChild(prop);
 
   const statusDot = new pixi.Graphics();
   const paintStatus = (status: AgentDeskStatus) => {
     statusDot.clear();
-    statusDot.circle(0, -28, 2).fill(STATUS_COLORS[status]);
-    statusDot.circle(0, -28, 2).stroke({ color: 0xffffff, width: 0.5, alpha: 0.8 });
+    statusDot.rect(4, -31, 5, 5).fill(0x1f2430);
+    statusDot.rect(5, -30, 3, 3).fill(STATUS_COLORS[status]);
   };
   if (options.status) {
     paintStatus(options.status);
-    upper.addChild(statusDot);
+    container.addChild(statusDot);
   }
 
-  container.addChild(upper);
-
   const bubble = new pixi.Container();
-  const bubbleBg = new pixi.Graphics();
-  bubble.addChild(bubbleBg);
+  const bubbleArt = new pixi.Graphics();
+  bubble.addChild(bubbleArt);
+  bubble.position.set(0, BUBBLE_BOTTOM);
   bubble.visible = false;
   container.addChild(bubble);
 
   let walking = false;
   let pose: CharacterPose = "stand";
+  let row: CharacterRow = 0;
+  let propKind: CharacterProp = "none";
   let bubbleKind: BubbleKind | null = null;
   let bubbleStartedAt = 0;
   let bubblePopped = false;
 
-  const seated = () => pose !== "stand";
+  let lastTickMs: number | null = null;
+  let blinkIn = Math.random() * blinkGap(false);
+  let blinkShut = 0;
 
-  const paintBubble = (kind: BubbleKind) => {
-    bubbleBg.clear();
-    bubbleBg
-      .roundRect(-9, BUBBLE_TOP, 18, BUBBLE_HEIGHT, 3)
-      .fill({ color: 0xffffff, alpha: 0.96 })
-      .stroke({ color: 0x1f2937, width: 1 });
-    bubbleBg
-      .moveTo(-2, BUBBLE_TOP + BUBBLE_HEIGHT)
-      .lineTo(2, BUBBLE_TOP + BUBBLE_HEIGHT)
-      .lineTo(0, BUBBLE_TOP + BUBBLE_HEIGHT + 3)
-      .closePath()
-      .fill({ color: 0xffffff });
-    const centreY = BUBBLE_TOP + BUBBLE_HEIGHT / 2;
-    if (kind === "dots" || kind === "chat") {
-      const ink = kind === "chat" ? 0x4f9bd9 : 0x64748b;
-      for (const offset of [-4, 0, 4]) {
-        bubbleBg.circle(offset, centreY, 1.2).fill(ink);
-      }
-    } else if (kind === "alert") {
-      bubbleBg.rect(-0.8, BUBBLE_TOP + 2.5, 1.6, 4.5).fill(0xd9a34f);
-      bubbleBg.circle(0, BUBBLE_TOP + 9, 0.9).fill(0xd9a34f);
-    } else if (kind === "check") {
-      bubbleBg
-        .moveTo(-4, centreY)
-        .lineTo(-1, centreY + 3)
-        .lineTo(4, centreY - 3)
-        .stroke({ color: 0x16a34a, width: 1.6 });
-    } else {
-      // sleep: two stacked "z" glyphs, drawn as strokes so no font is needed
-      bubbleBg
-        .moveTo(-5, BUBBLE_TOP + 6)
-        .lineTo(-2, BUBBLE_TOP + 6)
-        .lineTo(-5, BUBBLE_TOP + 3)
-        .lineTo(-2, BUBBLE_TOP + 3)
-        .stroke({ color: 0x64748b, width: 1 });
-      bubbleBg
-        .moveTo(1, BUBBLE_TOP + 9)
-        .lineTo(3.5, BUBBLE_TOP + 9)
-        .lineTo(1, BUBBLE_TOP + 6.5)
-        .lineTo(3.5, BUBBLE_TOP + 6.5)
-        .stroke({ color: 0x94a3b8, width: 1 });
+  const seated = () => pose === "sit" || pose === "type" || pose === "read" || pose === "sleep";
+
+  const paintProp = () => {
+    prop.clear();
+    // Facing away, the hands are hidden behind the body.
+    if (propKind === "none" || row === 1) {
+      prop.visible = false;
+      return;
     }
+    prop.visible = true;
+    const x = row === 0 ? 4 : 5;
+    const y = seated() ? -10 : -13;
+    if (propKind === "cup") {
+      prop.rect(x, y, 4, 4).fill(0x1f2430);
+      prop.rect(x + 1, y + 1, 2, 2).fill(0xf8fafb);
+      prop.rect(x + 1, y, 2, 1).fill(0x6b4426);
+    } else {
+      prop.rect(x - 1, y - 1, 6, 5).fill(0x1f2430);
+      prop.rect(x, y, 4, 3).fill(0xf8fafb);
+      prop.rect(x + 1, y + 1, 2, 1).fill(0x94a3b8);
+    }
+  };
+
+  const frameFor = (timeMs: number): number => {
+    if (walking) return WALK_FRAMES[Math.floor(timeMs / WALK_FRAME_MS) % WALK_FRAMES.length]!;
+    switch (pose) {
+      case "type":
+        return TYPE_FRAMES[Math.floor(timeMs / TYPE_FRAME_MS) % TYPE_FRAMES.length]!;
+      case "read":
+        return READ_FRAMES[Math.floor(timeMs / READ_FRAME_MS) % READ_FRAMES.length]!;
+      case "sit":
+      case "sleep":
+        return SEATED_FRAME;
+      default:
+        return STAND_FRAME;
+    }
+  };
+
+  /** Advances the blink timer; true while the eyes are shut. */
+  const blink = (dtSeconds: number): boolean => {
+    if (blinkShut > 0) {
+      blinkShut -= dtSeconds;
+      return blinkShut > 0;
+    }
+    blinkIn -= dtSeconds;
+    if (blinkIn > 0) return false;
+    blinkShut = 0.1 + Math.random() * 0.07;
+    blinkIn = Math.random() < 0.15 ? 0.15 + Math.random() * 0.15 : blinkGap(pose === "type");
+    return true;
   };
 
   const view: CharacterView = {
     container,
     setWalking(next) {
       walking = next;
-      if (!walking) {
-        leftLeg.y = 0;
-        rightLeg.y = 0;
-      }
     },
     setDir(dir) {
-      if (dir === "left") container.scale.x = -1;
-      else if (dir === "right") container.scale.x = 1;
+      if (!dir) return;
+      const nextRow = rowFor(dir);
+      rig.scale.x = dir === "left" ? -1 : 1;
+      if (nextRow !== row) {
+        row = nextRow;
+        paintProp();
+      }
     },
     setStatus(status) {
       paintStatus(status);
-      if (!statusDot.parent) upper.addChild(statusDot);
+      if (!statusDot.parent) container.addChild(statusDot);
     },
     setPose(next) {
       if (next === pose) return;
       pose = next;
-      leftLeg.visible = !seated();
-      rightLeg.visible = !seated();
-      book.visible = pose === "read";
-      leftArm.y = 0;
-      rightArm.y = 0;
-      head.x = pose === "sleep" ? 1 : 0;
-      upper.y = seated() ? 3 : 0;
-      leftArm.alpha = pose === "sleep" ? 0.6 : 1;
-      rightArm.alpha = pose === "sleep" ? 0.6 : 1;
+      paintProp();
+    },
+    setProp(next) {
+      if (next === propKind) return;
+      propKind = next;
+      paintProp();
     },
     setBubble(kind) {
       if (kind === bubbleKind) return;
@@ -211,31 +282,25 @@ export function createCharacter(
         bubble.visible = false;
         return;
       }
-      paintBubble(kind);
+      paintBubble(bubbleArt, kind);
       bubble.visible = true;
       bubblePopped = false;
       bubbleStartedAt = performance.now();
     },
     tick(timeMs) {
-      if (walking && !seated()) {
-        const step = Math.floor(timeMs / 140) % 2;
-        leftLeg.y = step === 0 ? 0 : -1;
-        rightLeg.y = step === 0 ? -1 : 0;
-        upper.y = step === 0 ? 0 : -1;
-      } else if (walking) {
-        upper.y = 3;
-      } else if (!seated()) {
-        // Idle breathing: one pixel every ~1.2 s keeps the pixel grid crisp.
-        upper.y = Math.floor(timeMs / 1200) % 2 === 0 ? 0 : 0.5;
-      } else {
-        upper.y = 3;
-      }
+      const dt = lastTickMs === null ? 0 : Math.max(0, (timeMs - lastTickMs) / 1000);
+      lastTickMs = timeMs;
 
-      if (pose === "type") {
-        const beat = Math.floor(timeMs / 90) % 2;
-        leftArm.y = beat === 0 ? 0 : -1;
-        rightArm.y = beat === 0 ? -1 : 0;
-      }
+      const shut = pose === "sleep" || blink(dt);
+      const sitting = seated() && !walking;
+      sprite.texture = sheet[shut ? 1 : 0]![row]![frameFor(timeMs)]!;
+
+      let lift = 0;
+      if (!walking && pose === "pour") lift = Math.floor(timeMs / 440) % 2;
+      else if (!walking && pose === "wave") lift = Math.floor(timeMs / 260) % 2;
+      sprite.y = 1 + (sitting ? SEATED_OFFSET[row] : 0) - lift;
+      shadow.visible = !sitting;
+      prop.y = walking ? -(Math.floor(timeMs / WALK_FRAME_MS) % 2) : pose === "drink" ? -3 : 0;
 
       if (bubble.visible && !bubblePopped) {
         const elapsed = timeMs - bubbleStartedAt;

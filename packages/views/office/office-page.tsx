@@ -26,7 +26,7 @@ import { OfficeCanvas, type OfficeCanvasHandle } from "./components/office-canva
 import { OfficeRoster } from "./components/office-roster";
 import type { AgentDeskStatus } from "./scene/characters";
 import { isTypingTarget } from "./scene/input";
-import { buildOfficeLayout, spawnFor } from "./scene/layout";
+import { buildOfficeLayout, spawnFor, type RoomId } from "./scene/layout";
 import { useOpenAgentChat } from "./use-open-agent-chat";
 
 const EMPTY_AGENTS: Agent[] = [];
@@ -57,6 +57,18 @@ export function OfficePage() {
   const { byAgent } = useWorkspacePresenceMap(wsId || undefined);
 
   const layout = useMemo(() => buildOfficeLayout(), []);
+  const roomNames = useMemo<Record<RoomId, string>>(
+    () => ({
+      meeting: t(($) => $.page.rooms.meeting),
+      kitchen: t(($) => $.page.rooms.kitchen),
+      server: t(($) => $.page.rooms.server),
+      office: t(($) => $.page.rooms.office),
+      lounge: t(($) => $.page.rooms.lounge),
+      reception: t(($) => $.page.rooms.reception),
+      print: t(($) => $.page.rooms.print),
+    }),
+    [t],
+  );
   const spawn = useMemo<OfficePosition>(
     () => spawnFor(layout, user?.id ?? "guest"),
     [layout, user?.id],
@@ -211,6 +223,7 @@ export function OfficePage() {
               agents={agentViews}
               peers={peerViews}
               localName={localName}
+              roomNames={roomNames}
               spawn={spawn}
               onLocalMove={handleLocalMove}
               onAgentActivate={handleAgentActivate}

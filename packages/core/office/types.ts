@@ -9,9 +9,9 @@
 
 export const OFFICE_WORLD = {
   /** Logical world size in pixels. */
-  width: 480,
-  height: 288,
-  /** Tile size the room is drawn on (30 x 18 tiles). */
+  width: 896,
+  height: 544,
+  /** Tile size the room is drawn on (56 x 34 tiles). */
   tile: 16,
 } as const;
 

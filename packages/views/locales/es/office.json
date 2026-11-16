@@ -2,7 +2,7 @@
   "page": {
     "title": "Oficina",
     "connecting": "Conectando a la oficina…",
-    "hint": "Muévete con WASD o las flechas, o haz clic en el suelo para caminar.",
+    "hint": "Camina con WASD o las flechas, usa la rueda para acercar y acércate a un agente para pulsar T.",
     "error": "Conexión con la oficina perdida. Reconectando…",
     "roster": {
       "title": "En la oficina",
@@ -19,6 +19,15 @@
       "queued": "En cola",
       "idle": "Inactivo",
       "offline": "Desconectado"
+    },
+    "rooms": {
+      "meeting": "Sala de reuniones",
+      "kitchen": "Cocina",
+      "server": "Sala de servidores",
+      "office": "Oficina abierta",
+      "lounge": "Sala de descanso",
+      "reception": "Recepción",
+      "print": "Sala de impresión"
     },
     "interact": {
       "hint": "Pulsa {{key}} para hablar con {{name}}",

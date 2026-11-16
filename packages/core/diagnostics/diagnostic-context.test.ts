@@ -85,6 +85,11 @@ describe("bucketDiagnosticPath", () => {
     expect(bucketDiagnosticPath("/acme/agents")).toBe("/:slug/agents");
   });
 
+  it("keeps workspace pages without ids", () => {
+    expect(bucketDiagnosticPath("/acme/office")).toBe("/:slug/office");
+    expect(bucketDiagnosticPath("/acme/org")).toBe("/:slug/org");
+  });
+
   it("keeps pre-workspace routes intact", () => {
     expect(bucketDiagnosticPath("/login")).toBe("/login");
     expect(bucketDiagnosticPath("/workspaces/new")).toBe("/workspaces/new");

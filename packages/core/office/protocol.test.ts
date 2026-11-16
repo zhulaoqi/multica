@@ -53,8 +53,8 @@ describe("office protocol", () => {
 
 describe("clampToWorld", () => {
   it("clamps into the world bounds", () => {
-    expect(clampToWorld(-5, 400)).toEqual({ x: 0, y: 288 });
-    expect(clampToWorld(999, 12)).toEqual({ x: 480, y: 12 });
+    expect(clampToWorld(-5, 400)).toEqual({ x: 0, y: 400 });
+    expect(clampToWorld(9999, 12)).toEqual({ x: 896, y: 12 });
   });
 
   it("treats non-finite input as the origin", () => {
