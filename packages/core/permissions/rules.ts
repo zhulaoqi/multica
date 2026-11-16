@@ -53,6 +53,7 @@ export function canEditAgent(agent: Agent, ctx: PermissionContext): Decision {
  *   - permission_mode "public_to" + workspace target: any workspace member
  *   - permission_mode "public_to" + member target: only the matching user
  *   - team target: reserved, INERT in v1 (never grants)
+ *   - either mode: a department lead over the owner (`viewer_leads_owner`)
  */
 export function canAssignAgentToIssue(
   agent: Agent,
@@ -64,6 +65,12 @@ export function canAssignAgentToIssue(
 
   // The owner may always invoke their own agent, regardless of mode.
   if (agent.owner_id !== null && agent.owner_id === ctx.userId) {
+    return ALLOW;
+  }
+
+  // The server computes the org-tree relation per viewer; leads may command
+  // their team's agents whatever the permission mode.
+  if (agent.viewer_leads_owner === true) {
     return ALLOW;
   }
 

@@ -29,6 +29,8 @@ import (
 //         agent/system principals) may invoke.
 //       * member target    -> only the specific user may invoke.
 //       * team target       -> reserved, inert in V1.
+//   - either mode -> a department lead may invoke the agents owned by anyone
+//     placed in a department they lead, descendants included.
 //
 // A2A is judged by the top-of-chain human originator, never by the immediate
 // agent actor: if user U triggers agent A and A @-mentions agent B, B is only
@@ -83,12 +85,20 @@ func (h *Handler) invokeAgentDecision(ctx context.Context, agent db.Agent, actor
 		return true
 	}
 
-	if agent.PermissionMode != "public_to" {
-		// private (or any unknown mode) is deny-by-default: no admin bypass,
-		// no A2A bypass. Only the owner branch above passes.
-		return false
+	if agent.PermissionMode == "public_to" && h.invocationTargetsAdmit(ctx, agent, actorType, effectiveUser, workspaceID) {
+		return true
 	}
 
+	// A department lead may command the agents of everyone in the departments
+	// they lead, private ones included. Checked last because it walks the org
+	// tree, and only for a resolved human: unattributed agent/system triggers
+	// never inherit a lead's reach.
+	return h.leadsAgentOwner(ctx, agent, workspaceID, effectiveUser)
+}
+
+// invocationTargetsAdmit applies a public_to agent's allow-list to the
+// effective invoking user.
+func (h *Handler) invocationTargetsAdmit(ctx context.Context, agent db.Agent, actorType, effectiveUser, workspaceID string) bool {
 	targets, err := h.Queries.ListAgentInvocationTargets(ctx, agent.ID)
 	if err != nil {
 		return false
@@ -140,8 +150,9 @@ func (h *Handler) invokeAgentDecision(ctx context.Context, agent db.Agent, actor
 //   - agent actors always pass (A2A collaboration + inspection preserved).
 //   - the agent owner always passes.
 //   - workspace owner/admin pass (governance / inventory visibility retained).
-//   - a regular member passes for a public_to agent only when they hit a
-//     workspace or member target; private agents stay owner+admin only.
+//   - a department lead passes for every agent owned by their team.
+//   - any other member passes for a public_to agent only when they hit a
+//     workspace or member target; private agents stay hidden.
 func (h *Handler) canAccessPrivateAgent(ctx context.Context, agent db.Agent, actorType, actorID, workspaceID string) bool {
 	if actorType == "agent" {
 		return true
@@ -156,14 +167,48 @@ func (h *Handler) canAccessPrivateAgent(ctx context.Context, agent db.Agent, act
 	if roleAllowed(member.Role, "owner", "admin") {
 		return true
 	}
-	if agent.PermissionMode != "public_to" {
+	if agent.PermissionMode == "public_to" {
+		targets, err := h.Queries.ListAgentInvocationTargets(ctx, agent.ID)
+		if err != nil {
+			return false
+		}
+		if memberHitsInvocationTargets(targets, actorID) {
+			return true
+		}
+	}
+	return h.leadsAgentOwner(ctx, agent, workspaceID, actorID)
+}
+
+// leadsAgentOwner reports whether userID leads a department, directly or
+// through an ancestor, that the agent's owner is placed in.
+func (h *Handler) leadsAgentOwner(ctx context.Context, agent db.Agent, workspaceID, userID string) bool {
+	if userID == "" || !agent.OwnerID.Valid {
 		return false
 	}
-	targets, err := h.Queries.ListAgentInvocationTargets(ctx, agent.ID)
+	return h.orgTeamOwnerSet(ctx, workspaceID, userID)[uuidToString(agent.OwnerID)]
+}
+
+// orgTeamOwnerSet is orgTeamMemberIDs keyed by user id string, for the list
+// filters that judge many agents against one viewer. Nil when the user leads
+// no department.
+func (h *Handler) orgTeamOwnerSet(ctx context.Context, workspaceID, userID string) map[string]bool {
+	wsUUID, err := util.ParseUUID(workspaceID)
 	if err != nil {
-		return false
+		return nil
 	}
-	return memberHitsInvocationTargets(targets, actorID)
+	userUUID, err := util.ParseUUID(userID)
+	if err != nil {
+		return nil
+	}
+	ids := h.orgTeamMemberIDs(ctx, wsUUID, userUUID)
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		set[uuidToString(id)] = true
+	}
+	return set
 }
 
 // memberHitsInvocationTargets is the pure predicate deciding whether a regular
@@ -185,15 +230,19 @@ func memberHitsInvocationTargets(targets []db.AgentInvocationTarget, userID stri
 }
 
 // memberAllowedToViewAgent is the ListAgents / aggregation filter predicate.
-// Caller supplies the agent's already-batch-loaded invocation targets so the
-// list endpoint avoids an N+1. Workspace owner/admin and the agent owner see
-// everything; a regular member sees a public_to agent only when on its
-// allow-list, and never sees other members' private agents.
-func memberAllowedToViewAgent(agent db.Agent, targets []db.AgentInvocationTarget, userID, role string) bool {
+// Caller supplies the agent's already-batch-loaded invocation targets and the
+// viewer's orgTeamOwnerSet so the list endpoint avoids an N+1. Workspace
+// owner/admin and the agent owner see everything; a department lead sees every
+// agent owned by their team; any other member sees a public_to agent only when
+// on its allow-list, and never sees other members' private agents.
+func memberAllowedToViewAgent(agent db.Agent, targets []db.AgentInvocationTarget, userID, role string, teamOwners map[string]bool) bool {
 	if roleAllowed(role, "owner", "admin") {
 		return true
 	}
 	if uuidToString(agent.OwnerID) == userID {
+		return true
+	}
+	if agent.OwnerID.Valid && teamOwners[uuidToString(agent.OwnerID)] {
 		return true
 	}
 	if agent.PermissionMode != "public_to" {
@@ -307,10 +356,14 @@ func (h *Handler) accessibleAgentIDs(ctx context.Context, workspaceID, actorType
 	if !ok {
 		return nil, false
 	}
+	var teamOwners map[string]bool
+	if actorType == "member" {
+		teamOwners = h.orgTeamOwnerSet(ctx, workspaceID, actorID)
+	}
 	allowed := make(map[string]struct{}, len(agents))
 	for _, a := range agents {
 		if actorType == "member" {
-			if !memberAllowedToViewAgent(a, targetsByAgent[uuidToString(a.ID)], actorID, role) {
+			if !memberAllowedToViewAgent(a, targetsByAgent[uuidToString(a.ID)], actorID, role, teamOwners) {
 				continue
 			}
 		}
@@ -358,18 +411,20 @@ func (h *Handler) restrictedAgentIDs(ctx context.Context, workspaceID, actorType
 	// Whether per-agent visibility can restrict anything for this actor at all.
 	judgeUserAgents := actorType == "member" && !roleAllowed(role, "owner", "admin")
 	var targetsByAgent map[string][]db.AgentInvocationTarget
+	var teamOwners map[string]bool
 	if judgeUserAgents {
 		var ok bool
 		if targetsByAgent, ok = h.loadInvocationTargetsByAgent(ctx, agents); !ok {
 			return nil, false
 		}
+		teamOwners = h.orgTeamOwnerSet(ctx, workspaceID, actorID)
 	}
 
 	restricted := make(map[string]struct{})
 	for _, a := range agents {
 		if a.Kind == "user" {
 			if !judgeUserAgents ||
-				memberAllowedToViewAgent(a, targetsByAgent[uuidToString(a.ID)], actorID, role) {
+				memberAllowedToViewAgent(a, targetsByAgent[uuidToString(a.ID)], actorID, role, teamOwners) {
 				continue
 			}
 		}

@@ -109,10 +109,19 @@ type AgentResponse struct {
 	// InvocationTargets is the allow-list for a public_to agent. Empty for
 	// private agents. Only populated on the detail / list / create / update
 	// responses that load it; broadcast payloads leave it empty.
-	InvocationTargets  []AgentInvocationTargetDTO `json:"invocation_targets"`
-	Status             string                     `json:"status"`
-	MaxConcurrentTasks int32                      `json:"max_concurrent_tasks"`
-	Model              string                     `json:"model"`
+	InvocationTargets []AgentInvocationTargetDTO `json:"invocation_targets"`
+	// ViewerLeadsOwner reports that the requesting member leads a department
+	// the agent's owner belongs to, which lets them invoke the agent whatever
+	// its permission mode. Only the list / detail reads compute it.
+	ViewerLeadsOwner bool `json:"viewer_leads_owner"`
+	// IntakeCan / IntakeCannot are the agent's declared responsibilities:
+	// what work it takes and what it turns away. Edited through
+	// PATCH /api/intake/agents/{id}.
+	IntakeCan          string `json:"intake_can"`
+	IntakeCannot       string `json:"intake_cannot"`
+	Status             string `json:"status"`
+	MaxConcurrentTasks int32  `json:"max_concurrent_tasks"`
+	Model              string `json:"model"`
 	// ThinkingLevel is the runtime-native reasoning/effort token persisted
 	// for this agent (empty = use runtime default). The picker is per-runtime
 	// per-model; the API never normalizes across providers. See MUL-2339.
@@ -228,6 +237,8 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		Visibility:               a.Visibility,
 		PermissionMode:           a.PermissionMode,
 		InvocationTargets:        []AgentInvocationTargetDTO{},
+		IntakeCan:                a.IntakeCan.String,
+		IntakeCannot:             a.IntakeCannot.String,
 		Status:                   a.Status,
 		MaxConcurrentTasks:       a.MaxConcurrentTasks,
 		Model:                    a.Model.String,
@@ -1252,15 +1263,20 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load agent invocation targets")
 		return
 	}
+	var teamOwners map[string]bool
+	if actorType == "member" {
+		teamOwners = h.orgTeamOwnerSet(r.Context(), workspaceID, actorID)
+	}
 	visible := make([]AgentResponse, 0, len(agents))
 	for _, a := range agents {
 		targets := targetsByAgent[uuidToString(a.ID)]
 		if actorType == "member" {
-			if !memberAllowedToViewAgent(a, targets, actorID, member.Role) {
+			if !memberAllowedToViewAgent(a, targets, actorID, member.Role, teamOwners) {
 				continue
 			}
 		}
 		resp := h.agentToResponse(a)
+		resp.ViewerLeadsOwner = a.OwnerID.Valid && teamOwners[uuidToString(a.OwnerID)]
 		// The map is keyed by runtime, and active + archived agents may share one.
 		// Keep the archived guard here as well as in the loader so an active sibling
 		// cannot leak its projection onto an archived response.
@@ -1317,6 +1333,9 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := h.agentToResponse(agent)
+	if actorType == "member" {
+		resp.ViewerLeadsOwner = h.leadsAgentOwner(r.Context(), agent, workspaceID, actorID)
+	}
 	viewerRole := ""
 	if member, ok := ctxMember(r.Context()); ok {
 		viewerRole = member.Role

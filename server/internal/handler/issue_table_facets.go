@@ -358,9 +358,13 @@ func (h *Handler) issueTableWorkingAgentIDs(
 		writeIssueTableQueryFailure(w, r, "failed to resolve agent access")
 		return nil, false
 	}
+	var teamOwners map[string]bool
+	if actorType == "member" {
+		teamOwners = h.orgTeamOwnerSet(r.Context(), workspaceID, actorID)
+	}
 	ids := make([]pgtype.UUID, 0, len(agents))
 	for _, agent := range agents {
-		if actorType == "member" && !memberAllowedToViewAgent(agent, targetsByAgent[uuidToString(agent.ID)], actorID, member.Role) {
+		if actorType == "member" && !memberAllowedToViewAgent(agent, targetsByAgent[uuidToString(agent.ID)], actorID, member.Role, teamOwners) {
 			continue
 		}
 		ids = append(ids, agent.ID)

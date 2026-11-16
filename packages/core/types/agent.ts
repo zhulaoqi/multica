@@ -614,6 +614,16 @@ export interface Agent {
    * private agent). See `AgentInvocationTarget`.
    */
   invocation_targets: AgentInvocationTarget[];
+  /**
+   * The viewer leads a department the owner belongs to, so they may invoke
+   * this agent in any permission mode. Older backends omit it; treat
+   * `undefined` as false.
+   */
+  viewer_leads_owner?: boolean;
+  /** Declared responsibilities: the work this agent takes. Older backends omit it. */
+  intake_can?: string;
+  /** Work this agent turns away. Older backends omit it. */
+  intake_cannot?: string;
   status: AgentStatus;
   max_concurrent_tasks: number;
   model: string;

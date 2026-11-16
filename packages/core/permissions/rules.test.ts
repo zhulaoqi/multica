@@ -195,6 +195,19 @@ describe("canAssignAgentToIssue", () => {
     expect(d.reason).toBe("private_visibility");
   });
 
+  it("allows a department lead to assign their team member's private agent", () => {
+    const a = makeAgent({
+      visibility: "private",
+      permission_mode: "private",
+      invocation_targets: [],
+      owner_id: ALICE,
+      viewer_leads_owner: true,
+    });
+    expect(
+      canAssignAgentToIssue(a, { userId: BOB, role: "member" }).allowed,
+    ).toBe(true);
+  });
+
   it("denies a plain member from assigning someone else's private agent", () => {
     const a = makeAgent({
       visibility: "private",
