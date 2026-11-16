@@ -1332,7 +1332,7 @@ export function TableView({
   exportIssues,
   resolveExportLookups,
 }: TableViewProps) {
-  const { t } = useT("issues");
+  const { t, i18n } = useT("issues");
   const wsId = useWorkspaceId();
   const resolveStatusLabel = useStatusLabel(wsId);
   const { entryOf } = useIssueStatuses(wsId);
