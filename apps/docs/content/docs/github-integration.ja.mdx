@@ -1,17 +1,17 @@
 ---
 title: GitHub 連携
-description: pull request を Multica のタスクに紐づけ、開発の進捗をタスクから確認します。
+description: pull request を ECP のタスクに紐づけ、開発の進捗をタスクから確認します。
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { PrLinkDemo } from "@/components/demos/pr-link-demo";
 
-GitHub を接続すると、Multica はタスク番号を使って pull request を自動的に紐づけます。タスクの詳細画面から、PR の状態、変更規模、CI の結果、マージ競合を直接確認できます。
+GitHub を接続すると、ECP はタスク番号を使って pull request を自動的に紐づけます。タスクの詳細画面から、PR の状態、変更規模、CI の結果、マージ競合を直接確認できます。
 
 GitHub 連携が読み取るのは、インストール時に許可されたリポジトリだけです。コード、コメント、status check を書き込むことはありません。
 
-セルフホスト版 Multica では、セルフホストの Forgejo、Gitea、GitLab インスタンスも同時に接続できます。PR の自動紐づけ、マージ時のステータス変更、CI 表示を同じように利用できます。**設定 → コード**から設定してください。詳しくは[セルフホスト Git ホスティング](/vcs-integration)を参照してください。Multica Cloud にはこの項目はありません。
+セルフホスト版 ECP では、セルフホストの Forgejo、Gitea、GitLab インスタンスも同時に接続できます。PR の自動紐づけ、マージ時のステータス変更、CI 表示を同じように利用できます。**設定 → コード**から設定してください。詳しくは[セルフホスト Git ホスティング](/vcs-integration)を参照してください。ECP Cloud にはこの項目はありません。
 
 ## GitHub を接続する
 
@@ -28,14 +28,14 @@ GitHub 連携が読み取るのは、インストール時に許可されたリ�
 GitHub でアカウントまたは organization を選び、すべてのリポジトリか指定したリポジトリを許可します。
 </Step>
 <Step>
-インストールが完了したら Multica に戻ります。
+インストールが完了したら ECP に戻ります。
 </Step>
 </Steps>
 
 接続状態は同じページに表示されます。通常のメンバーは状態を確認できますが、接続、切断、スイッチの変更はできません。
 
 <Callout type="info">
-**GitHub 接続**は、Multica がどのリポジトリから PR イベントを受け取るかを決めます。**コードリポジトリ**設定は、エージェントが作業を実行するときに選べるリポジトリを決めます。用途が異なるため、それぞれ設定する必要があります。
+**GitHub 接続**は、ECP がどのリポジトリから PR イベントを受け取るかを決めます。**コードリポジトリ**設定は、エージェントが作業を実行するときに選べるリポジトリを決めます。用途が異なるため、それぞれ設定する必要があります。
 </Callout>
 
 ## 機能スイッチ
@@ -48,7 +48,7 @@ GitHub でアカウントまたは organization を選び、すべてのリポ�
 | Co-authored-by | エージェントが作成する commit に `Co-authored-by: multica-agent <github@multica.ai>` を追加します。 |
 | PR の自動紐づけ | ブランチ名かタイトルにタスク番号を含む PR、または本文で closing keyword の直後にタスク番号を置いた PR を、そのタスクに紐づけます。 |
 | PR マージ後のタスクのステータス | タスクに紐づく PR がすべてマージされたとき、タスクをあるステータス（既定は `Done`）に変更するか、変更しないかを選びます。[PR マージ後のステータス変更](#pr-マージ後のステータス変更)を参照してください。 |
-| PR カード → CI とマージ可否 | 紐づいた各 PR について、Multica は App として GitHub API からスナップショットを取得し、CI の状態とマージ可否をカードに表示します。[タスクから PR を確認する](#タスクから-pr-を確認する)を参照してください。 |
+| PR カード → CI とマージ可否 | 紐づいた各 PR について、ECP は App として GitHub API からスナップショットを取得し、CI の状態とマージ可否をカードに表示します。[タスクから PR を確認する](#タスクから-pr-を確認する)を参照してください。 |
 
 ## PR をタスクに紐づける
 
@@ -62,7 +62,7 @@ mul-123-fix-login-redirect
 MUL-123 ログイン後のリダイレクトを修正
 ```
 
-Multica は大文字と小文字を区別せず、現在のワークスペースのタスク接頭辞だけを照合します。1 つの PR を複数のタスクに紐づけることもできます。
+ECP は大文字と小文字を区別せず、現在のワークスペースのタスク接頭辞だけを照合します。1 つの PR を複数のタスクに紐づけることもできます。
 
 タスク番号を PR 本文だけに書く場合は、GitHub の closing keyword を必ず使ってください。
 
@@ -74,7 +74,7 @@ Resolves MUL-123
 
 本文に `Related to MUL-123` のような通常の参照を書いただけでは、そのタスクへまったく紐づきません。Commit message と PR コメントも紐づけの対象外です。
 
-手動で紐づけることもできます。タスクの **Pull requests** セクションで **+** をクリックし、PR の URL を貼り付けます。PR をタスクから外すには、その行の **⋯** メニューから **タスクから外す** を選びます。以後、Multica がタイトルやブランチから再び紐づけることはありません。
+手動で紐づけることもできます。タスクの **Pull requests** セクションで **+** をクリックし、PR の URL を貼り付けます。PR をタスクから外すには、その行の **⋯** メニューから **タスクから外す** を選びます。以後、ECP がタイトルやブランチから再び紐づけることはありません。
 
 ## タスクから PR を確認する
 
@@ -86,7 +86,7 @@ Resolves MUL-123
 - CI の状態: すべて成功した check の件数、失敗した check の名前、実行中の check の件数。check が 1 つも設定されていない PR ではこの項目を表示せず、「check なし」を成功として扱いません。
 - マージ可能性: GitHub がマージ状態を clean と報告した場合だけマージ可能。ほかに競合、blocked、behind を表示します。
 
-CI の状態とマージ可能性は、Multica が GitHub API から取得したスナップショットで、互いに独立しています。マージ済みまたはクローズ済みの PR では、この 2 項目を表示しません。GitHub が一時的に利用できない場合、カードは前回のスナップショットを残し、古い情報として表示します。
+CI の状態とマージ可能性は、ECP が GitHub API から取得したスナップショットで、互いに独立しています。マージ済みまたはクローズ済みの PR では、この 2 項目を表示しません。GitHub が一時的に利用できない場合、カードは前回のスナップショットを残し、古い情報として表示します。
 
 リストの下には、次に何が起きるかを 1 行で表示します。たとえば「#19 がマージされると 完了 に変更」や、マージされずにクローズされた PR です。ワークスペースが「変更しない」に設定されている場合や、タスクがすでに変更先のステータスにある場合は表示されません。
 
@@ -111,21 +111,21 @@ PR の紐づけ方は結果に影響しません。タイトル、ブランチ�
 
 ## 複数のワークスペース
 
-同じ GitHub App installation を複数の Multica ワークスペースへ接続できます。GitHub イベントは各ワークスペースにそれぞれ送られ、各ワークスペースのタスク接頭辞に従って照合されます。
+同じ GitHub App installation を複数の ECP ワークスペースへ接続できます。GitHub イベントは各ワークスペースにそれぞれ送られ、各ワークスペースのタスク接頭辞に従って照合されます。
 
 たとえば、1 つの PR が `MUL-1` と `ENG-2` の両方を参照している場合、異なる接頭辞を持つ 2 つのワークスペースでそれぞれ紐づけられます。ワークスペース間で相手のタスクが見えることはありません。
 
-同じ番号が接続中の複数のワークスペースでタスクに一致する場合（接頭辞が同じときに起こり得ます）、Multica はどのワークスペースでも自動では紐づけません。関係のないタスクがマージで完了しないようにするためです。正しいワークスペースで手動で紐づけてください。
+同じ番号が接続中の複数のワークスペースでタスクに一致する場合（接頭辞が同じときに起こり得ます）、ECP はどのワークスペースでも自動では紐づけません。関係のないタスクがマージで完了しないようにするためです。正しいワークスペースで手動で紐づけてください。
 
 ## 接続を解除する
 
-**設定 → コード** の GitHub の行で **⋯** メニューから**接続解除**を選ぶと、現在の Multica ワークスペースと installation の関係だけが削除されます。GitHub から App がアンインストールされることはありません。既存の PR 記録は保持されますが、新しいイベントはこのワークスペースに届かなくなります。
+**設定 → コード** の GitHub の行で **⋯** メニューから**接続解除**を選ぶと、現在の ECP ワークスペースと installation の関係だけが削除されます。GitHub から App がアンインストールされることはありません。既存の PR 記録は保持されますが、新しいイベントはこのワークスペースに届かなくなります。
 
-GitHub 側のリポジトリアクセスを取り消す場合は、個人または organization の GitHub App installations ページで App をアンインストールするか、リポジトリの範囲を変更してください。App をアンインストールすると、その installation に接続していたすべての Multica ワークスペースがイベントを受信しなくなります。
+GitHub 側のリポジトリアクセスを取り消す場合は、個人または organization の GitHub App installations ページで App をアンインストールするか、リポジトリの範囲を変更してください。App をアンインストールすると、その installation に接続していたすべての ECP ワークスペースがイベントを受信しなくなります。
 
 ## セルフホスト設定
 
-Multica Cloud ではこのセクションの作業は不要です。セルフホスト環境では、自分の GitHub App を先に作成します。
+ECP Cloud ではこのセクションの作業は不要です。セルフホスト環境では、自分の GitHub App を先に作成します。
 
 <Steps>
 <Step>
@@ -136,7 +136,7 @@ GitHub の **Developer settings → GitHub Apps** で App を作成し、次の�
 
 | フィールド | 値 |
 |---|---|
-| Homepage URL | Multica のフロントエンド URL。例: `https://multica.example.com` |
+| Homepage URL | ECP のフロントエンド URL。例: `https://multica.example.com` |
 | Callback URL | 空欄 |
 | Setup URL | `https://<api-host>/api/github/setup`。**Redirect on update** を有効にする |
 | Webhook URL | `https://<api-host>/api/webhooks/github` |
@@ -160,7 +160,7 @@ Repository permissions:
 PR スナップショットは Pull requests、Checks、Commit statuses の REST API から取得します。Contents 権限は不要です。任意の Actions 権限を付与すると、そのコミットのワークフロー実行も読み取ります。付与しない場合、同じワークフローの新しい実行が成功しても、キャンセルされた古い実行は失敗として数えられます。
 
 <Callout type="warning">
-必要なのは **Webhook secret** であり、OAuth Client secret ではありません。GitHub と Multica に入力した Webhook secret が異なる場合、GitHub delivery は `401 invalid signature` を返します。
+必要なのは **Webhook secret** であり、OAuth Client secret ではありません。GitHub と ECP に入力した Webhook secret が異なる場合、GitHub delivery は `401 invalid signature` を返します。
 </Callout>
 
 </Step>
@@ -178,7 +178,7 @@ FRONTEND_ORIGIN=https://multica.example.com
 
 `GITHUB_APP_SLUG` と `GITHUB_WEBHOOK_SECRET` のいずれかがない場合、接続ボタンは無効になり、webhook エンドポイントもイベントを拒否します。
 
-PR カードに CI の状態とマージ可能性を表示するには、次の 2 つの変数も必要です。Multica はこれを使って App として認証し、スナップショットを取得します。
+PR カードに CI の状態とマージ可能性を表示するには、次の 2 つの変数も必要です。ECP はこれを使って App として認証し、スナップショットを取得します。
 
 ```dotenv
 GITHUB_APP_ID=<numeric GitHub App ID>

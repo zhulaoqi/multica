@@ -8,6 +8,16 @@
  * spec.
  */
 
+/**
+ * User-visible product branding. Technical identifiers — package names, the
+ * CLI binary, environment variables, config directories, and URLs — keep their
+ * historical names so existing installs and deployments keep working.
+ */
+export const BRAND = {
+  full: "易点研发协同平台",
+  short: "易研",
+} as const;
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Filled outline of one arch: outer width `w`, stroke `t`, legs down to `y1`. */

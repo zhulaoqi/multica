@@ -1,6 +1,6 @@
 ---
 title: 安裝 AI 程式設計工具
-description: 安裝並登入一款受支援的 AI 程式設計工具，讓 Multica 在本機執行。
+description: 安裝並登入一款受支援的 AI 程式設計工具，讓 易研 在本機執行。
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -8,7 +8,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
-本地執行時由兩部分組成：Multica 守護程序，和它能呼叫的一款 AI 程式設計工具。只裝你準備用的那一款就行，不必全部安裝。
+本地執行時由兩部分組成：易研 守護程序，和它能呼叫的一款 AI 程式設計工具。只裝你準備用的那一款就行，不必全部安裝。
 
 <Steps>
 <Step>
@@ -17,7 +17,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 已經安裝並登入的工具不需要額外配置。各工具在模型、MCP、會話恢復和 skill 支援上有差異，見 [AI 程式設計工具對照](/providers)。
 
-Multica 當前會檢測以下命令：
+易研 當前會檢測以下命令：
 
 | 工具 | 檢測的命令 | 官方安裝說明 |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Multica 當前會檢測以下命令：
 | Devin CLI | `devin` | [安裝 Devin CLI](https://docs.devin.ai/cli/quickstart)（3000.3.22+）；本機 ACP，先執行 `devin auth login` |
 | ZeroClaw | `zeroclaw` | [ZeroClaw 快速開始](https://github.com/zeroclaw-labs/zeroclaw/blob/master/docs/book/src/getting-started/quickstart.md#install) |
 
-"受支援"表示 Multica 能夠呼叫對應 CLI，不代表 Multica 會替你提供該工具的帳號、訂閱或模型額度。
+"受支援"表示 易研 能夠呼叫對應 CLI，不代表 易研 會替你提供該工具的帳號、訂閱或模型額度。
 
 </Step>
 <Step>
@@ -60,7 +60,7 @@ Multica 當前會檢測以下命令：
 
 安裝後，先在終端裡單獨啟動一次工具，按它自己的流程登入或配置模型服務。工具在終端中完成不了請求，守護程序呼叫它也會失敗。
 
-這些登入憑據由工具儲存在本機。Multica 不會接收 Claude、Codex、Cursor 或其他 CLI 的登入 token。
+這些登入憑據由工具儲存在本機。易研 不會接收 Claude、Codex、Cursor 或其他 CLI 的登入 token。
 
 低於最低版本時，守護程序不會註冊對應執行時：
 
@@ -82,14 +82,14 @@ Multica 當前會檢測以下命令：
 <Accordions type="multiple">
 <Accordion title="CodeArts" id="codearts">
 
-用 `codearts run --model provider/model "只回復 OK"` 驗證非互動模式，只驗證 TUI 不夠。當前 CodeArts CLI 可能允許自定義 provider 在 TUI 中工作，但 `run`、`models` 和 `serve` 仍要求配置 [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html)。Multica 可以從 `~/.codeartsdoer/codearts_cli.json` 或 `.jsonc` 發現自定義模型，但每次執行都使用 `codearts run`，因此仍遵循該命令的授權要求。
+用 `codearts run --model provider/model "只回復 OK"` 驗證非互動模式，只驗證 TUI 不夠。當前 CodeArts CLI 可能允許自定義 provider 在 TUI 中工作，但 `run`、`models` 和 `serve` 仍要求配置 [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html)。易研 可以從 `~/.codeartsdoer/codearts_cli.json` 或 `.jsonc` 發現自定義模型，但每次執行都使用 `codearts run`，因此仍遵循該命令的授權要求。
 
 </Accordion>
 <Accordion title="DeepSeek Harness" id="deepseek-harness">
 
-先安裝 Node.js 20+ 並執行 `npm install -g @deepseek-ai/dsh`，再為它安裝 Multica 執行時 profile。這個 bundle 實現了 Multica 驅動的 `--stdio` 協議，單獨的 `dsh` 因此無法直接使用。啟動守護程序前，設定 `DEEPSEEK_API_KEY`（或儲存在 dsh 自身的設定中）。
+先安裝 Node.js 20+ 並執行 `npm install -g @deepseek-ai/dsh`，再為它安裝 易研 執行時 profile。這個 bundle 實現了 易研 驅動的 `--stdio` 協議，單獨的 `dsh` 因此無法直接使用。啟動守護程序前，設定 `DEEPSEEK_API_KEY`（或儲存在 dsh 自身的設定中）。
 
-**安裝 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 設為要安裝的 bundle，守護程序會替你安裝；也可以自己執行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目錄，或打包好的 tarball。Multica 自己的橋接實現在 multica-ai/dsh-multica-runtime，目前還沒有釋出到公共 npm registry。現階段自託管團隊從該倉庫自行構建，把變數指向構建產物目錄；執行守護程序的機器和構建機器不是同一臺時，指向 `npm pack` 產出的 tarball。橋接釋出之後，直接填包名最省事。
+**安裝 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 設為要安裝的 bundle，守護程序會替你安裝；也可以自己執行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目錄，或打包好的 tarball。易研 自己的橋接實現在 multica-ai/dsh-multica-runtime，目前還沒有釋出到公共 npm registry。現階段自託管團隊從該倉庫自行構建，把變數指向構建產物目錄；執行守護程序的機器和構建機器不是同一臺時，指向 `npm pack` 產出的 tarball。橋接釋出之後，直接填包名最省事。
 
 **遷移現有 profile。** 先備份 profile，按橋接倉庫 README 構建與你的 DSH 版本相容的 bundle。手動安裝這個目錄或 tarball，再確認 `dsh.profile.bundles` 載入了 `@multica-ai/dsh-runtime`：有 `dsh-profile-multica` 時替換它；兩者都有時移除 `dsh-profile-multica`。只在依賴列表宣告包名不會載入執行時。`MULTICA_DSH_PROFILE_BUNDLE` 不會遷移現有橋接配置。完成後用 `dsh --profile multica --probe` 驗證。
 
@@ -104,22 +104,22 @@ Multica 當前會檢測以下命令：
 </Accordion>
 <Accordion title="Devin CLI" id="devin-cli">
 
-Devin 透過 `devin acp` 在本機執行，不是雲端的 Devin VM。先執行 `devin auth login`。Multica 檢查的是二進位檔的版本，不是 ACP 的 `agentInfo.version`（它可能是 `0.0.0-dev`）。
+Devin 透過 `devin acp` 在本機執行，不是雲端的 Devin VM。先執行 `devin auth login`。易研 檢查的是二進位檔的版本，不是 ACP 的 `agentInfo.version`（它可能是 `0.0.0-dev`）。
 
 </Accordion>
 <Accordion title="MiniMax Code" id="minimax-code">
 
-安裝受支援的 Node.js 版本（`>=22.19 <23` 或 `>=24 <27`），並執行 `npm install --global @minimax-ai/code@latest`。全域性 npm 安裝會把 `mcode` 放進 npm 的全域性可執行目錄；`command -v mcode` 或 `Get-Command mcode` 找不到它時，把該目錄加入 `PATH`。然後執行 `mcode login`。模型由 MiniMax Code 管理，Multica 無法透過 ACP 覆蓋。
+安裝受支援的 Node.js 版本（`>=22.19 <23` 或 `>=24 <27`），並執行 `npm install --global @minimax-ai/code@latest`。全域性 npm 安裝會把 `mcode` 放進 npm 的全域性可執行目錄；`command -v mcode` 或 `Get-Command mcode` 找不到它時，把該目錄加入 `PATH`。然後執行 `mcode login`。模型由 MiniMax Code 管理，易研 無法透過 ACP 覆蓋。
 
 </Accordion>
 <Accordion title="Muse Code" id="muse-code">
 
-Muse Code 需要 1.4.10 或更高版本。按[官方安裝和登入指南](https://dev.meta.ai/docs/muse-code)操作，並確認 `muse` 已加入 `PATH`。Multica 透過 MSP 獲取模型列表，支援繼續已有會話。
+Muse Code 需要 1.4.10 或更高版本。按[官方安裝和登入指南](https://dev.meta.ai/docs/muse-code)操作，並確認 `muse` 已加入 `PATH`。易研 透過 MSP 獲取模型列表，支援繼續已有會話。
 
 </Accordion>
 <Accordion title="QwenPaw" id="qwenpaw">
 
-在 QwenPaw 自身的配置裡選擇模型服務和模型。Multica 無法在執行時覆蓋 QwenPaw 的模型。
+在 QwenPaw 自身的配置裡選擇模型服務和模型。易研 無法在執行時覆蓋 QwenPaw 的模型。
 
 </Accordion>
 <Accordion title="Reasonix" id="reasonix">
@@ -184,12 +184,12 @@ multica daemon restart
 </Tab>
 <Tab value="Desktop">
 
-退出並重新開啟 Multica Desktop。
+退出並重新開啟 易研 Desktop。
 
 </Tab>
 </Tabs>
 
-然後開啟 Multica 的**執行時**頁面，目標電腦下面會出現對應工具，並顯示為線上。之後建立或編輯 AI 代理時，就可以選這條執行時。
+然後開啟 易研 的**執行時**頁面，目標電腦下面會出現對應工具，並顯示為線上。之後建立或編輯 AI 代理時，就可以選這條執行時。
 
 <Callout type="warning">
 守護程序啟動時必須先檢測到至少一款內建支援的 CLI。自定義執行時配置在守護程序啟動後才同步，所以在一臺空白機器上不能只靠它啟動。只有一個例外：守護程序剛開始自行安裝 DSH 執行時 profile（`MULTICA_DSH_PROFILE_BUNDLE`）時，會在沒有任何執行時的情況下啟動，安裝完成後再註冊 DeepSeek Harness。否則，一臺只裝了需要該 profile 的 DSH 的機器永遠裝不完：守護程序會在安裝結束前退出，把安裝程序一起帶走。
@@ -214,6 +214,6 @@ multica daemon restart
 
 - [建立和配置 AI 代理](/agents-create) — 選擇剛剛連線的執行時。
 - [守護程序與執行時](/daemon-runtimes) — 瞭解線上狀態、併發和自定義執行時。
-- [AI 程式設計工具對照](/providers) — 比較各工具在 Multica 中的能力。
+- [AI 程式設計工具對照](/providers) — 比較各工具在 易研 中的能力。
 
 ZCode Desktop 的 macOS 應用程式包可被自動發現；請同時安裝 Node.js，並在桌面端啟用可用的 API 連線。模型與思考強度由 ZCode 原生目錄提供。詳見[執行時對照](/providers#zcode)。

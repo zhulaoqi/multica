@@ -123,7 +123,7 @@
     "mode_worktree_title": "Exécuter en parallèle, en isolation",
     "mode_worktree_description": "Les exécutions ont lieu simultanément sans toucher à votre copie de travail. Chacune restitue une branche agent/… dans ce dépôt pour relecture et fusion.",
     "mode_worktree_needs_git": "Ce dossier n'est pas un dépôt git : il n'y a donc nulle part où placer la branche. Choisissez un dépôt, ou continuez à modifier le dossier directement.",
-    "mode_worktree_needs_server_upgrade": "Votre serveur Multica est trop ancien pour lancer des exécutions en parallèle : il les lancerait silencieusement dans ce dossier. Mettez le serveur à jour avant d'activer cette option.",
+    "mode_worktree_needs_server_upgrade": "Votre serveur ECP est trop ancien pour lancer des exécutions en parallèle : il les lancerait silencieusement dans ce dossier. Mettez le serveur à jour avant d'activer cette option.",
     "mode_cancel": "Annuler",
     "mode_save": "Enregistrer",
     "mode_add": "Ajouter le dossier",

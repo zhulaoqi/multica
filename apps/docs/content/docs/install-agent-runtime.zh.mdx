@@ -1,6 +1,6 @@
 ---
 title: 安装 AI 编程工具
-description: 安装并登录一款受支持的 AI 编程工具，让 Multica 在本机运行。
+description: 安装并登录一款受支持的 AI 编程工具，让 易研 在本机运行。
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -8,7 +8,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
-本地运行时由两部分组成：Multica 守护进程，和它能调用的一款 AI 编程工具。只装你准备用的那一款就行，不必全部安装。
+本地运行时由两部分组成：易研 守护进程，和它能调用的一款 AI 编程工具。只装你准备用的那一款就行，不必全部安装。
 
 <Steps>
 <Step>
@@ -17,7 +17,7 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 已经安装并登录的工具不需要额外配置。各工具在模型、MCP、会话恢复和 skill 支持上有差异，见 [AI 编程工具对照](/providers)。
 
-Multica 当前会检测以下命令：
+易研 当前会检测以下命令：
 
 | 工具 | 检测的命令 | 官方安装说明 |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Multica 当前会检测以下命令：
 | Devin CLI | `devin` | [安装 Devin CLI](https://docs.devin.ai/cli/quickstart)（3000.3.22+）；本机 ACP，先运行 `devin auth login` |
 | ZeroClaw | `zeroclaw` | [ZeroClaw 快速开始](https://github.com/zeroclaw-labs/zeroclaw/blob/master/docs/book/src/getting-started/quickstart.md#install) |
 
-"受支持"表示 Multica 能够调用对应 CLI，不代表 Multica 会替你提供该工具的账号、订阅或模型额度。
+"受支持"表示 易研 能够调用对应 CLI，不代表 易研 会替你提供该工具的账号、订阅或模型额度。
 
 </Step>
 <Step>
@@ -60,7 +60,7 @@ Multica 当前会检测以下命令：
 
 安装后，先在终端里单独启动一次工具，按它自己的流程登录或配置模型服务。工具在终端中完成不了请求，守护进程调用它也会失败。
 
-这些登录凭据由工具保存在本机。Multica 不会接收 Claude、Codex、Cursor 或其他 CLI 的登录 token。
+这些登录凭据由工具保存在本机。易研 不会接收 Claude、Codex、Cursor 或其他 CLI 的登录 token。
 
 低于最低版本时，守护进程不会注册对应运行时：
 
@@ -82,14 +82,14 @@ Multica 当前会检测以下命令：
 <Accordions type="multiple">
 <Accordion title="CodeArts" id="codearts">
 
-用 `codearts run --model provider/model "只回复 OK"` 验证非交互模式，只验证 TUI 不够。当前 CodeArts CLI 可能允许自定义 provider 在 TUI 中工作，但 `run`、`models` 和 `serve` 仍要求配置 [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html)。Multica 可以从 `~/.codeartsdoer/codearts_cli.json` 或 `.jsonc` 发现自定义模型，但每次运行都使用 `codearts run`，因此仍遵循该命令的授权要求。
+用 `codearts run --model provider/model "只回复 OK"` 验证非交互模式，只验证 TUI 不够。当前 CodeArts CLI 可能允许自定义 provider 在 TUI 中工作，但 `run`、`models` 和 `serve` 仍要求配置 [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html)。易研 可以从 `~/.codeartsdoer/codearts_cli.json` 或 `.jsonc` 发现自定义模型，但每次运行都使用 `codearts run`，因此仍遵循该命令的授权要求。
 
 </Accordion>
 <Accordion title="DeepSeek Harness" id="deepseek-harness">
 
-先安装 Node.js 20+ 并运行 `npm install -g @deepseek-ai/dsh`，再为它安装 Multica 运行时 profile。这个 bundle 实现了 Multica 驱动的 `--stdio` 协议，单独的 `dsh` 因此无法直接使用。启动守护进程前，设置 `DEEPSEEK_API_KEY`（或保存在 dsh 自身的设置中）。
+先安装 Node.js 20+ 并运行 `npm install -g @deepseek-ai/dsh`，再为它安装 易研 运行时 profile。这个 bundle 实现了 易研 驱动的 `--stdio` 协议，单独的 `dsh` 因此无法直接使用。启动守护进程前，设置 `DEEPSEEK_API_KEY`（或保存在 dsh 自身的设置中）。
 
-**安装 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 设为要安装的 bundle，守护进程会替你安装；也可以自己执行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目录，或打包好的 tarball。Multica 自己的桥接实现在 multica-ai/dsh-multica-runtime，目前还没有发布到公共 npm registry。现阶段自托管团队从该仓库自行构建，把变量指向构建产物目录；运行守护进程的机器和构建机器不是同一台时，指向 `npm pack` 产出的 tarball。桥接发布之后，直接填包名最省事。
+**安装 profile。** 把 `MULTICA_DSH_PROFILE_BUNDLE` 设为要安装的 bundle，守护进程会替你安装；也可以自己执行 `dsh plugin --profile multica add <bundle>`。`<bundle>` 可以是 `dsh plugin` 接受的任意形式：npm 包名、目录，或打包好的 tarball。易研 自己的桥接实现在 multica-ai/dsh-multica-runtime，目前还没有发布到公共 npm registry。现阶段自托管团队从该仓库自行构建，把变量指向构建产物目录；运行守护进程的机器和构建机器不是同一台时，指向 `npm pack` 产出的 tarball。桥接发布之后，直接填包名最省事。
 
 **迁移现有 profile。** 先备份 profile，按桥接仓库 README 构建与你的 DSH 版本兼容的 bundle。手动安装这个目录或 tarball，再确认 `dsh.profile.bundles` 加载了 `@multica-ai/dsh-runtime`：有 `dsh-profile-multica` 时替换它；两者都有时移除 `dsh-profile-multica`。只在依赖列表声明包名不会加载运行时。`MULTICA_DSH_PROFILE_BUNDLE` 不会迁移现有桥接配置。完成后用 `dsh --profile multica --probe` 验证。
 
@@ -104,17 +104,17 @@ Multica 当前会检测以下命令：
 </Accordion>
 <Accordion title="MiniMax Code" id="minimax-code">
 
-安装受支持的 Node.js 版本（`>=22.19 <23` 或 `>=24 <27`），并运行 `npm install --global @minimax-ai/code@latest`。全局 npm 安装会把 `mcode` 放进 npm 的全局可执行目录；`command -v mcode` 或 `Get-Command mcode` 找不到它时，把该目录加入 `PATH`。然后运行 `mcode login`。模型由 MiniMax Code 管理，Multica 无法通过 ACP 覆盖。
+安装受支持的 Node.js 版本（`>=22.19 <23` 或 `>=24 <27`），并运行 `npm install --global @minimax-ai/code@latest`。全局 npm 安装会把 `mcode` 放进 npm 的全局可执行目录；`command -v mcode` 或 `Get-Command mcode` 找不到它时，把该目录加入 `PATH`。然后运行 `mcode login`。模型由 MiniMax Code 管理，易研 无法通过 ACP 覆盖。
 
 </Accordion>
 <Accordion title="Muse Code" id="muse-code">
 
-Muse Code 需要 1.4.10 或更高版本。按[官方安装和登录指南](https://dev.meta.ai/docs/muse-code)操作，并确认 `muse` 已加入 `PATH`。Multica 通过 MSP 获取模型列表，支持继续已有会话。
+Muse Code 需要 1.4.10 或更高版本。按[官方安装和登录指南](https://dev.meta.ai/docs/muse-code)操作，并确认 `muse` 已加入 `PATH`。易研 通过 MSP 获取模型列表，支持继续已有会话。
 
 </Accordion>
 <Accordion title="QwenPaw" id="qwenpaw">
 
-在 QwenPaw 自身的配置里选择模型服务和模型。Multica 无法在执行时覆盖 QwenPaw 的模型。
+在 QwenPaw 自身的配置里选择模型服务和模型。易研 无法在执行时覆盖 QwenPaw 的模型。
 
 </Accordion>
 <Accordion title="Reasonix" id="reasonix">
@@ -179,12 +179,12 @@ multica daemon restart
 </Tab>
 <Tab value="Desktop">
 
-退出并重新打开 Multica Desktop。
+退出并重新打开 易研 Desktop。
 
 </Tab>
 </Tabs>
 
-然后打开 Multica 的**运行时**页面，目标电脑下面会出现对应工具，并显示为在线。之后创建或编辑智能体时，就可以选这条运行时。
+然后打开 易研 的**运行时**页面，目标电脑下面会出现对应工具，并显示为在线。之后创建或编辑智能体时，就可以选这条运行时。
 
 <Callout type="warning">
 守护进程启动时必须先检测到至少一款内置支持的 CLI。自定义运行时配置在守护进程启动后才同步，所以在一台空白机器上不能只靠它启动。只有一个例外：守护进程刚开始自行安装 DSH 运行时 profile（`MULTICA_DSH_PROFILE_BUNDLE`）时，会在没有任何运行时的情况下启动，安装完成后再注册 DeepSeek Harness。否则，一台只装了需要该 profile 的 DSH 的机器永远装不完：守护进程会在安装结束前退出，把安装进程一起带走。
@@ -209,6 +209,6 @@ multica daemon restart
 
 - [创建和配置智能体](/agents-create) — 选择刚刚连接的运行时。
 - [守护进程与运行时](/daemon-runtimes) — 了解在线状态、并发和自定义运行时。
-- [AI 编程工具对照](/providers) — 比较各工具在 Multica 中的能力。
+- [AI 编程工具对照](/providers) — 比较各工具在 易研 中的能力。
 
 ZCode Desktop 的 macOS 应用包可被自动发现；请同时安装 Node.js，并在桌面端启用可用的 API 连接。模型与思考强度由 ZCode 原生目录提供。详见[运行时对照](/providers#zcode)。

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { BRAND } from "@multica/ui/lib/multica-brand";
 
 /**
  * Installable web manifest. Start at /inbox so session-aware proxy routing
@@ -15,10 +16,9 @@ export const PWA_START_URL = "/inbox";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Multica",
-    short_name: "Multica",
-    description:
-      "Assign tasks to coding agents, track progress, and keep your team's work in one place.",
+    name: `${BRAND.short} — ${BRAND.full}`,
+    short_name: BRAND.short,
+    description: "给人和智能体派发任务、跟踪进度，把团队的工作放在同一个地方。",
     start_url: PWA_START_URL,
     scope: "/",
     display: "standalone",

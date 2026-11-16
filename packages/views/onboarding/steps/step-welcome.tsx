@@ -77,9 +77,8 @@ export function StepWelcome({
         <div className="flex flex-1 flex-col justify-center px-6 pb-12 sm:px-10 md:px-20 lg:px-20 xl:px-24">
           <div className="flex w-full max-w-[540px] flex-col gap-8">
             <MulticaWordmark
-              writeDelayMs={200}
               title={t(($) => $.welcome.wordmark)}
-              className="h-8 self-start text-foreground"
+              className="self-start text-[32px] text-foreground"
             />
 
             <h1 className="text-balance font-serif text-5xl font-medium leading-[1.04] tracking-tight sm:text-6xl">

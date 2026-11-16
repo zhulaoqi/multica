@@ -1,12 +1,12 @@
 ---
 title: Variables d'environnement
-description: Configuration courante du serveur, du stockage, des intégrations et du runtime pour auto-héberger Multica.
+description: Configuration courante du serveur, du stockage, des intégrations et du runtime pour auto-héberger ECP.
 ---
 
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Callout } from "fumadocs-ui/components/callout";
 
-Multica lit les variables d'environnement au démarrage du processus. Après en avoir modifié une, redémarrez le processus API, web ou daemon concerné. La commande `docker compose restart` de Docker Compose ne relit pas `.env` ; recréez les conteneurs avec `up -d` pour que les modifications prennent effet.
+ECP lit les variables d'environnement au démarrage du processus. Après en avoir modifié une, redémarrez le processus API, web ou daemon concerné. La commande `docker compose restart` de Docker Compose ne relit pas `.env` ; recréez les conteneurs avec `up -d` pour que les modifications prennent effet.
 
 Cette page regroupe par thème la configuration liée au déploiement ; les variables de test et les variables internes aux exécutions n'y figurent pas. Pour les étapes complètes de déploiement, consultez le [démarrage rapide de l'auto-hébergement](/self-host-quickstart).
 
@@ -121,7 +121,7 @@ Pour l'ordre exact d'évaluation des listes d'autorisation, consultez [Connexion
 
 ## Stockage des pièces jointes
 
-Lorsque `S3_BUCKET` n'est pas défini, Multica utilise le disque local.
+Lorsque `S3_BUCKET` n'est pas défini, ECP utilise le disque local.
 
 | Variable | Défaut | Description |
 |---|---|---|
@@ -225,7 +225,7 @@ Deux fonctionnalités utilisent cette couche, et chacune envoie du contenu de di
 Lorsque la clé d'API et l'URL de base sont toutes deux vides, cette couche est désactivée et n'effectue aucune requête en amont — aucune des deux fonctionnalités ci-dessus n'envoie quoi que ce soit. C'est la configuration prise en charge lorsque votre politique n'autorise pas cette couche à envoyer du contenu de discussion hors du déploiement : les sessions de discussion conservent le titre que le client dérive du premier message, les boutons de questions de suivi n'apparaissent pas, et tout le reste fonctionne normalement.
 
 <Callout type="info">
-Ceci ne concerne que la couche d'assistance. L'exécution d'un agent suit un chemin de données distinct : lorsqu'un agent répond dans une discussion, votre daemon exécute l'outil de codage IA de cet agent avec les propres identifiants de l'outil, et ne lui transmet pas les paramètres `MULTICA_LLM_*` ci-dessus. (Les variables de connexion à Multica propres à l'exécution, dont l'agent a besoin, sont injectées séparément par le daemon.) Vider les variables ci-dessus n'a aucun effet sur ce chemin — contrôlez-le via la configuration du runtime de l'agent.
+Ceci ne concerne que la couche d'assistance. L'exécution d'un agent suit un chemin de données distinct : lorsqu'un agent répond dans une discussion, votre daemon exécute l'outil de codage IA de cet agent avec les propres identifiants de l'outil, et ne lui transmet pas les paramètres `MULTICA_LLM_*` ci-dessus. (Les variables de connexion à ECP propres à l'exécution, dont l'agent a besoin, sont injectées séparément par le daemon.) Vider les variables ci-dessus n'a aucun effet sur ce chemin — contrôlez-le via la configuration du runtime de l'agent.
 </Callout>
 
 ## Configuration du daemon
@@ -234,7 +234,7 @@ Les variables ci-dessous sont lues sur l'ordinateur qui exécute vos agents, et 
 
 | Variable | Valeur par défaut | Description |
 |---|---|---|
-| `MULTICA_SERVER_URL` | `ws://localhost:8080/ws` | URL de l'API / WebSocket Multica ; accepte aussi `http(s)` |
+| `MULTICA_SERVER_URL` | `ws://localhost:8080/ws` | URL de l'API / WebSocket ECP ; accepte aussi `http(s)` |
 | `MULTICA_DAEMON_DEVICE_NAME` | nom d'hôte | Nom de l'appareil affiché dans la liste des runtimes |
 | `MULTICA_AGENT_RUNTIME_NAME` | `Local Agent` | Nom d'affichage du runtime |
 | `MULTICA_DAEMON_POLL_INTERVAL` | `30s` | Intervalle d'interrogation des exécutions lorsqu'aucun événement de réveil n'arrive |
@@ -270,7 +270,7 @@ Le daemon nettoie régulièrement les répertoires des exécutions, les caches d
 | `MULTICA_GC_ENABLED` | `true` | `false` ou `0` désactive toute la boucle de nettoyage |
 | `MULTICA_GC_INTERVAL` | `2h` | Intervalle entre deux passes ; la première a lieu environ 30 secondes après le démarrage du daemon |
 | `MULTICA_GC_TTL` | `24h` | Délai après lequel les répertoires d'exécution sont supprimés une fois la tâche passée dans la catégorie `done` ou `closed`, ou la session de chat archivée |
-| `MULTICA_GC_COMPLETED_TASK_TTL` | Multica Cloud `14d` ; auto-hébergé `0` | Délai après la fin d'une exécution de tâche au bout duquel tout son répertoire est supprimé, que la tâche soit fermée ou non ; `0` désactive. Ne s'applique pas aux exécutions sur le répertoire local d'un projet |
+| `MULTICA_GC_COMPLETED_TASK_TTL` | ECP Cloud `14d` ; auto-hébergé `0` | Délai après la fin d'une exécution de tâche au bout duquel tout son répertoire est supprimé, que la tâche soit fermée ou non ; `0` désactive. Ne s'applique pas aux exécutions sur le répertoire local d'un projet |
 | `MULTICA_GC_ORPHAN_TTL` | `72h` | Durée sans modification après laquelle un répertoire sans propriétaire identifié est supprimé |
 | `MULTICA_GC_ARTIFACT_TTL` | `12h` | Délai après la fin d'une exécution au bout duquel le contenu régénérable est supprimé (les répertoires de la ligne suivante et le cache que le daemon prépare pour Codex) ; `0` le conserve |
 | `MULTICA_GC_ARTIFACT_PATTERNS` | `node_modules,.next,.turbo` | Noms de répertoires considérés comme régénérables, séparés par des virgules. La définir **remplace** la liste par défaut : ajoutez les valeurs par défaut si vous voulez les garder. Les entrées contenant `/` ou `\` sont ignorées |
@@ -333,7 +333,7 @@ Chaque outil intégré a une variable de chemin, `MULTICA_<PREFIX>_PATH`. Quand 
 </Accordion>
 </Accordions>
 
-QwenPaw et MiniMax Code n'ont pas de variable de modèle, car Multica ne leur envoie jamais de modèle ; consultez [Comparaison des outils de codage IA](/providers#sources-des-modèles). DeepSeek Harness a aussi `MULTICA_DSH_PROFILE_BUNDLE` et `MULTICA_DSH_PLUGIN_PATH`, décrits dans la section suivante.
+QwenPaw et MiniMax Code n'ont pas de variable de modèle, car ECP ne leur envoie jamais de modèle ; consultez [Comparaison des outils de codage IA](/providers#sources-des-modèles). DeepSeek Harness a aussi `MULTICA_DSH_PROFILE_BUNDLE` et `MULTICA_DSH_PLUGIN_PATH`, décrits dans la section suivante.
 
 Les arguments par défaut à l'échelle de la machine via `MULTICA_<PREFIX>_ARGS` sont actuellement pris en charge pour cinq outils : Claude Code, Codex, CodeBuddy, Qwen Code et QwenPaw. Les variables sont `MULTICA_CLAUDE_ARGS`, `MULTICA_CODEX_ARGS`, `MULTICA_CODEBUDDY_ARGS`, `MULTICA_QWEN_ARGS` et `MULTICA_QWENPAW_ARGS`. Par exemple :
 
@@ -344,9 +344,9 @@ MULTICA_CLAUDE_ARGS=--max-turns 40
 
 ### Installation du profil DeepSeek Harness
 
-`MULTICA_DSH_PROFILE_BUNDLE` est une liste de bundles, séparés par des virgules, à installer dans le profil `multica` lorsque ce profil est absent, essayés dans l'ordre, chaque entrée étant une spécification npm, un répertoire ou une archive tarball empaquetée. Elle n'est pas définie par défaut. C'est ce profil qui fournit le protocole `--stdio` que pilote Multica : si la variable n'est pas définie, l'installation DSH reste intacte et le daemon signale le profil manquant au lieu d'enregistrer un runtime inutilisable.
+`MULTICA_DSH_PROFILE_BUNDLE` est une liste de bundles, séparés par des virgules, à installer dans le profil `multica` lorsque ce profil est absent, essayés dans l'ordre, chaque entrée étant une spécification npm, un répertoire ou une archive tarball empaquetée. Elle n'est pas définie par défaut. C'est ce profil qui fournit le protocole `--stdio` que pilote ECP : si la variable n'est pas définie, l'installation DSH reste intacte et le daemon signale le profil manquant au lieu d'enregistrer un runtime inutilisable.
 
-Le bridge de Multica n'est pas encore publié sur un registre npm public ; le choix d'une valeur est traité dans [Installer un runtime d'agent](/install-agent-runtime). Ce que vous définissez est installé dans le répertoire DSH de chaque hôte de daemon sans autre confirmation : considérez ce choix comme une décision relative à la chaîne d'approvisionnement.
+Le bridge de ECP n'est pas encore publié sur un registre npm public ; le choix d'une valeur est traité dans [Installer un runtime d'agent](/install-agent-runtime). Ce que vous définissez est installé dans le répertoire DSH de chaque hôte de daemon sans autre confirmation : considérez ce choix comme une décision relative à la chaîne d'approvisionnement.
 
 Cette installation est volontairement limitée : elle s'exécute au plus une fois par durée de vie du daemon, uniquement lorsque la sonde signale que le profil est réellement absent, et un échec est journalisé avec la sortie du gestionnaire de paquets lui-même et n'est retenté qu'après un redémarrage du daemon. Une sonde qui expire, ou qui répond avec une version de protocole que ce daemon ne pilote pas, est signalée et ne donne jamais lieu à une installation par-dessus : le daemon n'écrase pas un profil présent à dessein. Pour diagnostiquer, recherchez `DSH runtime profile` dans le journal du daemon ; pour annuler une installation, supprimez `$DSH_HOME/profiles/multica` (par défaut `~/.dsh/profiles/multica`).
 
@@ -371,7 +371,7 @@ Clés prises en charge :
 
 | Clé | Valeur par défaut | Description |
 |---|---|---|
-| `server_url` | `ws://localhost:8080/ws` | URL de l'API / WebSocket Multica |
+| `server_url` | `ws://localhost:8080/ws` | URL de l'API / WebSocket ECP |
 | `app_url` | vide | URL web utilisée pour la connexion dans le navigateur |
 | `workspace_id` | vide | Espace de travail par défaut |
 | `device_name` | nom d'hôte | Nom de l'appareil affiché dans la liste des runtimes |
@@ -399,7 +399,7 @@ Quelques règles concernant les valeurs :
 
 | Variable | Valeur par défaut | Description |
 |---|---|---|
-| `DO_NOT_TRACK` | vide (télémétrie activée) | Définissez `1` ou `true` (insensible à la casse) pour arrêter la collecte et l'envoi de la télémétrie anonyme propre à Multica pour les instances auto-hébergées |
+| `DO_NOT_TRACK` | vide (télémétrie activée) | Définissez `1` ou `true` (insensible à la casse) pour arrêter la collecte et l'envoi de la télémétrie anonyme propre à ECP pour les instances auto-hébergées |
 | `ANALYTICS_DISABLED` | `false` | Définissez `true` pour désactiver l'envoi de données à PostHog |
 | `POSTHOG_API_KEY` | vide | L'envoi est désactivé si elle n'est pas définie ; définissez-la pour utiliser votre propre projet PostHog |
 | `POSTHOG_HOST` | `https://us.i.posthog.com` | Hôte PostHog |
@@ -408,7 +408,7 @@ Quelques règles concernant les valeurs :
 
 La télémétrie auto-hébergée de première partie est désactivée dans ce déploiement : le serveur définit `DO_NOT_TRACK`, donc aucun instantané quotidien n'est collecté ni envoyé. `ANALYTICS_DISABLED` contrôle l'intégration PostHog, qui est indépendante.
 
-`DO_NOT_TRACK` et `ANALYTICS_DISABLED` sont indépendantes. La première contrôle cet instantané anonyme propre à Multica ; la seconde contrôle l'intégration facultative avec PostHog.
+`DO_NOT_TRACK` et `ANALYTICS_DISABLED` sont indépendantes. La première contrôle cet instantané anonyme propre à ECP ; la seconde contrôle l'intégration facultative avec PostHog.
 
 ## Étapes suivantes
 

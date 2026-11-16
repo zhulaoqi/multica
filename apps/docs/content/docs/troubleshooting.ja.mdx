@@ -7,7 +7,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
-まず、問題がどの層で起きているかを切り分けます。Multica サービス、デーモン、ランタイム、AI コーディングツールのどれかです。多くの場合、次のコマンドだけで最初の有効なエラーが見つかります。
+まず、問題がどの層で起きているかを切り分けます。ECP サービス、デーモン、ランタイム、AI コーディングツールのどれかです。多くの場合、次のコマンドだけで最初の有効なエラーが見つかります。
 
 <Tabs items={["すべてのインストール方法", "セルフホストサービス"]}>
 <Tab value="すべてのインストール方法">
@@ -48,7 +48,7 @@ multica daemon logs --lines 100
 よくある原因:
 
 - CLI がまだログインしていない、またはローカルに保存されたトークンが失効している。
-- デーモンが誤った Multica サービスに接続している。
+- デーモンが誤った ECP サービスに接続している。
 - 実行用コンピューターが API に到達できない、または DNS、TLS、ファイアウォールが接続を遮っている。
 - 現在のアカウントが対象ワークスペースのメンバーではなくなっている。
 - サポートされている AI コーディングツールがこのマシンに 1 つもインストールされておらず、デーモンが起動できない。
@@ -82,7 +82,7 @@ curl -fsS <server-url>/health
 
 `multica login` でブラウザが開き、Web 側のサインインは完了するのに、CLI は「Sign-in did not complete」または「TLS handshake timed out」で失敗します。`multica --debug login` では `POST /api/tokens` に `net/http: TLS handshake timeout` と表示され、同じマシンの `curl.exe -I https://multica.example.com` やブラウザは問題なく接続できます。
 
-TCP 接続は確立されますが、TLS ハンドシェイクが完了しません。Multica CLI とデーモンを含む Go クライアントは、既定で TLS ClientHello にポスト量子鍵交換を含めるため、ClientHello が約 1.5 KB になり 2 つのパケットに分割されます。一部のセキュリティソフト、VPN、ルーター、ファイアウォールはこのようなハンドシェイクを破棄します。curl の ClientHello はずっと小さいため通過します。
+TCP 接続は確立されますが、TLS ハンドシェイクが完了しません。ECP CLI とデーモンを含む Go クライアントは、既定で TLS ClientHello にポスト量子鍵交換を含めるため、ClientHello が約 1.5 KB になり 2 つのパケットに分割されます。一部のセキュリティソフト、VPN、ルーター、ファイアウォールはこのようなハンドシェイクを破棄します。curl の ClientHello はずっと小さいため通過します。
 
 ポスト量子鍵交換を無効にして再試行し、原因を確認します。
 
@@ -139,7 +139,7 @@ multica issue runs <issue-id>
 </Tab>
 <Tab value="waiting_local_directory">
 
-これは、進行中の別の実行が同じローカルディレクトリを使っていることを意味します。2 つのエージェントが同じファイルを同時に変更しないよう、Multica はディレクトリロックの解放を待ちます。
+これは、進行中の別の実行が同じローカルディレクトリを使っていることを意味します。2 つのエージェントが同じファイルを同時に変更しないよう、ECP はディレクトリロックの解放を待ちます。
 
 この待機はディレクトリの `in_place`（「直接」）モードにのみ存在します。ディレクトリが git リポジトリであれば、リソースを `worktree`（「並行」）に切り替えるとキューそのものがなくなります。各実行が自分のワークツリーを受け取り、成果をブランチとして返すため、どの実行も待ちません。[プロジェクトリソース](/project-resources#実行がディレクトリを共有する方法)を参照してください。
 
@@ -174,7 +174,7 @@ Homebrew でインストールした `multica` CLI が `brew upgrade`、`multica
 2. 無人で動かす Mac では、新しいバイナリにフルディスクアクセスを付与します。`realpath "$(command -v multica)"` でパスを表示し、**システム設定 → プライバシーとセキュリティ → フルディスクアクセス**で古い `multica` の項目を削除してそのパスを追加します（ファイル選択画面で ⌘⇧G を押すとパスを貼り付けられます）。
 3. デーモンを起動したときと同じ方法で再起動します。通常は `multica daemon restart`、LaunchAgent の場合は `launchctl kickstart -k gui/$(id -u)/<label>` です。
 
-CLI をアップグレードするたびにこの手順を繰り返してください。自動更新がデフォルトで有効なのは Multica Cloud に接続したデーモンだけです。`--no-auto-update` を付けてデーモンを起動すると、手動で実行したときだけアップグレードされます。[Multica Desktop](/desktop-app) に同梱の CLI は Developer ID で署名されているため、アップグレード後も許可が維持されます。
+CLI をアップグレードするたびにこの手順を繰り返してください。自動更新がデフォルトで有効なのは ECP Cloud に接続したデーモンだけです。`--no-auto-update` を付けてデーモンを起動すると、手動で実行したときだけアップグレードされます。[ECP Desktop](/desktop-app) に同梱の CLI は Developer ID で署名されているため、アップグレード後も許可が維持されます。
 
 </Accordion>
 </Accordions>
@@ -219,7 +219,7 @@ docker compose -f docker-compose.selfhost.yml logs backend \
 - **Resend**: API key が有効で、送信元アドレスのドメインが検証済みであることを確認します。
 - **SMTP**: ホスト、ポート、資格情報、送信元アドレスを確認し、エラーログから失敗が接続、TLS、認証、配送のどの段階で起きたかを判断します。
 
-`SMTP_HOST` と Resend が両方設定されている場合、Multica は SMTP を優先します。設定方法は[ログインとサインアップ](/auth-setup#メール認証コード)を参照してください。
+`SMTP_HOST` と Resend が両方設定されている場合、ECP は SMTP を優先します。設定方法は[ログインとサインアップ](/auth-setup#メール認証コード)を参照してください。
 
 <Callout type="warning">
 プロダクションではログ内の認証コードに依存せず、固定のローカルテスト認証コードも有効にしないでください。
@@ -297,7 +297,7 @@ netstat -ano | findstr :8080
 </Tab>
 </Tabs>
 
-それが別の Multica チェックアウトであれば、まずそのディレクトリで `make stop` を実行してください。そうでなければ、占有しているプログラムを通常の方法で停止するか、現在のサービスのポートを変更します。公開ポートの 80/443 は、Caddy や Nginx などのリバースプロキシがリッスンします。
+それが別の ECP チェックアウトであれば、まずそのディレクトリで `make stop` を実行してください。そうでなければ、占有しているプログラムを通常の方法で停止するか、現在のサービスのポートを変更します。公開ポートの 80/443 は、Caddy や Nginx などのリバースプロキシがリッスンします。
 
 </Accordion>
 </Accordions>

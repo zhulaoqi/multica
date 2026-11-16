@@ -29,7 +29,7 @@ Sur la page **Skills** de l'espace de travail, choisissez « Nouveau skill ». Q
 | **Importer depuis une URL** | Importez un skill publié depuis GitHub, ClawHub ou Skills.sh. |
 | **Copier depuis un runtime** | Analysez les skills d'un ordinateur connecté et copiez ceux que vous sélectionnez dans l'espace de travail. |
 
-La copie depuis un runtime prend un instantané des fichiers à ce moment-là. Les modifications ultérieures des fichiers locaux ne mettent pas automatiquement à jour la version de l'espace de travail ; réimportez le skill ou modifiez-le dans Multica.
+La copie depuis un runtime prend un instantané des fichiers à ce moment-là. Les modifications ultérieures des fichiers locaux ne mettent pas automatiquement à jour la version de l'espace de travail ; réimportez le skill ou modifiez-le dans ECP.
 
 Le même format d'archive fonctionne depuis le CLI :
 
@@ -92,9 +92,9 @@ Seuls les membres autorisés à modifier l'agent peuvent ajouter, retirer ou dé
 
 ## Skills de l'espace de travail et skills du dépôt
 
-Les skills de l'espace de travail sont stockés dans Multica — idéal pour les skills que l'équipe maintient ensemble et ajoute à différents agents.
+Les skills de l'espace de travail sont stockés dans ECP — idéal pour les skills que l'équipe maintient ensemble et ajoute à différents agents.
 
-Certains outils de codage IA lisent aussi des skills au niveau du projet directement depuis le dépôt de code, comme `.claude/skills/` ou `.agents/skills/`. Ces fichiers restent gérés par le dépôt ; Multica ne les enregistre pas automatiquement comme skills de l'espace de travail. La prise en charge dépend de l'outil utilisé — voir [Comparatif des outils de codage IA](/providers).
+Certains outils de codage IA lisent aussi des skills au niveau du projet directement depuis le dépôt de code, comme `.claude/skills/` ou `.agents/skills/`. Ces fichiers restent gérés par le dépôt ; ECP ne les enregistre pas automatiquement comme skills de l'espace de travail. La prise en charge dépend de l'outil utilisé — voir [Comparatif des outils de codage IA](/providers).
 
 Les skills locaux au runtime déjà installés sur un ordinateur connecté (Claude Code et Codex) apparaissent dans l'onglet **Skills** de l'agent et peuvent être désactivés agent par agent. Cette désactivation requiert également le droit de modifier l'agent.
 
@@ -105,7 +105,7 @@ Tout membre de l'espace de travail peut créer ou importer un skill. Le créateu
 La suppression est définitive et retire le skill de tous les agents en même temps.
 
 <Callout type="warning">
-Les skills importés depuis des sources externes peuvent contenir des scripts, des commandes ou des instructions dangereuses. Multica ne les vérifie pas, ne les signe pas et ne les isole pas dans un bac à sable à votre place. Le contenu importé est transmis tel quel aux agents : la source doit donc être digne de confiance.
+Les skills importés depuis des sources externes peuvent contenir des scripts, des commandes ou des instructions dangereuses. ECP ne les vérifie pas, ne les signe pas et ne les isole pas dans un bac à sable à votre place. Le contenu importé est transmis tel quel aux agents : la source doit donc être digne de confiance.
 </Callout>
 
 ## Étapes suivantes

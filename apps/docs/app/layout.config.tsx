@@ -7,7 +7,7 @@ export const baseOptions: BaseLayoutProps = {
   nav: {
     title: (
       <span className="inline-flex items-center gap-2 font-semibold text-base">
-        <MulticaWordmark className="h-[15px]" />
+        <MulticaWordmark className="text-[15px]" />
         Docs
       </span>
     ),

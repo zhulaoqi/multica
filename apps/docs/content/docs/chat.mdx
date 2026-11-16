@@ -12,7 +12,7 @@ Chat fits work that hasn't become a clear issue yet: sorting out ideas, checking
 
 Chat is a one-to-one conversation between you and an [agent](/agents), off the [issue](/issues) board. The whole conversation is **fully private**: nobody else in the [workspace](/workspaces), admins included, can see it.
 
-A chat is **not bound to any issue**. The agent isn't watching your board, doesn't automatically receive an issue's description and comments, and won't turn the conversation into issues on its own. It can still use the Multica CLI to query workspaces, projects, issues, and skills within its permissions, and when you explicitly ask, it acts with your workspace access, for example to create an issue.
+A chat is **not bound to any issue**. The agent isn't watching your board, doesn't automatically receive an issue's description and comments, and won't turn the conversation into issues on its own. It can still use the ECP CLI to query workspaces, projects, issues, and skills within its permissions, and when you explicitly ask, it acts with your workspace access, for example to create an issue.
 
 A chat can also carry background. Click **+** at the bottom left of the input and choose **Project context** to attach a [project](/projects) to the conversation; when the agent runs, it receives that project's description, repositories, and other resources.
 
@@ -36,7 +36,7 @@ Type a message; you can also attach images or files.
 </Step>
 <Step>
 
-After you send, Multica creates a run for the message, and the reply comes back to the current conversation.
+After you send, ECP creates a run for the message, and the reply comes back to the current conversation.
 
 </Step>
 </Steps>
@@ -51,7 +51,7 @@ After the agent replies, it sometimes offers **Follow-up questions** below the r
 
 ## Chat from any page
 
-You don't have to leave the page you're on to chat. Workspace pages have a round chat button in the bottom-right corner (its tooltip reads "Ask Multica"), which opens a floating chat window. The window and the **Chat** page share the same conversations, so you can pick up a chat from either one.
+You don't have to leave the page you're on to chat. Workspace pages have a round chat button in the bottom-right corner (its tooltip reads "Ask ECP"), which opens a floating chat window. The window and the **Chat** page share the same conversations, so you can pick up a chat from either one.
 
 - Press `⌘J` (`Ctrl+J` on Windows and Linux) to open or close the floating window; opening it puts the cursor in the message input. The key works while you're typing in that input, too. You can rebind it under **Settings → Shortcuts**; see [Search, shortcuts, and preferences](/shortcuts).
 - Drag the window's edges to resize it, or expand or minimize it. While an agent is replying, the closed chat button pulses gently.
@@ -68,11 +68,11 @@ If you don't want the floating window, turn off **Floating chat window** under *
 | Letting teammates see the background and continue the discussion | **Issue** |
 | A quick look at workspace information with no work record needed | **Chat** |
 
-Direct chats created in Multica can be read only by their creator, not by other members or admins. Put conclusions the team needs to see into an issue, a project description, or a skill.
+Direct chats created in ECP can be read only by their creator, not by other members or admins. Put conclusions the team needs to see into an issue, a project description, or a skill.
 
 ## Multi-turn context
 
-A conversation tries to continue the original session in the AI coding tool, so later messages don't need to repeat earlier content. Multica stores the session ID and routes subsequent runs to a runtime that can access that session.
+A conversation tries to continue the original session in the AI coding tool, so later messages don't need to repeat earlier content. ECP stores the session ID and routes subsequent runs to a runtime that can access that session.
 
 If the local session no longer exists, the context can't be continued, or the previous error shouldn't be reused, the runtime starts from a fresh session. The conversation's message history is kept either way.
 

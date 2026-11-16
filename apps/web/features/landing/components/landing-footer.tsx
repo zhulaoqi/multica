@@ -29,7 +29,7 @@ export function LandingFooter() {
           {/* Left — newsletter / CTA */}
           <div className="lg:w-[340px] lg:shrink-0">
             <Link href="#product" className="flex items-center">
-              <MulticaWordmark className="h-[22px] text-white" />
+              <MulticaWordmark className="text-[22px] text-white" />
             </Link>
             <p className="mt-4 max-w-[300px] text-body leading-[1.7] text-white/50 sm:text-body-lg">
               {t.footer.tagline}
@@ -128,7 +128,7 @@ export function LandingFooter() {
 
         {/* Giant logo */}
         <div className="relative overflow-hidden pb-4">
-          <MulticaWordmark className="h-auto w-full text-white" />
+          <MulticaWordmark className="w-full text-[16vw] leading-none text-white" />
         </div>
       </div>
     </footer>

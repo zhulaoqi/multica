@@ -6,6 +6,7 @@ import { Inter, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { cn } from "@multica/ui/lib/utils";
+import { BRAND } from "@multica/ui/lib/multica-brand";
 import { baseOptions } from "@/app/layout.config";
 import { source } from "@/lib/source";
 import { i18n, type Lang } from "@/lib/i18n";
@@ -48,11 +49,10 @@ const sourceSerif = Source_Serif_4({
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | Multica Docs",
-    default: "Multica Docs",
+    template: `%s | ${BRAND.short} Docs`,
+    default: `${BRAND.short} Docs`,
   },
-  description:
-    "Documentation for Multica — the source-available managed agents platform.",
+  description: `${BRAND.full}文档：人和智能体协同工作的使用说明。`,
   // Internal deployment: the docs site is reachable only inside the company
   // network, so nothing here should end up in a search index.
   robots: { index: false, follow: false },

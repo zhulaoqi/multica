@@ -12,7 +12,7 @@ Discussion convient aux sujets qui n'ont pas encore pris la forme d'une tâche c
 
 Une discussion est une conversation en tête-à-tête entre vous et un [agent](/agents), en dehors du tableau des [tâches](/issues). Elle est **entièrement privée** : personne d'autre dans l'[espace de travail](/workspaces), pas même les administrateurs, ne peut la voir.
 
-Une discussion n'est **liée à aucune tâche**. L'agent ne regarde pas votre tableau, ne reçoit pas automatiquement la description et les commentaires d'une tâche, et ne transforme pas la conversation en tâches de lui-même. Il peut toujours utiliser le CLI Multica pour consulter les espaces de travail, projets, tâches et skills dans la limite de ses autorisations, et quand vous le lui demandez explicitement, il agit avec vos accès à l'espace de travail, par exemple pour créer une tâche.
+Une discussion n'est **liée à aucune tâche**. L'agent ne regarde pas votre tableau, ne reçoit pas automatiquement la description et les commentaires d'une tâche, et ne transforme pas la conversation en tâches de lui-même. Il peut toujours utiliser le CLI ECP pour consulter les espaces de travail, projets, tâches et skills dans la limite de ses autorisations, et quand vous le lui demandez explicitement, il agit avec vos accès à l'espace de travail, par exemple pour créer une tâche.
 
 Une discussion peut aussi porter un contexte. Cliquez sur **+** en bas à gauche de la zone de saisie et choisissez **Contexte de projet** pour rattacher un [projet](/projects) à la conversation ; lorsque l'agent s'exécute, il reçoit la description, les dépôts et les autres ressources de ce projet.
 
@@ -36,7 +36,7 @@ Saisissez un message ; vous pouvez aussi joindre des images ou des fichiers.
 </Step>
 <Step>
 
-Après l'envoi, Multica crée une exécution pour le message, et la réponse revient dans la conversation en cours.
+Après l'envoi, ECP crée une exécution pour le message, et la réponse revient dans la conversation en cours.
 
 </Step>
 </Steps>
@@ -51,7 +51,7 @@ Après la réponse de l'agent, des **Questions de suivi** s'affichent parfois en
 
 ## Discuter depuis n'importe quelle page
 
-Inutile de quitter la page en cours pour discuter. Les pages de l'espace de travail affichent un bouton de discussion rond en bas à droite (son info-bulle indique « Demander à Multica ») qui ouvre une fenêtre de discussion flottante. Cette fenêtre et la page **Discussion** partagent les mêmes conversations : une discussion commencée d'un côté se poursuit de l'autre.
+Inutile de quitter la page en cours pour discuter. Les pages de l'espace de travail affichent un bouton de discussion rond en bas à droite (son info-bulle indique « Demander à ECP ») qui ouvre une fenêtre de discussion flottante. Cette fenêtre et la page **Discussion** partagent les mêmes conversations : une discussion commencée d'un côté se poursuit de l'autre.
 
 - Appuyez sur `⌘J` (`Ctrl+J` sous Windows et Linux) pour ouvrir ou fermer la fenêtre flottante ; à l'ouverture, le curseur se place dans la zone de saisie. La touche fonctionne aussi pendant que vous tapez dans cette zone. Vous pouvez la modifier dans **Paramètres → Raccourcis** ; voir [Recherche, raccourcis et préférences](/shortcuts).
 - Faites glisser les bords de la fenêtre pour la redimensionner, ou développez-la et réduisez-la. Pendant qu'un agent répond, le bouton de discussion fermé pulse légèrement.
@@ -68,11 +68,11 @@ Si vous ne voulez pas de la fenêtre flottante, désactivez **Fenêtre de discus
 | Permettre à vos coéquipiers de voir le contexte et de poursuivre la discussion | **Tâche** |
 | Un coup d'œil rapide aux informations de l'espace de travail, sans besoin de garder une trace du travail | **Discussion** |
 
-Seul leur créateur peut lire les discussions directes créées dans Multica ; les autres membres et les administrateurs ne le peuvent pas. Consignez les conclusions que l'équipe doit voir dans une tâche, une description de projet ou un skill.
+Seul leur créateur peut lire les discussions directes créées dans ECP ; les autres membres et les administrateurs ne le peuvent pas. Consignez les conclusions que l'équipe doit voir dans une tâche, une description de projet ou un skill.
 
 ## Contexte sur plusieurs tours
 
-Une conversation tente de poursuivre la session d'origine dans l'outil de codage IA, afin que les messages suivants n'aient pas à répéter le contenu précédent. Multica stocke l'identifiant de session et achemine les exécutions suivantes vers un runtime qui a accès à cette session.
+Une conversation tente de poursuivre la session d'origine dans l'outil de codage IA, afin que les messages suivants n'aient pas à répéter le contenu précédent. ECP stocke l'identifiant de session et achemine les exécutions suivantes vers un runtime qui a accès à cette session.
 
 Si la session locale n'existe plus, si le contexte ne peut pas être poursuivi, ou si l'erreur précédente ne doit pas être réutilisée, le runtime démarre une nouvelle session. L'historique des messages de la conversation est conservé dans tous les cas.
 

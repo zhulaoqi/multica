@@ -1,6 +1,6 @@
 ---
 title: Install AI coding tools
-description: Install and sign in to a supported AI coding tool so Multica can execute runs on your machine.
+description: Install and sign in to a supported AI coding tool so ECP can execute runs on your machine.
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -8,7 +8,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
-A local runtime has two parts: the Multica daemon, and one AI coding tool it can invoke. Install only the tool you intend to use — you do not need all of them.
+A local runtime has two parts: the ECP daemon, and one AI coding tool it can invoke. Install only the tool you intend to use — you do not need all of them.
 
 <Steps>
 <Step>
@@ -17,7 +17,7 @@ A local runtime has two parts: the Multica daemon, and one AI coding tool it can
 
 A tool that is already installed and signed in needs no extra setup. Tools differ in models, MCP, session resumption, and skill support; the details are in [AI coding tools comparison](/providers).
 
-Multica currently detects these commands:
+ECP currently detects these commands:
 
 | Tool | Detected command | Official install guide |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Multica currently detects these commands:
 | Devin CLI | `devin` | [Install Devin CLI](https://docs.devin.ai/cli/quickstart) |
 | ZeroClaw | `zeroclaw` | [ZeroClaw quickstart](https://github.com/zeroclaw-labs/zeroclaw/blob/master/docs/book/src/getting-started/quickstart.md#install) |
 
-"Supported" means Multica can invoke that CLI. It does not mean Multica provides the tool's account, subscription, or model quota for you.
+"Supported" means ECP can invoke that CLI. It does not mean ECP provides the tool's account, subscription, or model quota for you.
 
 </Step>
 <Step>
@@ -60,7 +60,7 @@ Multica currently detects these commands:
 
 After installing, launch the tool once in a terminal on its own and complete its sign-in or model provider setup. If the tool cannot complete requests in the terminal, the daemon's invocations fail the same way.
 
-Those login credentials are stored locally by the tool itself. Multica never receives login tokens from Claude, Codex, Cursor, or any other CLI.
+Those login credentials are stored locally by the tool itself. ECP never receives login tokens from Claude, Codex, Cursor, or any other CLI.
 
 Below the minimum version, the daemon does not register the corresponding runtime:
 
@@ -83,14 +83,14 @@ A few tools need extra setup beyond signing in:
 <Accordions type="multiple">
 <Accordion title="CodeArts" id="codearts">
 
-Verify the non-interactive path with `codearts run --model provider/model "Reply OK"`, not only the TUI. The current CodeArts CLI can let a custom provider work in the TUI while `run`, `models`, and `serve` still require [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html). Multica can discover custom models from `~/.codeartsdoer/codearts_cli.json` or `.jsonc`, but agent runs use `codearts run` and therefore follow its authorization requirements.
+Verify the non-interactive path with `codearts run --model provider/model "Reply OK"`, not only the TUI. The current CodeArts CLI can let a custom provider work in the TUI while `run`, `models`, and `serve` still require [`CODEARTS_CLI_AK` / `CODEARTS_CLI_SK`](https://support.huaweicloud.com/usermanual-cli/codeartsagent_cli_0026.html). ECP can discover custom models from `~/.codeartsdoer/codearts_cli.json` or `.jsonc`, but agent runs use `codearts run` and therefore follow its authorization requirements.
 
 </Accordion>
 <Accordion title="DeepSeek Harness" id="deepseek-harness">
 
-Install Node.js 20+ and run `npm install -g @deepseek-ai/dsh`, then give it the Multica runtime profile — the bundle that implements the `--stdio` protocol Multica drives, and the reason a bare `dsh` is not usable on its own. Set `DEEPSEEK_API_KEY` (or store it in dsh's own settings) before starting the daemon.
+Install Node.js 20+ and run `npm install -g @deepseek-ai/dsh`, then give it the ECP runtime profile — the bundle that implements the `--stdio` protocol ECP drives, and the reason a bare `dsh` is not usable on its own. Set `DEEPSEEK_API_KEY` (or store it in dsh's own settings) before starting the daemon.
 
-**Installing the profile.** Set `MULTICA_DSH_PROFILE_BUNDLE` to the bundle to install and the daemon adds it for you, or add it yourself with `dsh plugin --profile multica add <bundle>`. `<bundle>` is anything `dsh plugin` accepts — an npm package name, a directory, or a packed tarball — and Multica's own bridge lives at multica-ai/dsh-multica-runtime. It is not on a public npm registry yet, so today a self-hosted team builds it from that repository and points the variable at the build directory, or at the tarball `npm pack` produces — the latter if the machine running the daemon is not the machine that built it. A package name becomes the simplest option once the bridge is published.
+**Installing the profile.** Set `MULTICA_DSH_PROFILE_BUNDLE` to the bundle to install and the daemon adds it for you, or add it yourself with `dsh plugin --profile multica add <bundle>`. `<bundle>` is anything `dsh plugin` accepts — an npm package name, a directory, or a packed tarball — and ECP's own bridge lives at multica-ai/dsh-multica-runtime. It is not on a public npm registry yet, so today a self-hosted team builds it from that repository and points the variable at the build directory, or at the tarball `npm pack` produces — the latter if the machine running the daemon is not the machine that built it. A package name becomes the simplest option once the bridge is published.
 
 **Migrating an existing profile.** Back up the profile and follow the bridge repository's README to build a bundle compatible with your DSH version. Install that directory or tarball manually, then ensure `dsh.profile.bundles` loads `@multica-ai/dsh-runtime`: replace `dsh-profile-multica` if present, or remove it if both bridges are listed. A dependency entry alone does not load the runtime. `MULTICA_DSH_PROFILE_BUNDLE` will not migrate an existing bridge configuration. Verify the result with `dsh --profile multica --probe`.
 
@@ -105,22 +105,22 @@ The daemon registers DeepSeek Harness only after `dsh --profile multica --probe`
 </Accordion>
 <Accordion title="Devin CLI" id="devin-cli">
 
-Devin runs locally through `devin acp`, not cloud Devin VMs. Run `devin auth login` first. Multica checks the binary's version, not ACP's `agentInfo.version` (which can be `0.0.0-dev`).
+Devin runs locally through `devin acp`, not cloud Devin VMs. Run `devin auth login` first. ECP checks the binary's version, not ACP's `agentInfo.version` (which can be `0.0.0-dev`).
 
 </Accordion>
 <Accordion title="MiniMax Code" id="minimax-code">
 
-Install a supported Node.js release (`>=22.19 <23` or `>=24 <27`) and run `npm install --global @minimax-ai/code@latest`. A global npm install places `mcode` on npm's global binary path; if `command -v mcode` or `Get-Command mcode` cannot find it, add that path to `PATH`. Then run `mcode login`. MiniMax Code owns the model selection; Multica cannot override it through ACP.
+Install a supported Node.js release (`>=22.19 <23` or `>=24 <27`) and run `npm install --global @minimax-ai/code@latest`. A global npm install places `mcode` on npm's global binary path; if `command -v mcode` or `Get-Command mcode` cannot find it, add that path to `PATH`. Then run `mcode login`. MiniMax Code owns the model selection; ECP cannot override it through ACP.
 
 </Accordion>
 <Accordion title="Muse Code" id="muse-code">
 
-Muse Code requires 1.4.10 or later. Follow the [official installation and sign-in guide](https://dev.meta.ai/docs/muse-code), then confirm `muse` is on `PATH`. Multica discovers its models over MSP and supports continuing sessions.
+Muse Code requires 1.4.10 or later. Follow the [official installation and sign-in guide](https://dev.meta.ai/docs/muse-code), then confirm `muse` is on `PATH`. ECP discovers its models over MSP and supports continuing sessions.
 
 </Accordion>
 <Accordion title="QwenPaw" id="qwenpaw">
 
-Choose the provider and model in QwenPaw's own configuration. Multica cannot override a QwenPaw model at run time.
+Choose the provider and model in QwenPaw's own configuration. ECP cannot override a QwenPaw model at run time.
 
 </Accordion>
 <Accordion title="Reasonix" id="reasonix">
@@ -185,12 +185,12 @@ multica daemon restart
 </Tab>
 <Tab value="Desktop">
 
-Quit and reopen Multica Desktop.
+Quit and reopen ECP Desktop.
 
 </Tab>
 </Tabs>
 
-Then open Multica's **Runtimes** page. The tool appears under the target computer and shows as online. You can now select this runtime when creating or editing an agent.
+Then open ECP's **Runtimes** page. The tool appears under the target computer and shows as online. You can now select this runtime when creating or editing an agent.
 
 <Callout type="warning">
 The daemon must detect at least one built-in supported CLI before it will start. Custom runtime profiles sync after the daemon is up, so they cannot be the sole startup condition on a blank machine. There is one exception: when the daemon has just begun installing the DSH runtime profile itself (`MULTICA_DSH_PROFILE_BUNDLE`), it starts with no runtimes and registers DeepSeek Harness once that install finishes. Without it, a host whose only tool is a DSH that needs the profile could never complete the install — the daemon would exit before it finished and take it down with it.
@@ -215,6 +215,6 @@ If the tool shows as online but runs still fail, open the issue's run record to 
 
 - [Create and configure an agent](/agents-create) — select the runtime you just connected.
 - [Daemon and runtimes](/daemon-runtimes) — online status, concurrency, and custom runtimes.
-- [AI coding tools comparison](/providers) — compare what each tool can do in Multica.
+- [AI coding tools comparison](/providers) — compare what each tool can do in ECP.
 
 ZCode Desktop on macOS is discovered from its application bundle. Install Node.js and enable a working API connection in the desktop app. Model and reasoning choices are supplied by ZCode itself; see [the runtime comparison](/providers#zcode).

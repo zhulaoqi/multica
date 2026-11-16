@@ -1,24 +1,24 @@
 ---
 title: Daemon et runtimes
-description: Comment Multica connecte les ordinateurs, détecte les outils de codage IA et lance les exécutions.
+description: Comment ECP connecte les ordinateurs, détecte les outils de codage IA et lance les exécutions.
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { RuntimeOfflineDemo } from "@/components/demos/runtime-offline-demo";
 
-Multica enregistre et coordonne le travail ; ce sont les ordinateurs connectés qui l'exécutent. Le **daemon** d'un ordinateur prend en charge les exécutions et invoque les outils de codage IA installés sur cette machine.
+ECP enregistre et coordonne le travail ; ce sont les ordinateurs connectés qui l'exécutent. Le **daemon** d'un ordinateur prend en charge les exécutions et invoque les outils de codage IA installés sur cette machine.
 
 ## Daemon et runtime
 
-- Le **daemon** est le processus d'arrière-plan de Multica qui tourne sur un ordinateur. Il se connecte au serveur, détecte les outils locaux, prend en charge les exécutions et renvoie les résultats.
+- Le **daemon** est le processus d'arrière-plan de ECP qui tourne sur un ordinateur. Il se connecte au serveur, détecte les outils locaux, prend en charge les exécutions et renvoie les résultats.
 - Un **runtime** représente un environnement d'exécution concret mis à la disposition d'un espace de travail. Il correspond à un ordinateur associé à un outil de codage IA — ou à un profil de runtime personnalisé — sur cet ordinateur.
 
 Par exemple, si un ordinateur sur lequel sont installés Claude Code et Codex est connecté à deux espaces de travail, le daemon enregistre un runtime Claude Code et un runtime Codex pour chaque espace de travail. Redémarrer le daemon met à jour les enregistrements existants ; il ne crée pas de nouveaux runtimes à chaque fois pour la même combinaison.
 
 ## Lieu d'exécution et périmètre des données
 
-Les outils de codage IA qu'invoque un runtime local, leurs propres identifiants de connexion et vos répertoires de code locaux restent tous sur l'ordinateur connecté. Le serveur Multica n'exécute pas de commandes à la place des outils locaux et ne téléverse pas automatiquement l'intégralité de votre répertoire de travail.
+Les outils de codage IA qu'invoque un runtime local, leurs propres identifiants de connexion et vos répertoires de code locaux restent tous sur l'ordinateur connecté. Le serveur ECP n'exécute pas de commandes à la place des outils locaux et ne téléverse pas automatiquement l'intégralité de votre répertoire de travail.
 
 Pour permettre à l'équipe de collaborer, le serveur stocke les tâches, les commentaires, la configuration des agents, le contexte des exécutions, les enregistrements d'exécution et les résultats que les agents renvoient. Ce contenu peut inclure des extraits de code ou d'autres éléments de contexte du projet qu'un agent a choisi de lire et d'inclure dans ses réponses.
 
@@ -31,12 +31,12 @@ Pour permettre à l'équipe de collaborer, le serveur stocke les tâches, les co
 <Tabs items={["Desktop", "CLI"]}>
 <Tab value="Desktop">
 
-Multica Desktop démarre le daemon automatiquement ; aucune commande supplémentaire n'est nécessaire.
+ECP Desktop démarre le daemon automatiquement ; aucune commande supplémentaire n'est nécessaire.
 
 </Tab>
 <Tab value="CLI">
 
-Sur le web, sur un ordinateur distant ou dans un environnement sans interface graphique, [installez d'abord le CLI Multica](/cli), puis exécutez :
+Sur le web, sur un ordinateur distant ou dans un environnement sans interface graphique, [installez d'abord le CLI ECP](/cli), puis exécutez :
 
 ```bash
 multica daemon start
@@ -73,11 +73,11 @@ multica daemon autostart disable
 
 La commande enregistrée est `multica daemon start --foreground` pour ce profil, lancée par le système à l'ouverture de session : une valeur de registre Run pour l'utilisateur courant sous Windows, un LaunchAgent dans `~/Library/LaunchAgents` sous macOS, et une unité utilisateur systemd sous Linux, ou une entrée XDG autostart quand aucune session utilisateur systemd n'est disponible. Pour un profil nommé, ajoutez `--profile <name>` ; chaque profil est enregistré séparément.
 
-- Seul `enable` crée l'enregistrement. `multica daemon start` ne s'enregistre jamais de lui-même : il affiche une ligne d'indication quand rien n'est enregistré et, si un enregistrement créé par Multica existe, il y met à jour le chemin de l'exécutable. Mettre à jour ou déplacer la CLI ne demande donc pas de relancer `enable`.
+- Seul `enable` crée l'enregistrement. `multica daemon start` ne s'enregistre jamais de lui-même : il affiche une ligne d'indication quand rien n'est enregistré et, si un enregistrement créé par ECP existe, il y met à jour le chemin de l'exécutable. Mettre à jour ou déplacer la CLI ne demande donc pas de relancer `enable`.
 - Sous macOS et Linux, la session ne reçoit que le `PATH` capturé dans votre shell au moment de `enable`. Les autres variables exportées (clés d'API, `HTTPS_PROXY`, etc.) ne suivent pas. Enregistrez les réglages du daemon avec `multica config set` et placez les autres variables dans votre environnement utilisateur.
 - Une unité utilisateur systemd démarre à l'ouverture de session. Pour démarrer au boot sans ouvrir de session, exécutez `loginctl enable-linger <utilisateur>` comme l'indique la sortie de `enable`.
 - `multica daemon stop` arrête le daemon en cours mais conserve l'enregistrement.
-- Si un fichier que Multica n'a pas créé occupe déjà cet emplacement (votre propre unité systemd, par exemple), `enable` et `disable` refusent de le modifier.
+- Si un fichier que ECP n'a pas créé occupe déjà cet emplacement (votre propre unité systemd, par exemple), `enable` et `disable` refusent de le modifier.
 - Un daemon lancé par Desktop est géré par Desktop ; `daemon start` n'affiche pas d'indication et ne met pas à jour d'enregistrement pour lui.
 
 ## Distribution et statut en ligne
@@ -109,11 +109,11 @@ La consommation de tokens, les coûts et les échecs des exécutions sont regrou
 
 ## Configuration MCP locale [#local-mcp]
 
-Quand aucune configuration MCP n'est enregistrée sur un agent, Multica ne transmet aucun réglage MCP et l'outil lit comme d'habitude sa propre configuration sur cette machine.
+Quand aucune configuration MCP n'est enregistrée sur un agent, ECP ne transmet aucun réglage MCP et l'outil lit comme d'habitude sa propre configuration sur cette machine.
 
-Dès qu'un agent a une configuration MCP (même vide), Multica génère une configuration dédiée pour chaque exécution et la remet à l'outil ; Claude Code, par exemple, ne charge alors que ce fichier, en mode strict. Pour que les serveurs déjà configurés sur la machine continuent de fonctionner, le daemon lit la configuration MCP de niveau utilisateur de l'outil sur la machine du runtime et la fusionne avec celle de l'agent. Pour deux serveurs du même nom, la première source dans cet ordre l'emporte :
+Dès qu'un agent a une configuration MCP (même vide), ECP génère une configuration dédiée pour chaque exécution et la remet à l'outil ; Claude Code, par exemple, ne charge alors que ce fichier, en mode strict. Pour que les serveurs déjà configurés sur la machine continuent de fonctionner, le daemon lit la configuration MCP de niveau utilisateur de l'outil sur la machine du runtime et la fusionne avec celle de l'agent. Pour deux serveurs du même nom, la première source dans cet ordre l'emporte :
 
-1. les serveurs gérés par Multica ou attribués depuis la bibliothèque MCP de l'espace de travail dans l'onglet **MCP** de l'agent ;
+1. les serveurs gérés par ECP ou attribués depuis la bibliothèque MCP de l'espace de travail dans l'onglet **MCP** de l'agent ;
 2. le fichier de configuration de niveau utilisateur de l'outil ;
 3. Claude Code uniquement : les serveurs MCP fournis par les plugins Claude Code activés. Les plugins viennent de `enabledPlugins` dans `~/.claude/settings.json` ; le daemon lit le `.mcp.json` de chaque plugin et les fichiers MCP déclarés dans son manifeste.
 
@@ -126,9 +126,9 @@ Dès qu'un agent a une configuration MCP (même vide), Multica génère une conf
 | OpenClaw | `mcp.servers` dans `$CLAWDBOT_CONFIG_PATH`, ou dans `$OPENCLAW_STATE_DIR/openclaw.json` (par défaut `~/.openclaw/openclaw.json`) |
 | CodeArts | `mcp` dans `~/.codeartsdoer/codearts_cli.json` ou `codearts_cli.jsonc` |
 
-CodeBuddy, Kimi CLI et Pi chargent eux-mêmes leur configuration de niveau utilisateur au démarrage et la combinent avec ce que Multica envoie ; le daemon ne fusionne donc pas à l'avance pour eux, sinon le même serveur démarrerait deux fois. En cas de nom en double, CodeBuddy garde l'entrée de Multica. Les autres outils absents du tableau ne reçoivent que la configuration de l'agent.
+CodeBuddy, Kimi CLI et Pi chargent eux-mêmes leur configuration de niveau utilisateur au démarrage et la combinent avec ce que ECP envoie ; le daemon ne fusionne donc pas à l'avance pour eux, sinon le même serveur démarrerait deux fois. En cas de nom en double, CodeBuddy garde l'entrée de ECP. Les autres outils absents du tableau ne reçoivent que la configuration de l'agent.
 
-La fusion a lieu sur la machine du runtime : les commandes, URL, en-têtes et variables d'environnement des serveurs locaux ne sont jamais envoyés. La liste « Hérité du runtime » de l'onglet **MCP** de l'agent n'affiche que le nom, le transport, la source et l'état activé de chaque serveur ; un serveur masqué par un serveur de l'agent du même nom porte la mention « Remplacé par Multica ». Si un fichier de configuration local ne peut pas être analysé, le daemon consigne un avertissement et l'exécution n'utilise que la configuration de l'agent.
+La fusion a lieu sur la machine du runtime : les commandes, URL, en-têtes et variables d'environnement des serveurs locaux ne sont jamais envoyés. La liste « Hérité du runtime » de l'onglet **MCP** de l'agent n'affiche que le nom, le transport, la source et l'état activé de chaque serveur ; un serveur masqué par un serveur de l'agent du même nom porte la mention « Remplacé par ECP ». Si un fichier de configuration local ne peut pas être analysé, le daemon consigne un avertissement et l'exécution n'utilise que la configuration de l'agent.
 
 ## Nettoyage et conservation [#cleanup]
 
@@ -145,9 +145,9 @@ Chaque exécution a un répertoire sous la racine des espaces de travail (par d�
 | Automatisation (Exécution seule), création rapide | Au nettoyage suivant la fin de l'exécution |
 | Sans propriétaire identifié (métadonnées absentes, ou enregistrement disparu côté serveur) | Après 72 heures sans modification du répertoire |
 
-Tant que la tâche reste ouverte, 12 heures après la fin d'une exécution, seul le contenu régénérable est supprimé : les répertoires `node_modules`, `.next` et `.turbo`, ainsi que le cache que le daemon prépare pour Codex. Le reste est conservé. Un daemon connecté à Multica Cloud supprime aussi le répertoire entier 14 jours après la fin de l'exécution, que la tâche soit fermée ou non ; les daemons auto-hébergés ne le font pas par défaut.
+Tant que la tâche reste ouverte, 12 heures après la fin d'une exécution, seul le contenu régénérable est supprimé : les répertoires `node_modules`, `.next` et `.turbo`, ainsi que le cache que le daemon prépare pour Codex. Le reste est conservé. Un daemon connecté à ECP Cloud supprime aussi le répertoire entier 14 jours après la fin de l'exécution, que la tâche soit fermée ou non ; les daemons auto-hébergés ne le font pas par défaut.
 
-Une exécution sur le répertoire local d'un projet travaille dans votre propre répertoire, auquel le daemon ne touche jamais. Le répertoire de suivi que Multica crée pour cette exécution (journaux, etc.) est conservé lui aussi ; seuls les caches régénérables qu'il contient sont nettoyés.
+Une exécution sur le répertoire local d'un projet travaille dans votre propre répertoire, auquel le daemon ne touche jamais. Le répertoire de suivi que ECP crée pour cette exécution (journaux, etc.) est conservé lui aussi ; seuls les caches régénérables qu'il contient sont nettoyés.
 
 ### Cache de dépôts partagé
 
@@ -160,19 +160,19 @@ Un cache n'est supprimé que si les trois conditions sont réunies : aucun espac
 | Donnée | Emplacement | Conservation |
 |---|---|---|
 | Historiques de session Codex (un par agent et par tâche) | `multica-sessions/` dans le répertoire Codex (par défaut `~/.codex`) | Supprimés après 14 jours sans usage ; les exécutions suivantes sur cette tâche ne peuvent plus reprendre l'ancienne session Codex |
-| Historiques de session Hermes | `hermes-sessions/` dans le répertoire de configuration Multica (par défaut `~/.multica` ; `~/.multica/profiles/<name>` pour un profil nommé) | Supprimés après 14 jours sans usage |
+| Historiques de session Hermes | `hermes-sessions/` dans le répertoire de configuration ECP (par défaut `~/.multica` ; `~/.multica/profiles/<name>` pour un profil nommé) | Supprimés après 14 jours sans usage |
 | Mémoire Hermes (une par agent) | `hermes-state/` dans le même répertoire | Supprimée après 90 jours sans usage |
 | Répertoire temporaire privé de chaque exécution (`TMPDIR`) | `multica-task-*` dans le répertoire temporaire du système | Supprimé à la fin de l'exécution ; si le daemon a été tué, un nettoyage ultérieur s'en charge |
 
 Les exécutions Hermes liées à une tâche ou à un chat utilisent le répertoire persistant de leur conversation comme `HERMES_HOME` isolé, avec un fichier `state.db` ordinaire et ses journaux SQLite à l’intérieur. Cette disposition fonctionne aussi bien avec l’ACP exécuté dans le processus qu’avec l’ACP passant par la Gateway. Les historiques existants sont réutilisés et les historiques locaux sont migrés avant l’exécution suivante.
 
-Multica actualise les skills et la configuration dérivée à chaque exécution. L’authentification du fournisseur de modèles est conservée ; les adaptateurs de messagerie et les points d’entrée HTTP sont désactivés pour les exécutions gérées. L’état de la Gateway, les journaux, les sessions et les tâches cron de l’hôte sont isolés. Toute Gateway propre à une exécution est arrêtée à la fin de celle-ci afin que les exécutions suivantes utilisent leur propre environnement.
+ECP actualise les skills et la configuration dérivée à chaque exécution. L’authentification du fournisseur de modèles est conservée ; les adaptateurs de messagerie et les points d’entrée HTTP sont désactivés pour les exécutions gérées. L’état de la Gateway, les journaux, les sessions et les tâches cron de l’hôte sont isolés. Toute Gateway propre à une exécution est arrêtée à la fin de celle-ci afin que les exécutions suivantes utilisent leur propre environnement.
 
 ### Mémoire native et sous-agents de Codex [#codex-memory]
 
 Dans les exécutions Codex gérées par le daemon, la mémoire native de Codex est désactivée par défaut, pour que les souvenirs de cette machine ou d'une exécution précédente ne passent pas dans un autre espace de travail. Le réglage est écrit uniquement dans le `CODEX_HOME/config.toml` propre à l'exécution (`features.memories`, `memories.generate_memories` et `memories.use_memories` à `false`) ; votre `~/.codex/config.toml` n'est pas modifié. Pour garder la mémoire native, définissez `MULTICA_CODEX_MEMORY=1` dans l'environnement du daemon.
 
-Les sous-agents natifs de Codex sont eux aussi désactivés par défaut : Multica considère l'exécution terminée quand le fil parent se termine, et les résultats des sous-agents encore actifs sont perdus. Si vous acceptez ce risque, définissez `MULTICA_CODEX_MULTI_AGENT=1`.
+Les sous-agents natifs de Codex sont eux aussi désactivés par défaut : ECP considère l'exécution terminée quand le fil parent se termine, et les résultats des sous-agents encore actifs sont perdus. Si vous acceptez ce risque, définissez `MULTICA_CODEX_MULTI_AGENT=1`.
 
 ## Partage des runtimes [#runtimes-privés-et-publics]
 
@@ -182,7 +182,7 @@ Seul le propriétaire peut le rendre **public**. Les administrateurs de l'espace
 
 Pour le partager seulement avec certaines personnes, ouvrez la page de détail du runtime, choisissez **Membres**, sélectionnez un ou plusieurs membres de l'espace de travail, puis cliquez sur **Enregistrer**. Ces membres peuvent sélectionner le runtime et y créer des agents. Seul le propriétaire peut modifier la liste, et y figurer ne donne pas le droit de renommer, supprimer ou administrer le runtime.
 
-Lorsque le propriétaire retire des membres, restreint un runtime public à des membres spécifiques ou le rend à nouveau **privé**, Multica affiche d'abord les agents et les exécutions actives concernés, y compris les conversations de création d'agents avec Agent Builder. La confirmation dissocie les agents de ces autres membres, annule leurs exécutions en file d'attente, distribuées, en cours, en attente d'un répertoire local ou différées avec le motif `runtime_access_revoked`, et met en pause les automatisations actives assignées aux agents dissociés. Les agents et exécutions du propriétaire et des membres qui gardent l'accès ne sont pas affectés. Si le plan change, une nouvelle confirmation est nécessaire ; des modifications simultanées de la discussion peuvent nécessiter de réessayer. Pour reprendre le travail, associez l'agent à un runtime accessible, puis reprenez explicitement ses automatisations en pause.
+Lorsque le propriétaire retire des membres, restreint un runtime public à des membres spécifiques ou le rend à nouveau **privé**, ECP affiche d'abord les agents et les exécutions actives concernés, y compris les conversations de création d'agents avec Agent Builder. La confirmation dissocie les agents de ces autres membres, annule leurs exécutions en file d'attente, distribuées, en cours, en attente d'un répertoire local ou différées avec le motif `runtime_access_revoked`, et met en pause les automatisations actives assignées aux agents dissociés. Les agents et exécutions du propriétaire et des membres qui gardent l'accès ne sont pas affectés. Si le plan change, une nouvelle confirmation est nécessaire ; des modifications simultanées de la discussion peuvent nécessiter de réessayer. Pour reprendre le travail, associez l'agent à un runtime accessible, puis reprenez explicitement ses automatisations en pause.
 
 L'annulation conserve l'historique de discussion et enregistre sur le serveur les données de restauration du brouillon et des pièces jointes. Les versions web et bureau utilisent l'interface de restauration existante ; la version mobile ne propose pas encore cette interface. Une exécution démarrée sans sortie attend l'accusé d'annulation du daemon ou la fin du délai de finalisation du serveur avant de décider si la saisie doit être restaurée. Un daemon connecté reçoit l'annulation lors de sa vérification habituelle. Si l'ordinateur est hors ligne, l'accès côté serveur est tout de même révoqué immédiatement, mais le processus local peut continuer jusqu'à sa reconnexion et à la réception de l'annulation ; le serveur ne peut pas garantir un arrêt à distance immédiat.
 
@@ -190,7 +190,7 @@ L'annulation conserve l'historique de discussion et enregistre sur le serveur le
 
 Si votre équipe utilise un wrapper interne, un exécutable à version figée, ou a besoin d'arguments supplémentaires fixes pour un outil compatible, créez un **profil de runtime personnalisé**.
 
-Un profil personnalisé n'ajoute pas de nouveau protocole de communication. Vous choisissez toujours l'une des familles de protocoles que Multica prend déjà en charge (le type de protocole d'intégration de l'outil ; voir [Comparatif des outils de codage IA](/providers)), et la commande elle-même doit être compatible avec cette famille.
+Un profil personnalisé n'ajoute pas de nouveau protocole de communication. Vous choisissez toujours l'une des familles de protocoles que ECP prend déjà en charge (le type de protocole d'intégration de l'outil ; voir [Comparatif des outils de codage IA](/providers)), et la commande elle-même doit être compatible avec cette famille.
 
 ### Environnement du runtime pendant une exécution
 
@@ -204,8 +204,8 @@ Le tableau liste les variables que les runtimes personnalisés peuvent utiliser 
 | `MULTICA_TASK_ID` | ID de l'exécution en cours | **Contrat d'intégration** |
 | `MULTICA_AGENT_ID` | ID de l'agent assigné | **Contrat d'intégration** |
 | `MULTICA_WORKSPACE_ID` | ID de l'espace de travail de l'exécution | **Contrat d'intégration** |
-| `MULTICA_SERVER_URL` | URL du serveur Multica sélectionnée par le daemon | **Contrat d'intégration** |
-| `MULTICA_TASK_CONFIG_ROOT` | Racine privée de configuration du CLI Multica, propre à l'exécution | Indicatif |
+| `MULTICA_SERVER_URL` | URL du serveur ECP sélectionnée par le daemon | **Contrat d'intégration** |
+| `MULTICA_TASK_CONFIG_ROOT` | Racine privée de configuration du CLI ECP, propre à l'exécution | Indicatif |
 | `MULTICA_TASK_WORKSPACES_ROOT` | Racine des répertoires de travail des exécutions gérés par le daemon | Indicatif |
 | `MULTICA_AGENT_NAME` | Nom affiché de l'agent assigné | Indicatif |
 | `MULTICA_DAEMON_PORT` | Port local de santé/API du daemon utilisé par les commandes réservées aux exécutions, comme `multica repo checkout` | Indicatif |
@@ -234,19 +234,19 @@ Le champ de commande accepte un exécutable et des arguments, pas un script shel
 
 ### Ordre de vos arguments
 
-Tout ce que vous saisissez dans le champ de commande reste directement après l'exécutable, avant les arguments ajoutés par Multica :
+Tout ce que vous saisissez dans le champ de commande reste directement après l'exécutable, avant les arguments ajoutés par ECP :
 
 ```text
-<votre commande> <vos arguments fixes> <arguments de protocole de Multica> <arguments personnalisés de l'agent>
+<votre commande> <vos arguments fixes> <arguments de protocole de ECP> <arguments personnalisés de l'agent>
 ```
 
-Les wrappers à sous-commandes reposent sur cet ordre. Si votre commande est `ccms start q36`, l'outil voit d'abord `start q36` et choisit sa sous-commande avant que n'arrivent le `-p` de Multica et le reste ; ce type de wrapper n'accepte aucun autre ordre.
+Les wrappers à sous-commandes reposent sur cet ordre. Si votre commande est `ccms start q36`, l'outil voit d'abord `start q36` et choisit sa sous-commande avant que n'arrivent le `-p` de ECP et le reste ; ce type de wrapper n'accepte aucun autre ordre.
 
 Auparavant, vos arguments étaient ajoutés en dernier. La plupart des commandes à options les analysent de la même façon dans les deux cas, mais une commande qui distingue les options globales des options de sous-commande est sensible à la position d'une option. Si vous avez déjà un profil avec des arguments fixes, lancez une exécution dessus après la mise à jour pour vérifier qu'il fonctionne toujours.
 
 À noter aussi :
 
-- **Les valeurs de Multica l'emportent en cas de conflit.** Si vos arguments fixes définissent une option que Multica définit aussi, la valeur de Multica arrive plus tard et prend effet. Surtout, un modèle choisi sur l'agent remplace un `--model` figé dans le profil. Pour imposer un modèle à tout le monde, laissez vide le champ du modèle des agents.
+- **Les valeurs de ECP l'emportent en cas de conflit.** Si vos arguments fixes définissent une option que ECP définit aussi, la valeur de ECP arrive plus tard et prend effet. Surtout, un modèle choisi sur l'agent remplace un `--model` figé dans le profil. Pour imposer un modèle à tout le monde, laissez vide le champ du modèle des agents.
 - **Les options critiques pour le protocole sont ignorées.** `-p`, `--output-format`, `--input-format`, `--permission-mode` et leurs équivalents pour les autres familles sont retirés de vos arguments fixes, car les remplacer romprait la connexion du daemon à l'outil. Les sous-commandes et les autres arguments positionnels sont toujours transmis.
 
 Si un daemon lancé par Desktop ne trouve pas une commande que votre terminal peut exécuter, définissez un chemin absolu pour l'ordinateur courant :
@@ -265,12 +265,12 @@ Modifier un profil n'affecte que les exécutions prises en charge par la suite. 
 
 ## Runtime distant Qoder Cloud Agents
 
-Qoder Cloud Agents exécute les tickets assignés dans des sessions distantes. Le serveur Multica supervise un pont qui utilise le protocole de tâches existant du daemon ; aucun daemon local n'est nécessaire pour ce runtime.
+Qoder Cloud Agents exécute les tickets assignés dans des sessions distantes. Le serveur ECP supervise un pont qui utilise le protocole de tâches existant du daemon ; aucun daemon local n'est nécessaire pour ce runtime.
 
 ### Avant de commencer
 
 - Vous devez être administrateur de l'espace de travail. Chaque espace de travail a une seule connexion Qoder.
-- Créez un jeton d'accès personnel Qoder (PAT), au moins un environnement et les agents à utiliser dans Qoder Cloud Agents. Les modèles, outils et skills se configurent sur l'agent distant dans Qoder Cloud Agents, pas dans Multica.
+- Créez un jeton d'accès personnel Qoder (PAT), au moins un environnement et les agents à utiliser dans Qoder Cloud Agents. Les modèles, outils et skills se configurent sur l'agent distant dans Qoder Cloud Agents, pas dans ECP.
 - Les installations auto-hébergées doivent définir `MULTICA_VCS_SECRET_KEY` sur le serveur : une clé de 32 octets encodée en base64, identique d'un redémarrage à l'autre. Sans elle, Qoder Cloud Agents n'apparaît pas dans le menu **Ajouter**.
 
 ### Connecter Qoder
@@ -284,7 +284,7 @@ Qoder Cloud Agents exécute les tickets assignés dans des sessions distantes. L
 
 ### Ajouter un agent
 
-Ouvrez Qoder Cloud Agents depuis la page Runtimes et cliquez sur **Créer un agent avec**, ou créez un agent comme d'habitude en choisissant le runtime Qoder. Dans le formulaire de l'agent, sélectionnez l'agent distant sous **Agent distant**. Pour un agent existant, modifiez l'agent Qoder Cloud Agents ou son dépôt par défaut dans l'onglet **Qoder Cloud Agents**. Plusieurs agents Multica peuvent partager une connexion, chacun lié à un agent Qoder Cloud Agents différent.
+Ouvrez Qoder Cloud Agents depuis la page Runtimes et cliquez sur **Créer un agent avec**, ou créez un agent comme d'habitude en choisissant le runtime Qoder. Dans le formulaire de l'agent, sélectionnez l'agent distant sous **Agent distant**. Pour un agent existant, modifiez l'agent Qoder Cloud Agents ou son dépôt par défaut dans l'onglet **Qoder Cloud Agents**. Plusieurs agents ECP peuvent partager une connexion, chacun lié à un agent Qoder Cloud Agents différent.
 
 Les identifiants de connexion sont chiffrés et partagés dans l'espace de travail. Les administrateurs gèrent la connexion ; les membres peuvent sélectionner les agents Qoder Cloud Agents accessibles. Les projets choisissent le dépôt et la branche de départ ; le jeton du dépôt est transmis à Qoder Cloud Agents à la création d'une session de code. Les PAT ne sont jamais renvoyés au navigateur après l'enregistrement.
 
@@ -294,7 +294,7 @@ Sur la page Qoder Cloud Agents, les administrateurs peuvent modifier la connexio
 
 Au-delà de la limite de simultanéité, les exécutions attendent dans la file. Une relance sur le même ticket reprend la session Qoder précédente de l'agent si elle est inactive. Un agent peut définir un dépôt par défaut, utilisé quand le projet du ticket n'en a pas. L'agent est invité à pousser une branche nommée d'après l'identifiant du ticket et à préfixer le titre de la pull request avec cet identifiant, afin que la pull request soit liée au ticket.
 
-Cette première version prend en charge l'exécution des tickets, le chat, le suivi de progression, l'annulation et la reprise à partir d'un journal d'exécution persistant. Les fichiers et images joints aux tickets et aux messages de chat sont transmis à la session, PDF et documents Office compris, jusqu'à 5 Mo par fichier ; les fichiers plus volumineux ne le sont pas, et l'agent est informé de leur existence. Les répertoires locaux et la création d'agents Qoder Cloud Agents distants depuis Multica ne sont pas pris en charge. La page Runtimes sépare les runtimes distants des ordinateurs connectés. Dans le chat, les fichiers que l’agent livre avec DeliverArtifacts, jusqu’à 10 Mo chacun, sont joints à sa réponse.
+Cette première version prend en charge l'exécution des tickets, le chat, le suivi de progression, l'annulation et la reprise à partir d'un journal d'exécution persistant. Les fichiers et images joints aux tickets et aux messages de chat sont transmis à la session, PDF et documents Office compris, jusqu'à 5 Mo par fichier ; les fichiers plus volumineux ne le sont pas, et l'agent est informé de leur existence. Les répertoires locaux et la création d'agents Qoder Cloud Agents distants depuis ECP ne sont pas pris en charge. La page Runtimes sépare les runtimes distants des ordinateurs connectés. Dans le chat, les fichiers que l’agent livre avec DeliverArtifacts, jusqu’à 10 Mo chacun, sont joints à sa réponse.
 
 Pour le déploiement du pont autonome et ses limites opérationnelles, consultez le [README du runtime Qoder](https://gitlab.yeahmobi.com/yeahcloudadrd/multica/-/blob/release/server/cmd/qoder-runtime/README.md).
 
@@ -305,7 +305,7 @@ Vérifiez dans cet ordre :
 1. Exécutez `multica daemon status` pour confirmer que le daemon tourne.
 2. Exécutez `multica daemon logs -f` pour rechercher des erreurs d'authentification, de réseau ou de détection d'outils.
 3. Exécutez `command -v <tool-command>` dans le même environnement pour confirmer que le daemon peut trouver l'outil.
-4. Ouvrez la page **Runtimes** de Multica et vérifiez que l'ordinateur cible et l'outil de codage IA correspondant apparaissent en ligne.
+4. Ouvrez la page **Runtimes** de ECP et vérifiez que l'ordinateur cible et l'outil de codage IA correspondant apparaissent en ligne.
 5. Après l'installation d'un outil, une modification du chemin ou la mise à jour d'un profil, exécutez `multica daemon restart`.
 
 Si le problème persiste, consultez [Dépannage](/troubleshooting).
