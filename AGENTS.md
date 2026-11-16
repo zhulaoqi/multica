@@ -88,6 +88,9 @@ Installed desktop clients may talk to newer backends. Preserve response compatib
 
 ## Database and Migration Rules
 
+- Schema changes are applied by a DBA, not by the API process. Container startup only connects to the database. Do not put `migrate up` back into `docker/agent-api/start.sh` or `docker/entrypoint.sh`.
+- The baseline for an empty database is `deploy/dba/baseline/multica-schema.sql`. Run it once. Do not edit it for later changes, and do not run it again on a database that already has tables.
+- Each later change gets a new file in `deploy/dba/changes/`, named `NNN_short_description.sql`, containing only that change. Hand the file to the DBA. Do not rely on startup to apply it.
 - Do not add foreign keys, cascading deletes, or cascading updates. Validate relationships and clean up dependents in application code, using a transaction when the operation must be atomic.
 - Every migration-created index, including indexes on new tables, uses `CREATE [UNIQUE] INDEX CONCURRENTLY`. Each concurrent index build gets its own single-statement migration file; the runner executes files outside an explicit transaction.
 - Conditionally skipped migrations are still recorded in `schema_migrations`. Later DDL touching conditional objects must be idempotent (`IF EXISTS` / `IF NOT EXISTS`); document recovery if the missing object would break runtime behavior.
