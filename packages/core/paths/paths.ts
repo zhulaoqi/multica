@@ -42,6 +42,10 @@ function workspaceScoped(slug: string) {
     usage: () => `${ws}/usage`,
     issues: () => `${ws}/issues`,
     issueDetail: (id: string) => `${ws}/issues/${encode(id)}`,
+    workbench: () => `${ws}/workbench`,
+    workbenchUnit: (unitId: string) => `${ws}/workbench?unit=${encode(unitId)}`,
+    workbenchDispatch: (issueId: string) =>
+      `${ws}/workbench?dispatch=${encode(issueId)}`,
     intake: () => `${ws}/intake`,
     intakeIssue: (id: string) => `${ws}/intake/${encode(id)}`,
     intakeScheduled: () => `${ws}/intake/scheduled`,

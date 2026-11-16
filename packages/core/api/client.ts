@@ -341,7 +341,6 @@ import {
   UNREADABLE_CRON_PREVIEW_RESPONSE,
   ListIssuesResponseSchema,
   CreateIssueResponseSchema,
-  OrgDispatchResponseSchema,
   IssueSchema,
   AgentTaskSchema,
   SourceContextPreviewSchema,
@@ -522,6 +521,13 @@ import {
   type IssueViewPreference,
   type CreateIssueViewRequest,
 } from "./schemas";
+import {
+  DispatchListResponseSchema,
+  DispatchWorkResponseSchema,
+  type DispatchListItem,
+  type DispatchWorkInput,
+  type DispatchWorkResponse,
+} from "../workbench/schemas";
 
 /** Identifies the calling client to the server.
  *  Sent on every HTTP request as X-Client-Platform / X-Client-Version /
@@ -5801,19 +5807,24 @@ export class ApiClient {
    * to that squad so its leader decomposes the work. The caller is notified
    * through the inbox when the issue reaches review or done.
    */
-  async dispatchToOrgUnit(
-    unitId: string,
-    input: { title: string; description: string },
-  ): Promise<Issue> {
-    const raw = await this.fetch<unknown>(`/api/org/units/${encodeURIComponent(unitId)}/dispatch`, {
+  async dispatchWork(input: DispatchWorkInput): Promise<DispatchWorkResponse> {
+    const raw = await this.fetch<unknown>("/api/org/dispatch", {
       method: "POST",
       body: JSON.stringify(input),
     });
-    const parsed = parseWithFallback<{ issue: Issue } | null>(raw, OrgDispatchResponseSchema, null, {
-      endpoint: "POST /api/org/units/:id/dispatch",
+    const parsed = parseWithFallback<DispatchWorkResponse | null>(raw, DispatchWorkResponseSchema, null, {
+      endpoint: "POST /api/org/dispatch",
     });
-    if (!parsed) throw new Error();
-    return parsed.issue;
+    if (!parsed) throw new Error("could not read the dispatch");
+    return parsed;
+  }
+
+  async listMyDispatches(limit = 30): Promise<DispatchListItem[]> {
+    const raw = await this.fetch<unknown>(`/api/org/dispatches?limit=${encodeURIComponent(String(limit))}`);
+    const parsed = parseWithFallback(raw, DispatchListResponseSchema, { dispatches: [] }, {
+      endpoint: "GET /api/org/dispatches",
+    });
+    return parsed.dispatches;
   }
 
   /** Places an agent in a unit; an empty id clears its unit. */

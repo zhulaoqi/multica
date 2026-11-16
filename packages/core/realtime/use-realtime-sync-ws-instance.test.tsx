@@ -134,12 +134,12 @@ describe("useRealtimeSync — ws instance change", () => {
     // and view preferences] + 6 per-issue prefixes + the workspace
     // working-agents projection + 5 per-chat prefixes + 1 workspaceKeys.list()
     // + 1 cross-workspace inbox unread summary + 1 issue unread marks + 1
-    // subscribed issue ids = 36 calls).
+    // subscribed issue ids + 1 workbench dispatches = 37 calls).
     //
     // Awaited rather than counted synchronously: the inbox unread summary
     // refresh cancels any in-flight request before invalidating (see
     // onInboxSummaryInvalidate), so that one lands after the synchronous ones.
-    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledTimes(36));
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledTimes(37));
   });
 
   it("does not re-invalidate when rerendered with the same ws instance", () => {
