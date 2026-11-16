@@ -12,9 +12,11 @@ esac
 
 ./migrate up
 
-# Go's GC guide: keep the soft limit about 10% under the cgroup so the
-# process returns memory before the kernel kills it. Operators can pin
-# GOMEMLIMIT or GOMAXPROCS; those values are left alone.
+# Cloud test and production share this cap. PROFILE only selects the config
+# file. The budget is the pod memory applied on the platform. Keep the soft
+# limit 10% under that cgroup so Go returns memory before the kernel kills
+# the pod. Operators can pin GOMEMLIMIT or GOMAXPROCS; those values are left
+# alone.
 if [ -z "${GOMEMLIMIT:-}" ]; then
   if mem=$(runtime_memory_bytes); then
     percent=${GO_MEM_PERCENT:-90}

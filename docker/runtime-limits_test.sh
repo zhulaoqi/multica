@@ -38,4 +38,18 @@ if runtime_memory_bytes >/dev/null 2>&1; then
   fail "unlimited memory should be absent"
 fi
 
+# The mount root is the node. The applied pod memory is on this process cgroup.
+mkdir -p "$tmp/pod/ctr" "$tmp/cpu/pod/ctr"
+echo max > "$tmp/memory.max"
+echo 2147483648 > "$tmp/pod/ctr/memory.max"
+echo "100000 100000" > "$tmp/pod/ctr/cpu.max"
+printf '0::/pod/ctr\n' > "$tmp/cgroup"
+PROC_SELF_CGROUP=$tmp/cgroup
+export PROC_SELF_CGROUP
+mem=$(runtime_memory_bytes)
+cpu=$(runtime_cpu_count)
+[ "$mem" = 2147483648 ] || fail "pod memory = $mem"
+[ "$cpu" = 1 ] || fail "pod cpu = $cpu"
+unset PROC_SELF_CGROUP
+
 echo "runtime limits ok"

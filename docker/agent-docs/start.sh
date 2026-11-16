@@ -9,8 +9,7 @@ export NODE_ENV=production
 export PORT=80
 export HOSTNAME=0.0.0.0
 
-# V8's old space is not the whole process. 70% matches the company JVM cap
-# and leaves the rest for buffers, code, and the HTTP stack.
+# Same cap as agent-web: 70% of the pod memory applied on the platform.
 if [ -z "${NODE_OPTIONS:-}" ]; then
   if mem=$(runtime_memory_bytes); then
     percent=${NODE_HEAP_PERCENT:-70}
