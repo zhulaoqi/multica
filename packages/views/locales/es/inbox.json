@@ -82,7 +82,9 @@
     "quick_create_unconfirmed": "Creación con agente sin confirmar",
     "autopilot_paused": "Automatización en pausa",
     "children_done": "Sub-tareas finalizadas",
-    "autopilot_quota_exceeded": "Límite de ejecuciones de automatizaciones alcanzado"
+    "dispatch_completed": "Trabajo del departamento terminado",
+    "autopilot_quota_exceeded": "Límite de ejecuciones de automatizaciones alcanzado",
+    "squad_leader_failed": "Falló el líder del escuadrón"
   },
   "labels": {
     "set_status_to": "Establecer estado en",

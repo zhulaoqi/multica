@@ -82,7 +82,9 @@
     "quick_create_unconfirmed": "Create with agent unconfirmed",
     "autopilot_paused": "Autopilot paused",
     "children_done": "Sub-issues finished",
-    "autopilot_quota_exceeded": "Autopilot run limit reached"
+    "dispatch_completed": "Department work finished",
+    "autopilot_quota_exceeded": "Autopilot run limit reached",
+    "squad_leader_failed": "Squad leader failed"
   },
   "labels": {
     "set_status_to": "Set status to",

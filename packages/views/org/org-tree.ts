@@ -39,6 +39,26 @@ export function unitPaths(units: OrgUnit[]): Map<string, string> {
   return paths;
 }
 
+/** The unit and every department below it, so a department's squad covers
+ * agents placed in sub-departments too. */
+export function unitSubtreeIDs(units: OrgUnit[], rootId: string): Set<string> {
+  const children = new Map<string, string[]>();
+  for (const unit of units) {
+    if (!unit.parent_id) continue;
+    const siblings = children.get(unit.parent_id) ?? [];
+    siblings.push(unit.id);
+    children.set(unit.parent_id, siblings);
+  }
+  const ids = new Set<string>();
+  const walk = (id: string) => {
+    if (!id || ids.has(id)) return;
+    ids.add(id);
+    for (const child of children.get(id) ?? []) walk(child);
+  };
+  walk(rootId);
+  return ids;
+}
+
 /** Groups agents, members and squads under their unit and collects the rest. */
 export function buildOrgForest(
   tree: Pick<OrgTree, "units" | "agents" | "members"> & { squads?: OrgSquad[] },

@@ -229,6 +229,7 @@ type Handler struct {
 	TaskService            *service.TaskService
 	PluginService          *service.PluginService
 	IssueService           *service.IssueService
+	OrgDispatchService     *service.OrgDispatchService
 	AutopilotService       *service.AutopilotService
 	// Entitlements supplies workspace-scoped commercial gates. A nil provider
 	// preserves self-hosted behavior without extra reads.
@@ -506,6 +507,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 	)
 
 	taskSvc := service.NewTaskService(queries, txStarter, hub, bus, daemonHub)
+	issueSvc := service.NewIssueService(queries, txStarter, bus, analyticsClient, taskSvc)
 	taskSvc.Analytics = analyticsClient
 	taskSvc.SourceContextStorage = store
 	// Chat follow-up suggestions run through the same internal LLM layer that
@@ -513,19 +515,22 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 	// a disabled client, which turns the feature off rather than failing.
 	taskSvc.QuickActions = llmClient
 	h := &Handler{
-		Queries:                      queries,
-		ReadSelector:                 dbreader.NewPrimaryOnly(queries),
-		DB:                           executor,
-		TxStarter:                    txStarter,
-		Hub:                          hub,
-		DaemonHub:                    daemonHub,
-		DaemonProfileRefresh:         daemonProfileRefresh,
-		DaemonWorkspaceRefresh:       daemonWorkspaceRefresh,
-		DaemonRuntimeGone:            daemonRuntimeGone,
-		Bus:                          bus,
-		TaskService:                  taskSvc,
-		PluginService:                service.NewPluginService(queries, txStarter),
-		IssueService:                 service.NewIssueService(queries, txStarter, bus, analyticsClient, taskSvc),
+		Queries:                queries,
+		ReadSelector:           dbreader.NewPrimaryOnly(queries),
+		DB:                     executor,
+		TxStarter:              txStarter,
+		Hub:                    hub,
+		DaemonHub:              daemonHub,
+		DaemonProfileRefresh:   daemonProfileRefresh,
+		DaemonWorkspaceRefresh: daemonWorkspaceRefresh,
+		DaemonRuntimeGone:      daemonRuntimeGone,
+		Bus:                    bus,
+		TaskService:            taskSvc,
+		PluginService:          service.NewPluginService(queries, txStarter),
+		IssueService:           issueSvc,
+		OrgDispatchService: &service.OrgDispatchService{
+			Queries: queries, TxStarter: txStarter, Issues: issueSvc, Tasks: taskSvc, Bus: bus,
+		},
 		AutopilotService:             service.NewAutopilotService(queries, txStarter, bus, taskSvc),
 		EmailService:                 emailService,
 		UpdateStore:                  NewInMemoryUpdateStore(),

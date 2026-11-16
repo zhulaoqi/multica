@@ -1107,6 +1107,7 @@
     "dialog_title": "Responsabilités de {{name}}",
     "save": "Enregistrer",
     "cancel": "Annuler",
-    "save_failed": "Impossible d'enregistrer les responsabilités."
+    "save_failed": "Impossible d'enregistrer les responsabilités.",
+    "dispatch": "Assigner"
   }
 }

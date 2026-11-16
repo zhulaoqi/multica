@@ -1,5 +1,5 @@
 import type { ZodType } from "zod";
-import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_SYNC_REPORT, EMPTY_ORG_SYNC_STATUS, EMPTY_ORG_TREE, OrgImportResultSchema, OrgSyncReportSchema, OrgSyncStatusSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgSyncReport, type OrgSyncStatus, type OrgTree, type OrgUnitCreated } from "./org-schema";
+import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_SYNC_REPORT, EMPTY_ORG_SYNC_STATUS, EMPTY_ORG_TREE, OrgImportResultSchema, OrgSquadSyncResultSchema, OrgSyncReportSchema, OrgSyncStatusSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgSquadSyncResult, type OrgSyncReport, type OrgSyncStatus, type OrgTree, type OrgUnitCreated } from "./org-schema";
 import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
@@ -341,6 +341,7 @@ import {
   UNREADABLE_CRON_PREVIEW_RESPONSE,
   ListIssuesResponseSchema,
   CreateIssueResponseSchema,
+  OrgDispatchResponseSchema,
   IssueSchema,
   AgentTaskSchema,
   SourceContextPreviewSchema,
@@ -5766,6 +5767,53 @@ export class ApiClient {
 
   async deleteOrgUnit(unitId: string): Promise<void> {
     await this.fetch(`/api/org/units/${encodeURIComponent(unitId)}`, { method: "DELETE" });
+  }
+
+  /**
+   * Creates the department's squad when it has none, then re-syncs its roster
+   * from the unit subtree. Idempotent, so "generate" and "sync" share it.
+   */
+  async generateOrgUnitSquad(
+    unitId: string,
+    input: {
+      name?: string;
+      leader_id?: string;
+      instructions?: string;
+      wip_limit?: number;
+      max_children?: number;
+    },
+  ): Promise<OrgSquadSyncResult> {
+    const raw = await this.fetch<unknown>(`/api/org/units/${encodeURIComponent(unitId)}/squad`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return parseWithFallback(
+      raw,
+      OrgSquadSyncResultSchema,
+      { squad: { id: "", name: "", unit_id: unitId, leader_id: "", agent_count: 0, working_agents: 0, wip_limit: 0, max_children: 0, active_issues: 0, review_issues: 0, blocked_issues: 0 }, added: 0, updated: 0, removed: 0, created: false },
+      { endpoint: `POST /api/org/units/${unitId}/squad` },
+    );
+  }
+
+  /**
+   * Hands one brief to a department. The server resolves the unit the caller
+   * can see, creates its mirror squad when missing, and assigns the root issue
+   * to that squad so its leader decomposes the work. The caller is notified
+   * through the inbox when the issue reaches review or done.
+   */
+  async dispatchToOrgUnit(
+    unitId: string,
+    input: { title: string; description: string },
+  ): Promise<Issue> {
+    const raw = await this.fetch<unknown>(`/api/org/units/${encodeURIComponent(unitId)}/dispatch`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    const parsed = parseWithFallback<{ issue: Issue } | null>(raw, OrgDispatchResponseSchema, null, {
+      endpoint: "POST /api/org/units/:id/dispatch",
+    });
+    if (!parsed) throw new Error();
+    return parsed.issue;
   }
 
   /** Places an agent in a unit; an empty id clears its unit. */

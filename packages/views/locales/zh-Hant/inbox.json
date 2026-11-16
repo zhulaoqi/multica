@@ -80,7 +80,9 @@
     "quick_create_unconfirmed": "透過 AI 代理建立結果未確認",
     "autopilot_paused": "自動化已暫停",
     "children_done": "子任務已全部結束",
-    "autopilot_quota_exceeded": "自動化執行次數已用完"
+    "dispatch_completed": "部門派活已完成",
+    "autopilot_quota_exceeded": "自動化執行次數已用完",
+    "squad_leader_failed": "小隊隊長任務失敗"
   },
   "labels": {
     "set_status_to": "狀態設為",

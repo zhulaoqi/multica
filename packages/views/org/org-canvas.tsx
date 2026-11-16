@@ -16,7 +16,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@multica/ui/components/
 import { Bot, ChevronDown, ChevronRight } from "@multica/ui/icons";
 import { useT } from "../i18n";
 import { IntroArtCard, IntroArtConnector } from "../layout/feature-intro";
+import { DispatchDialog } from "../squads/components/dispatch-dialog";
 import { agentAvailability, memberTwin, squadAvailability, type OrgNode } from "./org-tree";
+import { GenerateSquadDialog } from "./org-squad-dialog";
 import { TwinDialog } from "./org-twin";
 
 export const NO_UNIT = "__none";
@@ -291,6 +293,8 @@ function UnitHeaderCard({
   squadCount,
   agentCount,
   allMembers,
+  squad,
+  squadAgents,
   actions,
 }: {
   unit: OrgUnit;
@@ -300,6 +304,10 @@ function UnitHeaderCard({
   squadCount: number;
   agentCount: number;
   allMembers: Array<{ user_id: string; label: string }>;
+  /** The squad generated for this department, if any. */
+  squad: OrgSquad | null;
+  /** Agents this department and its sub-departments cover, for leader choice. */
+  squadAgents: OrgAgent[];
   actions: {
     run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
   };
@@ -310,6 +318,7 @@ function UnitHeaderCard({
   const [draft, setDraft] = useState(unit.name);
   const [confirming, setConfirming] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const leadLabel = unit.lead_user_id
     ? (allMembers.find((member) => member.user_id === unit.lead_user_id)?.label ?? unit.lead_user_id.slice(0, 8))
     : "";
@@ -368,6 +377,17 @@ function UnitHeaderCard({
             {unit.can_manage ? (
               <Button size="sm" variant="ghost" onClick={() => setCreating(true)}>
                 {t(($) => $.create_child)}
+              </Button>
+            ) : null}
+            {unit.can_manage ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={squadAgents.length === 0}
+                title={squadAgents.length === 0 ? t(($) => $.squad_generate_no_agents) : undefined}
+                onClick={() => setGenerating(true)}
+              >
+                {squad ? t(($) => $.squad_sync_action) : t(($) => $.squad_generate_action)}
               </Button>
             ) : null}
           </>
@@ -430,6 +450,15 @@ function UnitHeaderCard({
         {t(($) => $.members)} {memberCount} · {t(($) => $.squads)} {squadCount} · {t(($) => $.agents)} {agentCount}
       </p>
       {creating ? <CreateUnitDialog unitId={unit.id} open onOpenChange={setCreating} /> : null}
+      {generating ? (
+        <GenerateSquadDialog
+          unit={unit}
+          agents={squadAgents}
+          squad={squad}
+          open
+          onOpenChange={setGenerating}
+        />
+      ) : null}
     </IntroArtCard>
   );
 }
@@ -463,6 +492,12 @@ export function SquadCard({
   onMove: (unitId: string) => void;
 }) {
   const { t } = useT("org");
+  const [dispatching, setDispatching] = useState(false);
+  const issueCounts = t(($) => $.squad_issue_counts, {
+    active: squad.active_issues,
+    review: squad.review_issues,
+    blocked: squad.blocked_issues,
+  });
   return (
     <div className="flex w-full flex-col gap-2 rounded-lg bg-surface p-3 ring-1 ring-surface-border">
       <div className="flex items-center gap-2">
@@ -470,15 +505,28 @@ export function SquadCard({
         <div className="min-w-0 flex-1">
           <div className="truncate text-body font-medium">{squad.name}</div>
           <div className="truncate text-caption text-muted-foreground">
-            {t(($) => $.squad_agents, { count: squad.agent_count })}
+            {t(($) => $.squad_agents, { count: squad.agent_count })} · {issueCounts}
           </div>
         </div>
         <StatusChip tone={squadAvailability(squad)} />
       </div>
-      {canMove ? (
-        <div className="flex justify-end">
-          <UnitPicker value={squad.unit_id} choices={choices} onChange={onMove} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-caption text-muted-foreground tabular-nums">
+          {t(($) => $.squad_limits, { wip: squad.wip_limit, max: squad.max_children })}
+        </span>
+        <div className="flex items-center gap-1">
+          {canMove ? <UnitPicker value={squad.unit_id} choices={choices} onChange={onMove} /> : null}
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-caption" onClick={() => setDispatching(true)}>
+            {t(($) => $.dispatch_work)}
+          </Button>
         </div>
+      </div>
+      {dispatching ? (
+        <DispatchDialog
+          target={{ type: "squad", id: squad.id, name: squad.name }}
+          open
+          onOpenChange={setDispatching}
+        />
       ) : null}
     </div>
   );
@@ -495,6 +543,8 @@ export function AgentCard({
   choices: Array<{ id: string; path: string }>;
   onMove: (unitId: string) => void;
 }) {
+  const { t } = useT("org");
+  const [dispatching, setDispatching] = useState(false);
   return (
     <div className="flex w-full flex-col gap-2 rounded-lg bg-surface p-3 ring-1 ring-surface-border">
       <div className="flex items-center gap-2">
@@ -507,13 +557,25 @@ export function AgentCard({
         </div>
         <StatusChip tone={agentAvailability(agent.status)} />
       </div>
-      {canMove ? (
-        <div className="flex justify-end">
-          <UnitPicker value={agent.unit_id} choices={choices} onChange={onMove} />
-        </div>
+      <div className="flex items-center justify-end gap-1">
+        {canMove ? <UnitPicker value={agent.unit_id} choices={choices} onChange={onMove} /> : null}
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-caption" onClick={() => setDispatching(true)}>
+          {t(($) => $.dispatch_work)}
+        </Button>
+      </div>
+      {dispatching ? (
+        <DispatchDialog
+          target={{ type: "agent", id: agent.id, name: agent.name }}
+          open
+          onOpenChange={setDispatching}
+        />
       ) : null}
     </div>
   );
+}
+
+function collectSubtreeAgents(node: OrgNode): OrgAgent[] {
+  return [...node.agents, ...node.children.flatMap(collectSubtreeAgents)];
 }
 
 /** The selected department drawn as a card tree: the unit card hands off to
@@ -524,6 +586,7 @@ export function OrgCanvas({
   path,
   myUnitId,
   allMembers,
+  allAgents,
   unitChoices,
   actions,
   onSelect,
@@ -532,6 +595,9 @@ export function OrgCanvas({
   path: string;
   myUnitId: string;
   allMembers: Array<{ user_id: string; label: string }>;
+  /** Every agent in the workspace, so a squad leader outside the subtree
+   * still appears in the leader picker. */
+  allAgents: OrgAgent[];
   unitChoices: Array<{ id: string; path: string; manage: boolean }>;
   actions: {
     run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
@@ -542,6 +608,13 @@ export function OrgCanvas({
   const { unit, agents, members, squads, children } = node;
   const { run } = actions;
   const manageableChoices = unitChoices.filter((choice) => choice.manage);
+  const unitSquad = squads.find((squad) => squad.unit_id === unit.id) ?? null;
+  const subtreeAgents = collectSubtreeAgents(node);
+  const leaderAgent =
+    unitSquad && !subtreeAgents.some((agent) => agent.id === unitSquad.leader_id)
+      ? (allAgents.find((agent) => agent.id === unitSquad.leader_id) ?? null)
+      : null;
+  const squadAgents = leaderAgent ? [...subtreeAgents, leaderAgent] : subtreeAgents;
 
   // An agent owned by a member shown here is that member's twin; it renders
   // on the member row instead of duplicating in the shared agents grid.
@@ -652,6 +725,8 @@ export function OrgCanvas({
         squadCount={squads.length}
         agentCount={agents.length}
         allMembers={allMembers}
+        squad={unitSquad}
+        squadAgents={squadAgents}
         actions={actions}
       />
       {sections.map((section) => (

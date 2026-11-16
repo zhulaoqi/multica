@@ -446,10 +446,30 @@ SELECT
     s.name,
     s.org_unit_id,
     s.leader_id,
+    s.wip_limit,
+    s.max_children,
     count(DISTINCT sm.member_id) FILTER (WHERE sm.member_type = 'agent')::int AS agent_count,
     count(DISTINCT a.id) FILTER (
         WHERE sm.member_type = 'agent' AND a.status = 'working'
-    )::int AS working_agents
+    )::int AS working_agents,
+    (
+        SELECT count(*)::int FROM issue i
+        WHERE i.workspace_id = s.workspace_id
+          AND i.assignee_type = 'squad' AND i.assignee_id = s.id
+          AND i.status IN ('todo', 'in_progress')
+    ) AS active_issues,
+    (
+        SELECT count(*)::int FROM issue i
+        WHERE i.workspace_id = s.workspace_id
+          AND i.assignee_type = 'squad' AND i.assignee_id = s.id
+          AND i.status = 'in_review'
+    ) AS review_issues,
+    (
+        SELECT count(*)::int FROM issue i
+        WHERE i.workspace_id = s.workspace_id
+          AND i.assignee_type = 'squad' AND i.assignee_id = s.id
+          AND i.status = 'blocked'
+    ) AS blocked_issues
 FROM squad s
 LEFT JOIN squad_member sm ON sm.squad_id = s.id
 LEFT JOIN agent a ON a.id = sm.member_id
@@ -464,8 +484,13 @@ type ListSquadsInOrgUnitsRow struct {
 	Name          string      `json:"name"`
 	OrgUnitID     pgtype.UUID `json:"org_unit_id"`
 	LeaderID      pgtype.UUID `json:"leader_id"`
+	WipLimit      int32       `json:"wip_limit"`
+	MaxChildren   int32       `json:"max_children"`
 	AgentCount    int32       `json:"agent_count"`
 	WorkingAgents int32       `json:"working_agents"`
+	ActiveIssues  int32       `json:"active_issues"`
+	ReviewIssues  int32       `json:"review_issues"`
+	BlockedIssues int32       `json:"blocked_issues"`
 }
 
 // Squads attached to the organisation tree, with the working count their
@@ -485,8 +510,13 @@ func (q *Queries) ListSquadsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.Name,
 			&i.OrgUnitID,
 			&i.LeaderID,
+			&i.WipLimit,
+			&i.MaxChildren,
 			&i.AgentCount,
 			&i.WorkingAgents,
+			&i.ActiveIssues,
+			&i.ReviewIssues,
+			&i.BlockedIssues,
 		); err != nil {
 			return nil, err
 		}

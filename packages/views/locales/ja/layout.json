@@ -58,6 +58,7 @@
     "invitation_decline": "辞退",
     "log_out": "ログアウト",
     "new_issue": "新規タスク",
+    "dispatch_work": "仕事を送る",
     "pinned_label": "ピン留め済み",
     "show_more_pins": "さらに {{count}} 件を表示…",
     "show_fewer_pins": "表示を減らす"

@@ -1080,6 +1080,7 @@
     "dialog_title": "{{name}} の担当業務",
     "save": "保存",
     "cancel": "キャンセル",
-    "save_failed": "担当業務を保存できませんでした。"
+    "save_failed": "担当業務を保存できませんでした。",
+    "dispatch": "仕事を割り当て"
   }
 }

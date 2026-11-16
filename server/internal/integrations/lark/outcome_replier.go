@@ -53,7 +53,9 @@ type noopReplier struct {
 
 func (n *noopReplier) Reply(ctx context.Context, inst Installation, msg InboundMessage, res DispatchResult) {
 	switch res.Outcome {
-	case OutcomeNeedsBinding, OutcomeAgentOffline, OutcomeAgentArchived, OutcomeFreshPending, OutcomeChatStarted, OutcomeIssueUsage:
+	case OutcomeNeedsBinding, OutcomeAgentOffline, OutcomeAgentArchived, OutcomeFreshPending, OutcomeChatStarted, OutcomeIssueUsage,
+		OutcomeDispatchUsage, OutcomeDispatchCreated, OutcomeDispatchAmbiguous,
+		OutcomeDispatchNoAccess, OutcomeDispatchNoAgents, OutcomeDispatchLeaderUnavailable:
 		n.log.Warn("lark outcome replier: outbound reply skipped (replier not wired)",
 			"outcome", string(res.Outcome),
 			"installation_id", uuidString(inst.ID),
@@ -204,6 +206,55 @@ func (r *LarkOutcomeReplier) Reply(ctx context.Context, inst Installation, msg I
 				"err", err.Error(),
 			)
 		}
+	case OutcomeDispatchUsage:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchUsageCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch usage reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchCreated:
+		if err := r.sendDispatchCreated(ctx, inst, msg, res); err != nil {
+			r.log.Warn("lark outcome replier: dispatch confirmation failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"issue_id", uuidString(res.IssueID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchAmbiguous:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchAmbiguousText(res.DispatchCandidates)); err != nil {
+			r.log.Warn("lark outcome replier: dispatch candidate reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchNoAccess:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchNoAccessCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch no-access reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchNoAgents:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchNoAgentsCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch no-agent reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchLeaderUnavailable:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchLeaderUnavailableCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch leader-unavailable reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
 	case OutcomeIngested:
 		// The agent's chat reply itself goes through the Patcher. An /issue
 		// command gets an immediate product result: either the newly created
@@ -280,6 +331,28 @@ func (r *LarkOutcomeReplier) sendIssueOutcome(ctx context.Context, inst Installa
 	// send so the product result is not lost; transport/5xx/rate-limit
 	// failures stay failures rather than leaking into the group chat.
 	return sendWithReplyFallback(r.log, "send issue outcome text", inboundReplyTarget(msg), func(t ReplyTarget) error {
+		_, err := r.client.SendTextMessage(ctx, SendTextParams{
+			InstallationID: creds,
+			ChatID:         msg.ChatID,
+			Text:           text,
+			ReplyTarget:    t,
+		})
+		return err
+	})
+}
+
+// sendDispatchCreated confirms a department dispatch as plain text, with the
+// same deep link an /issue confirmation carries.
+func (r *LarkOutcomeReplier) sendDispatchCreated(ctx context.Context, inst Installation, msg InboundMessage, res DispatchResult) error {
+	if msg.ChatID == "" {
+		return errors.New("missing chat_id")
+	}
+	creds, err := r.installationCredentials(inst)
+	if err != nil {
+		return err
+	}
+	text := dispatchCreatedText(res, r.appURL)
+	return sendWithReplyFallback(r.log, "send dispatch confirmation", inboundReplyTarget(msg), func(t ReplyTarget) error {
 		_, err := r.client.SendTextMessage(ctx, SendTextParams{
 			InstallationID: creds,
 			ChatID:         msg.ChatID,
@@ -436,11 +509,49 @@ func renderNoticeCard(header, body string) (string, error) {
 // match the §4.6 design: an offline agent will run when the daemon
 // comes back; an archived agent needs operator action.
 const (
-	agentOfflineCopy             = "Agent 当前离线，消息已记录。下次 daemon 上线后会自动继续处理。"
-	agentArchivedCopy            = "这个 Agent 已被归档，无法继续处理消息。请联系工作区管理员恢复或重新绑定。"
-	freshPendingCopy             = "✅ 已准备从空上下文运行。你的下一条聊天消息仍会进入当前对话，但不会带上之前的上下文。"
-	chatStartedCopy              = "✅ 已新建 Multica 对话。你的下一条消息会进入该对话。"
-	issueUsageCopy               = "请填写任务标题，格式如下：\n\n`/issue <标题>`\n`[描述]`（可选）"
-	issueUsageWithMediaCopy      = "请添加标题，并与图片或视频一起重新发送（*图片或视频可以位于命令之前或之后*）：\n\n`/issue <标题>`\n`[描述]`（可选）"
-	bindingPromptUnavailableCopy = "你还未绑定 Multica 账户，绑定卡片未能发送到你的私聊。\n请先打开机器人对话并发送一条消息，再回到群里重试；仍失败请联系管理员检查应用可用范围。"
+	agentOfflineCopy              = "Agent 当前离线，消息已记录。下次 daemon 上线后会自动继续处理。"
+	agentArchivedCopy             = "这个 Agent 已被归档，无法继续处理消息。请联系工作区管理员恢复或重新绑定。"
+	freshPendingCopy              = "✅ 已准备从空上下文运行。你的下一条聊天消息仍会进入当前对话，但不会带上之前的上下文。"
+	chatStartedCopy               = "✅ 已新建 Multica 对话。你的下一条消息会进入该对话。"
+	issueUsageCopy                = "请填写任务标题，格式如下：\n\n`/issue <标题>`\n`[描述]`（可选）"
+	issueUsageWithMediaCopy       = "请添加标题，并与图片或视频一起重新发送（*图片或视频可以位于命令之前或之后*）：\n\n`/issue <标题>`\n`[描述]`（可选）"
+	bindingPromptUnavailableCopy  = "你还未绑定 Multica 账户，绑定卡片未能发送到你的私聊。\n请先打开机器人对话并发送一条消息，再回到群里重试；仍失败请联系管理员检查应用可用范围。"
+	dispatchUsageCopy             = "派活格式如下：\n\n`/dispatch <部门名或完整路径>`\n`<标题>`\n`目标: ...`\n`验收: ...`\n\n`输入: ...` 和 `边界: ...` 为可选项。"
+	dispatchNoAccessCopy          = "你没有向这个部门派活的权限。只能派给自己所在的部门，或自己负责的部门。"
+	dispatchNoAgentsCopy          = "这个部门还没有可用的 Agent，暂时无法派活。请联系部门负责人添加 Agent 后再试。"
+	dispatchLeaderUnavailableCopy = "这个部门的队长 Agent 暂时不能由你调用。请联系部门负责人开放该 Agent 的权限。"
 )
+
+// dispatchCreatedText confirms the department dispatch. identifier always wins
+// over a bare number; the link is omitted when no app URL is configured.
+func dispatchCreatedText(res DispatchResult, appURL string) string {
+	identifier := res.IssueIdentifier
+	if identifier == "" {
+		identifier = fmt.Sprintf("#%d", res.IssueNumber)
+	}
+	target := strings.TrimSpace(res.DispatchUnitName)
+	line := "已派活：" + identifier
+	if target != "" {
+		line = "已派活给 " + target + "：" + identifier
+	}
+	if title := strings.TrimSpace(res.IssueTitle); title != "" {
+		line += " — " + title
+	}
+	line += "\n队长会拆解并派给组内 Agent，完成后我会在这里汇报。"
+	if link := channel.IssueWebLink(appURL, res.IssueWorkspaceSlug, res.IssueIdentifier); link != "" {
+		line += "\n" + link
+	}
+	return line
+}
+
+// dispatchAmbiguousText asks for a full path when the department name matched
+// more than one unit.
+func dispatchAmbiguousText(candidates []string) string {
+	var b strings.Builder
+	b.WriteString("找到多个部门，请把完整路径写在 /dispatch 后面：")
+	for _, path := range candidates {
+		b.WriteString("\n- ")
+		b.WriteString(path)
+	}
+	return b.String()
+}

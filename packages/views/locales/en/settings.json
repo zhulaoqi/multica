@@ -242,6 +242,10 @@
         "label": "Create issue",
         "description": "Open your preferred issue creation flow."
       },
+      "dispatchWork": {
+        "label": "Send work",
+        "description": "Pick a department and hand it a brief; its leader splits the work and reports back."
+      },
       "toggleSidebar": {
         "label": "Toggle left sidebar",
         "description": "Show or hide the left sidebar."

@@ -35,6 +35,7 @@
   "commands": {
     "current_theme_aria": "Thème actuel",
     "new_issue": "Nouvelle tâche",
+    "dispatch_work": "Envoyer du travail à un service",
     "new_project": "Nouveau projet",
     "new_autopilot": "Nouvelle automatisation",
     "chat_with_agent": "Discuter avec un agent",

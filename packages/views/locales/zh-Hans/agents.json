@@ -1080,6 +1080,7 @@
     "dialog_title": "{{name}} 的职责",
     "save": "保存",
     "cancel": "取消",
-    "save_failed": "职责没有保存成功。"
+    "save_failed": "职责没有保存成功。",
+    "dispatch": "派活"
   }
 }

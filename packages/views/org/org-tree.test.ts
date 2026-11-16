@@ -1,7 +1,24 @@
 // @vitest-environment node
 
 import { describe, expect, it } from "vitest";
-import { agentAvailability, buildOrgForest, memberTwin, squadAvailability, unitPaths } from "./org-tree";
+import type { OrgSquad } from "@multica/core/api";
+import { agentAvailability, buildOrgForest, memberTwin, squadAvailability, unitPaths, unitSubtreeIDs } from "./org-tree";
+
+function squad(id: string, name: string, unitId: string, leaderId: string, agentCount: number): OrgSquad {
+  return {
+    id,
+    name,
+    unit_id: unitId,
+    leader_id: leaderId,
+    agent_count: agentCount,
+    working_agents: 0,
+    wip_limit: 3,
+    max_children: 8,
+    active_issues: 0,
+    review_issues: 0,
+    blocked_issues: 0,
+  };
+}
 
 const UNITS = [
   { id: "a", parent_id: "", name: "研发中心", lead_user_id: "", can_manage: true, description: "", position: 0 },
@@ -15,6 +32,14 @@ describe("unitPaths", () => {
     expect(paths.get("a")).toBe("研发中心");
     expect(paths.get("b")).toBe("研发中心/支付组");
     expect(paths.get("c")).toBe("研发中心/结算组");
+  });
+});
+
+describe("unitSubtreeIDs", () => {
+  it("covers the unit and every department below it, not siblings or parents", () => {
+    expect([...unitSubtreeIDs(UNITS, "a")].sort()).toEqual(["a", "b", "c"]);
+    expect([...unitSubtreeIDs(UNITS, "b")]).toEqual(["b"]);
+    expect([...unitSubtreeIDs(UNITS, "missing")]).toEqual(["missing"]);
   });
 });
 
@@ -47,9 +72,9 @@ describe("squads in the forest", () => {
       agents: [],
       members: [],
       squads: [
-        { id: "s1", name: "支付小队", unit_id: "b", leader_id: "ag1", agent_count: 2, working_agents: 0 },
-        { id: "s2", name: "流浪小队", unit_id: "", leader_id: "ag2", agent_count: 1, working_agents: 0 },
-        { id: "s3", name: "失联小队", unit_id: "gone", leader_id: "ag3", agent_count: 1, working_agents: 0 },
+        squad("s1", "支付小队", "b", "ag1", 2),
+        squad("s2", "流浪小队", "", "ag2", 1),
+        squad("s3", "失联小队", "gone", "ag3", 1),
       ],
     });
     expect(forest.roots[0]!.children[0]!.squads.map((squad) => squad.id)).toEqual(["s1"]);

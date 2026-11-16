@@ -36,6 +36,11 @@ type SquadResponse struct {
 	ArchivedBy    *string                      `json:"archived_by"`
 	MemberCount   int                          `json:"member_count"`
 	MemberPreview []SquadMemberPreviewResponse `json:"member_preview"`
+	// WipLimit caps concurrently open child issues; MaxChildren caps one
+	// dispatch's child count. Both are enforced when the leader creates
+	// children.
+	WipLimit    int32 `json:"wip_limit"`
+	MaxChildren int32 `json:"max_children"`
 }
 
 type SquadMemberPreviewResponse struct {
@@ -75,6 +80,8 @@ func (h *Handler) squadToResponse(s db.Squad) SquadResponse {
 		ArchivedAt:    timestampToPtr(s.ArchivedAt),
 		ArchivedBy:    uuidToPtr(s.ArchivedBy),
 		MemberPreview: []SquadMemberPreviewResponse{},
+		WipLimit:      s.WipLimit,
+		MaxChildren:   s.MaxChildren,
 	}
 }
 
@@ -362,9 +369,19 @@ func (h *Handler) UpdateSquad(w http.ResponseWriter, r *http.Request) {
 		Instructions *string `json:"instructions"`
 		LeaderID     *string `json:"leader_id"`
 		AvatarURL    *string `json:"avatar_url"`
+		WipLimit     *int32  `json:"wip_limit"`
+		MaxChildren  *int32  `json:"max_children"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.WipLimit != nil && (*req.WipLimit < 1 || *req.WipLimit > squadWIPLimitMax) {
+		writeError(w, http.StatusBadRequest, "wip_limit must be between 1 and 50")
+		return
+	}
+	if req.MaxChildren != nil && (*req.MaxChildren < 1 || *req.MaxChildren > squadMaxChildrenMax) {
+		writeError(w, http.StatusBadRequest, "max_children must be between 1 and 100")
 		return
 	}
 
@@ -377,6 +394,12 @@ func (h *Handler) UpdateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Instructions != nil {
 		params.Instructions = pgtype.Text{String: *req.Instructions, Valid: true}
+	}
+	if req.WipLimit != nil {
+		params.WipLimit = pgtype.Int4{Int32: *req.WipLimit, Valid: true}
+	}
+	if req.MaxChildren != nil {
+		params.MaxChildren = pgtype.Int4{Int32: *req.MaxChildren, Valid: true}
 	}
 	if req.AvatarURL != nil {
 		accepted, ok := h.acceptAvatarURL(w, r, *req.AvatarURL, squad.AvatarUrl.String)

@@ -14,7 +14,7 @@ import (
 const addSquadMember = `-- name: AddSquadMember :one
 INSERT INTO squad_member (squad_id, member_type, member_id, role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, squad_id, member_type, member_id, role, created_at
+RETURNING id, squad_id, member_type, member_id, role, created_at, source
 `
 
 type AddSquadMemberParams struct {
@@ -39,6 +39,7 @@ func (q *Queries) AddSquadMember(ctx context.Context, arg AddSquadMemberParams) 
 		&i.MemberID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
 }
@@ -46,7 +47,7 @@ func (q *Queries) AddSquadMember(ctx context.Context, arg AddSquadMemberParams) 
 const archiveSquad = `-- name: ArchiveSquad :one
 UPDATE squad SET archived_at = now(), archived_by = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id
+RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed
 `
 
 type ArchiveSquadParams struct {
@@ -71,6 +72,9 @@ func (q *Queries) ArchiveSquad(ctx context.Context, arg ArchiveSquadParams) (Squ
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
@@ -89,7 +93,7 @@ func (q *Queries) CountSquadMembers(ctx context.Context, squadID pgtype.UUID) (i
 const createSquad = `-- name: CreateSquad :one
 INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id
+RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed
 `
 
 type CreateSquadParams struct {
@@ -125,12 +129,15 @@ func (q *Queries) CreateSquad(ctx context.Context, arg CreateSquadParams) (Squad
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
 
 const getSquad = `-- name: GetSquad :one
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad WHERE id = $1
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad WHERE id = $1
 `
 
 func (q *Queries) GetSquad(ctx context.Context, id pgtype.UUID) (Squad, error) {
@@ -150,12 +157,15 @@ func (q *Queries) GetSquad(ctx context.Context, id pgtype.UUID) (Squad, error) {
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
 
 const getSquadByAssignee = `-- name: GetSquadByAssignee :one
-SELECT s.id, s.workspace_id, s.name, s.description, s.leader_id, s.creator_id, s.created_at, s.updated_at, s.archived_at, s.archived_by, s.avatar_url, s.instructions, s.org_unit_id FROM squad s WHERE s.id = $1 AND s.workspace_id = $2
+SELECT s.id, s.workspace_id, s.name, s.description, s.leader_id, s.creator_id, s.created_at, s.updated_at, s.archived_at, s.archived_by, s.avatar_url, s.instructions, s.org_unit_id, s.wip_limit, s.max_children, s.org_managed FROM squad s WHERE s.id = $1 AND s.workspace_id = $2
 `
 
 type GetSquadByAssigneeParams struct {
@@ -181,12 +191,53 @@ func (q *Queries) GetSquadByAssignee(ctx context.Context, arg GetSquadByAssignee
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
+	)
+	return i, err
+}
+
+const getSquadByOrgUnit = `-- name: GetSquadByOrgUnit :one
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad
+WHERE workspace_id = $1 AND org_unit_id = $2 AND archived_at IS NULL
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+type GetSquadByOrgUnitParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+// The department's squad, if one has been generated. Org pages keep one
+// implicit squad per unit; additional squads stay manual and unbound.
+func (q *Queries) GetSquadByOrgUnit(ctx context.Context, arg GetSquadByOrgUnitParams) (Squad, error) {
+	row := q.db.QueryRow(ctx, getSquadByOrgUnit, arg.WorkspaceID, arg.OrgUnitID)
+	var i Squad
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Description,
+		&i.LeaderID,
+		&i.CreatorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
+		&i.AvatarUrl,
+		&i.Instructions,
+		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
 
 const getSquadInWorkspace = `-- name: GetSquadInWorkspace :one
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad WHERE id = $1 AND workspace_id = $2
 `
 
 type GetSquadInWorkspaceParams struct {
@@ -211,6 +262,9 @@ func (q *Queries) GetSquadInWorkspace(ctx context.Context, arg GetSquadInWorkspa
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
@@ -236,7 +290,7 @@ func (q *Queries) IsSquadMember(ctx context.Context, arg IsSquadMemberParams) (b
 }
 
 const listAllSquads = `-- name: ListAllSquads :many
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad WHERE workspace_id = $1 ORDER BY created_at ASC
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad WHERE workspace_id = $1 ORDER BY created_at ASC
 `
 
 func (q *Queries) ListAllSquads(ctx context.Context, workspaceID pgtype.UUID) ([]Squad, error) {
@@ -262,6 +316,9 @@ func (q *Queries) ListAllSquads(ctx context.Context, workspaceID pgtype.UUID) ([
 			&i.AvatarUrl,
 			&i.Instructions,
 			&i.OrgUnitID,
+			&i.WipLimit,
+			&i.MaxChildren,
+			&i.OrgManaged,
 		); err != nil {
 			return nil, err
 		}
@@ -457,7 +514,7 @@ func (q *Queries) ListSquadMemberStatusRows(ctx context.Context, squadID pgtype.
 }
 
 const listSquadMembers = `-- name: ListSquadMembers :many
-SELECT id, squad_id, member_type, member_id, role, created_at FROM squad_member WHERE squad_id = $1 ORDER BY created_at ASC
+SELECT id, squad_id, member_type, member_id, role, created_at, source FROM squad_member WHERE squad_id = $1 ORDER BY created_at ASC
 `
 
 func (q *Queries) ListSquadMembers(ctx context.Context, squadID pgtype.UUID) ([]SquadMember, error) {
@@ -476,6 +533,7 @@ func (q *Queries) ListSquadMembers(ctx context.Context, squadID pgtype.UUID) ([]
 			&i.MemberID,
 			&i.Role,
 			&i.CreatedAt,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -488,7 +546,7 @@ func (q *Queries) ListSquadMembers(ctx context.Context, squadID pgtype.UUID) ([]
 }
 
 const listSquads = `-- name: ListSquads :many
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY created_at ASC
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY created_at ASC
 `
 
 func (q *Queries) ListSquads(ctx context.Context, workspaceID pgtype.UUID) ([]Squad, error) {
@@ -514,6 +572,9 @@ func (q *Queries) ListSquads(ctx context.Context, workspaceID pgtype.UUID) ([]Sq
 			&i.AvatarUrl,
 			&i.Instructions,
 			&i.OrgUnitID,
+			&i.WipLimit,
+			&i.MaxChildren,
+			&i.OrgManaged,
 		); err != nil {
 			return nil, err
 		}
@@ -526,7 +587,7 @@ func (q *Queries) ListSquads(ctx context.Context, workspaceID pgtype.UUID) ([]Sq
 }
 
 const listSquadsByMember = `-- name: ListSquadsByMember :many
-SELECT s.id, s.workspace_id, s.name, s.description, s.leader_id, s.creator_id, s.created_at, s.updated_at, s.archived_at, s.archived_by, s.avatar_url, s.instructions, s.org_unit_id FROM squad s
+SELECT s.id, s.workspace_id, s.name, s.description, s.leader_id, s.creator_id, s.created_at, s.updated_at, s.archived_at, s.archived_by, s.avatar_url, s.instructions, s.org_unit_id, s.wip_limit, s.max_children, s.org_managed FROM squad s
 JOIN squad_member sm ON sm.squad_id = s.id
 WHERE s.workspace_id = $1 AND sm.member_type = $2 AND sm.member_id = $3
 ORDER BY s.created_at ASC
@@ -562,6 +623,9 @@ func (q *Queries) ListSquadsByMember(ctx context.Context, arg ListSquadsByMember
 			&i.AvatarUrl,
 			&i.Instructions,
 			&i.OrgUnitID,
+			&i.WipLimit,
+			&i.MaxChildren,
+			&i.OrgManaged,
 		); err != nil {
 			return nil, err
 		}
@@ -574,7 +638,7 @@ func (q *Queries) ListSquadsByMember(ctx context.Context, arg ListSquadsByMember
 }
 
 const lockSquadForAutopilotAssignment = `-- name: LockSquadForAutopilotAssignment :one
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad
 WHERE id = $1 AND workspace_id = $2
 FOR SHARE
 `
@@ -605,12 +669,15 @@ func (q *Queries) LockSquadForAutopilotAssignment(ctx context.Context, arg LockS
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
 
 const lockSquadForUpdate = `-- name: LockSquadForUpdate :one
-SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id FROM squad
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed FROM squad
 WHERE id = $1 AND workspace_id = $2
 FOR UPDATE
 `
@@ -640,8 +707,28 @@ func (q *Queries) LockSquadForUpdate(ctx context.Context, arg LockSquadForUpdate
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
+}
+
+const markSquadOrgManaged = `-- name: MarkSquadOrgManaged :exec
+UPDATE squad SET org_managed = true
+WHERE id = $1 AND workspace_id = $2
+`
+
+type MarkSquadOrgManagedParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Adopts a squad into the org mirror. Only generated or explicitly synced
+// squads mirror their unit subtree; hand-attached squads stay manual.
+func (q *Queries) MarkSquadOrgManaged(ctx context.Context, arg MarkSquadOrgManagedParams) error {
+	_, err := q.db.Exec(ctx, markSquadOrgManaged, arg.ID, arg.WorkspaceID)
+	return err
 }
 
 const removeSquadMember = `-- name: RemoveSquadMember :execrows
@@ -657,6 +744,33 @@ type RemoveSquadMemberParams struct {
 
 func (q *Queries) RemoveSquadMember(ctx context.Context, arg RemoveSquadMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeSquadMember, arg.SquadID, arg.MemberType, arg.MemberID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const removeSyncedSquadMember = `-- name: RemoveSyncedSquadMember :execrows
+DELETE FROM squad_member
+WHERE squad_id = $1 AND member_type = $2 AND member_id = $3 AND source = $4
+`
+
+type RemoveSyncedSquadMemberParams struct {
+	SquadID    pgtype.UUID `json:"squad_id"`
+	MemberType string      `json:"member_type"`
+	MemberID   pgtype.UUID `json:"member_id"`
+	Source     string      `json:"source"`
+}
+
+// Prunes a member the org sync added but the current department no longer
+// covers. Manually added members keep source='manual' and survive.
+func (q *Queries) RemoveSyncedSquadMember(ctx context.Context, arg RemoveSyncedSquadMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeSyncedSquadMember,
+		arg.SquadID,
+		arg.MemberType,
+		arg.MemberID,
+		arg.Source,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -710,9 +824,11 @@ UPDATE squad SET
     leader_id = COALESCE($4, leader_id),
     avatar_url = COALESCE($5, avatar_url),
     instructions = COALESCE($6, instructions),
+    wip_limit = COALESCE($7, wip_limit),
+    max_children = COALESCE($8, max_children),
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id
+RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, org_unit_id, wip_limit, max_children, org_managed
 `
 
 type UpdateSquadParams struct {
@@ -722,6 +838,8 @@ type UpdateSquadParams struct {
 	LeaderID     pgtype.UUID `json:"leader_id"`
 	AvatarUrl    pgtype.Text `json:"avatar_url"`
 	Instructions pgtype.Text `json:"instructions"`
+	WipLimit     pgtype.Int4 `json:"wip_limit"`
+	MaxChildren  pgtype.Int4 `json:"max_children"`
 }
 
 func (q *Queries) UpdateSquad(ctx context.Context, arg UpdateSquadParams) (Squad, error) {
@@ -732,6 +850,8 @@ func (q *Queries) UpdateSquad(ctx context.Context, arg UpdateSquadParams) (Squad
 		arg.LeaderID,
 		arg.AvatarUrl,
 		arg.Instructions,
+		arg.WipLimit,
+		arg.MaxChildren,
 	)
 	var i Squad
 	err := row.Scan(
@@ -748,6 +868,9 @@ func (q *Queries) UpdateSquad(ctx context.Context, arg UpdateSquadParams) (Squad
 		&i.AvatarUrl,
 		&i.Instructions,
 		&i.OrgUnitID,
+		&i.WipLimit,
+		&i.MaxChildren,
+		&i.OrgManaged,
 	)
 	return i, err
 }
@@ -755,7 +878,7 @@ func (q *Queries) UpdateSquad(ctx context.Context, arg UpdateSquadParams) (Squad
 const updateSquadMemberRole = `-- name: UpdateSquadMemberRole :one
 UPDATE squad_member SET role = $4
 WHERE squad_id = $1 AND member_type = $2 AND member_id = $3
-RETURNING id, squad_id, member_type, member_id, role, created_at
+RETURNING id, squad_id, member_type, member_id, role, created_at, source
 `
 
 type UpdateSquadMemberRoleParams struct {
@@ -780,6 +903,35 @@ func (q *Queries) UpdateSquadMemberRole(ctx context.Context, arg UpdateSquadMemb
 		&i.MemberID,
 		&i.Role,
 		&i.CreatedAt,
+		&i.Source,
 	)
 	return i, err
+}
+
+const upsertSquadMember = `-- name: UpsertSquadMember :exec
+INSERT INTO squad_member (squad_id, member_type, member_id, role, source)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (squad_id, member_type, member_id)
+DO UPDATE SET role = EXCLUDED.role, source = EXCLUDED.source
+`
+
+type UpsertSquadMemberParams struct {
+	SquadID    pgtype.UUID `json:"squad_id"`
+	MemberType string      `json:"member_type"`
+	MemberID   pgtype.UUID `json:"member_id"`
+	Role       string      `json:"role"`
+	Source     string      `json:"source"`
+}
+
+// Org sync re-runs on demand and after department moves; the same member must
+// settle to one row whose role and provenance follow the latest roster.
+func (q *Queries) UpsertSquadMember(ctx context.Context, arg UpsertSquadMemberParams) error {
+	_, err := q.db.Exec(ctx, upsertSquadMember,
+		arg.SquadID,
+		arg.MemberType,
+		arg.MemberID,
+		arg.Role,
+		arg.Source,
+	)
+	return err
 }

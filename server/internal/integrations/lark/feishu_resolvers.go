@@ -313,6 +313,8 @@ func dispatchResultFromEngine(res engine.Result) DispatchResult {
 		IssueTitle:         res.IssueTitle,
 		IssueDuplicate:     res.IssueDuplicate,
 		IssueUsageHadMedia: res.IssueUsageHadMedia,
+		DispatchUnitName:   res.DispatchUnitName,
+		DispatchCandidates: res.DispatchCandidates,
 	}
 }
 

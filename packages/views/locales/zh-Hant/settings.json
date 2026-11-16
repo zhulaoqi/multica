@@ -240,6 +240,10 @@
         "label": "新建任務",
         "description": "開啟你常用的任務建立流程。"
       },
+      "dispatchWork": {
+        "label": "派活",
+        "description": "選擇部門並提交任務說明，隊長會拆解任務並在完成後通知你。"
+      },
       "toggleSidebar": {
         "label": "顯示或隱藏左側邊欄",
         "description": "切換左側邊欄的顯示狀態。"

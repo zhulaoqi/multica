@@ -13,6 +13,7 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
     setOrgMemberUnit: vi.fn(),
     setOrgAgentUnit: vi.fn(),
     setOrgSquadUnit: vi.fn(),
+    generateOrgUnitSquad: vi.fn(),
     registerIntakeAgent: vi.fn(),
     patchIntakeAgent: vi.fn(),
   },
@@ -48,7 +49,19 @@ const baseUnit: OrgUnit = {
   position: 0,
 };
 const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", owner_id: "", runtime_mode: "", can: "", cannot: "", status: "" };
-const baseSquad: OrgSquad = { id: "", name: "", unit_id: "", leader_id: "", agent_count: 0, working_agents: 0 };
+const baseSquad: OrgSquad = {
+  id: "",
+  name: "",
+  unit_id: "",
+  leader_id: "",
+  agent_count: 0,
+  working_agents: 0,
+  wip_limit: 3,
+  max_children: 8,
+  active_issues: 0,
+  review_issues: 0,
+  blocked_issues: 0,
+};
 const baseOrgMember: OrgMember = { user_id: "", unit_id: "", name: "", email: "", avatar_url: null };
 
 function unit(overrides: Partial<OrgUnit> & Pick<OrgUnit, "id" | "name">): OrgUnit {
@@ -287,6 +300,52 @@ describe("OrgPage admin actions", () => {
     expect(screen.getByText("Ada")).toBeInTheDocument();
     expect(screen.getByText("Reviewer")).toBeInTheDocument();
     expect(screen.getAllByText("Engineering/Payments").length).toBeGreaterThan(0);
+  });
+
+  it("syncs the department squad from its header card", async () => {
+    const generate = vi.spyOn(api, "generateOrgUnitSquad").mockResolvedValue({
+      squad: baseSquad,
+      added: 0,
+      updated: 0,
+      removed: 0,
+      created: false,
+    });
+    renderPage(tree({
+      units: [unit({ id: "dept-root", name: "Engineering", can_manage: true })],
+      agents: [{ ...baseAgent, id: "agent-1", name: "Reviewer", unit_id: "dept-root", status: "idle" }],
+      squads: [{
+        ...baseSquad,
+        id: "squad-1",
+        name: "Engineering squad",
+        unit_id: "dept-root",
+        leader_id: "agent-1",
+        agent_count: 1,
+      }],
+    }));
+
+    selectUnit("Engineering");
+    fireEvent.click(screen.getByRole("button", { name: "Sync squad" }));
+
+    const dialog = screen.getByTestId("generate-squad-dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sync squad" }));
+
+    await waitFor(() =>
+      expect(generate).toHaveBeenCalledWith("dept-root", {
+        name: "Engineering squad",
+        leader_id: "agent-1",
+        wip_limit: 3,
+        max_children: 8,
+        instructions: undefined,
+      }),
+    );
+  });
+
+  it("cannot generate a squad before the department has an agent", () => {
+    renderPage(tree({ agents: [], squads: [] }));
+
+    selectUnit("Engineering");
+
+    expect(screen.getByRole("button", { name: "Generate squad" })).toBeDisabled();
   });
 });
 

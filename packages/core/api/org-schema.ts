@@ -43,6 +43,22 @@ export const OrgSquadSchema = z.object({
   leader_id: z.string().optional().default(""),
   agent_count: z.number().optional().default(0),
   working_agents: z.number().optional().default(0),
+  // Dispatch guardrails enforced by the server when the leader creates a
+  // child issue. Older servers omit them; the org view then hides the limits.
+  wip_limit: z.number().optional().default(0),
+  max_children: z.number().optional().default(0),
+  // Work currently assigned to the squad, by status bucket.
+  active_issues: z.number().optional().default(0),
+  review_issues: z.number().optional().default(0),
+  blocked_issues: z.number().optional().default(0),
+});
+
+export const OrgSquadSyncResultSchema = z.object({
+  squad: OrgSquadSchema,
+  added: z.number().optional().default(0),
+  updated: z.number().optional().default(0),
+  removed: z.number().optional().default(0),
+  created: z.boolean().optional().default(false),
 });
 
 export const OrgTreeSchema = z.object({
@@ -98,6 +114,7 @@ export type OrgUnit = z.infer<typeof OrgUnitSchema>;
 export type OrgAgent = z.infer<typeof OrgAgentSchema>;
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
 export type OrgSquad = z.infer<typeof OrgSquadSchema>;
+export type OrgSquadSyncResult = z.infer<typeof OrgSquadSyncResultSchema>;
 export type OrgTree = z.infer<typeof OrgTreeSchema>;
 export type OrgImportRow = z.infer<typeof OrgImportRowSchema>;
 export type OrgImportResult = z.infer<typeof OrgImportResultSchema>;

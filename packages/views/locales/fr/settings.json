@@ -242,6 +242,10 @@
         "label": "Créer une tâche",
         "description": "Ouvrir votre mode de création de tâche préféré."
       },
+      "dispatchWork": {
+        "label": "Envoyer du travail",
+        "description": "Choisissez un service et confiez-lui un brief ; son leader répartit le travail et vous tient informé."
+      },
       "toggleSidebar": {
         "label": "Afficher ou masquer la barre latérale gauche",
         "description": "Afficher ou masquer la barre latérale gauche."

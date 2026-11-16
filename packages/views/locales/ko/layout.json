@@ -58,6 +58,7 @@
     "invitation_decline": "거절",
     "log_out": "로그아웃",
     "new_issue": "새 태스크",
+    "dispatch_work": "작업 보내기",
     "pinned_label": "고정됨",
     "show_more_pins": "{{count}}개 더 보기…",
     "show_fewer_pins": "접기"

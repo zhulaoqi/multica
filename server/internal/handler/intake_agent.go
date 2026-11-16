@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -51,7 +52,7 @@ func (h *Handler) mayConfigureIntakeAgentOwnedBy(
 	if err != nil {
 		return false
 	}
-	return orgUserLeadsUnit(caller.UserID, units, owner.OrgUnitID)
+	return orgscope.Leads(units, caller.UserID, owner.OrgUnitID)
 }
 
 type intakePlacement struct {

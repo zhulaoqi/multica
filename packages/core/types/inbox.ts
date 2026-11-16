@@ -31,7 +31,13 @@ export type InboxItemType =
   | "autopilot_quota_exceeded"
   // Sub-issues of an issue assigned to the recipient closed (the child_done
   // system rule notifies a member assignee instead of waking an agent).
-  | "children_done";
+  | "children_done"
+  // A dispatch to a department reached review or done; the requester gets one
+  // item per dispatch, linked to the root issue.
+  | "dispatch_completed"
+  // A squad leader exhausted its runs without delivering; the department lead
+  // gets an action-required item so the stall is visible without reading runs.
+  | "squad_leader_failed";
 
 /**
  * One workspace's unread inbox count in the cross-workspace summary

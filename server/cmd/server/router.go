@@ -544,7 +544,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	// is the single shared inbound handler injected into every Channel.
 	channelRegistry := channel.NewRegistry()
 	channelRouter := engine.NewRouter(h.IssueService, h.TaskService, queries, engine.RouterConfig{
-		Logger: slog.Default(), Lifecycle: h,
+		Logger: slog.Default(), Lifecycle: h, Dispatcher: h.OrgDispatchService,
 	})
 	// Debounce the per-session run trigger so a burst of messages collapses
 	// into one agent run instead of one per message (MUL-2968).
@@ -582,6 +582,12 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	// continues to start so self-host deployments that have not opted
 	// in to Lark are unaffected. Feishu registers its Factory + ResolverSet
 	// into the channel engine above.
+	// Filled in when Lark is configured. The dispatch completion listener is
+	// registered regardless so in-app requesters still get their inbox item on
+	// deployments that never enabled Lark.
+	var dispatchLarkClient lark.APIClient
+	var dispatchLarkInstalls *lark.InstallationService
+
 	if larkKey, err := secretbox.LoadKey("MULTICA_LARK_SECRET_KEY"); err == nil {
 		box, err := secretbox.New(larkKey)
 		if err != nil {
@@ -592,6 +598,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				slog.Error("lark: InstallationService init failed; lark integration disabled", "error", err)
 			} else {
 				h.LarkInstallations = installSvc
+				dispatchLarkInstalls = installSvc
 				h.LarkBindingTokens = lark.NewBindingTokenService(queries, pool)
 				slog.Info("lark integration enabled")
 
@@ -617,6 +624,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					Logger:  slog.Default(),
 				})
 				h.LarkAPIClient = larkClient
+				dispatchLarkClient = larkClient
 				service.DeliverIntakeCard = func(ctx context.Context, workspaceID, userID, issueID pgtype.UUID, title, text string) error {
 					binding, err := queries.FindLarkOpenIDForUser(ctx, db.FindLarkOpenIDForUserParams{
 						WorkspaceID: workspaceID, MulticaUserID: userID,
@@ -825,6 +833,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		slog.Info("lark integration disabled (MULTICA_LARK_SECRET_KEY not set)")
 	}
 	registerFeishuInboxMirror(bus, queries, h)
+	registerDispatchCompletionListener(bus, queries, h.OrgDispatchService, dispatchLarkClient, dispatchLarkInstalls, appURLFromEnv())
 
 	// Slack integration. Multi-tenant B2 model (MUL-3666): Multica hosts ONE
 	// Slack app, workspaces self-install via OAuth, and inbound runs on a single
@@ -2587,6 +2596,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/units/import", h.ImportOrgUnits)
 				r.Patch("/units/{unitId}", h.UpdateOrgUnit)
 				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
+				r.Post("/units/{unitId}/squad", h.GenerateOrgUnitSquad)
+				r.Post("/units/{unitId}/dispatch", h.DispatchToOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
 				r.Put("/members/{userId}/unit", h.SetOrgMemberUnit)
 				r.Put("/squads/{squadId}/unit", h.SetOrgSquadUnit)

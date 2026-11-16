@@ -1080,6 +1080,7 @@
     "dialog_title": "{{name}} 的職責",
     "save": "儲存",
     "cancel": "取消",
-    "save_failed": "職責沒有儲存成功。"
+    "save_failed": "職責沒有儲存成功。",
+    "dispatch": "派活"
   }
 }

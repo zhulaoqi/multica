@@ -654,6 +654,10 @@ func (s *ChatSession) AppendUserMessage(ctx context.Context, in AppendInput) (Ap
 		commandSource = in.Body
 	}
 	cmd, _ := ParseIssueCommand(commandSource)
+	dispatchCmd, _ := ParseDispatchCommand(commandSource)
+	// Both command kinds are control-plane turns: they neither title the Chat
+	// nor join a later agent turn's input.
+	isCommand := cmd != nil || dispatchCmd != nil
 	// Context paths acquire chat_session before binding and generation. This
 	// also keeps the later TouchChatSession update from introducing the reverse
 	// binding -> chat_session edge against task enqueue.
@@ -679,9 +683,9 @@ func (s *ChatSession) AppendUserMessage(ctx context.Context, in AppendInput) (Ap
 	if err != nil {
 		return AppendResult{}, fmt.Errorf("check public chat history: %w", err)
 	}
-	becameVisible := cmd == nil && !hadPublicUserMessage && !currentSession.ExplicitlyCreatedAt.Valid
+	becameVisible := !isCommand && !hadPublicUserMessage && !currentSession.ExplicitlyCreatedAt.Valid
 	initializedTitle := ""
-	if cmd == nil {
+	if !isCommand {
 		title := deriveFirstMessageTitle(chatTitleSource(in.Body, in.CommandText, in.ForceFresh), in.MediaPendingSeconds > 0)
 		if becameVisible {
 			if _, err := qtx.ReplaceImplicitChatSessionTitle(ctx, db.ReplaceImplicitChatSessionTitleParams{ID: in.SessionID, Title: title}); err != nil {
@@ -721,7 +725,7 @@ func (s *ChatSession) AppendUserMessage(ctx context.Context, in AppendInput) (Ap
 	}
 	// A channel command is excluded from agent input, so it must not replace
 	// the principal used to recover earlier unowned agent-visible messages.
-	if contextRevision > 0 && cmd == nil {
+	if contextRevision > 0 && !isCommand {
 		if _, err := qtx.SetChannelChatContextInitiator(ctx, db.SetChannelChatContextInitiatorParams{
 			ChatSessionID: in.SessionID, Revision: contextRevision, InitiatorUserID: in.Sender,
 		}); err != nil {
@@ -751,7 +755,7 @@ func (s *ChatSession) AppendUserMessage(ctx context.Context, in AppendInput) (Ap
 		ChatSessionID:           in.SessionID,
 		Role:                    "user",
 		Content:                 in.Body,
-		MessageKind:             textOrNullIf(cmd != nil, channelCommandMessageKind),
+		MessageKind:             textOrNullIf(isCommand, channelCommandMessageKind),
 		ChannelMediaPendingSecs: pgtype.Float8{Float64: in.MediaPendingSeconds, Valid: in.MediaPendingSeconds > 0},
 		ChannelIngested:         pgtype.Bool{Bool: true, Valid: true},
 		ChannelContextRevision:  pgtype.Int8{Int64: contextRevision, Valid: contextRevision > 0},
@@ -814,6 +818,7 @@ func (s *ChatSession) AppendUserMessage(ctx context.Context, in AppendInput) (Ap
 	return AppendResult{
 		MessageID:       msg.ID,
 		IssueCommand:    cmd,
+		DispatchCommand: dispatchCmd,
 		DedupMarked:     markedInTx,
 		ContextRevision: contextRevision,
 		PendingContexts: pendingContexts,

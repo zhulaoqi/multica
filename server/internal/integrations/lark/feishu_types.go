@@ -103,6 +103,14 @@ const (
 	OutcomeAgentOffline Outcome = "agent_offline"
 	// OutcomeAgentArchived — landed, but the agent is archived.
 	OutcomeAgentArchived Outcome = "agent_archived"
+	// /dispatch outcomes: created, malformed, ambiguous department, and the
+	// dispatch service's refusals.
+	OutcomeDispatchUsage             Outcome = "dispatch_usage"
+	OutcomeDispatchCreated           Outcome = "dispatch_created"
+	OutcomeDispatchAmbiguous         Outcome = "dispatch_ambiguous"
+	OutcomeDispatchNoAccess          Outcome = "dispatch_no_access"
+	OutcomeDispatchNoAgents          Outcome = "dispatch_no_agents"
+	OutcomeDispatchLeaderUnavailable Outcome = "dispatch_leader_unavailable"
 )
 
 // DispatchResult is the Feishu-side verdict the OutcomeReplier consumes to
@@ -130,4 +138,9 @@ type DispatchResult struct {
 	// IssueUsageHadMedia asks the usage reply to tell the sender to include the
 	// current message's media again with the corrected command.
 	IssueUsageHadMedia bool
+	// DispatchUnitName is the department a /dispatch was delivered to.
+	DispatchUnitName string
+	// DispatchCandidates lists the department paths a /dispatch could mean
+	// when the name did not resolve to exactly one.
+	DispatchCandidates []string
 }

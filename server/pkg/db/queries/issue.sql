@@ -710,6 +710,16 @@ WHERE workspace_id = $1
   AND assignee_id IS NOT NULL
 GROUP BY assignee_type, assignee_id;
 
+-- name: CountChildIssues :one
+-- Dispatch guard for squad-assigned parents: total children and the ones that
+-- are still open. Terminal keys come from the workspace status catalog so a
+-- custom done status closes a slot just like the built-in one.
+SELECT count(*)::int AS total,
+       count(*) FILTER (WHERE status <> ALL(sqlc.arg('terminal_status_keys')::text[]))::int AS open
+FROM issue
+WHERE workspace_id = sqlc.arg('workspace_id')
+  AND parent_issue_id = sqlc.arg('parent_issue_id');
+
 -- name: ChildIssueProgress :many
 SELECT parent_issue_id,
        COUNT(*)::bigint AS total,

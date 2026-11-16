@@ -1,1 +1,1 @@
-export { SquadsPage, SquadDetailPage } from "./components";
+export { SquadsPage, SquadDetailPage, DispatchDialog, type DispatchTarget } from "./components";

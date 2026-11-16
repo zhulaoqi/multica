@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -60,6 +61,16 @@ Your responsibilities, in order:
      Two or three sentences is usually plenty.
    - Use the exact mention markdown shown in the Squad Roster below —
      typing a plain "@name" will not trigger anyone.
+   - **Make every delegation a complete handoff.** State these four parts;
+     a delegation missing GOAL or ACCEPTANCE is not ready:
+     1. GOAL — the concrete outcome in one or two sentences.
+     2. INPUT — the files, modules, links, or issue ids to start from.
+     3. ACCEPTANCE — how the member proves it is done (command to run,
+        test to pass, or the exact review point).
+     4. BOUNDARY — what not to touch, and when to stop and ask you.
+   - When you use child issues instead of a mention, put the same four
+     parts in the child issue description so the assignee starts from the
+     same contract.
 3. **Record your evaluation.** After every trigger — whether you delegated,
    decided no action is needed, or encountered an error — record it:
    ` + "`" + `multica squad activity <issue-id> <outcome> --reason "<short reason>"` + "`" + `
@@ -195,6 +206,14 @@ const squadOperatingProtocolHardRules = `Hard rules:
 - If the squad has no member capable of the task, post a comment
   explaining the gap (and @mention the issue's reporter if possible)
   rather than silently doing the work.
+- **Escalate after two failures.** If the same member fails the same task
+  twice (error, wrong deliverable, or the work comes back after review),
+  stop retrying. Post one comment with what was attempted, why it failed,
+  and what you need from the human; @mention the reporter when possible,
+  then record ` + "`" + `multica squad activity <issue-id> failed` + "`" + `.
+- **Respect the dispatch limits below.** The server rejects a child issue
+  that would exceed them. Do not retry the rejected create; wait for
+  running children to finish, then continue or escalate.
 - ALWAYS call ` + "`" + `multica squad activity` + "`" + ` before ending your turn —
   even when the outcome is no_action. If it errors on a turn where you
   posted no comment, leave one short comment instead; never let an
@@ -270,6 +289,9 @@ func buildSquadLeaderBriefing(ctx context.Context, q *db.Queries, squad db.Squad
 	}
 	sb.WriteString("\n\n")
 	sb.WriteString(buildSquadRoster(ctx, q, squad))
+	sb.WriteString("\n\n## Dispatch Limits\n\n")
+	fmt.Fprintf(&sb, "- Open child issues at once: %d\n", squad.WipLimit)
+	fmt.Fprintf(&sb, "- Child issues per dispatch: %d\n", squad.MaxChildren)
 
 	if trimmed := strings.TrimSpace(squad.Instructions); trimmed != "" {
 		sb.WriteString("\n\n## Squad Instructions (")

@@ -65,6 +65,8 @@
     "quick_create_unconfirmed": "Quick-create needs a check",
     "autopilot_paused": "Autopilot paused",
     "children_done": "Sub-issues finished",
+    "dispatch_completed": "Department work finished",
+    "squad_leader_failed": "Squad leader failed",
     "autopilot_quota_exceeded": "Autopilot run limit reached",
     "set_status": "Set status to",
     "set_priority": "Set priority to",

@@ -124,6 +124,35 @@ func (q *Queries) ClearIssueDuplicatesOf(ctx context.Context, arg ClearIssueDupl
 	return items, nil
 }
 
+const countChildIssues = `-- name: CountChildIssues :one
+SELECT count(*)::int AS total,
+       count(*) FILTER (WHERE status <> ALL($1::text[]))::int AS open
+FROM issue
+WHERE workspace_id = $2
+  AND parent_issue_id = $3
+`
+
+type CountChildIssuesParams struct {
+	TerminalStatusKeys []string    `json:"terminal_status_keys"`
+	WorkspaceID        pgtype.UUID `json:"workspace_id"`
+	ParentIssueID      pgtype.UUID `json:"parent_issue_id"`
+}
+
+type CountChildIssuesRow struct {
+	Total int32 `json:"total"`
+	Open  int32 `json:"open"`
+}
+
+// Dispatch guard for squad-assigned parents: total children and the ones that
+// are still open. Terminal keys come from the workspace status catalog so a
+// custom done status closes a slot just like the built-in one.
+func (q *Queries) CountChildIssues(ctx context.Context, arg CountChildIssuesParams) (CountChildIssuesRow, error) {
+	row := q.db.QueryRow(ctx, countChildIssues, arg.TerminalStatusKeys, arg.WorkspaceID, arg.ParentIssueID)
+	var i CountChildIssuesRow
+	err := row.Scan(&i.Total, &i.Open)
+	return i, err
+}
+
 const countCreatedIssueAssignees = `-- name: CountCreatedIssueAssignees :many
 SELECT
   assignee_type,

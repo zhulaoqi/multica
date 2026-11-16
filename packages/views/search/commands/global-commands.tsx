@@ -8,6 +8,7 @@ import {
   FolderPlus,
   MessageSquare,
   Palette,
+  Send,
   SquarePen,
   Zap,
 } from "@multica/ui/icons";
@@ -35,6 +36,7 @@ export function useGlobalCommands(contexts: readonly CommandBarContext[]): Palet
   const p = useWorkspacePaths();
   const navigation = useNavigation();
   const createIssueShortcut = useShortcut("createIssue");
+  const dispatchWorkShortcut = useShortcut("dispatchWork");
   const toggleChatShortcut = useShortcut("toggleChat");
   const markAllRead = useMarkAllInboxRead();
   const archiveAllRead = useArchiveAllReadInbox();
@@ -56,6 +58,17 @@ export function useGlobalCommands(contexts: readonly CommandBarContext[]): Palet
         shortcut: createIssueShortcut,
         run: () => openCreateIssueWithPreference(projectId ? { project_id: projectId } : undefined),
         primary: true,
+      },
+      {
+        id: "dispatch-work",
+        label: t(($) => $.commands.dispatch_work),
+        icon: Send,
+        keywords: ["dispatch", "department", "org", "team", "hand off", "派活", "部门", "组织"],
+        shortcut: dispatchWorkShortcut,
+        run: () => {
+          if (useModalStore.getState().modal) return;
+          useModalStore.getState().open("dispatch-work");
+        },
       },
       {
         id: "chat-with-agent",
@@ -138,6 +151,7 @@ export function useGlobalCommands(contexts: readonly CommandBarContext[]): Palet
   }, [
     archiveAllRead,
     createIssueShortcut,
+    dispatchWorkShortcut,
     inbox,
     markAllRead,
     navigation,
