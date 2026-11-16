@@ -11,8 +11,24 @@ if ! COREPACK_INTEGRITY_KEYS=0 corepack enable \
   corepack disable >/dev/null 2>&1 || true
   npm install -g pnpm@10.28.2
 fi
-pnpm install --frozen-lockfile
-if [ $? -ne 0 ]; then
+# The company Nexus sometimes drops a tarball mid-download (Socket timeout).
+# Retry the whole install; a later attempt reuses packages already in the store.
+install_ok=0
+for attempt in 1 2 3; do
+  echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') pnpm install attempt ${attempt}"
+  if pnpm install --frozen-lockfile \
+    --fetch-timeout 180000 \
+    --fetch-retries 5 \
+    --fetch-retry-mintimeout 10000 \
+    --fetch-retry-maxtimeout 120000 \
+    --network-concurrency 8; then
+    install_ok=1
+    break
+  fi
+  echo "[WARN] $(date '+%Y-%m-%d %H:%M:%S') pnpm install failed, retrying"
+  sleep 10
+done
+if [ "$install_ok" -ne 1 ]; then
   echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') Installation failed, request the developer to confirm it."
   exit 1
 fi
