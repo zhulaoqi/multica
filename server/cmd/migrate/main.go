@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/multica-ai/multica/server/internal/attributionbackfill"
 	"github.com/multica-ai/multica/server/internal/chatoriginbackfill"
+	appconfig "github.com/multica-ai/multica/server/internal/config"
 	"github.com/multica-ai/multica/server/internal/dbstartup"
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/migrations"
@@ -825,6 +826,13 @@ func main() {
 	direction := os.Args[1]
 	if direction != "up" && direction != "down" {
 		fmt.Println("Usage: go run ./cmd/migrate <up|down>")
+		os.Exit(1)
+	}
+
+	// Migrations run before the API process. Load the same profile and Apollo
+	// keys, so DATABASE_URL set only in Apollo is visible here.
+	if err := appconfig.ApplyProfile(os.Getenv("PROFILE"), ""); err != nil {
+		slog.Error("refusing to migrate: " + err.Error())
 		os.Exit(1)
 	}
 
