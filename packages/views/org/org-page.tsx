@@ -113,6 +113,7 @@ export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
   const userId = useAuthStore((state) => state.user?.id);
+  const isOperator = useAuthStore((state) => state.user?.is_operator ?? false);
   const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
   const members = useQuery(memberListOptions(wsId));
@@ -136,8 +137,10 @@ export function OrgPage() {
   // request fails. Fall back to the caller's workspace role so an admin can
   // still reach the sync action on a degraded page.
   const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
+  // The operator account is synthesised as an owner on the API and never has
+  // a member row, so the role lookup cannot see it.
   const canManageOrg =
-    data.can_manage || myRole === "owner" || myRole === "admin";
+    isOperator || data.can_manage || myRole === "owner" || myRole === "admin";
   // Landing on the caller's own department keeps plain members oriented; an
   // explicit click (including the unassigned pseudo-node) always wins.
   const activeSelected =

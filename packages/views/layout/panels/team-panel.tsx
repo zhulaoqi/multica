@@ -99,6 +99,7 @@ export function TeamPanel() {
   const { pathname, push } = useNavigation();
   const wsId = useCurrentWorkspace()?.id ?? "";
   const userId = useAuthStore((s) => s.user?.id);
+  const isOperator = useAuthStore((s) => s.user?.is_operator ?? false);
   const agentsScope = useAgentsViewStore((s) => s.scope);
   const setAgentsScope = useAgentsViewStore((s) => s.setScope);
   const { agents, stuck, working, byAgent } = useTeamAgentStatus(wsId || undefined);
@@ -133,7 +134,8 @@ export function TeamPanel() {
 
   const mineCount = userId ? agents.filter((agent) => agent.owner_id === userId).length : 0;
   const myRole = members.find((member) => member.user_id === userId)?.role;
-  const canManageMembers = myRole === "owner" || myRole === "admin";
+  const canManageMembers =
+    isOperator || myRole === "owner" || myRole === "admin";
   // A workspace with no organisation should not carry a dead directory entry.
   // Managers always keep it: they need the create and sync actions, including
   // when the tree request itself fails. While the list is still loading we

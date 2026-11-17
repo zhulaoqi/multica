@@ -87,19 +87,19 @@ function tree(overrides: Partial<OrgTree> = {}): OrgTree {
 let qc: QueryClient;
 let auth: ReturnType<typeof createAuthStore>;
 
-function signIn(userID: string) {
+function signIn(userID: string, { operator = false } = {}) {
   auth.setState({
     user: {
       id: userID,
-      name: "Ada",
-      email: "ada@example.com",
+      name: operator ? "admin" : "Ada",
+      email: operator ? "admin@operator.local" : "ada@example.com",
       avatar_url: null,
       onboarded_at: null,
       onboarding_questionnaire: {},
       language: null,
       profile_description: "",
       timezone: null,
-      is_operator: false,
+      is_operator: operator,
       created_at: new Date(NOW).toISOString(),
       updated_at: new Date(NOW).toISOString(),
     },
@@ -229,6 +229,14 @@ describe("OrgPage permissions", () => {
 });
 
 describe("OrgPage Feishu sync", () => {
+  it("gives the operator account org management without a member row", () => {
+    signIn("u-operator", { operator: true });
+    qc.setQueryData(memberListOptions(WS).queryKey, []);
+    renderPage(tree({ can_manage: false }));
+
+    expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
+  });
+
   it("keeps the sync action for a workspace admin when the tree fails", async () => {
     signIn("u-ada");
     qc.setQueryData(memberListOptions(WS).queryKey, [
