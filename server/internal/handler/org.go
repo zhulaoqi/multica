@@ -147,8 +147,24 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var visible map[pgtype.UUID]bool
+	invitedSquads := map[string]struct{}{}
 	if !access.admin {
 		visible = orgscope.Visible(access.units, ownUnitID, access.userID, false)
+		// A member always sees squads they were added to, even when that squad
+		// sits outside the department they belong to.
+		joined, err := h.Queries.ListSquadsByMember(r.Context(), db.ListSquadsByMemberParams{
+			WorkspaceID: access.wsUUID,
+			MemberType:  "member",
+			MemberID:    access.userID,
+		})
+		if err != nil {
+			slog.Error("list invited squads failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "could not list organisation squads")
+			return
+		}
+		for _, squad := range joined {
+			invitedSquads[uuidToString(squad.ID)] = struct{}{}
+		}
 	}
 	for _, unit := range access.units {
 		if visible != nil && !visible[unit.ID] {
@@ -192,7 +208,8 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	for _, squad := range squads {
-		if visible != nil && !visible[squad.OrgUnitID] {
+		_, invited := invitedSquads[uuidToString(squad.ID)]
+		if visible != nil && !visible[squad.OrgUnitID] && !invited {
 			continue
 		}
 		resp.Squads = append(resp.Squads, orgSquadResponse{

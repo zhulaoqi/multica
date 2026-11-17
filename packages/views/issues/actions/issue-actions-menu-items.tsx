@@ -323,9 +323,9 @@ export function IssueActionsMenuItems({
       </P.Sub>
 
       {/* Assignee — a submenu like Status and Priority, filled with the
-          shared assignee picker's own list (members + agents + squads, with
-          search and permission checks) rather than menu items of its own, so
-          every entry point offers the same choices. (MUL-2157) */}
+          shared assignee picker's own list (agents and squads, with search
+          and permission checks) rather than menu items of its own, so every
+          entry point offers the same choices. (MUL-2157) */}
       <P.Sub>
         <P.SubTrigger>
           <UserMinus className="h-3.5 w-3.5" />

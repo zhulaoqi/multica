@@ -132,7 +132,10 @@ export function OrgPage() {
   const forest = buildOrgForest(data);
   // Landing on the caller's own department keeps plain members oriented; an
   // explicit click (including the unassigned pseudo-node) always wins.
-  const activeSelected = selected || data.my_unit_id;
+  const activeSelected =
+    selected ||
+    data.my_unit_id ||
+    (!data.can_manage && forest.unassignedSquads.length > 0 ? NO_UNIT : "");
   const selectedNode = findNode(forest.roots, activeSelected);
   const allMembers = (members.data ?? []).map((member) => ({
     user_id: member.user_id,

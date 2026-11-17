@@ -222,9 +222,6 @@ function useAssigneeChoices(filter: string) {
   const getFreq = (type: string, id: string) => freqMap.get(`${type}:${id}`) ?? 0;
 
   const query = filter.trim().toLowerCase();
-  const filteredMembers = members
-    .filter((m) => m.name.toLowerCase().includes(query) || matchesPinyin(m.name, query))
-    .sort((a, b) => getFreq("member", b.user_id) - getFreq("member", a.user_id));
   const filteredAgents = agents
     .filter((a) => !a.archived_at && (a.name.toLowerCase().includes(query) || matchesPinyin(a.name, query)))
     .sort((a, b) => getFreq("agent", b.id) - getFreq("agent", a.id));
@@ -240,7 +237,6 @@ function useAssigneeChoices(filter: string) {
   return {
     userId: user?.id ?? null,
     memberRole,
-    filteredMembers,
     filteredAgents,
     filteredSquads,
     runnableAgentIds,
@@ -263,8 +259,7 @@ function AssigneeOptions({
   onPick: (updates: Partial<UpdateIssueRequest>) => void;
 }) {
   const { t } = useT("issues");
-  const { userId, memberRole, filteredMembers, filteredAgents, filteredSquads, runnableAgentIds } =
-    choices;
+  const { userId, memberRole, filteredAgents, filteredSquads, runnableAgentIds } = choices;
 
   const isSelected = (type: string, id: string) =>
     assigneeType === type && assigneeId === id;
@@ -283,28 +278,8 @@ function AssigneeOptions({
         <span className="text-muted-foreground">{t(($) => $.pickers.assignee.trigger_unassigned)}</span>
       </PickerItem>
 
-      {/* Members */}
-      {filteredMembers.length > 0 && (
-        <PickerSection label={t(($) => $.pickers.assignee.members_group)}>
-          {filteredMembers.map((m) => (
-            <PickerItem
-              key={m.user_id}
-              selected={isSelected("member", m.user_id)}
-              onClick={() =>
-                onPick({
-                  assignee_type: "member",
-                  assignee_id: m.user_id,
-                })
-              }
-            >
-              <ActorAvatar actorType="member" actorId={m.user_id} size="sm" />
-              <span className="truncate">{m.name}</span>
-            </PickerItem>
-          ))}
-        </PickerSection>
-      )}
-
-      {/* Agents */}
+      {/* Agents only. A person from the directory does not start a run;
+          choosing an agent does, so the picker must not offer members. */}
       {filteredAgents.length > 0 && (
         <PickerSection label={t(($) => $.pickers.assignee.agents_group)}>
           {filteredAgents.map((a) => {
@@ -382,10 +357,7 @@ function AssigneeOptions({
         </PickerSection>
       )}
 
-      {filteredMembers.length === 0 &&
-        filteredAgents.length === 0 &&
-        filteredSquads.length === 0 &&
-        filter && <PickerEmpty />}
+      {filteredAgents.length === 0 && filteredSquads.length === 0 && filter && <PickerEmpty />}
     </>
   );
 }

@@ -1038,7 +1038,7 @@
     "section_availability": "可用性",
     "section_access": "访问权限",
     "section_runtime": "运行时",
-    "section_owner": "owner",
+    "section_owner": "所属成员",
     "section_model": "模型"
   },
   "actions": {},

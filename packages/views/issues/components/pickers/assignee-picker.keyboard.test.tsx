@@ -15,14 +15,16 @@ import { I18nProvider } from "@multica/core/i18n/react";
 import enIssues from "../../../locales/en/issues.json";
 import { AssigneePicker } from "./assignee-picker";
 
-const MEMBERS = [
-  { user_id: "user-1", name: "Ada Lovelace", role: "member" },
-  { user_id: "user-2", name: "Grace Hopper", role: "member" },
+const MEMBERS = [{ user_id: "user-1", name: "Ada Lovelace", role: "member" }];
+const AGENTS = [
+  { id: "agent-1", name: "Ada Lovelace", runtime_id: "rt-1", runtime_bound: true, archived_at: null },
+  { id: "agent-2", name: "Grace Hopper", runtime_id: "rt-2", runtime_bound: true, archived_at: null },
 ];
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey: string[] }) => {
     if (queryKey[0] === "members") return { data: MEMBERS };
+    if (queryKey[0] === "agents") return { data: AGENTS };
     return { data: [] };
   },
 }));
@@ -74,8 +76,8 @@ describe("AssigneePicker search keyboard defaults", () => {
     await user.keyboard("{Enter}");
 
     expect(onUpdate).toHaveBeenCalledWith({
-      assignee_type: "member",
-      assignee_id: "user-2",
+      assignee_type: "agent",
+      assignee_id: "agent-2",
     });
   });
 

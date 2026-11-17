@@ -52,7 +52,10 @@ vi.mock("@multica/core/workspace/queries", () => ({
   }),
   agentListOptions: () => ({
     queryKey: ["workspaces", "ws-1", "agents"],
-    queryFn: () => Promise.resolve([]),
+    queryFn: () =>
+      Promise.resolve([
+        { id: "agent-1", name: "Lambda", runtime_id: "rt-1", runtime_bound: true, archived_at: null },
+      ]),
   }),
   squadListOptions: () => ({
     queryKey: ["workspaces", "ws-1", "squads"],
@@ -286,16 +289,18 @@ describe("IssueActionsDropdown", () => {
     fireEvent.click(screen.getByTestId("trigger"));
     fireEvent.click(await screen.findByText("Assignee"));
 
-    // The search box and the "Members" group come from the shared assignee
-    // picker, so the submenu offers what every other assignee entry point does.
+    // The search box and the Agents group come from the shared assignee
+    // picker. People from the directory are not offered: assigning an agent
+    // is what starts the run.
     expect(
       await screen.findByPlaceholderText("Assign to..."),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Members")).toBeInTheDocument();
-    fireEvent.click(await screen.findByText("Test User"));
+    expect(screen.queryByText("Members")).not.toBeInTheDocument();
+    expect(await screen.findByText("Lambda")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Lambda"));
 
     expect(updateIssueMock).toHaveBeenCalledWith(
-      { id: "issue-1", assignee_type: "member", assignee_id: "user-1" },
+      { id: "issue-1", assignee_type: "agent", assignee_id: "agent-1" },
       expect.anything(),
     );
     await waitFor(() => expect(screen.queryByText("Status")).not.toBeInTheDocument());
