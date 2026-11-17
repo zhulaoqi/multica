@@ -1,29 +1,25 @@
 /**
- * 易研 wordmark. Vector copy of WORDMARK in packages/ui/lib/multica-brand.ts
- * (mobile does not depend on @multica/ui) — keep the two in sync.
+ * 易研 mark — YY. Vector copy of ICON_MARK_PATH in
+ * packages/ui/lib/multica-brand.ts (mobile does not depend on @multica/ui) —
+ * keep the two in sync.
  *
  * react-native-svg does not resolve CSS `currentColor`, so callers must pass
  * `color` explicitly. For theme-aware usage, pair with `useColorScheme` +
  * `THEME` token from `@/lib/theme`.
  */
-import Svg, { Circle, G, Path } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import { useLocale } from "@/lib/i18n/use-locale";
 import { THEME } from "@/lib/theme";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
-const VIEW_BOX = { x: 0, y: -30.5, w: 421.36, h: 106.5 };
-const LETTERS = [
-  "M8 76V31A23 23 0 0 1 54 31V76M54 31A23 23 0 0 1 100 31V76",
-  "M128 0V45A23 23 0 0 0 174 45M174 0V76",
-  "M202 -30V76",
-  "M239.6 -19.8V76M219.6 8H259.6",
-  "M277.8 0V76",
-  "M344.103 14.737A23 23 0 0 0 304.84 31V45A23 23 0 0 0 344.103 61.263",
-  "M367.36 31A23 23 0 0 1 413.36 31V45A23 23 0 0 1 367.36 45ZM413.36 0V76",
-];
+/** Tile grid the mark is drawn in; the stems run past its bottom edge. */
+const VIEW_BOX = { x: 0, y: 0, w: 100, h: 100 };
+
+const MARK_PATH = "M16 22L30 52L44 22M30 52V112M56 22L70 52L84 22M70 52V112";
+const MARK_STROKE = 12;
 
 interface MulticaLogoProps {
-  /** Rendered height in points; width follows the wordmark's aspect ratio. */
+  /** Rendered height in points; the mark is square. */
   size?: number;
   color?: string;
 }
@@ -37,17 +33,17 @@ export function MulticaLogo({ size = 24, color }: MulticaLogoProps) {
 
   return (
     <Svg
-      width={(size * VIEW_BOX.w) / VIEW_BOX.h}
+      width={size}
       height={size}
       viewBox={`${VIEW_BOX.x} ${VIEW_BOX.y} ${VIEW_BOX.w} ${VIEW_BOX.h}`}
       accessibilityLabel={label}
     >
-      <G fill="none" stroke={resolvedColor} strokeWidth={16}>
-        {LETTERS.map((d) => (
-          <Path key={d} d={d} />
-        ))}
-      </G>
-      <Circle cx={277.8} cy={-18.6} r={8.96} fill={resolvedColor} />
+      <Path
+        d={MARK_PATH}
+        fill="none"
+        stroke={resolvedColor}
+        strokeWidth={MARK_STROKE}
+      />
     </Svg>
   );
 }

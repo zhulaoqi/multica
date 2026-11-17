@@ -1,27 +1,26 @@
 import { useId, type CSSProperties } from "react";
 import { cn } from "../../lib/utils";
 import {
-  ICON_M_CENTRE_LINE,
-  ICON_M_PATH,
+  ICON_MARK_PATH,
   ICON_STROKE,
   ICON_TILE_RADIUS,
   iconEdge,
-  iconMTransform,
+  iconMarkTransform,
 } from "../../lib/multica-brand";
 
 export type MulticaIconMode =
   /** The mark at rest. */
   | "static"
-  /** A highlight runs along the m: an agent at work, loading, waiting. */
+  /** A highlight runs along the mark: an agent at work, loading, waiting. */
   | "think"
-  /** Tile pops in and the m rises from below — app launch, sign-in. */
+  /** Tile pops in and the mark rises from below — app launch, sign-in. */
   | "intro"
   /** `intro`, then `think` until whatever is loading unmounts it. */
   | "launch";
 
 interface MulticaIconProps extends Omit<React.ComponentProps<"svg">, "mode"> {
   mode?: MulticaIconMode;
-  /** `circle` is the avatar form; the m sits the same way inside it. */
+  /** `circle` is the avatar form; the mark sits the same way inside it. */
   shape?: "square" | "circle";
   /**
    * Rendered size in px. Sets width/height and the edge thickness, which the
@@ -32,12 +31,13 @@ interface MulticaIconProps extends Omit<React.ComponentProps<"svg">, "mode"> {
   title?: string;
 }
 
-/** When the launch sequence hands over from the risen m to the think loop. */
+/** When the launch sequence hands over from the risen mark to the think loop. */
 const LAUNCH_THINK_AT = "1.5s";
 
 /**
- * The Multica icon (F1): the wordmark's m, too big for its tile and cropped
- * by it. Black tile with a white m in light mode, inverted in dark mode.
+ * The product icon (F2): YY for 易研, its stems too long for the tile and
+ * cropped by it. Black tile with a white mark in light mode, inverted in dark
+ * mode.
  */
 export function MulticaIcon({
   mode = "static",
@@ -52,19 +52,20 @@ export function MulticaIcon({
   const edge = iconEdge(size ?? 24);
   const intro = mode === "intro" || mode === "launch";
   const tileClass = "fill-multica-ink dark:fill-multica-paper";
-  const mFill = "fill-multica-paper dark:fill-multica-ink";
-  const mStroke = "stroke-multica-paper dark:stroke-multica-ink";
+  const markStroke = "stroke-multica-paper dark:stroke-multica-ink";
 
-  const filled = <path d={ICON_M_PATH} className={mFill} />;
+  const filled = (
+    <path d={ICON_MARK_PATH} fill="none" strokeWidth={ICON_STROKE} className={markStroke} />
+  );
   const thinking = (
     <>
-      <path d={ICON_M_CENTRE_LINE} fill="none" strokeWidth={ICON_STROKE} opacity={0.22} className={mStroke} />
+      <path d={ICON_MARK_PATH} fill="none" strokeWidth={ICON_STROKE} opacity={0.22} className={markStroke} />
       <path
-        d={ICON_M_CENTRE_LINE}
+        d={ICON_MARK_PATH}
         fill="none"
         strokeWidth={ICON_STROKE}
         pathLength={1}
-        className={cn("multica-think", mStroke)}
+        className={cn("multica-think", markStroke)}
       />
     </>
   );
@@ -102,7 +103,7 @@ export function MulticaIcon({
       )}
       <g clipPath={`url(#${clipId})`}>
         <g className={intro ? "multica-rise" : undefined} style={intro ? delay("0.35s") : undefined}>
-          <g transform={iconMTransform(shape)}>
+          <g transform={iconMarkTransform(shape)}>
             {mode === "think" ? thinking : null}
             {mode === "static" || mode === "intro" ? filled : null}
             {mode === "launch" ? (

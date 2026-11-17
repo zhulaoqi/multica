@@ -1,30 +1,43 @@
 import { cn } from "../../lib/utils";
-import { ICON_ARCH, ICON_STROKE, archPath } from "../../lib/multica-brand";
+import { ICON_STROKE } from "../../lib/multica-brand";
 
 const ARCH_STAGGER_S = 0.11;
 const BLEED_HEIGHT = 140;
-const M_WIDTH = 2 * ICON_ARCH - ICON_STROKE;
+/** One Y of the mark: arms spread 14 either side and meet 30 below the top. */
+const Y_SPREAD = 14;
+const Y_JOIN = 30;
+/** Centre-to-centre distance between neighbouring Ys, as in the icon. */
+const Y_STEP = 40;
+/** Room for the stroke and the mitred arm tips around the centre line. */
+const Y_PAD = ICON_STROKE;
+
+const BLEED_WIDTH = 2 * (Y_PAD + Y_SPREAD) + Y_STEP;
+
+function yPath(cx: number, top: number, bottom: number): string {
+  const join = top + Y_JOIN;
+  return `M${cx - Y_SPREAD} ${top}L${cx} ${join}L${cx + Y_SPREAD} ${top}M${cx} ${join}V${bottom}`;
+}
 
 interface MulticaArcadeProps extends React.ComponentProps<"svg"> {
-  /** Number of arches; each one stands for a teammate. */
+  /** Number of Ys; each one stands for a teammate. */
   count: number;
-  /** Leg length in arch units (an arch is 68 wide). */
+  /** Height of each Y in icon units (a Y is 28 wide). */
   legs?: number;
   /**
-   * `center`: arches rise from the middle outwards (backgrounds).
-   * `join`: arches rise left to right, and the last one rises after a beat
+   * `center`: Ys rise from the middle outwards (backgrounds).
+   * `join`: Ys rise left to right, and the last one rises after a beat
    * (someone just joined). Omit for a static row.
    */
   rise?: "center" | "join";
-  /** Seconds before the first arch moves. */
+  /** Seconds before the first Y moves. */
   delay?: number;
-  /** Classes for the last arch, e.g. to highlight the newest teammate. */
+  /** Classes for the last Y, e.g. to highlight the newest teammate. */
   lastClassName?: string;
 }
 
 /**
- * A row of arches built from the icon's module — the graphic extension of the
- * m. Decorative and low-contrast; fill follows `currentColor`.
+ * A row of Ys built from the icon's module — the graphic extension of the
+ * mark. Decorative and low-contrast; colour follows `currentColor`.
  */
 export function MulticaArcade({
   count,
@@ -35,8 +48,8 @@ export function MulticaArcade({
   className,
   ...props
 }: MulticaArcadeProps) {
-  const step = ICON_ARCH - ICON_STROKE;
-  const width = step * (count - 1) + ICON_ARCH;
+  const first = Y_PAD + Y_SPREAD;
+  const width = Y_STEP * (count - 1) + 2 * first;
   const mid = (count - 1) / 2;
   const delayOf = (i: number) => {
     if (rise === "center") return delay + Math.abs(i - mid) * ARCH_STAGGER_S;
@@ -46,7 +59,9 @@ export function MulticaArcade({
   return (
     <svg
       viewBox={`0 0 ${width} ${legs}`}
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={ICON_STROKE}
       aria-hidden="true"
       className={cn("block", className)}
       {...props}
@@ -54,7 +69,7 @@ export function MulticaArcade({
       {Array.from({ length: count }, (_, i) => (
         <path
           key={i}
-          d={archPath(step * i, 0, legs, ICON_ARCH, ICON_STROKE)}
+          d={yPath(first + Y_STEP * i, Y_PAD, legs)}
           className={cn(rise && "multica-arch-rise", i === count - 1 && lastClassName)}
           style={rise ? { animationDelay: `${delayOf(i)}s` } : undefined}
         />
@@ -69,15 +84,17 @@ interface MulticaBleedMarkProps extends React.ComponentProps<"svg"> {
 }
 
 /**
- * A large m meant to bleed off the bottom and right of its container — the
+ * A large YY meant to bleed off the bottom and right of its container — the
  * icon's "too big to fit" idea as a surface graphic. Position it with
- * `className`; fill follows `currentColor`.
+ * `className`; colour follows `currentColor`.
  */
 export function MulticaBleedMark({ riseDelay, className, ...props }: MulticaBleedMarkProps) {
   return (
     <svg
-      viewBox={`0 0 ${M_WIDTH} ${BLEED_HEIGHT}`}
-      fill="currentColor"
+      viewBox={`0 0 ${BLEED_WIDTH} ${BLEED_HEIGHT}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={ICON_STROKE}
       aria-hidden="true"
       className={cn("block", className)}
       {...props}
@@ -88,8 +105,8 @@ export function MulticaBleedMark({ riseDelay, className, ...props }: MulticaBlee
       >
         <path
           d={
-            archPath(0, 0, BLEED_HEIGHT, ICON_ARCH, ICON_STROKE) +
-            archPath(ICON_ARCH - ICON_STROKE, 0, BLEED_HEIGHT, ICON_ARCH, ICON_STROKE)
+            yPath(Y_PAD + Y_SPREAD, Y_PAD, BLEED_HEIGHT) +
+            yPath(Y_PAD + Y_SPREAD + Y_STEP, Y_PAD, BLEED_HEIGHT)
           }
         />
       </g>

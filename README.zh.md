@@ -1,10 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/logo-light.svg">
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.gif">
-  <img alt="Multica" src="docs/assets/logo-light.gif" width="240">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+  <img alt="易研" src="docs/assets/logo-light.svg" width="88">
 </picture>
 
 **智能体，也在看板上。**

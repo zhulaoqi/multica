@@ -48,7 +48,7 @@
   color: var(--shiki-dark) !important;
 }
 
-/* Multica brand motion — brand guidelines v3.1 §08. The word writes, the m
+/* Brand motion. The word writes, the mark
  * rises; every brand animation is one of those two actions. Only the tile and
  * the i dot overshoot (pop); nothing else does. Delays are set inline by the
  * components so a sequence stays readable in one place. */

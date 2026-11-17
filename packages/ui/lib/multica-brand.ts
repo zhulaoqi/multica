@@ -1,11 +1,8 @@
 /**
- * Multica brand geometry — brand guidelines v3.1 (MUL-8444).
- *
- * Every mark is built from one arch: straight lines and true circles with a
- * constant stroke. The icon is the wordmark's first letter, scaled up until it
- * no longer fits its tile and gets cropped. Units are the 100×100 icon grid
- * unless stated otherwise; do not tweak these numbers by eye, they are the
- * spec.
+ * Brand geometry. The icon is YY for 易研: straight strokes of one constant
+ * width, drawn larger than the tile so the stems are cropped by it. Units are
+ * the 100×100 icon grid unless stated otherwise; do not tweak these numbers by
+ * eye, they are the spec.
  */
 
 /**
@@ -20,43 +17,28 @@ export const BRAND = {
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
-/** Filled outline of one arch: outer width `w`, stroke `t`, legs down to `y1`. */
-export function archPath(x0: number, y0: number, y1: number, w: number, t: number): string {
-  const R = w / 2;
-  const cy = y0 + R;
-  const ri = R - t;
-  return (
-    `M${r3(x0)} ${r3(y1)}V${r3(cy)}A${r3(R)} ${r3(R)} 0 0 1 ${r3(x0 + w)} ${r3(cy)}V${r3(y1)}` +
-    `H${r3(x0 + w - t)}V${r3(cy)}A${r3(ri)} ${r3(ri)} 0 0 0 ${r3(x0 + t)} ${r3(cy)}V${r3(y1)}Z`
-  );
-}
-
-// ---------- icon (F1): stroke 22, arch 68, scaled 0.96, top at 22% ----------
-export const ICON_STROKE = 22;
-export const ICON_ARCH = 68;
-const ICON_SCALE = 0.96;
-const ICON_TOP = 22;
-const ICON_M_WIDTH = (2 * ICON_ARCH - ICON_STROKE) * ICON_SCALE;
-const ICON_LEG = (100 - ICON_TOP) / ICON_SCALE + 4;
-
+// ---------- icon (F2): YY, stroke 12, legs bleed off the bottom ----------
 /**
- * Places the m on the tile; the m's own paths are in unscaled arch units. The
- * circle (avatar) form sits the m 2 units lower so the arches clear the curve.
+ * Stroke of the YY mark, in tile units. The mark is drawn as one stroked
+ * centre line so the static and "think" forms share the same geometry.
  */
-export function iconMTransform(shape: "square" | "circle" = "square"): string {
-  const top = shape === "circle" ? ICON_TOP + 2 : ICON_TOP;
-  return `translate(${r3(50 - ICON_M_WIDTH / 2)} ${top}) scale(${ICON_SCALE})`;
-}
+export const ICON_STROKE = 12;
 export const ICON_TILE_RADIUS = 22.5;
 
-/** The m as two filled arches sharing the middle stem. */
-export const ICON_M_PATH =
-  archPath(0, 0, ICON_LEG, ICON_ARCH, ICON_STROKE) +
-  archPath(ICON_ARCH - ICON_STROKE, 0, ICON_LEG, ICON_ARCH, ICON_STROKE);
+/**
+ * The two Ys, in 100x100 tile units. The stems run past the tile's bottom edge
+ * so the mark reads as too big for its tile and gets cropped.
+ */
+export const ICON_MARK_PATH =
+  "M16 22L30 52L44 22M30 52V112M56 22L70 52L84 22M70 52V112";
 
-/** Centre line of the m, stroked at ICON_STROKE. Drives the "think" highlight. */
-export const ICON_M_CENTRE_LINE =
-  `M11 ${r3(ICON_LEG)}V34A23 23 0 0 1 57 34V${r3(ICON_LEG)}V34A23 23 0 0 1 103 34V${r3(ICON_LEG)}`;
+/**
+ * Places the mark on the tile. The circle (avatar) form shrinks it slightly so
+ * the arms clear the curve.
+ */
+export function iconMarkTransform(shape: "square" | "circle" = "square"): string | undefined {
+  return shape === "circle" ? "translate(5 5) scale(0.9)" : undefined;
+}
 
 /**
  * The thin edge in the tile colour that keeps the tile outline intact on any
