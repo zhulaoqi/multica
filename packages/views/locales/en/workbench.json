@@ -39,6 +39,11 @@
     "retry": "Send again",
     "failure_hint": "You can retry, or follow up on the issue."
   },
+  "result": {
+    "title": "Result",
+    "by": "Result from {{name}}",
+    "empty": "No result was posted on the issue. Open the issue to see what was delivered."
+  },
   "candidates": {
     "title": "Which department should take this?",
     "agents_one": "{{count}} agent",

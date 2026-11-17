@@ -3,6 +3,8 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@multica/core/api";
+import { issueTimelineOptions } from "@multica/core/issues/queries";
+import type { TimelineEntry } from "@multica/core/types";
 import type { DispatchListItem, DispatchWorkResponse } from "@multica/core/workbench";
 import {
   orgTreeOptions,
@@ -266,12 +268,54 @@ describe("WorkbenchPage", () => {
   it("renders the selected history entry as a conversation", () => {
     state.dispatches = [dispatchItem()];
     state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
     renderPage();
 
     expect(screen.getByText("Prepare onboarding materials for next week")).toBeInTheDocument();
     expect(screen.getByText("Delivered. Waiting for your review.")).toBeInTheDocument();
     expect(screen.getAllByText("Engineering / Customer Success").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "ACM-1" })).toBeInTheDocument();
+  });
+
+  it("shows the department's delivered result on a finished dispatch", () => {
+    state.dispatches = [
+      dispatchItem({ completed: true, issue: { ...dispatchItem().issue, status: "done", status_category: "done" } }),
+    ];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    const comment = (overrides: Partial<TimelineEntry>): TimelineEntry => ({
+      type: "comment",
+      id: "c",
+      actor_type: "agent",
+      actor_id: "agent-1",
+      created_at: NOW,
+      comment_type: "comment",
+      ...overrides,
+    });
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, [
+      comment({ id: "c1", content: "Draft outline posted" }),
+      comment({ id: "c2", actor_name: "Lead", content: "Onboarding deck is ready" }),
+      comment({ id: "c3", comment_type: "system", content: "task cancelled by server" }),
+    ]);
+    renderPage();
+
+    expect(screen.getByText("Completed.")).toBeInTheDocument();
+    const result = screen.getByRole("region", { name: "Result" });
+    expect(result).toHaveTextContent("Result from Lead");
+    expect(result).toHaveTextContent("Onboarding deck is ready");
+    expect(result).not.toHaveTextContent("task cancelled by server");
+  });
+
+  it("says so when a delivered dispatch has no result comment", () => {
+    state.dispatches = [dispatchItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    expect(
+      screen.getByText(
+        "No result was posted on the issue. Open the issue to see what was delivered.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows an empty history message when no work has been sent", () => {

@@ -39,6 +39,11 @@
     "retry": "もう一度依頼",
     "failure_hint": "再試行するか、Issue でフォローアップできます。"
   },
+  "result": {
+    "title": "結果",
+    "by": "{{name}} からの結果",
+    "empty": "Issue に結果が投稿されていません。Issue を開いて納品内容を確認してください。"
+  },
   "candidates": {
     "title": "どの部署が担当しますか？",
     "agents_other": "エージェント {{count}} 体"

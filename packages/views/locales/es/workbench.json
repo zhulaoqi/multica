@@ -39,6 +39,11 @@
     "retry": "Enviar de nuevo",
     "failure_hint": "Puedes reintentar o seguir el issue."
   },
+  "result": {
+    "title": "Resultado",
+    "by": "Resultado de {{name}}",
+    "empty": "No se publicó ningún resultado en el issue. Abre el issue para ver lo que se entregó."
+  },
   "candidates": {
     "title": "¿Qué departamento debería encargarse?",
     "agents_one": "{{count}} agente",

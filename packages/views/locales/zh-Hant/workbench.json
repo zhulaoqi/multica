@@ -39,6 +39,11 @@
     "retry": "重新派工",
     "failure_hint": "可以重試，或到 issue 裡追蹤。"
   },
+  "result": {
+    "title": "結果",
+    "by": "{{name}} 的交付結果",
+    "empty": "issue 上沒有發布結果，打開 issue 查看交付內容。"
+  },
   "candidates": {
     "title": "交給哪個部門？",
     "agents_other": "{{count}} 個 Agent"

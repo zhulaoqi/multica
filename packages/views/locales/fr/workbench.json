@@ -39,6 +39,11 @@
     "retry": "Renvoyer",
     "failure_hint": "Vous pouvez réessayer ou suivre l'issue."
   },
+  "result": {
+    "title": "Résultat",
+    "by": "Résultat de {{name}}",
+    "empty": "Aucun résultat n'a été publié sur l'issue. Ouvrez l'issue pour voir ce qui a été livré."
+  },
   "candidates": {
     "title": "Quel département doit s'en charger ?",
     "agents_one": "{{count}} agent",

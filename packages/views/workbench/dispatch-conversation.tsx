@@ -8,14 +8,18 @@ import {
   RotateCcw,
   XCircle,
 } from "@multica/ui/icons";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@multica/ui/components/ui/button";
 import { Progress } from "@multica/ui/components/ui/progress";
 import { Spinner } from "@multica/ui/components/ui/spinner";
 import { errorCode } from "@multica/core/api";
+import { issueTimelineOptions } from "@multica/core/issues/queries";
 import { useWorkspacePaths } from "@multica/core/paths";
 import type { DispatchCandidate, DispatchListItem } from "@multica/core/workbench";
+import { ReadonlyContent } from "../editor/readonly-content";
 import { useT, useTimeAgo } from "../i18n";
 import { AppLink } from "../navigation";
+import { dispatchResult } from "./dispatch-result";
 import type { ChildProgress, DispatchPhase } from "./use-workbench-conversation";
 
 /** A submission that has not been accepted by the server yet. */
@@ -99,6 +103,40 @@ function PhaseMessage({ phase }: { phase: DispatchPhase }) {
 }
 
 /**
+ * What the department delivered, read from the root issue's newest agent
+ * comment. Only fetched once the work is delivered, so in-flight dispatches
+ * do not load a timeline nobody reads yet.
+ */
+function DispatchResult({ issueId }: { issueId: string }) {
+  const { t } = useT("workbench");
+  const { data: result, isPending } = useQuery({
+    ...issueTimelineOptions(issueId),
+    select: dispatchResult,
+  });
+  if (isPending) return null;
+  if (!result) {
+    return (
+      <p className="text-caption text-muted-foreground">{t(($) => $.result.empty)}</p>
+    );
+  }
+  return (
+    <section
+      aria-label={t(($) => $.result.title)}
+      className="flex flex-col gap-1.5 rounded-lg bg-muted/50 px-3 py-2.5"
+    >
+      <p className="text-caption font-medium text-muted-foreground">
+        {result.actor_name
+          ? t(($) => $.result.by, { name: result.actor_name })
+          : t(($) => $.result.title)}
+      </p>
+      <div className="max-h-80 overflow-y-auto">
+        <ReadonlyContent content={result.content ?? ""} attachments={result.attachments} />
+      </div>
+    </section>
+  );
+}
+
+/**
  * One dispatch as a conversation turn: the requester's words, then the
  * department's current state — routed, decomposing, progress, review, or
  * receipt. The department path and issue link stay visible in every phase so
@@ -147,6 +185,9 @@ export function DispatchConversation({
               done: progress.done,
               total: progress.total,
             })} />
+          ) : null}
+          {phase === "completed" || phase === "in_review" ? (
+            <DispatchResult issueId={item.issue.id} />
           ) : null}
           {phase === "failed" ? (
             <p className="text-caption text-muted-foreground">

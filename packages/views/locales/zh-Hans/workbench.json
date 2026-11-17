@@ -39,6 +39,11 @@
     "retry": "重新派发",
     "failure_hint": "可以重试，或到 issue 里跟进。"
   },
+  "result": {
+    "title": "结果",
+    "by": "{{name}} 的交付结果",
+    "empty": "issue 上没有发布结果，打开 issue 查看交付内容。"
+  },
   "candidates": {
     "title": "交给哪个部门？",
     "agents_other": "{{count}} 个 Agent"
