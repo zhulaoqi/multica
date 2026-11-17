@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { BRAND } from "@multica/ui/lib/multica-brand";
 import { setLoggedInCookie } from "@/features/auth/auth-cookie";
 import { LoginBackdrop } from "@/features/auth/login-backdrop";
 
@@ -55,7 +56,7 @@ export default function OperatorLoginPage() {
         onSubmit={submit}
         className="relative z-10 mx-4 w-full max-w-md border border-white/20 bg-black/30 px-8 py-12 text-center shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-md"
       >
-        <p className="text-body tracking-[0.18em] text-white/75">multica</p>
+        <p className="text-body tracking-[0.18em] text-white/75">{BRAND.short}</p>
         <h1 className="landing-serif mt-3 text-[3.2rem] leading-none tracking-[-0.04em] text-white">
           开发者
         </h1>
