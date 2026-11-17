@@ -30,6 +30,15 @@ const canvas = vi.hoisted(() => ({
   visitAgent: vi.fn(),
   playEmote: vi.fn(),
   deliverToReception: vi.fn(),
+  celebrate: vi.fn(),
+  playLocalEmote: vi.fn(),
+  archiveRitual: vi.fn(),
+  setMinimapVisible: vi.fn(),
+  capturePhoto: vi.fn(() => "data:image/png;base64,AAAA"),
+}));
+const review = vi.hoisted(() => ({
+  updateIssue: vi.fn(),
+  createComment: vi.fn(),
 }));
 const activityState = vi.hoisted(() => ({
   byAgent: new Map<string, unknown>(),
@@ -42,6 +51,14 @@ const dispatchState = vi.hoisted(() => ({
 }));
 const apiState = vi.hoisted(() => ({
   listSquads: vi.fn().mockResolvedValue([]),
+  listOrgUnits: vi.fn().mockResolvedValue({
+    units: [],
+    agents: [],
+    members: [],
+    squads: [],
+    can_manage: false,
+    my_unit_id: "",
+  }),
 }));
 const openAgentChat = vi.hoisted(() => vi.fn());
 const quickCreate = vi.hoisted(() => vi.fn());
@@ -89,7 +106,11 @@ vi.mock("@multica/core/office", async (importOriginal) => {
   return { ...actual, useOfficeRoom: () => room };
 });
 vi.mock("@multica/core/api", () => ({
-  api: { quickCreateIssue: quickCreate, listSquads: apiState.listSquads },
+  api: {
+    quickCreateIssue: quickCreate,
+    listSquads: apiState.listSquads,
+    listOrgUnits: apiState.listOrgUnits,
+  },
   ApiError: class ApiError extends Error {
     body: unknown;
     constructor(message: string, body?: unknown) {
@@ -107,6 +128,10 @@ vi.mock("@multica/core/modals", () => ({
 vi.mock("./use-open-agent-chat", () => ({
   useOpenAgentChat: () => openAgentChat,
 }));
+vi.mock("@multica/core/issues/mutations", () => ({
+  useUpdateIssue: () => ({ mutateAsync: review.updateIssue, isPending: false }),
+  useCreateComment: () => ({ mutateAsync: review.createComment, isPending: false }),
+}));
 vi.mock("../navigation", () => ({
   useNavigation: () => ({ push }),
   AppLink: ({ href, children }: { href: string; children: ReactNode }) => (
@@ -123,13 +148,27 @@ vi.mock("./components/office-canvas", () => ({
       peers,
       companyName,
       companyLevel,
+      season,
+      deskTraces,
+      roomBadges,
+      minimapVisible,
+      receptionPapers,
       onFocusAgentChange,
+      onPlaceFocusChange,
+      onRandomEvent,
     }: {
       agents: { id: string; activity?: string | null; alert?: boolean }[];
       peers: unknown[];
       companyName: string;
       companyLevel: number;
+      season: { id: string };
+      deskTraces?: unknown[];
+      roomBadges?: unknown[];
+      minimapVisible?: boolean;
+      receptionPapers: number;
       onFocusAgentChange: (agentId: string | null) => void;
+      onPlaceFocusChange?: (place: string | null) => void;
+      onRandomEvent?: (event: string) => void;
     },
     ref: Ref<unknown>,
   ) {
@@ -138,6 +177,11 @@ vi.mock("./components/office-canvas", () => ({
       <div data-testid="office-canvas" data-company-level={companyLevel}>
         {peers.length}
         <span data-testid="company-name">{companyName}</span>
+        <span data-testid="reception-papers">{receptionPapers}</span>
+        <span data-testid="office-season">{season.id}</span>
+        <span data-testid="desk-traces">{(deskTraces ?? []).length}</span>
+        <span data-testid="room-badges">{(roomBadges ?? []).length}</span>
+        <span data-testid="minimap-visible">{String(minimapVisible)}</span>
         {agents.map((agent) => (
           <span
             key={agent.id}
@@ -148,6 +192,36 @@ vi.mock("./components/office-canvas", () => ({
         ))}
         <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
           focus-agent
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onFocusAgentChange(null);
+            onPlaceFocusChange?.("reception");
+          }}
+        >
+          at-reception
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onFocusAgentChange(null);
+            onPlaceFocusChange?.("coffee");
+          }}
+        >
+          at-coffee
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onFocusAgentChange(null);
+            onPlaceFocusChange?.("meeting");
+          }}
+        >
+          at-meeting
+        </button>
+        <button type="button" onClick={() => onRandomEvent?.("cat")}>
+          random-event
         </button>
       </div>
     );
@@ -286,6 +360,14 @@ describe("OfficePage", () => {
     canvas.visitAgent.mockClear();
     canvas.playEmote.mockClear();
     canvas.deliverToReception.mockClear();
+    canvas.celebrate.mockClear();
+    canvas.playLocalEmote.mockClear();
+    canvas.archiveRitual.mockClear();
+    canvas.setMinimapVisible.mockClear();
+    canvas.capturePhoto.mockClear();
+    apiState.listOrgUnits.mockClear();
+    review.updateIssue.mockReset().mockResolvedValue({});
+    review.createComment.mockReset().mockResolvedValue({});
     openAgentChat.mockClear();
     quickCreate.mockReset();
     draftStore.setAgent.mockClear();
@@ -511,5 +593,159 @@ describe("OfficePage", () => {
     renderPage({ squads: [SQUAD] });
 
     expect(canvas.deliverToReception).not.toHaveBeenCalled();
+  });
+
+  it("checks in at the front desk for today's report", async () => {
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(4)]]);
+    dispatchState.items = [makeDispatch({ status: "in_review" })];
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "at-reception" }));
+    expect(
+      screen.getByText("Press T to check in at the front desk"),
+    ).toBeInTheDocument();
+
+    await user.keyboard("t");
+    const panel = screen.getByRole("dialog");
+    expect(within(panel).getByText("Front desk")).toBeInTheDocument();
+    expect(within(panel).getByText("4 tasks completed")).toBeInTheDocument();
+    expect(within(panel).getByText("4 / 6")).toBeInTheDocument();
+    expect(within(panel).getByText("Ship the release notes")).toBeInTheDocument();
+    expect(screen.getByTestId("reception-papers")).toHaveTextContent("1");
+  });
+
+  it("signs off a delivered result from the front desk", async () => {
+    dispatchState.items = [makeDispatch({ status: "in_review" })];
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "at-reception" }));
+    await user.keyboard("t");
+    const panel = screen.getByRole("dialog");
+    await user.click(within(panel).getByRole("button", { name: /Accept/ }));
+
+    await waitFor(() =>
+      expect(review.updateIssue).toHaveBeenCalledWith({
+        id: "issue-root",
+        status: "done",
+      }),
+    );
+    expect(canvas.archiveRitual).toHaveBeenCalled();
+  });
+
+  it("celebrates a company level-up as the activity moves", async () => {
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(4)]]);
+    const { rerenderPage } = renderPage();
+    expect(screen.queryByText("Company Lv 2 unlocked!")).not.toBeInTheDocument();
+
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(20)]]);
+    rerenderPage();
+
+    expect(await screen.findByText("Company Lv 2 unlocked!")).toBeInTheDocument();
+    expect(canvas.celebrate).toHaveBeenCalled();
+  });
+
+  it("celebrates the shared weekly goal when the team reaches it", async () => {
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(2)]]);
+    const { rerenderPage } = renderPage();
+    expect(screen.queryByText("Weekly goal reached")).not.toBeInTheDocument();
+
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(7)]]);
+    rerenderPage();
+
+    expect(await screen.findByText("Weekly goal reached")).toBeInTheDocument();
+    expect(canvas.celebrate).toHaveBeenCalled();
+  });
+
+  it("runs the archive ritual when a delivered dispatch completes", () => {
+    dispatchState.items = [makeDispatch()];
+    const { rerenderPage } = renderPage({ squads: [SQUAD] });
+
+    dispatchState.items = [makeDispatch({ status: "in_review" })];
+    rerenderPage();
+    dispatchState.items = [
+      { ...makeDispatch({ status: "done" }), completed: true },
+    ];
+    rerenderPage();
+
+    expect(canvas.archiveRitual).toHaveBeenCalled();
+  });
+
+  it("passes the season and today's desk traces to the scene", () => {
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(4)]]);
+    renderPage();
+
+    expect(screen.getByTestId("office-season")).not.toBeEmptyDOMElement();
+    expect(screen.getByTestId("desk-traces")).toHaveTextContent("1");
+  });
+
+  it("greets the office with an emote from the number row", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.keyboard("1");
+
+    expect(canvas.playLocalEmote).toHaveBeenCalledWith("wave");
+  });
+
+  it("opens the kitchen chat and the meeting board on the floor", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "at-coffee" }));
+    expect(
+      screen.getByText("Press T for a kitchen chat"),
+    ).toBeInTheDocument();
+    await user.keyboard("t");
+    expect(screen.getByText("Kitchen chat")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await user.click(screen.getByRole("button", { name: "at-meeting" }));
+    expect(
+      screen.getByText("Press T to read the meeting board"),
+    ).toBeInTheDocument();
+    await user.keyboard("t");
+    expect(screen.getByText("Meeting room")).toBeInTheDocument();
+  });
+
+  it("opens the trophy wall and shows the current season", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Trophy wall" }));
+
+    expect(screen.getByText("Trophy wall")).toBeInTheDocument();
+    expect(screen.getByText("First delivery")).toBeInTheDocument();
+    expect(screen.getByText("Season")).toBeInTheDocument();
+  });
+
+  it("hides the minimap and enters photo mode from the toolbar", async () => {
+    const download = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.getByTestId("minimap-visible")).toHaveTextContent("true");
+
+    await user.click(screen.getByRole("button", { name: "Hide minimap" }));
+    expect(screen.getByTestId("minimap-visible")).toHaveTextContent("false");
+
+    await user.click(screen.getByRole("button", { name: "Photo mode" }));
+    expect(screen.queryByRole("heading", { name: "Office" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save PNG" }));
+    expect(canvas.capturePhoto).toHaveBeenCalled();
+    download.mockRestore();
+  });
+
+  it("shows a toast when a random office event fires", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "random-event" }));
+
+    expect(
+      screen.getByText("The office cat padded through."),
+    ).toBeInTheDocument();
   });
 });

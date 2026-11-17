@@ -54,6 +54,142 @@
       "task_error_agent_unavailable": "이 에이전트는 지금 작업을 받을 수 없습니다.",
       "task_error_issue_limit": "이 워크스페이스의 작업 수가 한도에 도달했습니다."
     },
-    "company_name": "eclicktech"
+    "reception": {
+      "title": "안내 데스크",
+      "close": "닫기",
+      "hint": "{{key}} 키를 눌러 안내 데스크 일일 보고서 보기",
+      "today": "오늘",
+      "today_value_other": "{{count}}건 완료",
+      "company_level": "회사 Lv {{level}}",
+      "mvp": "최다 기여: {{name}}",
+      "mvp_empty": "아직 완료 기록이 없습니다",
+      "week": "이번 주 목표",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "목표 달성",
+      "waiting": "승인 대기",
+      "waiting_empty": "검토를 기다리는 결과가 없습니다.",
+      "stuck_other": "확인이 필요한 에이전트 {{count}}명",
+      "unknown_department": "부서",
+      "reason_placeholder": "무엇을 다시 봐야 하나요?",
+      "reason_label": "반려 사유",
+      "send_back": "반려",
+      "accept": "승인",
+      "reject": "반려",
+      "cancel": "취소",
+      "accept_failed": "승인하지 못했습니다. 다시 시도하세요.",
+      "reject_failed": "반려하지 못했습니다. 다시 시도하세요."
+    },
+    "celebration": {
+      "company_level": "회사가 Lv {{level}}이 되었습니다!",
+      "company_level_hint": "사무실에 새 가구가 추가되었습니다.",
+      "weekly_goal": "이번 주 목표 달성",
+      "weekly_goal_hint_other": "이번 주에 함께 {{count}}개의 작업을 완료했습니다."
+    },
+    "company_name": "eclicktech",
+    "toolbar": {
+      "season": "계절: {{season}}",
+      "emotes": "이모트",
+      "trophies": "트로피 월",
+      "minimap_show": "미니맵 표시",
+      "minimap_hide": "미니맵 숨기기",
+      "photo": "사진 모드",
+      "sound_on": "소리 켜기",
+      "sound_off": "소리 끄기"
+    },
+    "season": {
+      "spring": "봄",
+      "summer": "여름",
+      "autumn": "가을",
+      "winter": "겨울"
+    },
+    "emotes": {
+      "title": "이모트",
+      "wave": "손 흔들기",
+      "check": "좋아요",
+      "alert": "도움 필요",
+      "coffee": "커피"
+    },
+    "photo": {
+      "hint": "원하는 구도로 담아 보세요.",
+      "save": "PNG로 저장",
+      "saved": "다운로드에 저장했습니다.",
+      "exit": "사진 모드 종료"
+    },
+    "events": {
+      "cat": "사무실 고양이가 지나갔습니다.",
+      "delivery": "프런트에 택배가 도착했습니다.",
+      "coffee": "누군가 커피를 내렸습니다.",
+      "plane": "종이비행기가 사무실을 가로질렀습니다.",
+      "phone": "프런트 전화가 울리고 있습니다.",
+      "lights": "천장 조명이 깜빡였습니다."
+    },
+    "trophies": {
+      "title": "트로피 월",
+      "close": "닫기",
+      "season": "계절",
+      "archived_other": "{{count}}개 보관",
+      "departments": "부서",
+      "departments_empty": "아직 부서 명판이 없습니다. 조직도에서 부서에 에이전트를 배치하세요.",
+      "items": {
+        "first_delivery": {
+          "name": "첫 배달",
+          "hint": "디스패치를 완료까지 지켜보기."
+        },
+        "crew": {
+          "name": "풀 크루",
+          "hint": "사무실에 활성 에이전트 3명."
+        },
+        "company_3": {
+          "name": "성장하는 사무실",
+          "hint": "회사 레벨 3 달성."
+        },
+        "company_5": {
+          "name": "큰 사무실",
+          "hint": "회사 레벨 5 달성."
+        },
+        "weekly_goal": {
+          "name": "팀의 주",
+          "hint": "팀과 함께 주간 목표 달성."
+        },
+        "mvp_level_3": {
+          "name": "스타 데스크",
+          "hint": "최고 기여자가 레벨 3 달성."
+        },
+        "fifty": {
+          "name": "50건",
+          "hint": "30일 동안 50건 완료."
+        },
+        "hundred": {
+          "name": "100건",
+          "hint": "30일 동안 100건 완료."
+        }
+      }
+    },
+    "coffee": {
+      "title": "탕비실 잡담",
+      "close": "닫기",
+      "hint": "{{key}}를 눌러 탕비실 잡담",
+      "prompts": {
+        "shipped": "이번 주에 자랑스러운 배달은?",
+        "blocked": "지금 팀을 막고 있는 것은?",
+        "learned": "지난 작업에서 무엇을 배웠나요?",
+        "next": "다음으로 팀이 할 일은?",
+        "thanks": "최근 작업으로 고마움을 전할 사람은?"
+      },
+      "stuck": "현재 막힘: {{names}}",
+      "another": "다른 질문"
+    },
+    "meeting": {
+      "title": "회의실",
+      "close": "닫기",
+      "hint": "{{key}}를 눌러 회의 보드 보기",
+      "empty": "보드가 비어 있습니다.",
+      "phases": {
+        "queued": "대기 중",
+        "decomposing": "분해 중",
+        "progress": "진행 중",
+        "in_review": "검토 중"
+      }
+    }
   }
 }

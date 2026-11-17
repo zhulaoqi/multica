@@ -48,6 +48,8 @@ const CHAT_COOLDOWN_MS = 3500;
 const CHAT_COOLDOWN_SPREAD_MS = 4500;
 const SPAWN_STAGGER_MS = 320;
 const EMOTE_MS = 1800;
+/** Long enough for a check to read across the room during a celebration. */
+const CELEBRATE_MS = 3_200;
 /** How far apart two agents may be to consider a walk-over chat. */
 const SOCIAL_RADIUS = 260;
 const SOCIAL_COOLDOWN_MS = 13_000;
@@ -308,12 +310,34 @@ export class OfficeAgents {
     return { id: avatar.id, x: avatar.x, y: avatar.y };
   }
 
+  /** Visible agents and their status, for the minimap. */
+  statuses(): { x: number; y: number; status: AgentDeskStatus }[] {
+    const list: { x: number; y: number; status: AgentDeskStatus }[] = [];
+    for (const avatar of this.avatars.values()) {
+      if (!this.isVisible(avatar)) continue;
+      list.push({ x: avatar.x, y: avatar.y, status: avatar.status });
+    }
+    return list;
+  }
+
   /** Shows a one-off balloon, e.g. a check after a task is assigned. */
   playEmote(agentId: string, kind: BubbleKind, nowMs: number, durationMs = EMOTE_MS) {
     const avatar = this.avatars.get(agentId);
     if (!avatar) return;
     avatar.emoteKind = kind;
     avatar.emoteUntil = nowMs + durationMs;
+  }
+
+  /**
+   * Good news for the whole office: every visible agent raises a check at
+   * once. Stuck agents keep their alert, which outranks the balloon.
+   */
+  celebrate(nowMs: number) {
+    for (const avatar of this.avatars.values()) {
+      if (!this.isVisible(avatar) || avatar.status === "offline") continue;
+      avatar.emoteKind = "check";
+      avatar.emoteUntil = nowMs + CELEBRATE_MS;
+    }
   }
 
   update(dtSeconds: number, nowMs: number, humans: OfficeHuman[]) {

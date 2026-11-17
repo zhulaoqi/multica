@@ -54,6 +54,142 @@
       "task_error_agent_unavailable": "這個智能體暫時無法接任務。",
       "task_error_issue_limit": "這個工作區的任務數已達上限。"
     },
-    "company_name": "易點天下 eclicktech"
+    "reception": {
+      "title": "前台",
+      "close": "關閉",
+      "hint": "按 {{key}} 查看前台日報",
+      "today": "今天",
+      "today_value_other": "完成 {{count}} 項",
+      "company_level": "公司 Lv {{level}}",
+      "mvp": "最佳：{{name}}",
+      "mvp_empty": "暫無完成記錄",
+      "week": "本週目標",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "已達成",
+      "waiting": "等待簽收",
+      "waiting_empty": "沒有待你簽收的成果。",
+      "stuck_other": "{{count}} 位智慧體需要關注",
+      "unknown_department": "部門",
+      "reason_placeholder": "說明需要補什麼",
+      "reason_label": "退回原因",
+      "send_back": "退回",
+      "accept": "簽收",
+      "reject": "退回",
+      "cancel": "取消",
+      "accept_failed": "簽收失敗，請重試。",
+      "reject_failed": "退回失敗，請重試。"
+    },
+    "celebration": {
+      "company_level": "公司升到 Lv {{level}} 了！",
+      "company_level_hint": "辦公室又添了新家具。",
+      "weekly_goal": "本週目標達成",
+      "weekly_goal_hint_other": "本週一起完成了 {{count}} 項任務。"
+    },
+    "company_name": "易點天下 eclicktech",
+    "toolbar": {
+      "season": "季節：{{season}}",
+      "emotes": "表情",
+      "trophies": "獎盃牆",
+      "minimap_show": "顯示小地圖",
+      "minimap_hide": "隱藏小地圖",
+      "photo": "拍照模式",
+      "sound_on": "開啟聲音",
+      "sound_off": "關閉聲音"
+    },
+    "season": {
+      "spring": "春",
+      "summer": "夏",
+      "autumn": "秋",
+      "winter": "冬"
+    },
+    "emotes": {
+      "title": "表情",
+      "wave": "招手",
+      "check": "做得好",
+      "alert": "需要幫忙",
+      "coffee": "喝咖啡"
+    },
+    "photo": {
+      "hint": "介面已隱藏，取好景後儲存。",
+      "save": "儲存圖片",
+      "saved": "已儲存到下載目錄。",
+      "exit": "退出拍照"
+    },
+    "events": {
+      "cat": "辦公室的貓經過了。",
+      "delivery": "前台收到一個包裹。",
+      "coffee": "有人煮了新咖啡。",
+      "plane": "一架紙飛機飛過辦公室。",
+      "phone": "前台電話響了。",
+      "lights": "天花板燈閃了一下。"
+    },
+    "trophies": {
+      "title": "獎盃牆",
+      "close": "關閉",
+      "season": "目前季節",
+      "archived_other": "已封存 {{count}} 個",
+      "departments": "部門",
+      "departments_empty": "還沒有部門銘牌。在組織架構裡為部門設定智慧體。",
+      "items": {
+        "first_delivery": {
+          "name": "首次交付",
+          "hint": "完整跟進一次派活到完成。"
+        },
+        "crew": {
+          "name": "全員到齊",
+          "hint": "辦公室裡有三名在職智慧體。"
+        },
+        "company_3": {
+          "name": "成長中的辦公室",
+          "hint": "公司等級達到 3 級。"
+        },
+        "company_5": {
+          "name": "大辦公室",
+          "hint": "公司等級達到 5 級。"
+        },
+        "weekly_goal": {
+          "name": "團隊一週",
+          "hint": "與團隊一起達成週目標。"
+        },
+        "mvp_level_3": {
+          "name": "明星座位",
+          "hint": "有智慧體達到 3 級。"
+        },
+        "fifty": {
+          "name": "五十",
+          "hint": "30 天內完成 50 個任務。"
+        },
+        "hundred": {
+          "name": "一百",
+          "hint": "30 天內完成 100 個任務。"
+        }
+      }
+    },
+    "coffee": {
+      "title": "茶水間閒聊",
+      "close": "關閉",
+      "hint": "按 {{key}} 在茶水間聊聊",
+      "prompts": {
+        "shipped": "這週有什麼讓你驕傲的交付？",
+        "blocked": "現在團隊卡在哪裡？",
+        "learned": "上一個任務學到了什麼？",
+        "next": "接下來團隊該做什麼？",
+        "thanks": "最近誰值得被感謝？"
+      },
+      "stuck": "目前卡住：{{names}}",
+      "another": "換一個問題"
+    },
+    "meeting": {
+      "title": "會議室",
+      "close": "關閉",
+      "hint": "按 {{key}} 檢視會議板",
+      "empty": "會議板是空的。",
+      "phases": {
+        "queued": "排隊中",
+        "decomposing": "拆解中",
+        "progress": "進行中",
+        "in_review": "待驗收"
+      }
+    }
   }
 }
