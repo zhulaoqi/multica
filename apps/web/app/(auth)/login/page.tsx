@@ -85,18 +85,18 @@ function LoginPageContent() {
       return;
     }
     if (cliCallbackRaw !== null) return;
+    // The developer account always lands on the console, including when the
+    // session cookie arrives after the first logged-out paint.
+    if (user.is_operator && !nextUrl) {
+      router.replace("/admin");
+      return;
+    }
     // A user that appears after this page settled as logged-out is not an
     // arrival. Feishu returns as a fresh page load with the cookie already
     // set, so only that arrival path redirects.
     if (settledLoggedOutRef.current) return;
     if (nextUrl) {
       router.replace(nextUrl);
-      return;
-    }
-    // The developer account's workspace is the console; its member pages are
-    // reached from there.
-    if (user.is_operator) {
-      router.replace("/admin");
       return;
     }
     // Fetch instead of reading the cache: on a fresh page load the cache is

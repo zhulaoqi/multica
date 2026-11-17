@@ -4112,3 +4112,32 @@ export const EMPTY_OPERATOR_OVERVIEW: OperatorOverview = {
   workspaces: [],
   generated_at: "",
 };
+
+export const OperatorDirectoryWorkspaceSchema = z.object({
+  id: z.string().default(""),
+  name: z.string().default(""),
+  slug: z.string().default(""),
+  unit_count: z.number().default(0),
+  placed_members: z.number().default(0),
+  last_synced_at: z.string().default(""),
+  created_units: z.number().default(0),
+  updated_units: z.number().default(0),
+  members_added: z.number().default(0),
+  members_moved: z.number().default(0),
+}).loose();
+
+export type OperatorDirectoryWorkspace = z.infer<typeof OperatorDirectoryWorkspaceSchema>;
+
+export const OperatorDirectoryListSchema = z.object({
+  configured: z.boolean().default(false),
+  schedule: z.string().default(""),
+  workspaces: z.array(OperatorDirectoryWorkspaceSchema).default([]),
+}).loose();
+
+export type OperatorDirectoryList = z.infer<typeof OperatorDirectoryListSchema>;
+
+export const EMPTY_OPERATOR_DIRECTORY_LIST: OperatorDirectoryList = {
+  configured: false,
+  schedule: "",
+  workspaces: [],
+};

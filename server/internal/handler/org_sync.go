@@ -91,86 +91,143 @@ func (h *Handler) GetOrgSyncStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// errDirectoryNotConfigured is returned when the Feishu contact app is unset.
+var errDirectoryNotConfigured = errors.New("feishu contact sync is not configured: set MULTICA_FEISHU_APP_ID and MULTICA_FEISHU_APP_SECRET")
+
+type directoryUpstreamError struct{ err error }
+
+func (e directoryUpstreamError) Error() string { return e.err.Error() }
+func (e directoryUpstreamError) Unwrap() error { return e.err }
+
 // SyncOrgFromFeishu imports the Feishu department tree and everyone in it.
 // Units are matched by external_id so manual units and manual renames survive;
 // people are matched by email. Nothing is deleted: units and directory-linked
 // members that disappeared upstream are reported for an admin to handle.
+// Workspace owners, workspace admins, and the operator account may run it.
 func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
-		return
-	}
-	if h.OrgDirectory == nil {
-		writeError(w, http.StatusConflict, "feishu contact sync is not configured: set MULTICA_FEISHU_APP_ID and MULTICA_FEISHU_APP_SECRET")
 		return
 	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
 	if !ok {
 		return
 	}
-
-	departments, err := h.OrgDirectory.ListDepartments(r.Context())
+	report, err := h.syncDirectory(r.Context(), wsUUID)
 	if err != nil {
-		h.orgSyncUpstreamFailed(w, r, err)
+		h.writeDirectorySyncError(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+// syncDirectory pulls the Feishu contact tree into one workspace. Callers
+// enforce who may start it; this function only does the import.
+func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyncReport, error) {
+	if h.OrgDirectory == nil {
+		return orgSyncReport{}, errDirectoryNotConfigured
+	}
+	departments, err := h.OrgDirectory.ListDepartments(ctx)
+	if err != nil {
+		return orgSyncReport{}, directoryUpstreamError{err: err}
 	}
 	ordered := orderByDepth(departments)
 	departmentIDs := make([]string, 0, len(ordered))
 	for _, department := range ordered {
 		departmentIDs = append(departmentIDs, department.ID)
 	}
-	users, err := h.OrgDirectory.ListDepartmentUsers(r.Context(), departmentIDs)
+	users, err := h.OrgDirectory.ListDepartmentUsers(ctx, departmentIDs)
 	if err != nil {
-		h.orgSyncUpstreamFailed(w, r, err)
-		return
+		return orgSyncReport{}, directoryUpstreamError{err: err}
 	}
 
 	report := newOrgSyncReport()
-	tx, err := h.TxStarter.Begin(r.Context())
+	tx, err := h.TxStarter.Begin(ctx)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not start organisation sync")
-		return
+		return orgSyncReport{}, err
 	}
-	defer tx.Rollback(r.Context())
+	defer tx.Rollback(ctx)
 	qtx := h.Queries.WithTx(tx)
 
-	unitIDs, err := h.upsertDirectoryUnits(r.Context(), qtx, wsUUID, ordered, &report)
+	unitIDs, err := h.upsertDirectoryUnits(ctx, qtx, wsUUID, ordered, &report)
 	if err != nil {
-		h.orgSyncFailed(w, r, err)
-		return
+		return orgSyncReport{}, err
 	}
-	userIDs, err := h.upsertDirectoryUsers(r.Context(), qtx, wsUUID, users, unitIDs, &report)
+	userIDs, err := h.upsertDirectoryUsers(ctx, qtx, wsUUID, users, unitIDs, &report)
 	if err != nil {
-		h.orgSyncFailed(w, r, err)
-		return
+		return orgSyncReport{}, err
 	}
-	if err := h.assignDirectoryLeads(r.Context(), qtx, wsUUID, ordered, unitIDs, userIDs, &report); err != nil {
-		h.orgSyncFailed(w, r, err)
-		return
+	if err := h.assignDirectoryLeads(ctx, qtx, wsUUID, ordered, unitIDs, userIDs, &report); err != nil {
+		return orgSyncReport{}, err
 	}
-	if err := h.reportDetachedEntities(r.Context(), qtx, wsUUID, ordered, users, userIDs, &report); err != nil {
-		h.orgSyncFailed(w, r, err)
-		return
+	if err := h.reportDetachedEntities(ctx, qtx, wsUUID, ordered, users, userIDs, &report); err != nil {
+		return orgSyncReport{}, err
 	}
 
 	report.SyncedAt = time.Now().UTC().Format(time.RFC3339)
 	summary, err := json.Marshal(report)
 	if err != nil {
-		h.orgSyncFailed(w, r, err)
-		return
+		return orgSyncReport{}, err
 	}
-	if _, err := qtx.InsertOrgSyncRun(r.Context(), db.InsertOrgSyncRunParams{
+	if _, err := qtx.InsertOrgSyncRun(ctx, db.InsertOrgSyncRunParams{
 		WorkspaceID: wsUUID,
 		Summary:     summary,
 	}); err != nil {
-		h.orgSyncFailed(w, r, err)
+		return orgSyncReport{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return orgSyncReport{}, err
+	}
+	return report, nil
+}
+
+// SyncAllDirectories refreshes every workspace. A workspace that fails is
+// logged and skipped so one bad tree does not block the others; the returned
+// error is non-nil when any workspace failed.
+func (h *Handler) SyncAllDirectories(ctx context.Context) (int, error) {
+	if h.OrgDirectory == nil {
+		return 0, nil
+	}
+	rows, err := h.DB.Query(ctx, `SELECT id FROM workspace ORDER BY created_at ASC`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var ids []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	synced := 0
+	var failed error
+	for _, id := range ids {
+		if _, err := h.syncDirectory(ctx, id); err != nil {
+			slog.Error("scheduled directory sync failed", "workspace_id", uuidToString(id), "error", err)
+			failed = err
+			continue
+		}
+		synced++
+	}
+	return synced, failed
+}
+
+func (h *Handler) writeDirectorySyncError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errDirectoryNotConfigured) {
+		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	if err := tx.Commit(r.Context()); err != nil {
-		h.orgSyncFailed(w, r, err)
+	var upstream directoryUpstreamError
+	if errors.As(err, &upstream) {
+		h.orgSyncUpstreamFailed(w, r, upstream.err)
 		return
 	}
-	writeJSON(w, http.StatusOK, report)
+	h.orgSyncFailed(w, r, err)
 }
 
 // upsertDirectoryUnits applies the department tree bottom-up-safe: by depth

@@ -233,12 +233,11 @@ describe("OrgPage Feishu sync", () => {
     qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "admin" }]);
   }
 
-  it("hides directory sync from a member even when the tree is marked manageable", () => {
+  it("shows directory sync when the server says this caller can manage the org", () => {
     signIn("u-ada");
     renderPage(tree());
 
-    expect(screen.queryByRole("button", { name: "Sync from Feishu" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Last synced/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeInTheDocument();
   });
 
   it("keeps the sync button disabled until credentials are configured", () => {

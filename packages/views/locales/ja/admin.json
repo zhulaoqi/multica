@@ -36,5 +36,21 @@
     "dingtalk": "DingTalk",
     "wecom": "WeCom",
     "telegram": "Telegram"
+  },
+  "directory": {
+    "title": "Directory",
+    "hint": "Refreshes every day at 00:00 Beijing time.",
+    "sync": "Sync now",
+    "syncing": "Syncing…",
+    "notConfigured": "Feishu directory sync is not configured.",
+    "never": "Not synced yet",
+    "last": "Last synced {{time}}",
+    "lastHeading": "Last sync",
+    "units": "Departments",
+    "placed": "Placed members",
+    "report": "Created {{created}} · Updated {{updated}} · Added {{added}} · Moved {{moved}}",
+    "failed": "Sync failed.",
+    "empty": "Nothing to sync.",
+    "loadFailed": "Could not load the directory."
   }
 }

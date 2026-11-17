@@ -6,6 +6,7 @@ import { api } from "../api";
 export const operatorKeys = {
   all: ["operator"] as const,
   overview: () => [...operatorKeys.all, "overview"] as const,
+  directories: () => [...operatorKeys.all, "directories"] as const,
 };
 
 export const operatorOverviewOptions = () =>
@@ -13,4 +14,11 @@ export const operatorOverviewOptions = () =>
     queryKey: operatorKeys.overview(),
     queryFn: () => api.getOperatorOverview(),
     staleTime: 60_000,
+  });
+
+export const operatorDirectoryOptions = () =>
+  queryOptions({
+    queryKey: operatorKeys.directories(),
+    queryFn: () => api.getOperatorDirectories(),
+    staleTime: 30_000,
   });

@@ -29,7 +29,8 @@ export default function OperatorLoginPage() {
         return;
       }
       setLoggedInCookie();
-      window.location.assign(`/login${window.location.search}`);
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.assign(next && next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
     } catch {
       setError("登录没有发出去");
     } finally {

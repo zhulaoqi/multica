@@ -516,7 +516,10 @@ import {
   EMPTY_JOIN_SHARE_LINK_RESPONSE,
   OperatorOverviewSchema,
   EMPTY_OPERATOR_OVERVIEW,
+  OperatorDirectoryListSchema,
+  EMPTY_OPERATOR_DIRECTORY_LIST,
   type OperatorOverview,
+  type OperatorDirectoryList,
   type IssueView,
   type IssueViewPreference,
   type CreateIssueViewRequest,
@@ -1086,6 +1089,23 @@ export class ApiClient {
     const raw = await this.fetch<unknown>("/api/operator/overview");
     return parseWithFallback(raw, OperatorOverviewSchema, EMPTY_OPERATOR_OVERVIEW, {
       endpoint: "GET /api/operator/overview",
+    });
+  }
+
+  async getOperatorDirectories(): Promise<OperatorDirectoryList> {
+    const raw = await this.fetch<unknown>("/api/operator/directories");
+    return parseWithFallback(raw, OperatorDirectoryListSchema, EMPTY_OPERATOR_DIRECTORY_LIST, {
+      endpoint: "GET /api/operator/directories",
+    });
+  }
+
+  async syncOperatorDirectory(workspaceId: string): Promise<OrgSyncReport> {
+    const raw = await this.fetch<unknown>(
+      `/api/operator/directories/${encodeURIComponent(workspaceId)}/sync`,
+      { method: "POST" },
+    );
+    return parseWithFallback(raw, OrgSyncReportSchema, EMPTY_ORG_SYNC_REPORT, {
+      endpoint: "POST /api/operator/directories/:workspaceId/sync",
     });
   }
 

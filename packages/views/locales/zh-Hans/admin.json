@@ -36,5 +36,21 @@
     "dingtalk": "钉钉",
     "wecom": "企业微信",
     "telegram": "Telegram"
+  },
+  "directory": {
+    "title": "通讯录",
+    "hint": "每天凌晨 0:00（北京时间）自动同步。",
+    "sync": "立即同步",
+    "syncing": "同步中…",
+    "notConfigured": "飞书通讯录还没配置。",
+    "never": "还没有同步过",
+    "last": "上次同步 {{time}}",
+    "lastHeading": "上次同步",
+    "units": "部门",
+    "placed": "已分配成员",
+    "report": "新建 {{created}} · 更新 {{updated}} · 新增 {{added}} · 调整 {{moved}}",
+    "failed": "同步失败。",
+    "empty": "没有可同步的工作区。",
+    "loadFailed": "通讯录加载失败。"
   }
 }

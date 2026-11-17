@@ -1,8 +1,14 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@multica/core/api";
+import { paths } from "@multica/core/paths";
 import {
+  operatorDirectoryOptions,
+  operatorKeys,
   operatorOverviewOptions,
+  type OperatorDirectoryWorkspace,
   type OperatorWorkspaceOverview,
 } from "@multica/core/operator";
 import { Alert, AlertDescription, AlertTitle } from "@multica/ui/components/ui/alert";
@@ -26,24 +32,52 @@ import { formatTokens, formatUsd } from "../../runtimes/utils";
 // Server ticks are 1e-10 USD (see task_usage_hourly.cost_usd_ticks).
 const USD_TICKS_PER_DOLLAR = 10_000_000_000;
 
+function rememberedWorkspaceSlug(): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(/(?:^|; )last_workspace_slug=([^;]*)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
+/** Where "back to workspace" lands. The operator can open every workspace,
+ *  so this is the one they used last, or the first one in the console. */
+function useOperatorHome(workspaces: Array<{ slug: string }>): string | null {
+  const [remembered, setRemembered] = useState("");
+  useEffect(() => {
+    setRemembered(rememberedWorkspaceSlug());
+  }, []);
+  const slug =
+    (remembered && workspaces.some((workspace) => workspace.slug === remembered)
+      ? remembered
+      : workspaces[0]?.slug) ?? "";
+  return slug ? paths.workspace(slug).workbench() : null;
+}
+
 export function AdminPage() {
   const { t } = useT("admin");
   const overview = useQuery(operatorOverviewOptions());
   const workspaces = overview.data?.workspaces ?? [];
   const totals = summarize(workspaces);
+  const home = useOperatorHome(workspaces);
 
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <AppLink
-              href="/"
-              className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" />
-              {t(($) => $.page.back)}
-            </AppLink>
+            {home ? (
+              <AppLink
+                href={home}
+                className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="size-3.5" />
+                {t(($) => $.page.back)}
+              </AppLink>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
+                <ArrowLeft className="size-3.5" />
+                {t(($) => $.page.back)}
+              </span>
+            )}
             <h1 className="text-title-lg">{t(($) => $.page.title)}</h1>
           </div>
           <Button
@@ -80,6 +114,8 @@ export function AdminPage() {
           />
         </section>
 
+        <DirectorySection />
+
         {overview.isPending ? (
           <Skeleton className="h-64 w-full" />
         ) : workspaces.length === 0 ? (
@@ -110,6 +146,109 @@ export function AdminPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function DirectorySection() {
+  const { t } = useT("admin");
+  const queryClient = useQueryClient();
+  const directories = useQuery(operatorDirectoryOptions());
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [failure, setFailure] = useState("");
+  const rows = directories.data?.workspaces ?? [];
+
+  const run = async (workspace: OperatorDirectoryWorkspace) => {
+    setFailure("");
+    setSyncing(workspace.id);
+    try {
+      await api.syncOperatorDirectory(workspace.id);
+      await queryClient.invalidateQueries({ queryKey: operatorKeys.directories() });
+    } catch (error) {
+      setFailure(error instanceof Error && error.message ? error.message : t(($) => $.directory.failed));
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-heading">{t(($) => $.directory.title)}</h2>
+        <span className="text-caption text-muted-foreground">{t(($) => $.directory.hint)}</span>
+      </div>
+      {directories.data && !directories.data.configured ? (
+        <p className="text-caption text-muted-foreground">{t(($) => $.directory.notConfigured)}</p>
+      ) : null}
+      {failure ? <p className="text-body text-destructive">{failure}</p> : null}
+      {directories.isError ? (
+        <p className="text-body text-destructive">{t(($) => $.directory.loadFailed)}</p>
+      ) : directories.isPending ? (
+        <Skeleton className="h-24 w-full" />
+      ) : rows.length === 0 ? (
+        <p className="text-body text-muted-foreground">{t(($) => $.directory.empty)}</p>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t(($) => $.table.workspace)}</TableHead>
+                  <TableHead>{t(($) => $.directory.units)}</TableHead>
+                  <TableHead>{t(($) => $.directory.placed)}</TableHead>
+                  <TableHead>{t(($) => $.directory.lastHeading)}</TableHead>
+                  <TableHead className="text-right">{t(($) => $.table.actions)}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((workspace) => (
+                  <TableRow key={workspace.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{workspace.name}</span>
+                        <span className="text-caption text-muted-foreground">{workspace.slug}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="tabular-nums">{workspace.unit_count}</TableCell>
+                    <TableCell className="tabular-nums">{workspace.placed_members}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-caption">
+                          {workspace.last_synced_at
+                            ? t(($) => $.directory.last, {
+                                time: new Date(workspace.last_synced_at).toLocaleString(),
+                              })
+                            : t(($) => $.directory.never)}
+                        </span>
+                        {workspace.last_synced_at ? (
+                          <span className="text-caption text-muted-foreground">
+                            {t(($) => $.directory.report, {
+                              created: workspace.created_units,
+                              updated: workspace.updated_units,
+                              added: workspace.members_added,
+                              moved: workspace.members_moved,
+                            })}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!directories.data?.configured || syncing !== null}
+                        onClick={() => void run(workspace)}
+                      >
+                        {syncing === workspace.id ? t(($) => $.directory.syncing) : t(($) => $.directory.sync)}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </section>
   );
 }
 

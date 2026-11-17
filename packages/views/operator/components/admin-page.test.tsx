@@ -15,11 +15,23 @@ const queryState = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: <T,>(options: T) => options,
-  useQuery: () => queryState,
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQuery: (options: { queryKey?: readonly unknown[] }) =>
+    options?.queryKey?.includes("directories")
+      ? {
+          data: { configured: true, schedule: "", workspaces: [] },
+          isPending: false,
+          isError: false,
+          isFetching: false,
+          refetch: vi.fn(),
+        }
+      : queryState,
 }));
 
 vi.mock("@multica/core/operator", () => ({
   operatorOverviewOptions: () => ({ queryKey: ["operator", "overview"] }),
+  operatorDirectoryOptions: () => ({ queryKey: ["operator", "directories"] }),
+  operatorKeys: { directories: () => ["operator", "directories"] },
 }));
 
 const adapter: NavigationAdapter = {
@@ -93,6 +105,10 @@ describe("AdminPage", () => {
   it("renders one row per workspace with channels, usage and links into settings", () => {
     queryState.data = OVERVIEW;
     renderPage();
+
+    expect(screen.getByRole("link", { name: "Back to workspace" }).getAttribute("href")).toBe(
+      "/acme/workbench",
+    );
 
     const acme = screen.getByRole("row", { name: /Acme/ });
     expect(within(acme).getByText("owner@acme.test")).toBeTruthy();

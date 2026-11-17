@@ -36,5 +36,21 @@
     "dingtalk": "釘釘",
     "wecom": "企業微信",
     "telegram": "Telegram"
+  },
+  "directory": {
+    "title": "通訊錄",
+    "hint": "每天凌晨 0:00（北京時間）自動同步。",
+    "sync": "立即同步",
+    "syncing": "同步中…",
+    "notConfigured": "飛書通訊錄還沒設定。",
+    "never": "還沒有同步過",
+    "last": "上次同步 {{time}}",
+    "lastHeading": "上次同步",
+    "units": "部門",
+    "placed": "已分配成員",
+    "report": "新建 {{created}} · 更新 {{updated}} · 新增 {{added}} · 調整 {{moved}}",
+    "failed": "同步失敗。",
+    "empty": "沒有可同步的工作區。",
+    "loadFailed": "通訊錄載入失敗。"
   }
 }

@@ -147,10 +147,11 @@ export function OrgPage() {
     user_id: member.user_id,
     label: member.name || member.email,
   }));
-  // Directory sync rewrites the whole company tree. Workspace owner and admin
-  // are the only roles that may start it; a department lead is not enough.
+  // The server's can_manage flag is the authority: workspace owners, workspace
+  // admins, and the operator account. The member-role check covers the same
+  // people when their row is in the roster. Department leads stay out.
   const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
-  const maySyncDirectory = canSyncDirectory(myRole);
+  const maySyncDirectory = data.can_manage || canSyncDirectory(myRole);
   const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
   const moveChoices = unitChoices.filter((choice) => choice.manage);
   // Unassigned people keep their twins on their own row; those agents leave
