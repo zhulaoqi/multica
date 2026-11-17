@@ -18,5 +18,7 @@ describe("IntakeBar", () => {
     expect(screen.getByRole("button", { name: "聊天" })).toBeTruthy();
     expect(screen.getByText("结算组")).toBeTruthy();
     expect(screen.getByRole("button", { name: "退出" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "周可" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("结算组").parentElement).toHaveClass("absolute", "top-full");
   });
 });

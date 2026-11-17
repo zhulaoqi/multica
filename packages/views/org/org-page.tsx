@@ -113,6 +113,7 @@ export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
   const userId = useAuthStore((state) => state.user?.id);
+  const isOperator = useAuthStore((state) => state.user?.is_operator === true);
   const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
   const members = useQuery(memberListOptions(wsId));
@@ -138,6 +139,8 @@ export function OrgPage() {
   const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
   const canManageOrg =
     data.can_manage || myRole === "owner" || myRole === "admin";
+  const maySyncDirectory =
+    isOperator || myRole === "owner" || myRole === "admin";
   // Landing on the caller's own department keeps plain members oriented; an
   // explicit click (including the unassigned pseudo-node) always wins.
   const activeSelected =
@@ -166,6 +169,7 @@ export function OrgPage() {
   // disables it; otherwise let the admin try and see the server's own error.
   const syncConfigured = syncStatus.data?.configured;
   const runSync = async () => {
+    if (!maySyncDirectory || syncing || syncConfigured === false) return;
     setFailure("");
     setSyncing(true);
     try {
@@ -249,7 +253,7 @@ export function OrgPage() {
         ) : null}
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-6">
-        {canManageOrg ? (
+        {maySyncDirectory ? (
           <div className="mx-auto mb-4 flex max-w-3xl flex-wrap items-center gap-3">
             <Button size="sm" disabled={syncConfigured === false || syncing} onClick={() => void runSync()}>
               {syncing ? t(($) => $.syncing) : t(($) => $.sync_from_feishu)}
@@ -267,7 +271,7 @@ export function OrgPage() {
             </span>
           </div>
         ) : null}
-        {canManageOrg && lastRun ? (
+        {maySyncDirectory && lastRun ? (
           <div className="mx-auto max-w-3xl">
             <SyncReport report={lastRun} />
           </div>

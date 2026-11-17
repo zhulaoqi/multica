@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/integrations/feishu/contact"
 )
 
@@ -172,15 +173,19 @@ func TestSyncOrgFromFeishu_ReportsDetachedAndMovesPeople(t *testing.T) {
 	}
 }
 
-func TestSyncOrgFromFeishu_RequiresWorkspaceAdmin(t *testing.T) {
+func TestSyncOrgFromFeishu_RequiresWorkspaceManager(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
 	member := createPermissionTestMember(t, "org-sync-member@example.com")
-	installOrgDirectory(t, directoryFixture())
+	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
 
 	code, _ := syncOrg(t, member)
 	if code != http.StatusForbidden {
 		t.Fatalf("member sync status = %d, want 403", code)
+	}
+
+	if code, _ := syncOrg(t, testUserID); code != http.StatusOK {
+		t.Fatalf("owner sync status = %d, want 200", code)
 	}
 
 	rec := httptest.NewRecorder()
@@ -197,11 +202,26 @@ func TestSyncOrgFromFeishu_RequiresWorkspaceAdmin(t *testing.T) {
 	}
 }
 
+func TestSyncOrgFromFeishu_AllowsOperator(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
+
+	req := newRequest("POST", "/api/org/sync/feishu", nil)
+	req.Header.Set(auth.OperatorHeader, "1")
+	rec := httptest.NewRecorder()
+	testHandler.SyncOrgFromFeishu(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("operator sync status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSyncOrgFromFeishu_NotConfigured(t *testing.T) {
 	requireDB(t)
 	testHandler.OrgDirectory = nil
+	admin := createOrgTestAdmin(t, "org-sync-unconfigured@example.com")
 	rec := httptest.NewRecorder()
-	testHandler.SyncOrgFromFeishu(rec, newRequest("POST", "/api/org/sync/feishu", nil))
+	testHandler.SyncOrgFromFeishu(rec, newRequestAs(admin, "POST", "/api/org/sync/feishu", nil))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}

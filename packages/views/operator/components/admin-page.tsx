@@ -114,7 +114,7 @@ export function AdminPage() {
           />
         </section>
 
-        <DirectorySection />
+        <DirectorySection workspaces={workspaces} />
 
         {overview.isPending ? (
           <Skeleton className="h-64 w-full" />
@@ -149,13 +149,24 @@ export function AdminPage() {
   );
 }
 
-function DirectorySection() {
+function DirectorySection({ workspaces }: { workspaces: OperatorWorkspaceOverview[] }) {
   const { t } = useT("admin");
   const queryClient = useQueryClient();
   const directories = useQuery(operatorDirectoryOptions());
   const [syncing, setSyncing] = useState<string | null>(null);
   const [failure, setFailure] = useState("");
-  const rows = directories.data?.workspaces ?? [];
+  const rows = directories.data?.workspaces ?? workspaces.map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    unit_count: 0,
+    placed_members: 0,
+    last_synced_at: "",
+    created_units: 0,
+    updated_units: 0,
+    members_added: 0,
+    members_moved: 0,
+  }));
 
   const run = async (workspace: OperatorDirectoryWorkspace) => {
     setFailure("");
@@ -181,8 +192,14 @@ function DirectorySection() {
       ) : null}
       {failure ? <p className="text-body text-destructive">{failure}</p> : null}
       {directories.isError ? (
-        <p className="text-body text-destructive">{t(($) => $.directory.loadFailed)}</p>
-      ) : directories.isPending ? (
+        <div className="flex items-center gap-3">
+          <p className="text-body text-destructive">{t(($) => $.directory.loadFailed)}</p>
+          <Button variant="outline" size="sm" onClick={() => void directories.refetch()}>
+            {t(($) => $.page.retry)}
+          </Button>
+        </div>
+      ) : null}
+      {directories.isPending && rows.length === 0 ? (
         <Skeleton className="h-24 w-full" />
       ) : rows.length === 0 ? (
         <p className="text-body text-muted-foreground">{t(($) => $.directory.empty)}</p>
@@ -235,7 +252,7 @@ function DirectorySection() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!directories.data?.configured || syncing !== null}
+                        disabled={directories.data?.configured === false || syncing !== null}
                         onClick={() => void run(workspace)}
                       >
                         {syncing === workspace.id ? t(($) => $.directory.syncing) : t(($) => $.directory.sync)}

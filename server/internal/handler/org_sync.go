@@ -106,8 +106,10 @@ func (e directoryUpstreamError) Unwrap() error { return e.err }
 // Workspace owners, workspace admins, and the operator account may run it.
 func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
-		return
+	if !requestIsOperator(r) {
+		if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+			return
+		}
 	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
 	if !ok {

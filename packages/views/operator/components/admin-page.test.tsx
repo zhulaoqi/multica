@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
-import type { OperatorOverview } from "@multica/core/operator";
+import type { OperatorDirectoryList, OperatorOverview } from "@multica/core/operator";
 import { NavigationProvider, type NavigationAdapter } from "../../navigation";
 import { renderWithI18n } from "../../test/i18n";
 import { AdminPage } from "./admin-page";
@@ -12,19 +12,20 @@ const queryState = vi.hoisted(() => ({
   isFetching: false,
   refetch: vi.fn(),
 }));
+const directoryState = vi.hoisted(() => ({
+  data: { configured: true, schedule: "", workspaces: [] } as OperatorDirectoryList | undefined,
+  isPending: false,
+  isError: false,
+  isFetching: false,
+  refetch: vi.fn(),
+}));
 
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: <T,>(options: T) => options,
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useQuery: (options: { queryKey?: readonly unknown[] }) =>
     options?.queryKey?.includes("directories")
-      ? {
-          data: { configured: true, schedule: "", workspaces: [] },
-          isPending: false,
-          isError: false,
-          isFetching: false,
-          refetch: vi.fn(),
-        }
+      ? directoryState
       : queryState,
 }));
 
@@ -156,5 +157,19 @@ describe("AdminPage", () => {
     expect(screen.getByText("Could not load the overview.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     queryState.isError = false;
+  });
+
+  it("keeps manual directory sync available when directory statistics fail to load", () => {
+    queryState.data = OVERVIEW;
+    directoryState.data = undefined;
+    directoryState.isError = true;
+    renderPage();
+
+    expect(screen.getByText("Could not load the directory.")).toBeTruthy();
+    const acme = screen.getAllByRole("row", { name: /Acme/ })[0]!;
+    expect(within(acme).getByRole("button", { name: "Sync now" })).toBeEnabled();
+
+    directoryState.data = { configured: true, schedule: "", workspaces: [] };
+    directoryState.isError = false;
   });
 });

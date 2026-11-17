@@ -36,10 +36,14 @@ SELECT w.id, w.name, w.slug,
        (SELECT count(*) FROM org_unit u WHERE u.workspace_id = w.id)::int,
        (SELECT count(*) FROM member m WHERE m.workspace_id = w.id AND m.org_unit_id IS NOT NULL)::int,
        COALESCE(run.summary->>'synced_at', ''),
-       COALESCE(jsonb_array_length(run.summary->'created_units'), 0),
-       COALESCE(jsonb_array_length(run.summary->'updated_units'), 0),
-       COALESCE(jsonb_array_length(run.summary->'members_added'), 0),
-       COALESCE(jsonb_array_length(run.summary->'members_moved'), 0)
+       CASE WHEN jsonb_typeof(run.summary->'created_units') = 'array'
+            THEN jsonb_array_length(run.summary->'created_units') ELSE 0 END,
+       CASE WHEN jsonb_typeof(run.summary->'updated_units') = 'array'
+            THEN jsonb_array_length(run.summary->'updated_units') ELSE 0 END,
+       CASE WHEN jsonb_typeof(run.summary->'members_added') = 'array'
+            THEN jsonb_array_length(run.summary->'members_added') ELSE 0 END,
+       CASE WHEN jsonb_typeof(run.summary->'members_moved') = 'array'
+            THEN jsonb_array_length(run.summary->'members_moved') ELSE 0 END
 FROM workspace w
 LEFT JOIN LATERAL (
     SELECT summary FROM org_sync_run
