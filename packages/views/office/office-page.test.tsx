@@ -6,7 +6,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@multica/core/i18n/react";
 import { issueDetailOptions } from "@multica/core/issues/queries";
-import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
+import {
+  agentListOptions,
+  memberListOptions,
+  squadListOptions,
+} from "@multica/core/workspace/queries";
 import type { Agent, MemberWithUser } from "@multica/core/types";
 import enCommon from "../locales/en/common.json";
 import enOffice from "../locales/en/office.json";
@@ -25,6 +29,19 @@ const push = vi.hoisted(() => vi.fn());
 const canvas = vi.hoisted(() => ({
   visitAgent: vi.fn(),
   playEmote: vi.fn(),
+  deliverToReception: vi.fn(),
+}));
+const activityState = vi.hoisted(() => ({
+  byAgent: new Map<string, unknown>(),
+}));
+const presenceState = vi.hoisted(() => ({
+  byAgent: new Map<string, unknown>(),
+}));
+const dispatchState = vi.hoisted(() => ({
+  items: [] as unknown[],
+}));
+const apiState = vi.hoisted(() => ({
+  listSquads: vi.fn().mockResolvedValue([]),
 }));
 const openAgentChat = vi.hoisted(() => vi.fn());
 const quickCreate = vi.hoisted(() => vi.fn());
@@ -52,13 +69,19 @@ vi.mock("@multica/core/agents", () => ({
     queryFn: async () => snapshot.tasks,
   }),
   useWorkspacePresenceMap: () => ({
-    byAgent: new Map([
-      [
-        "agent-1",
-        { availability: "online", workload: "working", runningCount: 1, queuedCount: 0 },
-      ],
-    ]),
+    byAgent: presenceState.byAgent,
     loading: false,
+  }),
+  useWorkspaceActivityMap: () => ({
+    byAgent: activityState.byAgent,
+    loading: false,
+  }),
+}));
+vi.mock("@multica/core/workbench", () => ({
+  useMyDispatches: () => ({
+    dispatches: dispatchState.items,
+    isLoading: false,
+    error: null,
   }),
 }));
 vi.mock("@multica/core/office", async (importOriginal) => {
@@ -66,7 +89,7 @@ vi.mock("@multica/core/office", async (importOriginal) => {
   return { ...actual, useOfficeRoom: () => room };
 });
 vi.mock("@multica/core/api", () => ({
-  api: { quickCreateIssue: quickCreate },
+  api: { quickCreateIssue: quickCreate, listSquads: apiState.listSquads },
   ApiError: class ApiError extends Error {
     body: unknown;
     constructor(message: string, body?: unknown) {
@@ -99,18 +122,20 @@ vi.mock("./components/office-canvas", () => ({
       agents,
       peers,
       companyName,
+      companyLevel,
       onFocusAgentChange,
     }: {
-      agents: { id: string; activity?: string | null }[];
+      agents: { id: string; activity?: string | null; alert?: boolean }[];
       peers: unknown[];
       companyName: string;
+      companyLevel: number;
       onFocusAgentChange: (agentId: string | null) => void;
     },
     ref: Ref<unknown>,
   ) {
     useImperativeHandle(ref, () => canvas);
     return (
-      <div data-testid="office-canvas">
+      <div data-testid="office-canvas" data-company-level={companyLevel}>
         {peers.length}
         <span data-testid="company-name">{companyName}</span>
         {agents.map((agent) => (
@@ -118,6 +143,7 @@ vi.mock("./components/office-canvas", () => ({
             key={agent.id}
             data-testid={`activity-${agent.id}`}
             data-activity={agent.activity ?? ""}
+            data-alert={agent.alert ? "true" : ""}
           />
         ))}
         <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
@@ -168,12 +194,49 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
   } as unknown as Agent;
 }
 
+function activityWithCompleted(completed: number) {
+  return {
+    buckets: [{ total: completed, failed: 0, completed, cancelled: 0 }],
+    daysSinceCreated: 20,
+  };
+}
+
+function makeDispatch({
+  status = "in_progress",
+  leaderState = "running",
+}: {
+  status?: string;
+  leaderState?: string;
+} = {}) {
+  return {
+    issue: {
+      id: "issue-root",
+      identifier: "OPS-1",
+      title: "Ship the release notes",
+      description: "Write the notes",
+      status,
+      status_category: "in_progress",
+      assignee_type: "squad",
+      assignee_id: "squad-1",
+    },
+    unit_id: "unit-1",
+    unit_path: "Engineering",
+    dispatched_at: "2026-11-17T00:00:00Z",
+    completed: false,
+    leader_state: leaderState,
+  };
+}
+
+const SQUAD = { id: "squad-1", leader_id: "agent-1", archived_at: null };
+
 function renderPage({
   members = [makeMember(), makeMember({ id: "member-2", user_id: "user-2", name: "Jamie Chen" })],
   agents = [makeAgent()],
+  squads = [],
 }: {
   members?: MemberWithUser[];
   agents?: Agent[];
+  squads?: unknown[];
 } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -181,18 +244,21 @@ function renderPage({
   qc.setQueryData(memberListOptions(WS).queryKey, members);
   qc.setQueryData(agentListOptions(WS).queryKey, agents);
   qc.setQueryData(["agent-task-snapshot", WS], snapshot.tasks);
+  qc.setQueryData(squadListOptions(WS).queryKey, squads as never);
   qc.setQueryData(issueDetailOptions(WS, "issue-11").queryKey, {
     id: "issue-11",
     identifier: "MAKE-11",
     title: "Write the launch post",
   } as never);
-  return render(
+  const ui = () => (
     <QueryClientProvider client={qc}>
       <I18nProvider locale="en" resources={TEST_RESOURCES}>
         <OfficePage />
       </I18nProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const result = render(ui());
+  return { ...result, rerenderPage: () => result.rerender(ui()) };
 }
 
 async function openPanel(user: ReturnType<typeof userEvent.setup>) {
@@ -203,6 +269,15 @@ async function openPanel(user: ReturnType<typeof userEvent.setup>) {
 describe("OfficePage", () => {
   beforeEach(() => {
     snapshot.tasks = [];
+    activityState.byAgent = new Map();
+    presenceState.byAgent = new Map([
+      [
+        "agent-1",
+        { availability: "online", workload: "working", runningCount: 1, queuedCount: 0 },
+      ],
+    ]);
+    dispatchState.items = [];
+    apiState.listSquads.mockClear();
     room.peers = [];
     room.joined = true;
     room.error = null;
@@ -210,6 +285,7 @@ describe("OfficePage", () => {
     push.mockClear();
     canvas.visitAgent.mockClear();
     canvas.playEmote.mockClear();
+    canvas.deliverToReception.mockClear();
     openAgentChat.mockClear();
     quickCreate.mockReset();
     draftStore.setAgent.mockClear();
@@ -362,5 +438,78 @@ describe("OfficePage", () => {
     renderPage({ members: [makeMember()] });
 
     expect(screen.getByText("Connecting to the office…")).toBeInTheDocument();
+  });
+
+  it("levels agents, crowns the top contributor and levels the company", () => {
+    activityState.byAgent = new Map([
+      ["agent-1", activityWithCompleted(4)],
+      ["agent-2", activityWithCompleted(9)],
+    ]);
+    renderPage({
+      agents: [makeAgent(), makeAgent({ id: "agent-2", name: "Borealis" })],
+    });
+
+    expect(screen.getByText("Lv 2")).toBeInTheDocument();
+    expect(screen.getByText("Lv 1")).toBeInTheDocument();
+    expect(screen.getByText("Company Lv 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Top contributor this month")).toBeInTheDocument();
+  });
+
+  it("unlocks office decorations once the company levels up", () => {
+    activityState.byAgent = new Map([
+      ["agent-1", activityWithCompleted(10)],
+      ["agent-2", activityWithCompleted(9)],
+    ]);
+    renderPage({
+      agents: [makeAgent(), makeAgent({ id: "agent-2", name: "Borealis" })],
+    });
+
+    expect(screen.getByText("Company Lv 2")).toBeInTheDocument();
+    expect(screen.getByTestId("office-canvas")).toHaveAttribute(
+      "data-company-level",
+      "2",
+    );
+  });
+
+  it("flags an agent stuck on an offline runtime", () => {
+    presenceState.byAgent = new Map([
+      [
+        "agent-1",
+        { availability: "offline", workload: "queued", runningCount: 0, queuedCount: 2 },
+      ],
+    ]);
+    renderPage();
+
+    expect(screen.getByTestId("activity-agent-1")).toHaveAttribute(
+      "data-alert",
+      "true",
+    );
+  });
+
+  it("walks the squad leader to reception when a dispatch is delivered", () => {
+    dispatchState.items = [makeDispatch()];
+    const { rerenderPage } = renderPage({ squads: [SQUAD] });
+
+    dispatchState.items = [makeDispatch({ status: "in_review" })];
+    rerenderPage();
+
+    expect(canvas.deliverToReception).toHaveBeenCalledWith("agent-1");
+  });
+
+  it("raises an alert when a dispatch fails", () => {
+    dispatchState.items = [makeDispatch()];
+    const { rerenderPage } = renderPage({ squads: [SQUAD] });
+
+    dispatchState.items = [makeDispatch({ leaderState: "failed" })];
+    rerenderPage();
+
+    expect(canvas.playEmote).toHaveBeenCalledWith("agent-1", "alert");
+  });
+
+  it("does not replay delivered work when the page opens", () => {
+    dispatchState.items = [makeDispatch({ status: "in_review" })];
+    renderPage({ squads: [SQUAD] });
+
+    expect(canvas.deliverToReception).not.toHaveBeenCalled();
   });
 });

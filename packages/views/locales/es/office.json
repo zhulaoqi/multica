@@ -12,7 +12,10 @@
       "you": "Tú",
       "agents": "Agentes",
       "no_agents": "Aún no hay agentes en este espacio de trabajo.",
-      "member": "Miembro"
+      "member": "Miembro",
+      "level": "Niv. {{level}}",
+      "company_level": "Nivel de empresa {{level}}",
+      "mvp": "Mayor contribución del mes"
     },
     "status": {
       "working": "Trabajando",

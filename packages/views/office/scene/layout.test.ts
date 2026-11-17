@@ -151,3 +151,40 @@ it("leaves no isolated furniture island", () => {
     if (station.key !== "door") expect(path.length).toBeGreaterThan(0);
   }
 });
+
+describe("decoration unlocks", () => {
+  const furnitureIds = (layout: OfficeLayout) =>
+    layout.furniture.map((item) => item.id);
+
+  it("starts a new company with no bonus furniture", () => {
+    const fresh = buildOfficeLayout();
+    expect(furnitureIds(fresh).some((id) => id.startsWith("unlock-"))).toBe(false);
+    expect(isWalkableTile(fresh, 35, 31)).toBe(true);
+  });
+
+  it("adds the level 2 plant and makes it solid", () => {
+    const level2 = buildOfficeLayout(2);
+    expect(furnitureIds(level2)).toContain("unlock-plant");
+    expect(furnitureIds(level2)).not.toContain("unlock-poster");
+    expect(isWalkableTile(level2, 35, 31)).toBe(false);
+  });
+
+  it("hangs the level 3 poster without blocking the floor", () => {
+    const level3 = buildOfficeLayout(3);
+    expect(furnitureIds(level3)).toContain("unlock-poster");
+    expect(furnitureIds(level3)).not.toContain("unlock-shelf");
+    expect(isWalkableTile(level3, 48, 13)).toBe(true);
+  });
+
+  it("adds every decoration by level 4 without sealing a station off", () => {
+    const max = buildOfficeLayout(4);
+    for (const id of ["unlock-plant", "unlock-poster", "unlock-shelf"]) {
+      expect(furnitureIds(max)).toContain(id);
+    }
+    expect(isWalkableTile(max, 12, 31)).toBe(false);
+    for (const station of max.stations) {
+      if (station.key === "door") continue;
+      expect(findPath(max, max.door, station).length).toBeGreaterThan(0);
+    }
+  });
+});

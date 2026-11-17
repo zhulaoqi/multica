@@ -57,6 +57,12 @@ const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", 
 
 export type { OfficeAgentView };
 
+/** Company levels are 1-based; anything unusable falls back to a new company. */
+function normalizeCompanyLevel(level: number | undefined): number {
+  if (!level || !Number.isFinite(level)) return 1;
+  return Math.max(1, Math.floor(level));
+}
+
 export interface OfficePeerView extends OfficePeer {
   /** Display name resolved from the member list. */
   name: string;
@@ -72,6 +78,8 @@ export interface OfficeSceneOptions {
   roomNames: Record<RoomId, string>;
   /** Shown on the sign behind the reception desk. */
   companyName: string;
+  /** Company level; decorations unlock as it grows. Defaults to 1. */
+  companyLevel?: number;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent and wants to talk to it. */
@@ -114,10 +122,12 @@ interface PeerAvatar {
 export class OfficeScene {
   private readonly app: Application;
   private readonly pixi: typeof import("pixi.js");
-  private readonly layout: OfficeLayout;
+  /** Replaced when the company levels up and unlocks more furniture. */
+  private layout: OfficeLayout;
   private readonly camera: Container;
   private readonly world: Container;
-  private readonly room: RoomView;
+  private room: RoomView;
+  private companyLevel: number;
   private readonly local: LocalAvatar;
   private readonly peers = new Map<string, PeerAvatar>();
   private readonly receptionists: CharacterView[] = [];
@@ -150,6 +160,7 @@ export class OfficeScene {
     this.world = world;
     this.room = room;
     this.layout = layout;
+    this.companyLevel = normalizeCompanyLevel(options.companyLevel);
     this.onLocalMove = options.onLocalMove;
     this.onAgentActivate = options.onAgentActivate;
     this.onFocusAgentChange = options.onFocusAgentChange;
@@ -207,7 +218,7 @@ export class OfficeScene {
     app.stage.addChild(camera);
 
     await loadOfficeTextures(pixi);
-    const layout = buildOfficeLayout();
+    const layout = buildOfficeLayout(normalizeCompanyLevel(options.companyLevel));
     const room = buildRoom(pixi, layout);
     room.floor.zIndex = -1000;
     world.addChild(room.floor);
@@ -261,6 +272,33 @@ export class OfficeScene {
   setAgents(agents: OfficeAgentView[]) {
     if (this.destroyed) return;
     this.agents.setAgents(agents);
+  }
+
+  /**
+   * Levels unlock office upgrades. Rebuilds the room in place: the player,
+   * peers and agents stay where they are, but new furniture becomes solid and
+   * the agents replan any walk in flight around it.
+   */
+  setCompanyLevel(companyLevel: number) {
+    if (this.destroyed) return;
+    const level = normalizeCompanyLevel(companyLevel);
+    if (level === this.companyLevel) return;
+    this.companyLevel = level;
+
+    const layout = buildOfficeLayout(level);
+    this.layout = layout;
+    this.agents.setLayout(layout);
+
+    const room = buildRoom(this.pixi, layout);
+    room.floor.zIndex = -1000;
+    this.world.removeChild(this.room.floor);
+    for (const prop of this.room.props) this.world.removeChild(prop);
+    this.room.floor.destroy({ children: true });
+    for (const prop of this.room.props) prop.destroy({ children: true });
+    this.world.addChild(room.floor);
+    for (const prop of room.props) this.world.addChild(prop);
+    this.room = room;
+    this.agents.setScreens(room.screens);
   }
 
   /** The wrapper resized; keep the same world area in view. */
@@ -322,6 +360,12 @@ export class OfficeScene {
   playEmote(agentId: string, kind: BubbleKind) {
     if (this.destroyed) return;
     this.agents.playEmote(agentId, kind, performance.now());
+  }
+
+  /** Walks the agent to the front desk to hand over a finished result. */
+  deliverToReception(agentId: string) {
+    if (this.destroyed) return;
+    this.agents.deliverToReception(agentId);
   }
 
   destroy() {

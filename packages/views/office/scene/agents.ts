@@ -57,6 +57,10 @@ const TALK_MS_MIN = 3_800;
 const TALK_MS_SPREAD = 2_600;
 const BUBBLE_MS_MIN = 1_300;
 const BUBBLE_MS_SPREAD = 900;
+/** Front-desk station where finished work is handed over. */
+const RECEPTION_STATION_KEY = "reception";
+/** Time spent handing the paper over before walking back. */
+const DELIVER_MS = 1_400;
 
 export interface OfficeAgentView {
   id: string;
@@ -64,6 +68,8 @@ export interface OfficeAgentView {
   status: AgentDeskStatus;
   /** What the agent is doing right now, shown in a bubble over its head. */
   activity?: string | null;
+  /** Waiting on a runtime that is offline; the head bubble shows an alert. */
+  alert?: boolean;
 }
 
 /** A human avatar the agents can react to (the local player and peers). */
@@ -84,11 +90,22 @@ interface VisitState {
   nextBubbleAt: number;
 }
 
+/**
+ * A paper run to the front desk, for work the agent just delivered. It sits
+ * above the routine like a visit: the routine resumes after the hand-over.
+ */
+interface ErrandState {
+  phase: "walk" | "deliver" | "return";
+  until: number;
+}
+
 interface Avatar {
   id: string;
   view: CharacterView;
   label: PixiText;
   status: AgentDeskStatus;
+  /** Stuck on an offline runtime; keeps an alert balloon up. */
+  alert: boolean;
   home: Station;
   env: RoutineEnv;
   brain: Behavior;
@@ -107,9 +124,13 @@ interface Avatar {
   /** Wall clock at which the walk-in begins; null while unassigned. */
   spawnAt: number | null;
   hidden: boolean;
+  /** Position in the desk list, used to rebind monitors after a room rebuild. */
+  deskIndex: number;
   screen: DeskScreen | null;
   /** Colleague this agent is walking over to, when it is the visitor. */
   visit: VisitState | null;
+  /** Delivery run to the reception desk, when one is in progress. */
+  errand: ErrandState | null;
   /** Colleague standing right here talking to it, when it is the host. */
   chatPartnerId: string | null;
   /** Earliest wall clock at which this agent will start a social visit. */
@@ -129,7 +150,8 @@ export interface OfficeAgentsOptions {
 
 export class OfficeAgents {
   private readonly pixi: typeof import("pixi.js");
-  private readonly layout: OfficeLayout;
+  /** Swapped when the company levels up and the floor plan gains furniture. */
+  private layout: OfficeLayout;
   private readonly world: Container;
   private readonly createLabel: (text: string) => PixiText;
   private readonly onAgentActivate: (agentId: string) => void;
@@ -137,7 +159,7 @@ export class OfficeAgents {
   private readonly homes: Station[];
   private readonly meetingSeats: Station[];
   private readonly reservations: Reservations;
-  private readonly screens: DeskScreen[];
+  private screens: DeskScreen[];
   private readonly avatars = new Map<string, Avatar>();
   private spawnQueue = 0;
   private engagedId: string | null = null;
@@ -171,6 +193,25 @@ export class OfficeAgents {
     this.reservations = new Reservations(this.stations);
   }
 
+  /**
+   * The floor plan changed, e.g. a decoration unlock added obstacles. Paths in
+   * flight are dropped and replanned against the new obstacles.
+   */
+  setLayout(layout: OfficeLayout) {
+    this.layout = layout;
+    for (const avatar of this.avatars.values()) {
+      avatar.path = [];
+    }
+  }
+
+  /** The room was rebuilt, e.g. for a decoration unlock; rebind the monitors. */
+  setScreens(screens: DeskScreen[]) {
+    this.screens = screens;
+    for (const avatar of this.avatars.values()) {
+      avatar.screen = screens[avatar.deskIndex] ?? null;
+    }
+  }
+
   setAgents(agents: OfficeAgentView[]) {
     const present = new Set<string>();
     agents.forEach((agent, index) => {
@@ -181,10 +222,12 @@ export class OfficeAgents {
       if (existing) {
         if (existing.label.text !== agent.name) existing.label.text = agent.name;
         existing.view.setCaption(agent.activity ?? null);
+        existing.alert = agent.alert ?? false;
         if (existing.status !== agent.status) {
           const wasOffline = existing.status === "offline";
           existing.status = agent.status;
           existing.view.setStatus(agent.status);
+          if (agent.status === "offline") this.cancelErrand(existing);
           // Presence flickers constantly while an agent works. Only a
           // departure is urgent; any other change waits for the current
           // routine (and any errand on top of it) to finish, so the agent
@@ -223,6 +266,30 @@ export class OfficeAgents {
     this.engagedId = agentId;
     const next = agentId ? this.avatars.get(agentId) : null;
     if (next) this.cancelSocial(next);
+  }
+
+  /**
+   * Sends an agent to the front desk to hand over a finished result: walks
+   * there holding a paper, shows a check, then returns to the desk it came
+   * from and resumes whatever it was doing.
+   */
+  deliverToReception(agentId: string) {
+    const avatar = this.avatars.get(agentId);
+    if (!avatar || !this.isVisible(avatar)) return;
+    if (avatar.id === this.engagedId || avatar.status === "offline") return;
+    const desk = this.stationOf(RECEPTION_STATION_KEY);
+    if (!desk) return;
+    this.cancelSocial(avatar, false);
+    avatar.brain.suspend();
+    avatar.goalKey = "";
+    avatar.emoteKind = null;
+    avatar.emoteUntil = 0;
+    avatar.errand = { phase: "walk", until: 0 };
+    avatar.path = findPath(
+      this.layout,
+      { x: avatar.x, y: avatar.y },
+      { x: desk.x, y: desk.y },
+    );
   }
 
   /** Visible agents, in world space, for proximity checks in the scene. */
@@ -265,7 +332,9 @@ export class OfficeAgents {
         // it is, face the player, and hand it back afterwards.
         this.cancelSocial(avatar);
         avatar.brain.suspend();
-        avatar.path = [];
+        // A delivery keeps its route: the player is just standing in it, and
+        // the paper run resumes once they walk away.
+        if (!avatar.errand) avatar.path = [];
         avatar.goalKey = "";
         view.setWalking(false);
         view.setPose("stand");
@@ -277,6 +346,14 @@ export class OfficeAgents {
         }
         avatar.chatUntil = nowMs + 400;
         view.setProp(avatar.brain.state().prop);
+      } else if (avatar.errand) {
+        // A delivery run outranks social visits: the paper gets to the desk
+        // before anyone starts chatting. The suspended routine resumes after.
+        avatar.brain.suspend();
+        moving = this.stepErrand(avatar, dtSeconds, nowMs);
+        view.setWalking(moving);
+        view.setPose("stand");
+        view.setProp(avatar.errand?.phase === "return" ? "none" : "paper");
       } else if (avatar.visit || avatar.chatPartnerId) {
         // Walking over to a colleague, chatting, or walking back. The
         // suspended routine resumes seconds later, mid-burst.
@@ -394,6 +471,7 @@ export class OfficeAgents {
       view,
       label,
       status: agent.status,
+      alert: agent.alert ?? false,
       home,
       env,
       brain,
@@ -409,8 +487,10 @@ export class OfficeAgents {
       active: false,
       spawnAt: null,
       hidden: false,
+      deskIndex: index,
       screen: this.desksFor(index),
       visit: null,
+      errand: null,
       chatPartnerId: null,
       nextVisitAt: 0,
       nextBubbleAt: 0,
@@ -640,6 +720,51 @@ export class OfficeAgents {
   }
 
   /**
+   * One frame of a delivery run: walk to the desk, hold the hand-over, walk
+   * home. Returns whether the avatar is moving this frame.
+   */
+  private stepErrand(avatar: Avatar, dtSeconds: number, nowMs: number): boolean {
+    const errand = avatar.errand;
+    if (!errand) return false;
+
+    if (errand.phase === "walk") {
+      const moving = this.advanceAlong(avatar, dtSeconds);
+      if (moving || avatar.path.length > 0) return moving;
+      errand.phase = "deliver";
+      errand.until = nowMs + DELIVER_MS;
+      const desk = this.stationOf(RECEPTION_STATION_KEY);
+      if (desk) avatar.view.setDir(desk.dir);
+      avatar.emoteKind = "check";
+      avatar.emoteUntil = errand.until;
+      return false;
+    }
+
+    if (errand.phase === "deliver") {
+      if (nowMs < errand.until) return false;
+      errand.phase = "return";
+      avatar.path = findPath(
+        this.layout,
+        { x: avatar.x, y: avatar.y },
+        { x: avatar.home.x, y: avatar.home.y },
+      );
+      return false;
+    }
+
+    const moving = this.advanceAlong(avatar, dtSeconds);
+    if (moving || avatar.path.length > 0) return moving;
+    avatar.errand = null;
+    avatar.brain.resume();
+    return false;
+  }
+
+  /** Drops a delivery run, e.g. when the agent is engaged or goes offline. */
+  private cancelErrand(avatar: Avatar) {
+    if (!avatar.errand) return;
+    avatar.errand = null;
+    avatar.path = [];
+  }
+
+  /**
    * Occasionally picks two agents at their desks and sends one over to chat.
    * Conversations are coordinated as a pair so both turn toward each other and
    * neither restarts its current task.
@@ -759,6 +884,9 @@ export class OfficeAgents {
       return null;
     }
     if (avatar.id === this.engagedId) return "chat";
+    // Stuck on an offline runtime: the alert keeps pointing at the agent
+    // until the queue clears, which is what the Team panel flags too.
+    if (avatar.alert) return "alert";
     const state = avatar.brain.state();
     if (state.bubble) return state.bubble;
     if (nowMs < avatar.chatUntil) return "chat";

@@ -11,7 +11,10 @@
       "agents": "エージェント",
       "no_agents": "このワークスペースにはまだエージェントがいません。",
       "member": "メンバー",
-      "count_other": "{{count}} 人"
+      "count_other": "{{count}} 人",
+      "level": "Lv {{level}}",
+      "company_level": "会社レベル {{level}}",
+      "mvp": "今月のベスト貢献者"
     },
     "status": {
       "working": "作業中",

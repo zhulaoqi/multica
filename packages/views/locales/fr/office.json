@@ -12,7 +12,10 @@
       "you": "Vous",
       "agents": "Agents",
       "no_agents": "Aucun agent dans cet espace de travail.",
-      "member": "Membre"
+      "member": "Membre",
+      "level": "Niv. {{level}}",
+      "company_level": "Niveau de l’entreprise {{level}}",
+      "mvp": "Meilleure contribution du mois"
     },
     "status": {
       "working": "En cours",

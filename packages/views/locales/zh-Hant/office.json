@@ -11,7 +11,10 @@
       "agents": "智能體",
       "no_agents": "這個工作區還沒有智能體。",
       "member": "成員",
-      "count_other": "{{count}} 人"
+      "count_other": "{{count}} 人",
+      "level": "Lv {{level}}",
+      "company_level": "公司等級 {{level}}",
+      "mvp": "本月最佳貢獻者"
     },
     "status": {
       "working": "工作中",

@@ -356,6 +356,41 @@ const FURNITURE: Furniture[] = [
   { id: "print-plant", kind: "plant", rect: { x: 52, y: 31, w: 1, h: 1 }, blocks: true },
 ];
 
+/**
+ * Office upgrades the company earns as it levels up. The scene rebuilds its
+ * furniture when the company level changes, so these also join the obstacle
+ * set and agents path around them like any other piece of the office.
+ */
+const DECORATIONS: { level: number; item: Furniture }[] = [
+  {
+    level: 2,
+    item: {
+      id: "unlock-plant",
+      kind: "plant",
+      rect: { x: 35, y: 31, w: 1, h: 1 },
+      blocks: true,
+    },
+  },
+  {
+    level: 3,
+    item: {
+      id: "unlock-poster",
+      kind: "poster",
+      rect: { x: 48, y: 13, w: 2, h: 1 },
+      blocks: false,
+    },
+  },
+  {
+    level: 4,
+    item: {
+      id: "unlock-shelf",
+      kind: "bookshelf",
+      rect: { x: 12, y: 31, w: 2, h: 1 },
+      blocks: true,
+    },
+  },
+];
+
 function isBlockedTile(layout: OfficeLayout, tx: number, ty: number): boolean {
   return layout.obstacles.some(
     (rect) => tx >= rect.x && tx < rect.x + rect.w && ty >= rect.y && ty < rect.y + rect.h,
@@ -368,10 +403,18 @@ export function isWalkableTile(layout: OfficeLayout, tx: number, ty: number): bo
   return !isBlockedTile(layout, tx, ty);
 }
 
-export function buildOfficeLayout(): OfficeLayout {
+/** Level-gated decorations the company has unlocked, lowest level first. */
+export function unlockedDecorations(companyLevel: number): Furniture[] {
+  return DECORATIONS.filter((entry) => companyLevel >= entry.level).map(
+    (entry) => entry.item,
+  );
+}
+
+export function buildOfficeLayout(companyLevel = 1): OfficeLayout {
+  const furniture = [...FURNITURE, ...unlockedDecorations(companyLevel)];
   const obstacles = [
     ...WALLS,
-    ...FURNITURE.filter((item) => item.blocks).map((item) => item.rect),
+    ...furniture.filter((item) => item.blocks).map((item) => item.rect),
   ];
 
   return {
@@ -382,7 +425,7 @@ export function buildOfficeLayout(): OfficeLayout {
       dir: "left" as OfficeDir,
     })),
     rooms: ROOMS,
-    furniture: FURNITURE,
+    furniture,
     walls: WALLS,
     doors: DOORS,
     stations: STATIONS,

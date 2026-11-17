@@ -11,7 +11,10 @@
       "agents": "에이전트",
       "no_agents": "이 워크스페이스에는 아직 에이전트가 없습니다.",
       "member": "멤버",
-      "count_other": "{{count}}명"
+      "count_other": "{{count}}명",
+      "level": "Lv {{level}}",
+      "company_level": "회사 레벨 {{level}}",
+      "mvp": "이번 달 최고 기여자"
     },
     "status": {
       "working": "작업 중",

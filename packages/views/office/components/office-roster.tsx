@@ -1,6 +1,7 @@
 "use client";
 
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
+import { Crown } from "@multica/ui/icons";
 import { useT } from "../../i18n";
 import type { AgentDeskStatus } from "../scene/characters";
 import { AgentStatusBadge, initials } from "./agent-status";
@@ -15,16 +16,28 @@ export interface OfficeRosterAgent {
   id: string;
   name: string;
   status: AgentDeskStatus;
+  /** Office level from the last 30 days of completed work. */
+  level: number;
+  /** Highest completion count on the team this window. */
+  isMvp: boolean;
 }
 
 export interface OfficeRosterProps {
   members: OfficeRosterMember[];
   agents: OfficeRosterAgent[];
+  /** Workspace level; the office sign carries it as a company milestone. */
+  companyLevel: number;
   joined: boolean;
   onAgentSelect: (agentId: string) => void;
 }
 
-export function OfficeRoster({ members, agents, joined, onAgentSelect }: OfficeRosterProps) {
+export function OfficeRoster({
+  members,
+  agents,
+  companyLevel,
+  joined,
+  onAgentSelect,
+}: OfficeRosterProps) {
   const { t } = useT("office");
 
   return (
@@ -67,9 +80,14 @@ export function OfficeRoster({ members, agents, joined, onAgentSelect }: OfficeR
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
-          {t(($) => $.page.roster.agents)}
-        </h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+            {t(($) => $.page.roster.agents)}
+          </h2>
+          <span className="text-caption tabular-nums text-muted-foreground">
+            {t(($) => $.page.roster.company_level, { level: companyLevel })}
+          </span>
+        </div>
         {agents.length === 0 ? (
           <p className="text-body text-muted-foreground">
             {t(($) => $.page.roster.no_agents)}
@@ -90,6 +108,15 @@ export function OfficeRoster({ members, agents, joined, onAgentSelect }: OfficeR
                     size="sm"
                   />
                   <span className="min-w-0 flex-1 truncate text-body">{agent.name}</span>
+                  {agent.isMvp && (
+                    <Crown
+                      className="size-3.5 shrink-0 text-warning"
+                      aria-label={t(($) => $.page.roster.mvp)}
+                    />
+                  )}
+                  <span className="shrink-0 text-caption tabular-nums text-muted-foreground">
+                    {t(($) => $.page.roster.level, { level: agent.level })}
+                  </span>
                   <AgentStatusBadge status={agent.status} />
                 </button>
               </li>

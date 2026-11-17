@@ -23,6 +23,8 @@ export interface OfficeCanvasProps {
   localName: string;
   roomNames: Record<RoomId, string>;
   companyName: string;
+  /** Company level; higher levels unlock office decorations. */
+  companyLevel: number;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent (walked over or clicked it). */
@@ -38,6 +40,8 @@ export interface OfficeCanvasProps {
 export interface OfficeCanvasHandle {
   visitAgent: (agentId: string) => void;
   playEmote: (agentId: string, kind: BubbleKind) => void;
+  /** Paper delivery run to the front desk, for a freshly delivered result. */
+  deliverToReception: (agentId: string) => void;
 }
 
 /**
@@ -55,6 +59,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       localName,
       roomNames,
       companyName,
+      companyLevel,
       spawn,
       onLocalMove,
       onAgentActivate,
@@ -77,6 +82,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     roomNamesRef.current = roomNames;
     const companyNameRef = useRef(companyName);
     companyNameRef.current = companyName;
+    const companyLevelRef = useRef(companyLevel);
+    companyLevelRef.current = companyLevel;
 
     const [ready, setReady] = useState(false);
 
@@ -85,6 +92,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       () => ({
         visitAgent: (agentId) => sceneRef.current?.activateAgent(agentId),
         playEmote: (agentId, kind) => sceneRef.current?.playEmote(agentId, kind),
+        deliverToReception: (agentId) =>
+          sceneRef.current?.deliverToReception(agentId),
       }),
       [],
     );
@@ -109,6 +118,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
           localName: nameRef.current,
           roomNames: roomNamesRef.current,
           companyName: companyNameRef.current,
+          companyLevel: companyLevelRef.current,
           spawn: spawnRef.current,
           onLocalMove: (position) => callbacks.current.onLocalMove(position),
           onAgentActivate: (agentId) =>
@@ -158,6 +168,10 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     useEffect(() => {
       sceneRef.current?.setEngagedAgent(engagedAgentId);
     }, [engagedAgentId, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setCompanyLevel(companyLevel);
+    }, [companyLevel, ready]);
 
     return (
       <div
