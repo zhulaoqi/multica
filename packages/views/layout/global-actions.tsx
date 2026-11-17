@@ -1,11 +1,10 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import { Search, Send, SquarePen } from "@multica/ui/icons";
+import { Search, SquarePen } from "@multica/ui/icons";
 import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
 import { openCreateIssueWithPreference } from "@multica/core/issues/stores";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
-import { useWorkspacePaths } from "@multica/core/paths";
 import { useShortcut } from "@multica/core/shortcuts";
 import { ShortcutKeycaps } from "../common/shortcut-keycaps";
 import { useT } from "../i18n";
@@ -58,41 +57,6 @@ export function NewIssueButton({
           <SquarePen />
           <DraftDot />
         </span>
-      </button>
-    </TooltipHint>
-  );
-}
-
-/** Opens the conversational workbench from anywhere. */
-export function DispatchWorkButton({
-  className,
-  tooltipSide,
-}: {
-  className: string;
-  tooltipSide: TooltipSide;
-}) {
-  const { t } = useT("layout");
-  const p = useWorkspacePaths();
-  const { pathname, push } = useNavigation();
-  const shortcut = useShortcut("dispatchWork");
-  const label = t(($) => $.sidebar.dispatch_work);
-  return (
-    <TooltipHint
-      label={label}
-      shortcut={shortcut ? <ShortcutKeycaps shortcut={shortcut} decorative className="ml-1.5" /> : null}
-      side={tooltipSide}
-    >
-      <button
-        type="button"
-        aria-label={label}
-        data-action="dispatch-work"
-        onClick={() => {
-          const target = p.workbench();
-          if (pathname !== target) push(target);
-        }}
-        className={className}
-      >
-        <Send />
       </button>
     </TooltipHint>
   );

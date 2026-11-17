@@ -2,15 +2,14 @@ import type { ReactNode } from "react";
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithI18n } from "../test/i18n";
-import { DispatchWorkButton, NewIssueButton, SearchButton } from "./global-actions";
+import { NewIssueButton, SearchButton } from "./global-actions";
 
 const state = vi.hoisted(() => ({ pathname: "/acme/inbox", hasDraft: false }));
 const openCreateIssueWithPreference = vi.hoisted(() => vi.fn());
 const setSearchOpen = vi.hoisted(() => vi.fn());
-const push = vi.hoisted(() => vi.fn());
 
 vi.mock("../navigation", () => ({
-  useNavigation: () => ({ pathname: state.pathname, push }),
+  useNavigation: () => ({ pathname: state.pathname }),
 }));
 vi.mock("@multica/core/issues/stores", () => ({ openCreateIssueWithPreference }));
 vi.mock("@multica/core/issues/stores/draft-store", () => ({
@@ -19,9 +18,6 @@ vi.mock("@multica/core/issues/stores/draft-store", () => ({
 }));
 vi.mock("../search/search-store", () => ({
   useSearchStore: { getState: () => ({ setOpen: setSearchOpen }) },
-}));
-vi.mock("@multica/core/paths", () => ({
-  useWorkspacePaths: () => ({ workbench: () => "/acme/workbench" }),
 }));
 vi.mock("@multica/core/shortcuts", () => ({ useShortcut: () => null }));
 vi.mock("@multica/ui/components/common/tooltip-hint", () => ({
@@ -33,7 +29,6 @@ beforeEach(() => {
   state.hasDraft = false;
   openCreateIssueWithPreference.mockClear();
   setSearchOpen.mockClear();
-  push.mockClear();
 });
 
 describe("NewIssueButton", () => {
@@ -54,21 +49,6 @@ describe("NewIssueButton", () => {
     state.hasDraft = true;
     renderWithI18n(<NewIssueButton className="" tooltipSide="bottom" />);
     expect(screen.getByRole("button", { name: /^new issue$/i }).querySelector(".bg-brand")).not.toBeNull();
-  });
-});
-
-describe("DispatchWorkButton", () => {
-  it("opens the workbench", () => {
-    renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Workbench" }));
-    expect(push).toHaveBeenCalledWith("/acme/workbench");
-  });
-
-  it("does not push when the workbench is already open", () => {
-    state.pathname = "/acme/workbench";
-    renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Workbench" }));
-    expect(push).not.toHaveBeenCalled();
   });
 });
 

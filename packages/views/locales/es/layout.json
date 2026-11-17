@@ -52,7 +52,6 @@
     "invitation_decline": "Rechazar",
     "log_out": "Cerrar sesión",
     "new_issue": "Nueva tarea",
-    "dispatch_work": "Centro de trabajo",
     "pinned_label": "Fijados",
     "show_more_pins": "Mostrar {{count}} más…",
     "show_fewer_pins": "Mostrar menos"

@@ -59,7 +59,6 @@
     "invitation_decline": "Decline",
     "log_out": "Log out",
     "new_issue": "New Issue",
-    "dispatch_work": "Workbench",
     "pinned_label": "Pinned",
     "show_more_pins": "Show {{count}} more…",
     "show_fewer_pins": "Show fewer"

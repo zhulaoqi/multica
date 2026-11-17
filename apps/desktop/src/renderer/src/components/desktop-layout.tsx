@@ -15,7 +15,6 @@ import {
   AppRail,
   AppShellProvider,
   CompactNavSheet,
-  DispatchWorkButton,
   GlobalShortcuts,
   NavigationProgress,
   NewIssueButton,
@@ -109,7 +108,6 @@ function MainTopBar({ railMounted }: { railMounted: boolean }) {
           style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
         >
           <NewIssueButton className={TITLE_BAR_ACTION_CLASS} tooltipSide="bottom" />
-          <DispatchWorkButton className={TITLE_BAR_ACTION_CLASS} tooltipSide="bottom" />
           <SearchButton className={TITLE_BAR_ACTION_CLASS} tooltipSide="bottom" />
         </div>
       )}
