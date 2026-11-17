@@ -84,5 +84,7 @@
   "squad_default_name": "{{name}} チーム",
   "squad_issue_counts": "進行中 {{active}} · レビュー待ち {{review}} · ブロック {{blocked}}",
   "squad_limits": "同時 {{wip}} · 1回 {{max}}",
-  "dispatch_work": "仕事を割り当て"
+  "dispatch_work": "仕事を割り当て",
+  "retry": "再試行",
+  "sync_status_unavailable": "Feishu 同期の状態を取得できませんでした。同期は実行できます。"
 }

@@ -107,15 +107,18 @@ beforeEach(() => {
 });
 
 describe("AppRail global actions", () => {
-  it("carries New issue and search by default", () => {
+  it("carries search by default", () => {
     renderRail();
-    expect(screen.getByRole("button", { name: /^new issue$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Search..." })).toBeTruthy();
   });
 
-  it("leaves them to the desktop title bar when turned off", () => {
-    renderRail(undefined, <AppRail globalActions={false} />);
+  it("leaves New issue to the workbench and the title bar", () => {
+    renderRail();
     expect(screen.queryByRole("button", { name: /^new issue$/i })).toBeNull();
+  });
+
+  it("leaves search to the desktop title bar when turned off", () => {
+    renderRail(undefined, <AppRail globalActions={false} />);
     expect(screen.queryByRole("button", { name: "Search..." })).toBeNull();
   });
 });

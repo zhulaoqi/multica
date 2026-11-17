@@ -57,6 +57,146 @@
       "task_error_agent_unavailable": "This agent can't take work right now.",
       "task_error_issue_limit": "This workspace has reached its issue limit."
     },
-    "company_name": "eclicktech"
+    "reception": {
+      "title": "Front desk",
+      "close": "Close",
+      "hint": "Press {{key}} to check in at the front desk",
+      "today": "Today",
+      "today_value_one": "{{count}} task completed",
+      "today_value_other": "{{count}} tasks completed",
+      "company_level": "Company Lv {{level}}",
+      "mvp": "Top: {{name}}",
+      "mvp_empty": "No completions yet",
+      "week": "This week's goal",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "Goal reached",
+      "waiting": "Waiting for sign-off",
+      "waiting_empty": "Nothing is waiting on you.",
+      "stuck_one": "{{count}} agent needs a look",
+      "stuck_other": "{{count}} agents need a look",
+      "unknown_department": "Department",
+      "reason_placeholder": "What needs another pass?",
+      "reason_label": "Reason for sending back",
+      "send_back": "Send back",
+      "accept": "Accept",
+      "reject": "Reject",
+      "cancel": "Cancel",
+      "accept_failed": "Couldn't accept this result. Try again.",
+      "reject_failed": "Couldn't send this back. Try again."
+    },
+    "celebration": {
+      "company_level": "Company Lv {{level}} unlocked!",
+      "company_level_hint": "The office just gained new furniture.",
+      "weekly_goal": "Weekly goal reached",
+      "weekly_goal_hint_one": "{{count}} task completed together this week.",
+      "weekly_goal_hint_other": "{{count}} tasks completed together this week."
+    },
+    "company_name": "eclicktech",
+    "toolbar": {
+      "season": "Season: {{season}}",
+      "emotes": "Emotes",
+      "trophies": "Trophy wall",
+      "minimap_show": "Show minimap",
+      "minimap_hide": "Hide minimap",
+      "photo": "Photo mode",
+      "sound_on": "Turn sound on",
+      "sound_off": "Turn sound off"
+    },
+    "season": {
+      "spring": "Spring",
+      "summer": "Summer",
+      "autumn": "Autumn",
+      "winter": "Winter"
+    },
+    "emotes": {
+      "title": "Emotes",
+      "wave": "Wave",
+      "check": "Nice",
+      "alert": "Need a hand",
+      "coffee": "Coffee"
+    },
+    "photo": {
+      "hint": "The office is yours to frame.",
+      "save": "Save PNG",
+      "saved": "Saved to your downloads.",
+      "exit": "Exit photo mode"
+    },
+    "events": {
+      "cat": "The office cat padded through.",
+      "delivery": "A delivery arrived at the front desk.",
+      "coffee": "Someone brewed a fresh pot.",
+      "plane": "A paper plane sailed across the office.",
+      "phone": "The front desk phone is ringing.",
+      "lights": "The ceiling lights flickered."
+    },
+    "trophies": {
+      "title": "Trophy wall",
+      "close": "Close",
+      "season": "Season",
+      "archived_one": "{{count}} archived",
+      "archived_other": "{{count}} archived",
+      "departments": "Departments",
+      "departments_empty": "No department plaques yet. Staff a department in the org chart.",
+      "items": {
+        "first_delivery": {
+          "name": "First delivery",
+          "hint": "See a dispatch through to done."
+        },
+        "crew": {
+          "name": "Full crew",
+          "hint": "Three active agents in the office."
+        },
+        "company_3": {
+          "name": "Growing office",
+          "hint": "Reach company level 3."
+        },
+        "company_5": {
+          "name": "Big office",
+          "hint": "Reach company level 5."
+        },
+        "weekly_goal": {
+          "name": "Team week",
+          "hint": "Reach a weekly goal together."
+        },
+        "mvp_level_3": {
+          "name": "Star desk",
+          "hint": "A top contributor reaches level 3."
+        },
+        "fifty": {
+          "name": "Fifty landed",
+          "hint": "50 tasks completed in 30 days."
+        },
+        "hundred": {
+          "name": "Century",
+          "hint": "100 tasks completed in 30 days."
+        }
+      }
+    },
+    "coffee": {
+      "title": "Kitchen chat",
+      "close": "Close",
+      "hint": "Press {{key}} for a kitchen chat",
+      "prompts": {
+        "shipped": "What shipped this week that you're proud of?",
+        "blocked": "What's blocking the team right now?",
+        "learned": "What did you learn from the last task?",
+        "next": "What should the team pick up next?",
+        "thanks": "Who deserves a thank-you for their work?"
+      },
+      "stuck": "Blocked right now: {{names}}",
+      "another": "Another question"
+    },
+    "meeting": {
+      "title": "Meeting room",
+      "close": "Close",
+      "hint": "Press {{key}} to read the meeting board",
+      "empty": "The board is clear.",
+      "phases": {
+        "queued": "Queued",
+        "decomposing": "Breaking down",
+        "progress": "In progress",
+        "in_review": "In review"
+      }
+    }
   }
 }

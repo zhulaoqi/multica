@@ -57,6 +57,146 @@
       "task_error_agent_unavailable": "Este agente no puede aceptar trabajo ahora mismo.",
       "task_error_issue_limit": "Este espacio de trabajo alcanzó su límite de tareas."
     },
-    "company_name": "eclicktech"
+    "reception": {
+      "title": "Recepción",
+      "close": "Cerrar",
+      "hint": "Pulsa {{key}} para ver el informe de recepción",
+      "today": "Hoy",
+      "today_value_one": "{{count}} tarea completada",
+      "today_value_other": "{{count}} tareas completadas",
+      "company_level": "Empresa Lv {{level}}",
+      "mvp": "Mejor: {{name}}",
+      "mvp_empty": "Aún no hay tareas completadas",
+      "week": "Objetivo semanal",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "Objetivo alcanzado",
+      "waiting": "Pendiente de aprobación",
+      "waiting_empty": "No hay nada pendiente de tu revisión.",
+      "stuck_one": "{{count}} agente necesita atención",
+      "stuck_other": "{{count}} agentes necesitan atención",
+      "unknown_department": "Departamento",
+      "reason_placeholder": "¿Qué hay que corregir?",
+      "reason_label": "Motivo de la devolución",
+      "send_back": "Devolver",
+      "accept": "Aceptar",
+      "reject": "Rechazar",
+      "cancel": "Cancelar",
+      "accept_failed": "No se pudo aceptar este resultado. Inténtalo de nuevo.",
+      "reject_failed": "No se pudo devolver este resultado. Inténtalo de nuevo."
+    },
+    "celebration": {
+      "company_level": "¡La empresa subió a Lv {{level}}!",
+      "company_level_hint": "La oficina ha ganado muebles nuevos.",
+      "weekly_goal": "Objetivo semanal alcanzado",
+      "weekly_goal_hint_one": "{{count}} tarea completada en equipo esta semana.",
+      "weekly_goal_hint_other": "{{count}} tareas completadas en equipo esta semana."
+    },
+    "company_name": "eclicktech",
+    "toolbar": {
+      "season": "Estación: {{season}}",
+      "emotes": "Emotes",
+      "trophies": "Muro de trofeos",
+      "minimap_show": "Mostrar minimapa",
+      "minimap_hide": "Ocultar minimapa",
+      "photo": "Modo foto",
+      "sound_on": "Activar sonido",
+      "sound_off": "Desactivar sonido"
+    },
+    "season": {
+      "spring": "Primavera",
+      "summer": "Verano",
+      "autumn": "Otoño",
+      "winter": "Invierno"
+    },
+    "emotes": {
+      "title": "Emotes",
+      "wave": "Saludar",
+      "check": "Bien hecho",
+      "alert": "Ayuda",
+      "coffee": "Café"
+    },
+    "photo": {
+      "hint": "El encuadre es tuyo.",
+      "save": "Guardar PNG",
+      "saved": "Guardado en tus descargas.",
+      "exit": "Salir del modo foto"
+    },
+    "events": {
+      "cat": "El gato de la oficina pasó de largo.",
+      "delivery": "Llegó un paquete a recepción.",
+      "coffee": "Alguien preparó café fresco.",
+      "plane": "Un avión de papel cruzó la oficina.",
+      "phone": "Suena el teléfono de recepción.",
+      "lights": "Las luces del techo parpadearon."
+    },
+    "trophies": {
+      "title": "Muro de trofeos",
+      "close": "Cerrar",
+      "season": "Estación",
+      "archived_one": "{{count}} archivado",
+      "archived_other": "{{count}} archivados",
+      "departments": "Departamentos",
+      "departments_empty": "Aún no hay placas de departamento. Asigna agentes a un departamento en el organigrama.",
+      "items": {
+        "first_delivery": {
+          "name": "Primera entrega",
+          "hint": "Lleva una tarea hasta el final."
+        },
+        "crew": {
+          "name": "Equipo completo",
+          "hint": "Tres agentes activos en la oficina."
+        },
+        "company_3": {
+          "name": "Oficina en crecimiento",
+          "hint": "Alcanza el nivel 3 de empresa."
+        },
+        "company_5": {
+          "name": "Oficina grande",
+          "hint": "Alcanza el nivel 5 de empresa."
+        },
+        "weekly_goal": {
+          "name": "Semana en equipo",
+          "hint": "Alcanza un objetivo semanal en equipo."
+        },
+        "mvp_level_3": {
+          "name": "Escritorio estrella",
+          "hint": "Un agente llega al nivel 3."
+        },
+        "fifty": {
+          "name": "Cincuenta",
+          "hint": "50 tareas completadas en 30 días."
+        },
+        "hundred": {
+          "name": "Centenar",
+          "hint": "100 tareas completadas en 30 días."
+        }
+      }
+    },
+    "coffee": {
+      "title": "Charla de cocina",
+      "close": "Cerrar",
+      "hint": "Pulsa {{key}} para charlar en la cocina",
+      "prompts": {
+        "shipped": "¿Qué entregasteis esta semana de lo que estés orgulloso?",
+        "blocked": "¿Qué está bloqueando al equipo ahora?",
+        "learned": "¿Qué aprendiste de la última tarea?",
+        "next": "¿Qué debería tomar el equipo ahora?",
+        "thanks": "¿Quién merece un gracias por su trabajo?"
+      },
+      "stuck": "Bloqueados ahora: {{names}}",
+      "another": "Otra pregunta"
+    },
+    "meeting": {
+      "title": "Sala de reuniones",
+      "close": "Cerrar",
+      "hint": "Pulsa {{key}} para leer el tablón de reunión",
+      "empty": "El tablón está limpio.",
+      "phases": {
+        "queued": "En cola",
+        "decomposing": "Desglosando",
+        "progress": "En curso",
+        "in_review": "En revisión"
+      }
+    }
   }
 }

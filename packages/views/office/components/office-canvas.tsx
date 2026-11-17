@@ -13,9 +13,15 @@ import type { BubbleKind } from "../scene/characters";
 import type { RoomId } from "../scene/layout";
 import {
   OfficeScene,
+  type DeskTrace,
   type OfficeAgentView,
   type OfficePeerView,
+  type OfficePlace,
+  type RoomBadge,
 } from "../scene/office-scene";
+import type { OfficeEventId } from "../game/events";
+import type { PlayerEmoteId } from "../game/emotes";
+import type { SeasonTheme } from "../game/season";
 
 export interface OfficeCanvasProps {
   agents: OfficeAgentView[];
@@ -31,6 +37,20 @@ export interface OfficeCanvasProps {
   onAgentActivate: (agentId: string) => void;
   /** Nearest agent changed, for the interact hint. */
   onFocusAgentChange: (agentId: string | null) => void;
+  /** The player reached a walk-up place, for the matching hint. */
+  onPlaceFocusChange?: (place: OfficePlace | null) => void;
+  /** A cosmetic office beat happened. */
+  onRandomEvent?: (event: OfficeEventId) => void;
+  /** Ambient season for the drifting particles. */
+  season: SeasonTheme;
+  /** Work waiting for sign-off; rendered as a paper stack on the desk. */
+  receptionPapers?: number;
+  /** Mugs and paper left on desks from today's work. */
+  deskTraces?: DeskTrace[];
+  /** Department name and level per room. */
+  roomBadges?: RoomBadge[];
+  /** Whether the corner floor plan is shown. */
+  minimapVisible?: boolean;
   /** Agent whose panel is open; it pauses and faces the player. */
   engagedAgentId: string | null;
   className?: string;
@@ -42,6 +62,15 @@ export interface OfficeCanvasHandle {
   playEmote: (agentId: string, kind: BubbleKind) => void;
   /** Paper delivery run to the front desk, for a freshly delivered result. */
   deliverToReception: (agentId: string) => void;
+  /** Confetti plus a check from every agent. */
+  celebrate: () => void;
+  /** Player emote above the local avatar. */
+  playLocalEmote: (kind: PlayerEmoteId) => void;
+  /** Stamped folder, confetti, and a check from every agent. */
+  archiveRitual: () => void;
+  setMinimapVisible: (visible: boolean) => void;
+  /** PNG data URL of the current view. */
+  capturePhoto: () => string | null;
 }
 
 /**
@@ -64,6 +93,13 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       onLocalMove,
       onAgentActivate,
       onFocusAgentChange,
+      onPlaceFocusChange,
+      onRandomEvent,
+      season,
+      receptionPapers = 0,
+      deskTraces = [],
+      roomBadges = [],
+      minimapVisible = false,
       engagedAgentId,
       className,
     },
@@ -72,8 +108,20 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     const wrapperRef = useRef<HTMLDivElement>(null);
     const hostRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<OfficeScene | null>(null);
-    const callbacks = useRef({ onLocalMove, onAgentActivate, onFocusAgentChange });
-    callbacks.current = { onLocalMove, onAgentActivate, onFocusAgentChange };
+    const callbacks = useRef({
+      onLocalMove,
+      onAgentActivate,
+      onFocusAgentChange,
+      onPlaceFocusChange,
+      onRandomEvent,
+    });
+    callbacks.current = {
+      onLocalMove,
+      onAgentActivate,
+      onFocusAgentChange,
+      onPlaceFocusChange,
+      onRandomEvent,
+    };
     const spawnRef = useRef(spawn);
     spawnRef.current = spawn;
     const nameRef = useRef(localName);
@@ -84,6 +132,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     companyNameRef.current = companyName;
     const companyLevelRef = useRef(companyLevel);
     companyLevelRef.current = companyLevel;
+    const seasonRef = useRef(season);
+    seasonRef.current = season;
 
     const [ready, setReady] = useState(false);
 
@@ -94,6 +144,11 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
         playEmote: (agentId, kind) => sceneRef.current?.playEmote(agentId, kind),
         deliverToReception: (agentId) =>
           sceneRef.current?.deliverToReception(agentId),
+        celebrate: () => sceneRef.current?.celebrate(),
+        playLocalEmote: (kind) => sceneRef.current?.playLocalEmote(kind),
+        archiveRitual: () => sceneRef.current?.archiveRitual(),
+        setMinimapVisible: (visible) => sceneRef.current?.setMinimapVisible(visible),
+        capturePhoto: () => sceneRef.current?.capturePhoto() ?? null,
       }),
       [],
     );
@@ -119,12 +174,16 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
           roomNames: roomNamesRef.current,
           companyName: companyNameRef.current,
           companyLevel: companyLevelRef.current,
+          season: seasonRef.current,
           spawn: spawnRef.current,
           onLocalMove: (position) => callbacks.current.onLocalMove(position),
           onAgentActivate: (agentId) =>
             callbacks.current.onAgentActivate(agentId),
           onFocusAgentChange: (agentId) =>
             callbacks.current.onFocusAgentChange(agentId),
+          onPlaceFocusChange: (place) =>
+            callbacks.current.onPlaceFocusChange?.(place),
+          onRandomEvent: (event) => callbacks.current.onRandomEvent?.(event),
         });
         if (cancelled) {
           created.destroy();
@@ -172,6 +231,26 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     useEffect(() => {
       sceneRef.current?.setCompanyLevel(companyLevel);
     }, [companyLevel, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setReceptionPapers(receptionPapers);
+    }, [receptionPapers, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setDeskTraces(deskTraces);
+    }, [deskTraces, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setRoomBadges(roomBadges);
+    }, [roomBadges, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setSeason(season);
+    }, [season, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setMinimapVisible(minimapVisible);
+    }, [minimapVisible, ready]);
 
     return (
       <div

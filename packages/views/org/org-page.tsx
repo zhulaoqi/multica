@@ -109,10 +109,6 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
   );
 }
 
-function canSyncDirectory(role: string | undefined): boolean {
-  return role === "owner" || role === "admin";
-}
-
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
@@ -136,23 +132,24 @@ export function OrgPage() {
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   const forest = buildOrgForest(data);
+  // The tree response owns `can_manage`, but it is unavailable when the tree
+  // request fails. Fall back to the caller's workspace role so an admin can
+  // still reach the sync action on a degraded page.
+  const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
+  const canManageOrg =
+    data.can_manage || myRole === "owner" || myRole === "admin";
   // Landing on the caller's own department keeps plain members oriented; an
   // explicit click (including the unassigned pseudo-node) always wins.
   const activeSelected =
     selected ||
     data.my_unit_id ||
-    (!data.can_manage && forest.unassignedSquads.length > 0 ? NO_UNIT : "");
+    (!canManageOrg && forest.unassignedSquads.length > 0 ? NO_UNIT : "");
   const selectedNode = findNode(forest.roots, activeSelected);
   const allMembers = (members.data ?? []).map((member) => ({
     user_id: member.user_id,
     label: member.name || member.email,
   }));
-  // The server's can_manage flag is the authority: workspace owners, workspace
-  // admins, and the operator account. The member-role check covers the same
-  // people when their row is in the roster. Department leads stay out.
-  const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
-  const maySyncDirectory = data.can_manage || canSyncDirectory(myRole);
-  const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
+  const canAnyManage = canManageOrg || data.units.some((unit) => unit.can_manage);
   const moveChoices = unitChoices.filter((choice) => choice.manage);
   // Unassigned people keep their twins on their own row; those agents leave
   // the unassigned agent list.
@@ -164,8 +161,11 @@ export function OrgPage() {
   const unassignedTwinIds = new Set([...unassignedTwins.values()].map((twin) => twin.id));
   const unassignedAgents = forest.unassignedAgents.filter((agent) => !unassignedTwinIds.has(agent.id));
   const lastRun = syncStatus.data?.last_run ?? null;
+  // When the tree request fails the page keeps the sync action. The status
+  // query can fail for the same reason, so only an explicit "not configured"
+  // disables it; otherwise let the admin try and see the server's own error.
+  const syncConfigured = syncStatus.data?.configured;
   const runSync = async () => {
-    if (!maySyncDirectory) return;
     setFailure("");
     setSyncing(true);
     try {
@@ -187,15 +187,23 @@ export function OrgPage() {
     }
   };
 
-  if (tree.isError) {
-    return <p className="p-6 text-body text-muted-foreground">{t(($) => $.load_failed)}</p>;
-  }
-
   return (
     <div className="flex h-full min-h-0">
       <aside className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto border-r p-3">
         <h1 className="px-2 text-heading">{t(($) => $.title)}</h1>
-        {data.can_manage ? (
+        {tree.isError ? (
+          <div className="mx-1 flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/10 p-2">
+            <p className="text-caption text-warning">{t(($) => $.load_failed)}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void tree.refetch()}
+            >
+              {t(($) => $.retry)}
+            </Button>
+          </div>
+        ) : null}
+        {canManageOrg ? (
           <div className="flex items-center gap-2 px-1">
             <Input
               value={rootName}
@@ -241,23 +249,25 @@ export function OrgPage() {
         ) : null}
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-6">
-        {maySyncDirectory ? (
+        {canManageOrg ? (
           <div className="mx-auto mb-4 flex max-w-3xl flex-wrap items-center gap-3">
-            <Button size="sm" disabled={!syncStatus.data?.configured || syncing} onClick={() => void runSync()}>
+            <Button size="sm" disabled={syncConfigured === false || syncing} onClick={() => void runSync()}>
               {syncing ? t(($) => $.syncing) : t(($) => $.sync_from_feishu)}
             </Button>
             <span className="text-caption text-muted-foreground">
-              {syncStatus.data?.configured
+              {syncConfigured
                 ? lastRun?.synced_at
                   ? t(($) => $.last_synced, {
                       time: new Date(lastRun.synced_at).toLocaleString(),
                     })
                   : t(($) => $.never_synced)
-                : t(($) => $.sync_not_configured)}
+                : syncConfigured === false
+                  ? t(($) => $.sync_not_configured)
+                  : t(($) => $.sync_status_unavailable)}
             </span>
           </div>
         ) : null}
-        {maySyncDirectory && lastRun ? (
+        {canManageOrg && lastRun ? (
           <div className="mx-auto max-w-3xl">
             <SyncReport report={lastRun} />
           </div>
@@ -288,7 +298,7 @@ export function OrgPage() {
                     key={member.user_id}
                     member={member}
                     canMove={moveChoices.length > 0}
-                    canConfigureTwin={data.can_manage}
+                    canConfigureTwin={canManageOrg}
                     choices={moveChoices}
                     twin={unassignedTwins.get(member.user_id) ?? null}
                     onMove={(unitId) =>

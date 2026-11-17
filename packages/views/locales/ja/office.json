@@ -54,6 +54,142 @@
       "task_error_agent_unavailable": "このエージェントは現在タスクを受け付けられません。",
       "task_error_issue_limit": "このワークスペースはタスク数の上限に達しています。"
     },
-    "company_name": "eclicktech"
+    "reception": {
+      "title": "受付",
+      "close": "閉じる",
+      "hint": "{{key}} キーで受付の日報を開く",
+      "today": "今日",
+      "today_value_other": "{{count}} 件完了",
+      "company_level": "会社 Lv {{level}}",
+      "mvp": "トップ：{{name}}",
+      "mvp_empty": "完了実績はまだありません",
+      "week": "今週の目標",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "目標達成",
+      "waiting": "承認待ち",
+      "waiting_empty": "承認待ちの成果はありません。",
+      "stuck_other": "{{count}} 体のエージェントに対応が必要です",
+      "unknown_department": "部門",
+      "reason_placeholder": "どこを直すべきですか？",
+      "reason_label": "差し戻しの理由",
+      "send_back": "差し戻す",
+      "accept": "承認",
+      "reject": "却下",
+      "cancel": "キャンセル",
+      "accept_failed": "承認できませんでした。もう一度お試しください。",
+      "reject_failed": "差し戻せませんでした。もう一度お試しください。"
+    },
+    "celebration": {
+      "company_level": "会社が Lv {{level}} になりました！",
+      "company_level_hint": "オフィスに新しい家具が追加されました。",
+      "weekly_goal": "今週の目標を達成",
+      "weekly_goal_hint_other": "今週は {{count}} 件のタスクを完了しました。"
+    },
+    "company_name": "eclicktech",
+    "toolbar": {
+      "season": "季節：{{season}}",
+      "emotes": "エモート",
+      "trophies": "トロフィーウォール",
+      "minimap_show": "ミニマップを表示",
+      "minimap_hide": "ミニマップを隠す",
+      "photo": "フォトモード",
+      "sound_on": "サウンドをオン",
+      "sound_off": "サウンドをオフ"
+    },
+    "season": {
+      "spring": "春",
+      "summer": "夏",
+      "autumn": "秋",
+      "winter": "冬"
+    },
+    "emotes": {
+      "title": "エモート",
+      "wave": "手を振る",
+      "check": "いいね",
+      "alert": "助けて",
+      "coffee": "コーヒー"
+    },
+    "photo": {
+      "hint": "自由に構図を決めてください。",
+      "save": "PNG で保存",
+      "saved": "ダウンロードに保存しました。",
+      "exit": "フォトモードを終了"
+    },
+    "events": {
+      "cat": "オフィスの猫が通りかかりました。",
+      "delivery": "受付に荷物が届きました。",
+      "coffee": "誰かがコーヒーを淹れました。",
+      "plane": "紙飛行機がオフィスを横切りました。",
+      "phone": "受付の電話が鳴っています。",
+      "lights": "天井の照明がちらつきました。"
+    },
+    "trophies": {
+      "title": "トロフィーウォール",
+      "close": "閉じる",
+      "season": "季節",
+      "archived_other": "{{count}} 件アーカイブ",
+      "departments": "部門",
+      "departments_empty": "部門の銘板はまだありません。組織図で部門にエージェントを配置してください。",
+      "items": {
+        "first_delivery": {
+          "name": "初めての納品",
+          "hint": "ディスパッチを完了まで見届ける。"
+        },
+        "crew": {
+          "name": "フルクルー",
+          "hint": "オフィスに 3 人のエージェントが在籍。"
+        },
+        "company_3": {
+          "name": "成長するオフィス",
+          "hint": "会社レベル 3 に到達。"
+        },
+        "company_5": {
+          "name": "大きなオフィス",
+          "hint": "会社レベル 5 に到達。"
+        },
+        "weekly_goal": {
+          "name": "チームの週",
+          "hint": "チームで週間目標を達成。"
+        },
+        "mvp_level_3": {
+          "name": "スター机",
+          "hint": "トップ貢献者がレベル 3 に到達。"
+        },
+        "fifty": {
+          "name": "50 件",
+          "hint": "30 日間で 50 件完了。"
+        },
+        "hundred": {
+          "name": "100 件",
+          "hint": "30 日間で 100 件完了。"
+        }
+      }
+    },
+    "coffee": {
+      "title": "給湯室の雑談",
+      "close": "閉じる",
+      "hint": "{{key}} で給湯室の雑談",
+      "prompts": {
+        "shipped": "今週、誇りに思う納品は？",
+        "blocked": "今チームが詰まっているのは？",
+        "learned": "前のタスクから何を学びましたか？",
+        "next": "次にチームが取り組むべきことは？",
+        "thanks": "最近の仕事で感謝したい人は？"
+      },
+      "stuck": "現在ブロック中：{{names}}",
+      "another": "別の質問"
+    },
+    "meeting": {
+      "title": "会議室",
+      "close": "閉じる",
+      "hint": "{{key}} で会議ボードを見る",
+      "empty": "ボードは空です。",
+      "phases": {
+        "queued": "待機中",
+        "decomposing": "分解中",
+        "progress": "進行中",
+        "in_review": "レビュー中"
+      }
+    }
   }
 }

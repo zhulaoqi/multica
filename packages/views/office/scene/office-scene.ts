@@ -2,6 +2,7 @@ import type {
   Application,
   Container,
   FederatedPointerEvent,
+  Graphics,
   Text as PixiText,
 } from "pixi.js";
 import type { OfficeDir, OfficePeer, OfficePosition } from "@multica/core/office";
@@ -22,6 +23,18 @@ import { nearestAgent, nearestVisitSlot } from "./interactions";
 import { isTypingTarget } from "./input";
 import { buildRoom, type RoomView } from "./room";
 import { loadOfficeTextures } from "./textures";
+import { OfficeCat } from "./office-cat";
+import { OfficeMinimap } from "./minimap";
+import { OfficeWeather } from "./weather";
+import type { SeasonTheme } from "../game/season";
+import { seasonFor } from "../game/season";
+import type { OfficeEventId } from "../game/events";
+import {
+  laterEventDelay,
+  nextEventDelay,
+  pickOfficeEvent,
+} from "../game/events";
+import type { PlayerEmoteId } from "../game/emotes";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
 const WALK_SPEED = 96;
@@ -54,8 +67,59 @@ const RECEPTIONISTS = [
 const COMPANY_SIGN = { centerX: 24.5 * 16, top: 25 * 16 - 7, zIndex: 26 * 16 + 1 } as const;
 const COMPANY_SIGN_ACCENT = 0xf39800;
 const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
+/** Standing spot in front of the reception desk, where check-in happens. */
+const RECEPTION_POINT = feetAtTile(24, 28);
+/** Wide enough to check in without brushing the desk, narrow enough to read. */
+const RECEPTION_RADIUS = 44;
+/** Coffee machine and meeting-room board, both reachable by walking up. */
+const COFFEE_POINT = feetAtTile(24, 4);
+const COFFEE_RADIUS = 36;
+const MEETING_POINT = feetAtTile(8, 10);
+const MEETING_RADIUS = 36;
+/** Rows of paper on the desk before the stack stops growing visually. */
+const MAX_DESK_PAPERS = 9;
+/** How long a player emote, the archive stamp, or a random event stays up. */
+const LOCAL_EMOTE_MS = 1_800;
+const ARCHIVE_RITUAL_MS = 2_600;
+const EVENT_EFFECT_MS = 3_200;
+const CONFETTI_MS = 3_800;
+const CONFETTI_COUNT = 40;
+const CONFETTI_COLORS = [0xf2c14e, 0x4f9bd9, 0x63b37a, 0xd97a7a, 0xb07ad9, 0xf8fafc];
+
+/** Walk-up places other than agents, in interaction priority order. */
+export type OfficePlace = "reception" | "coffee" | "meeting";
+
+/** What a desk has collected from today's work. */
+export interface DeskTrace {
+  deskIndex: number;
+  /** A mug after any completed run today. */
+  mug?: boolean;
+  /** Sheets waiting, drawn up to three. */
+  papers?: number;
+}
+
+/** Department plaque drawn inside its room, under the room name. */
+export interface RoomBadge {
+  room: RoomId;
+  label: string;
+  level: number;
+}
+
+interface ConfettiPiece {
+  view: Graphics;
+  vy: number;
+  sway: number;
+  phase: number;
+  spin: number;
+}
 
 export type { OfficeAgentView };
+
+function localEmoteBubble(kind: PlayerEmoteId): BubbleKind | null {
+  if (kind === "check") return "check";
+  if (kind === "alert") return "alert";
+  return "chat";
+}
 
 /** Company levels are 1-based; anything unusable falls back to a new company. */
 function normalizeCompanyLevel(level: number | undefined): number {
@@ -80,12 +144,18 @@ export interface OfficeSceneOptions {
   companyName: string;
   /** Company level; decorations unlock as it grows. Defaults to 1. */
   companyLevel?: number;
+  /** Ambient theme; defaults to the current calendar season. */
+  season?: SeasonTheme;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent and wants to talk to it. */
   onAgentActivate: (agentId: string) => void;
   /** Nearest agent to the player changed, so the HUD can hint at interact. */
   onFocusAgentChange: (agentId: string | null) => void;
+  /** The player walked up to the front desk, coffee machine, or board. */
+  onPlaceFocusChange?: (place: OfficePlace | null) => void;
+  /** A cosmetic office beat happened, so the HUD can show a one-line toast. */
+  onRandomEvent?: (event: OfficeEventId) => void;
 }
 
 interface LocalAvatar {
@@ -141,9 +211,28 @@ export class OfficeScene {
   private readonly onLocalMove: (position: OfficePosition) => void;
   private readonly onAgentActivate: (agentId: string) => void;
   private readonly onFocusAgentChange: (agentId: string | null) => void;
+  private readonly onPlaceFocusChange: (place: OfficePlace | null) => void;
+  private readonly onRandomEvent: (event: OfficeEventId) => void;
   private focusedAgentId: string | null = null;
+  private focusedPlace: OfficePlace | null = null;
   /** Agent the player is walking toward; activated once close enough. */
   private pendingAgentId: string | null = null;
+  private papers: Container | null = null;
+  private paperCount = 0;
+  private confetti: Container | null = null;
+  private confettiPieces: ConfettiPiece[] = [];
+  private confettiUntil = 0;
+  private traces: Container | null = null;
+  private badges: Container | null = null;
+  private localEmoteKind: PlayerEmoteId | null = null;
+  private localEmoteUntil = 0;
+  private readonly weather: OfficeWeather;
+  private readonly cat: OfficeCat;
+  private readonly minimap: OfficeMinimap;
+  private eventEffect: Container | null = null;
+  private eventEffectUntil = 0;
+  private nextEventAt = 0;
+  private eventsEnabled = true;
 
   private constructor(
     pixi: typeof import("pixi.js"),
@@ -164,6 +253,9 @@ export class OfficeScene {
     this.onLocalMove = options.onLocalMove;
     this.onAgentActivate = options.onAgentActivate;
     this.onFocusAgentChange = options.onFocusAgentChange;
+    this.onPlaceFocusChange = options.onPlaceFocusChange ?? (() => {});
+    this.onRandomEvent = options.onRandomEvent ?? (() => {});
+    const season = options.season ?? seasonFor(new Date());
 
     this.local = {
       view: createCharacter(pixi, { kind: "human", seed: "local-player" }),
@@ -190,6 +282,18 @@ export class OfficeScene {
       createLabel: (text) => this.createLabel(text),
       onAgentActivate: (agentId) => this.activateAgent(agentId),
     });
+
+    this.weather = new OfficeWeather(
+      pixi,
+      app.stage,
+      season,
+      app.screen.width,
+      app.screen.height,
+    );
+    this.cat = new OfficeCat(pixi, layout, world);
+    this.minimap = new OfficeMinimap(pixi, app.stage, layout);
+    this.minimap.resize(app.screen.width);
+    this.nextEventAt = performance.now() + nextEventDelay();
   }
 
   static async create(options: OfficeSceneOptions): Promise<OfficeScene> {
@@ -299,6 +403,8 @@ export class OfficeScene {
     for (const prop of room.props) this.world.addChild(prop);
     this.room = room;
     this.agents.setScreens(room.screens);
+    this.cat.setLayout(layout);
+    this.minimap.setLayout(layout);
   }
 
   /** The wrapper resized; keep the same world area in view. */
@@ -306,6 +412,8 @@ export class OfficeScene {
     if (this.destroyed) return;
     this.app.renderer.resize(Math.max(1, width), Math.max(1, height));
     this.app.stage.hitArea = new this.pixi.Rectangle(0, 0, width, height);
+    this.weather.resize(Math.max(1, width), Math.max(1, height));
+    this.minimap.resize(Math.max(1, width));
     this.updateCamera(1, true);
   }
 
@@ -368,12 +476,201 @@ export class OfficeScene {
     this.agents.deliverToReception(agentId);
   }
 
+  /**
+   * Papers on the front desk mirror work waiting for sign-off, so the queue
+   * is visible from across the room without opening a panel.
+   */
+  setReceptionPapers(count: number) {
+    if (this.destroyed) return;
+    const next = Math.max(0, Math.floor(count));
+    if (next === this.paperCount) return;
+    this.paperCount = next;
+    this.drawReceptionPapers();
+  }
+
+  /** Swaps the ambient weather; the season chip changes at the same time. */
+  setSeason(theme: SeasonTheme) {
+    if (this.destroyed) return;
+    this.weather.setTheme(theme);
+  }
+
+  setMinimapVisible(visible: boolean) {
+    if (this.destroyed) return;
+    this.minimap.setVisible(visible);
+  }
+
+  isMinimapVisible(): boolean {
+    return this.minimap.isVisible();
+  }
+
+  setEventsEnabled(enabled: boolean) {
+    this.eventsEnabled = enabled;
+  }
+
+  /** Mugs and papers left on a desk, mirroring today's work. */
+  setDeskTraces(traces: readonly DeskTrace[]) {
+    if (this.destroyed) return;
+    this.traces?.destroy({ children: true });
+    this.traces = null;
+    if (traces.length === 0) return;
+    const layer = new this.pixi.Container();
+    for (const trace of traces) {
+      const slot = this.layout.agents[trace.deskIndex];
+      if (!slot) continue;
+      const left = slot.desk.x * 16;
+      const top = slot.desk.y * 16;
+      const z = (slot.desk.y + 1) * 16 + 2;
+      if (trace.mug) {
+        const mug = new this.pixi.Graphics();
+        mug.rect(left + 7, top + 2, 5, 5).fill(0xf8fafc);
+        mug.rect(left + 8, top + 3, 3, 2).fill(0x8b5a3c);
+        mug.rect(left + 12, top + 3, 2, 2).fill(0xf8fafc);
+        mug.zIndex = z;
+        layer.addChild(mug);
+      }
+      const papers = Math.min(3, Math.max(0, Math.floor(trace.papers ?? 0)));
+      for (let index = 0; index < papers; index++) {
+        const sheet = new this.pixi.Graphics();
+        sheet
+          .rect(left + 18 + index, top + 2 + index, 8, 5)
+          .fill(0xf8fafc)
+          .rect(left + 18 + index, top + 6 + index, 8, 1)
+          .fill(0xc7ced6);
+        sheet.zIndex = z;
+        layer.addChild(sheet);
+      }
+    }
+    layer.sortableChildren = true;
+    this.world.addChild(layer);
+    this.traces = layer;
+  }
+
+  /** Department name and level on each room's wall. */
+  setRoomBadges(badges: readonly RoomBadge[]) {
+    if (this.destroyed) return;
+    this.badges?.destroy({ children: true });
+    this.badges = null;
+    if (badges.length === 0) return;
+    const layer = new this.pixi.Container();
+    for (const badge of badges) {
+      const room = this.layout.rooms.find((entry) => entry.id === badge.room);
+      if (!room) continue;
+      const plate = new this.pixi.Container();
+      const text = new this.pixi.Text({
+        text: `${badge.label} · Lv ${badge.level}`,
+        style: {
+          fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+          fontSize: 7,
+          fontWeight: "600",
+          fill: 0xe8f4fb,
+        },
+      });
+      text.resolution = 4;
+      text.position.set(4, 1);
+      const width = Math.ceil(text.width) + 8;
+      const background = new this.pixi.Graphics();
+      background
+        .roundRect(0, 0, width, Math.ceil(text.height) + 3, 2)
+        .fill({ color: 0x5aa8a2, alpha: 0.82 });
+      plate.addChild(background, text);
+      plate.position.set(
+        room.rect.x * 16 + 3,
+        room.rect.y * 16 + 16,
+      );
+      plate.eventMode = "none";
+      layer.addChild(plate);
+    }
+    layer.sortableChildren = true;
+    layer.zIndex = ROOM_LABEL_Z + 1;
+    this.world.addChild(layer);
+    this.badges = layer;
+  }
+
+  /** The player waves, acknowledges, asks for help, or raises a coffee cup. */
+  playLocalEmote(kind: PlayerEmoteId) {
+    if (this.destroyed) return;
+    const now = performance.now();
+    this.localEmoteKind = kind;
+    this.localEmoteUntil = now + LOCAL_EMOTE_MS;
+    this.local.view.setPose(kind === "wave" ? "wave" : "stand");
+    this.local.view.setBubble(localEmoteBubble(kind));
+  }
+
+  /**
+   * Closing the loop on delivered work: everyone checks, confetti falls, and
+   * a stamped folder sits on the front desk for a moment.
+   */
+  archiveRitual() {
+    if (this.destroyed) return;
+    this.celebrate();
+    const now = performance.now();
+    this.eventEffect?.destroy({ children: true });
+    const layer = new this.pixi.Container();
+    const folder = new this.pixi.Graphics();
+    const left = 24 * 16 - 2;
+    const top = 27 * 16 + 2;
+    folder.rect(left, top, 11, 7).fill(0xd9a34f);
+    folder.rect(left + 1, top + 1, 9, 2).fill(0xf1c27a);
+    folder.rect(left + 5, top + 3, 3, 1).fill(0x2f4858);
+    folder.rect(left + 4, top + 4, 5, 1).fill(0x2f4858);
+    folder.zIndex = 28 * 16 + 2;
+    layer.addChild(folder);
+    this.world.addChild(layer);
+    this.eventEffect = layer;
+    this.eventEffectUntil = now + ARCHIVE_RITUAL_MS;
+  }
+
+  /** A PNG data URL of the current view, or null when extraction is blocked. */
+  capturePhoto(): string | null {
+    if (this.destroyed) return null;
+    try {
+      const canvas = this.app.renderer.extract.canvas(this.app.stage);
+      if (!canvas || typeof canvas.toDataURL !== "function") return null;
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Good news: confetti over the view and a check from every agent. */
+  celebrate() {
+    if (this.destroyed) return;
+    const now = performance.now();
+    this.agents.celebrate(now);
+
+    this.confetti?.destroy({ children: true });
+    const layer = new this.pixi.Container();
+    this.app.stage.addChild(layer);
+    const width = this.app.screen.width;
+    const pieces: ConfettiPiece[] = [];
+    for (let index = 0; index < CONFETTI_COUNT; index++) {
+      const view = new this.pixi.Graphics();
+      const color = CONFETTI_COLORS[index % CONFETTI_COLORS.length]!;
+      view.rect(-2, -1.5, 4, 3).fill(color);
+      view.position.set(Math.random() * width, -Math.random() * 80 - 6);
+      layer.addChild(view);
+      pieces.push({
+        view,
+        vy: 70 + Math.random() * 110,
+        sway: 12 + Math.random() * 24,
+        phase: Math.random() * Math.PI * 2,
+        spin: -3 + Math.random() * 6,
+      });
+    }
+    this.confetti = layer;
+    this.confettiPieces = pieces;
+    this.confettiUntil = now + CONFETTI_MS;
+  }
+
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
     this.detachInput();
     this.app.ticker.remove(this.update);
     this.agents.destroy();
+    this.cat.destroy();
+    this.weather.destroy();
+    this.minimap.destroy();
     try {
       this.app.destroy({ removeView: true }, { children: true });
     } catch {
@@ -433,9 +730,161 @@ export class OfficeScene {
       FOCUS_RADIUS,
     );
     const id = agent?.id ?? null;
-    if (id === this.focusedAgentId) return;
-    this.focusedAgentId = id;
-    this.onFocusAgentChange(id);
+    if (id !== this.focusedAgentId) {
+      this.focusedAgentId = id;
+      this.onFocusAgentChange(id);
+    }
+
+    // Talking to a person outranks every desk and board behind them: the
+    // agent's hint wins whenever one is in range.
+    const place = id === null ? this.placeAt() : null;
+    if (place !== this.focusedPlace) {
+      this.focusedPlace = place;
+      this.onPlaceFocusChange(place);
+    }
+  }
+
+  /** Closest walk-up place, or null when the player is not at one. */
+  private placeAt(): OfficePlace | null {
+    const within = (point: { x: number; y: number }, radius: number) =>
+      Math.hypot(point.x - this.local.x, point.y - this.local.y) <= radius;
+    if (within(RECEPTION_POINT, RECEPTION_RADIUS)) return "reception";
+    if (within(COFFEE_POINT, COFFEE_RADIUS)) return "coffee";
+    if (within(MEETING_POINT, MEETING_RADIUS)) return "meeting";
+    return null;
+  }
+
+  /** Draws the paper stack on the desk; the count is a read-only queue view. */
+  private drawReceptionPapers() {
+    this.papers?.destroy({ children: true });
+    this.papers = null;
+    if (this.paperCount <= 0) return;
+    const stack = new this.pixi.Container();
+    const shown = Math.min(this.paperCount, MAX_DESK_PAPERS);
+    for (let index = 0; index < shown; index++) {
+      const sheet = new this.pixi.Graphics();
+      const x = 22 * 16 + 6 + (index % 3) * 9;
+      const y = 27 * 16 + 3 + Math.floor(index / 3) * 5;
+      sheet.rect(x, y, 8, 5).fill(0xf8fafc);
+      sheet.rect(x, y + 4, 8, 1).fill(0xc7ced6);
+      stack.addChild(sheet);
+    }
+    stack.zIndex = 28 * 16 + 1;
+    this.world.addChild(stack);
+    this.papers = stack;
+  }
+
+  /** Screen-space confetti; it outlives one camera pan and then cleans up. */
+  private stepConfetti(now: number, dt: number) {
+    if (!this.confetti) return;
+    if (now >= this.confettiUntil) {
+      this.confetti.destroy({ children: true });
+      this.confetti = null;
+      this.confettiPieces = [];
+      return;
+    }
+    const height = this.app.screen.height;
+    const seconds = now / 1000;
+    for (const piece of this.confettiPieces) {
+      piece.view.y += piece.vy * dt;
+      piece.view.x += Math.sin(seconds * 2 + piece.phase) * piece.sway * dt;
+      piece.view.rotation += piece.spin * dt;
+      if (piece.view.y > height + 8) piece.view.y = -8;
+    }
+  }
+
+  /** Waves, checks, and coffee cups fade out without touching the walk state. */
+  private stepLocalEmote(now: number) {
+    if (!this.localEmoteKind || now < this.localEmoteUntil) return;
+    this.localEmoteKind = null;
+    this.local.view.setPose("stand");
+  }
+
+  /**
+   * Random office beats. They are pure presentation: a box is not a task, the
+   * phone is not a notification, and turning them off loses no state.
+   */
+  private stepRandomEvents(now: number) {
+    if (!this.eventsEnabled || now < this.nextEventAt) return;
+    this.nextEventAt = now + laterEventDelay();
+    const event = pickOfficeEvent();
+    this.renderEvent(event);
+    this.onRandomEvent(event);
+  }
+
+  private renderEvent(event: OfficeEventId) {
+    this.eventEffect?.destroy({ children: true });
+    this.eventEffect = null;
+    const layer = new this.pixi.Container();
+    const at = (tx: number, ty: number) => feetAtTile(tx, ty);
+    switch (event) {
+      case "cat": {
+        this.cat.meow(performance.now());
+        this.cat.scamper(performance.now());
+        return;
+      }
+      case "delivery": {
+        const spot = at(27, 32);
+        const box = new this.pixi.Graphics();
+        box.rect(spot.x - 7, spot.y - 12, 14, 11).fill(0xb98a54);
+        box.rect(spot.x - 7, spot.y - 12, 14, 2).fill(0xd9a970);
+        box.rect(spot.x - 1, spot.y - 12, 2, 11).fill(0x8a643a);
+        box.zIndex = spot.y;
+        layer.addChild(box);
+        break;
+      }
+      case "coffee": {
+        for (let index = 0; index < 3; index++) {
+          const puff = new this.pixi.Graphics();
+          puff
+            .circle(23 * 16 + 10, 3 * 16 - 14 - index * 6, 3 + index)
+            .fill({ color: 0xf8fafc, alpha: 0.4 - index * 0.1 });
+          puff.zIndex = 3 * 16 + 2;
+          layer.addChild(puff);
+        }
+        break;
+      }
+      case "plane": {
+        const spot = at(31, 30);
+        const plane = new this.pixi.Graphics();
+        plane.rect(spot.x, spot.y - 18, 9, 3).fill(0xf8fafc);
+        plane.rect(spot.x + 6, spot.y - 21, 5, 3).fill(0xe2e8f0);
+        plane.rect(spot.x + 2, spot.y - 15, 2, 2).fill({ color: 0xcbd5e1, alpha: 0.6 });
+        plane.zIndex = spot.y;
+        layer.addChild(plane);
+        break;
+      }
+      case "phone": {
+        const spot = at(23, 26);
+        const ring = new this.pixi.Graphics();
+        ring.circle(spot.x + 6, spot.y - 26, 4).stroke({ color: 0xf2c14e, width: 1.5 });
+        ring.circle(spot.x + 6, spot.y - 26, 7).stroke({ color: 0xf2c14e, width: 1, alpha: 0.5 });
+        ring.zIndex = 28 * 16;
+        layer.addChild(ring);
+        break;
+      }
+      case "lights": {
+        for (const [tx, ty] of [[8, 16], [24, 16], [44, 16]] as const) {
+          const spot = at(tx, ty);
+          const glow = new this.pixi.Graphics();
+          glow
+            .ellipse(spot.x, spot.y, 34, 16)
+            .fill({ color: 0xf5d98a, alpha: 0.16 });
+          glow.zIndex = ty * 16;
+          layer.addChild(glow);
+        }
+        break;
+      }
+    }
+    this.world.addChild(layer);
+    this.eventEffect = layer;
+    this.eventEffectUntil = performance.now() + EVENT_EFFECT_MS;
+  }
+
+  private stepEventEffect(now: number) {
+    if (!this.eventEffect || now < this.eventEffectUntil) return;
+    this.eventEffect.destroy({ children: true });
+    this.eventEffect = null;
   }
 
   private addRoomLabels(names: Record<RoomId, string>) {
@@ -541,6 +990,18 @@ export class OfficeScene {
     ];
     this.agents.update(dt, now, humans);
     this.room.update(now);
+    this.cat.update(dt, now);
+    this.weather.update(dt);
+    this.stepConfetti(now, dt);
+    this.stepLocalEmote(now);
+    this.stepRandomEvents(now);
+    this.stepEventEffect(now);
+    this.minimap.update(
+      { x: this.local.x, y: this.local.y },
+      this.agents.statuses(),
+      Array.from(this.peers.values(), (peer) => ({ x: peer.x, y: peer.y })),
+      this.cat.position(),
+    );
     this.updateFocus();
     this.updateCamera(dt);
 
@@ -587,7 +1048,11 @@ export class OfficeScene {
       peer.chatUntil = now + HUMAN_CHAT_MS;
     }
     if (localChatting) this.local.chatUntil = now + HUMAN_CHAT_MS;
-    this.local.view.setBubble(now < this.local.chatUntil ? "chat" : null);
+    const emote =
+      this.localEmoteKind && now < this.localEmoteUntil
+        ? localEmoteBubble(this.localEmoteKind)
+        : null;
+    this.local.view.setBubble(emote ?? (now < this.local.chatUntil ? "chat" : null));
     for (const peer of this.peers.values()) {
       peer.view.setBubble(now < peer.chatUntil ? "chat" : null);
     }

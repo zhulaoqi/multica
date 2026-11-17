@@ -57,6 +57,146 @@
       "task_error_agent_unavailable": "Cet agent ne peut pas accepter de travail pour le moment.",
       "task_error_issue_limit": "Cet espace de travail a atteint sa limite de tâches."
     },
-    "company_name": "eclicktech"
+    "reception": {
+      "title": "Accueil",
+      "close": "Fermer",
+      "hint": "Appuyez sur {{key}} pour voir le rapport d'accueil",
+      "today": "Aujourd'hui",
+      "today_value_one": "{{count}} tâche terminée",
+      "today_value_other": "{{count}} tâches terminées",
+      "company_level": "Entreprise Lv {{level}}",
+      "mvp": "Meilleur : {{name}}",
+      "mvp_empty": "Aucune tâche terminée pour l'instant",
+      "week": "Objectif de la semaine",
+      "week_value": "{{done}} / {{goal}}",
+      "week_met": "Objectif atteint",
+      "waiting": "En attente de validation",
+      "waiting_empty": "Rien n'attend votre validation.",
+      "stuck_one": "{{count}} agent a besoin d'attention",
+      "stuck_other": "{{count}} agents ont besoin d'attention",
+      "unknown_department": "Service",
+      "reason_placeholder": "Que faut-il corriger ?",
+      "reason_label": "Motif du renvoi",
+      "send_back": "Renvoyer",
+      "accept": "Accepter",
+      "reject": "Rejeter",
+      "cancel": "Annuler",
+      "accept_failed": "Impossible d'accepter ce résultat. Réessayez.",
+      "reject_failed": "Impossible de renvoyer ce résultat. Réessayez."
+    },
+    "celebration": {
+      "company_level": "L'entreprise passe au niveau {{level}} !",
+      "company_level_hint": "Le bureau a gagné de nouveaux meubles.",
+      "weekly_goal": "Objectif hebdomadaire atteint",
+      "weekly_goal_hint_one": "{{count}} tâche terminée ensemble cette semaine.",
+      "weekly_goal_hint_other": "{{count}} tâches terminées ensemble cette semaine."
+    },
+    "company_name": "eclicktech",
+    "toolbar": {
+      "season": "Saison : {{season}}",
+      "emotes": "Émoticônes",
+      "trophies": "Mur des trophées",
+      "minimap_show": "Afficher la mini-carte",
+      "minimap_hide": "Masquer la mini-carte",
+      "photo": "Mode photo",
+      "sound_on": "Activer le son",
+      "sound_off": "Couper le son"
+    },
+    "season": {
+      "spring": "Printemps",
+      "summer": "Été",
+      "autumn": "Automne",
+      "winter": "Hiver"
+    },
+    "emotes": {
+      "title": "Émoticônes",
+      "wave": "Saluer",
+      "check": "Bien joué",
+      "alert": "Besoin d'aide",
+      "coffee": "Café"
+    },
+    "photo": {
+      "hint": "À vous de cadrer.",
+      "save": "Enregistrer en PNG",
+      "saved": "Enregistré dans vos téléchargements.",
+      "exit": "Quitter le mode photo"
+    },
+    "events": {
+      "cat": "Le chat du bureau est passé.",
+      "delivery": "Un colis est arrivé à l'accueil.",
+      "coffee": "Quelqu'un a préparé du café.",
+      "plane": "Un avion en papier a traversé le bureau.",
+      "phone": "Le téléphone de l'accueil sonne.",
+      "lights": "Les plafonniers ont vacillé."
+    },
+    "trophies": {
+      "title": "Mur des trophées",
+      "close": "Fermer",
+      "season": "Saison",
+      "archived_one": "{{count}} archivé",
+      "archived_other": "{{count}} archivés",
+      "departments": "Départements",
+      "departments_empty": "Pas encore de plaque de département. Affectez des agents à un département dans l'organigramme.",
+      "items": {
+        "first_delivery": {
+          "name": "Première livraison",
+          "hint": "Menez une mission jusqu'au bout."
+        },
+        "crew": {
+          "name": "Équipe au complet",
+          "hint": "Trois agents actifs au bureau."
+        },
+        "company_3": {
+          "name": "Bureau en croissance",
+          "hint": "Atteignez le niveau 3 d'entreprise."
+        },
+        "company_5": {
+          "name": "Grand bureau",
+          "hint": "Atteignez le niveau 5 d'entreprise."
+        },
+        "weekly_goal": {
+          "name": "Semaine d'équipe",
+          "hint": "Atteignez un objectif hebdomadaire ensemble."
+        },
+        "mvp_level_3": {
+          "name": "Bureau vedette",
+          "hint": "Un agent atteint le niveau 3."
+        },
+        "fifty": {
+          "name": "Cinquante",
+          "hint": "50 tâches terminées en 30 jours."
+        },
+        "hundred": {
+          "name": "Centenaire",
+          "hint": "100 tâches terminées en 30 jours."
+        }
+      }
+    },
+    "coffee": {
+      "title": "Discussion à la cuisine",
+      "close": "Fermer",
+      "hint": "Appuyez sur {{key}} pour discuter à la cuisine",
+      "prompts": {
+        "shipped": "Qu'avez-vous livré cette semaine dont vous êtes fier ?",
+        "blocked": "Qu'est-ce qui bloque l'équipe en ce moment ?",
+        "learned": "Qu'avez-vous appris de la dernière tâche ?",
+        "next": "Sur quoi l'équipe devrait-elle enchaîner ?",
+        "thanks": "Qui mérite un merci pour son travail ?"
+      },
+      "stuck": "Bloqués en ce moment : {{names}}",
+      "another": "Une autre question"
+    },
+    "meeting": {
+      "title": "Salle de réunion",
+      "close": "Fermer",
+      "hint": "Appuyez sur {{key}} pour lire le tableau de réunion",
+      "empty": "Le tableau est vide.",
+      "phases": {
+        "queued": "En attente",
+        "decomposing": "Décomposition",
+        "progress": "En cours",
+        "in_review": "En revue"
+      }
+    }
   }
 }
