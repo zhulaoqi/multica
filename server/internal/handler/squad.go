@@ -13,6 +13,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
+	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
@@ -195,8 +196,53 @@ func (h *Handler) squadToResponseWithPreview(ctx context.Context, squad db.Squad
 
 // ── Handlers ────────────────────────────────────────────────────────────────
 
+// squadsVisibleTo keeps a plain member's own department squads and any squad
+// they were added to. Other squads in the workspace stay hidden.
+func (h *Handler) squadsVisibleTo(ctx context.Context, member db.Member, squads []db.Squad) ([]db.Squad, error) {
+	joined, err := h.Queries.ListSquadsByMember(ctx, db.ListSquadsByMemberParams{
+		WorkspaceID: member.WorkspaceID,
+		MemberType:  "member",
+		MemberID:    member.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[pgtype.UUID]struct{}, len(joined))
+	for _, squad := range joined {
+		allowed[squad.ID] = struct{}{}
+	}
+	units, err := h.Queries.ListOrgUnits(ctx, member.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	people, err := h.Queries.ListOrgUnitMembers(ctx, member.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var own pgtype.UUID
+	for _, person := range people {
+		if person.UserID == member.UserID {
+			own = person.OrgUnitID
+			break
+		}
+	}
+	visibleUnits := orgscope.Visible(units, own, member.UserID, false)
+	kept := squads[:0]
+	for _, squad := range squads {
+		_, memberOf := allowed[squad.ID]
+		if memberOf || (squad.OrgUnitID.Valid && visibleUnits[squad.OrgUnitID]) {
+			kept = append(kept, squad)
+		}
+	}
+	return kept, nil
+}
+
 func (h *Handler) ListSquads(w http.ResponseWriter, r *http.Request) {
 	workspaceID := workspaceIDFromURL(r, "workspaceId")
+	member, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found")
+	if !ok {
+		return
+	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
 	if !ok {
 		return
@@ -205,6 +251,13 @@ func (h *Handler) ListSquads(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list squads")
 		return
+	}
+	if member.Role != "owner" && member.Role != "admin" {
+		squads, err = h.squadsVisibleTo(r.Context(), member, squads)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list squads")
+			return
+		}
 	}
 
 	previewRows, err := h.Queries.ListSquadMemberPreviewRows(r.Context(), wsUUID)
@@ -330,9 +383,35 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (h *Handler) GetSquad(w http.ResponseWriter, r *http.Request) {
-	squad, _, ok := h.loadSquadInWorkspace(w, r)
+// squadReadable reports whether this member may open the squad. Owners and
+// admins can open any squad in the workspace; everyone else only opens a
+// squad in their department or one they were added to.
+func (h *Handler) squadReadable(w http.ResponseWriter, r *http.Request, squad db.Squad, workspaceID string) bool {
+	member, ok := h.requireWorkspaceMember(w, r, workspaceID, "squad not found")
 	if !ok {
+		return false
+	}
+	if member.Role == "owner" || member.Role == "admin" {
+		return true
+	}
+	visible, err := h.squadsVisibleTo(r.Context(), member, []db.Squad{squad})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load squad")
+		return false
+	}
+	if len(visible) == 0 {
+		writeError(w, http.StatusNotFound, "squad not found")
+		return false
+	}
+	return true
+}
+
+func (h *Handler) GetSquad(w http.ResponseWriter, r *http.Request) {
+	squad, workspaceID, ok := h.loadSquadInWorkspace(w, r)
+	if !ok {
+		return
+	}
+	if !h.squadReadable(w, r, squad, workspaceID) {
 		return
 	}
 	resp, err := h.squadToResponseWithPreview(r.Context(), squad)
@@ -566,8 +645,11 @@ func (h *Handler) DeleteSquad(w http.ResponseWriter, r *http.Request) {
 // ── Squad Members ───────────────────────────────────────────────────────────
 
 func (h *Handler) ListSquadMembers(w http.ResponseWriter, r *http.Request) {
-	squad, _, ok := h.loadSquadInWorkspace(w, r)
+	squad, workspaceID, ok := h.loadSquadInWorkspace(w, r)
 	if !ok {
+		return
+	}
+	if !h.squadReadable(w, r, squad, workspaceID) {
 		return
 	}
 	members, err := h.Queries.ListSquadMembers(r.Context(), squad.ID)
@@ -675,8 +757,11 @@ func deriveSquadMemberStatus(
 // inherits the workspace-membership guard from the route middleware — any
 // member of the workspace can read it.
 func (h *Handler) ListSquadMemberStatus(w http.ResponseWriter, r *http.Request) {
-	squad, _, ok := h.loadSquadInWorkspace(w, r)
+	squad, workspaceID, ok := h.loadSquadInWorkspace(w, r)
 	if !ok {
+		return
+	}
+	if !h.squadReadable(w, r, squad, workspaceID) {
 		return
 	}
 

@@ -54,7 +54,14 @@ vi.mock("@multica/core/workspace/queries", () => ({
     queryKey: ["workspaces", "ws-1", "agents"],
     queryFn: () =>
       Promise.resolve([
-        { id: "agent-1", name: "Lambda", runtime_id: "rt-1", runtime_bound: true, archived_at: null },
+        {
+          id: "agent-1",
+          name: "Lambda",
+          runtime_id: "rt-1",
+          runtime_bound: true,
+          archived_at: null,
+          owner_id: "user-1",
+        },
       ]),
   }),
   squadListOptions: () => ({
@@ -299,10 +306,13 @@ describe("IssueActionsDropdown", () => {
     expect(await screen.findByText("Lambda")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Lambda"));
 
-    expect(updateIssueMock).toHaveBeenCalledWith(
-      { id: "issue-1", assignee_type: "agent", assignee_id: "agent-1" },
-      expect.anything(),
-    );
+    // Assigning an agent can start a run, so the menu confirms before writing.
+    expect(mockOpenModal).toHaveBeenCalledWith("issue-run-confirm", {
+      issueIds: ["issue-1"],
+      mode: "assign",
+      assigneeType: "agent",
+      assigneeId: "agent-1",
+    });
     await waitFor(() => expect(screen.queryByText("Status")).not.toBeInTheDocument());
   });
 
@@ -569,18 +579,20 @@ describe("IssueActionsContextMenu", () => {
     fireEvent.contextMenu(screen.getByTestId("row"));
     await user.click(await screen.findByText("Assignee"));
     const search = await screen.findByPlaceholderText("Assign to...");
-    await screen.findByText("Test User");
+    await screen.findByText("Lambda");
     await waitFor(() => expect(search).toHaveFocus());
 
     // The menu's typeahead would otherwise swallow these keys.
-    await user.keyboard("test");
-    expect(search).toHaveValue("test");
+    await user.keyboard("lam");
+    expect(search).toHaveValue("lam");
     await user.keyboard("{Enter}");
 
-    expect(updateIssueMock).toHaveBeenCalledWith(
-      { id: "issue-1", assignee_type: "member", assignee_id: "user-1" },
-      expect.anything(),
-    );
+    expect(mockOpenModal).toHaveBeenCalledWith("issue-run-confirm", {
+      issueIds: ["issue-1"],
+      mode: "assign",
+      assigneeType: "agent",
+      assigneeId: "agent-1",
+    });
     await waitFor(() => expect(screen.queryByText("Rename issue")).not.toBeInTheDocument());
   });
 });

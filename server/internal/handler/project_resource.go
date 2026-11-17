@@ -529,6 +529,19 @@ func (h *Handler) loadProjectForResource(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusNotFound, "project not found")
 		return db.Project{}, false
 	}
+	member, ok := h.workspaceMember(w, r, uuidToString(project.WorkspaceID))
+	if !ok {
+		return db.Project{}, false
+	}
+	visible, err := h.projectVisibleTo(r.Context(), member, project)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load project")
+		return db.Project{}, false
+	}
+	if !visible {
+		writeError(w, http.StatusNotFound, "project not found")
+		return db.Project{}, false
+	}
 	return project, true
 }
 

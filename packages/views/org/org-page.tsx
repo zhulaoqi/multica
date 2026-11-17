@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgSyncReport, type OrgTree } from "@multica/core/api";
+import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   memberListOptions,
@@ -108,9 +109,14 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
   );
 }
 
+function canSyncDirectory(role: string | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
+  const userId = useAuthStore((state) => state.user?.id);
   const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
   const members = useQuery(memberListOptions(wsId));
@@ -141,6 +147,10 @@ export function OrgPage() {
     user_id: member.user_id,
     label: member.name || member.email,
   }));
+  // Directory sync rewrites the whole company tree. Workspace owner and admin
+  // are the only roles that may start it; a department lead is not enough.
+  const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
+  const maySyncDirectory = canSyncDirectory(myRole);
   const canAnyManage = data.can_manage || data.units.some((unit) => unit.can_manage);
   const moveChoices = unitChoices.filter((choice) => choice.manage);
   // Unassigned people keep their twins on their own row; those agents leave
@@ -154,6 +164,7 @@ export function OrgPage() {
   const unassignedAgents = forest.unassignedAgents.filter((agent) => !unassignedTwinIds.has(agent.id));
   const lastRun = syncStatus.data?.last_run ?? null;
   const runSync = async () => {
+    if (!maySyncDirectory) return;
     setFailure("");
     setSyncing(true);
     try {
@@ -229,7 +240,7 @@ export function OrgPage() {
         ) : null}
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-6">
-        {data.can_manage ? (
+        {maySyncDirectory ? (
           <div className="mx-auto mb-4 flex max-w-3xl flex-wrap items-center gap-3">
             <Button size="sm" disabled={!syncStatus.data?.configured || syncing} onClick={() => void runSync()}>
               {syncing ? t(($) => $.syncing) : t(($) => $.sync_from_feishu)}
@@ -245,7 +256,7 @@ export function OrgPage() {
             </span>
           </div>
         ) : null}
-        {data.can_manage && lastRun ? (
+        {maySyncDirectory && lastRun ? (
           <div className="mx-auto max-w-3xl">
             <SyncReport report={lastRun} />
           </div>

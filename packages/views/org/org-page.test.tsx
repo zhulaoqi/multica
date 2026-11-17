@@ -228,7 +228,21 @@ describe("OrgPage permissions", () => {
 });
 
 describe("OrgPage Feishu sync", () => {
+  function signInAsAdmin() {
+    signIn("u-ada");
+    qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "admin" }]);
+  }
+
+  it("hides directory sync from a member even when the tree is marked manageable", () => {
+    signIn("u-ada");
+    renderPage(tree());
+
+    expect(screen.queryByRole("button", { name: "Sync from Feishu" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last synced/)).not.toBeInTheDocument();
+  });
+
   it("keeps the sync button disabled until credentials are configured", () => {
+    signInAsAdmin();
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, { configured: false, last_run: null });
     renderPage(tree());
 
@@ -237,6 +251,7 @@ describe("OrgPage Feishu sync", () => {
   });
 
   it("shows the last run report", () => {
+    signInAsAdmin();
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
       configured: true,
       last_run: {
@@ -258,6 +273,7 @@ describe("OrgPage Feishu sync", () => {
   });
 
   it("summarises long change lists instead of printing every name", () => {
+    signInAsAdmin();
     const people = Array.from({ length: 11 }, (_, index) => `Person ${index + 1}`);
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
       configured: true,

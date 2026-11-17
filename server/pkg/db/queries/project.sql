@@ -5,6 +5,11 @@ WHERE workspace_id = $1
   AND (sqlc.narg('priority')::text IS NULL OR priority = sqlc.narg('priority'))
 ORDER BY created_at DESC;
 
+-- name: ListProjectIDsForMember :many
+-- Projects a person was added to. The project lead is not stored here.
+SELECT project_id FROM intake_project_member
+WHERE workspace_id = $1 AND user_id = $2;
+
 -- name: GetProjectInWorkspace :one
 SELECT * FROM project
 WHERE id = $1 AND workspace_id = $2;

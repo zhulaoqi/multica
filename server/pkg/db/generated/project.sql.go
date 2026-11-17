@@ -169,6 +169,37 @@ func (q *Queries) GetProjectIssueStats(ctx context.Context, arg GetProjectIssueS
 	return items, nil
 }
 
+const listProjectIDsForMember = `-- name: ListProjectIDsForMember :many
+SELECT project_id FROM intake_project_member
+WHERE workspace_id = $1 AND user_id = $2
+`
+
+type ListProjectIDsForMemberParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+// Projects a person was added to. The project lead is not stored here.
+func (q *Queries) ListProjectIDsForMember(ctx context.Context, arg ListProjectIDsForMemberParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listProjectIDsForMember, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var project_id pgtype.UUID
+		if err := rows.Scan(&project_id); err != nil {
+			return nil, err
+		}
+		items = append(items, project_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT id, workspace_id, title, description, icon, status, lead_type, lead_id, created_at, updated_at, priority, start_date, due_date, workflow_id FROM project
 WHERE workspace_id = $1

@@ -141,8 +141,67 @@ type UpdateProjectRequest struct {
 	DueDate     *string `json:"due_date"`
 }
 
+// projectsVisibleTo hides projects a plain member was not added to and does
+// not lead. Owners and admins still see the whole workspace.
+func (h *Handler) projectsVisibleTo(ctx context.Context, member db.Member, projects []db.Project) ([]db.Project, error) {
+	if member.Role == "owner" || member.Role == "admin" {
+		return projects, nil
+	}
+	ids, err := h.Queries.ListProjectIDsForMember(ctx, db.ListProjectIDsForMemberParams{
+		WorkspaceID: member.WorkspaceID,
+		UserID:      member.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[pgtype.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		allowed[id] = struct{}{}
+	}
+	visible := projects[:0]
+	for _, project := range projects {
+		if _, ok := allowed[project.ID]; ok || projectLedBy(project, member.UserID) {
+			visible = append(visible, project)
+		}
+	}
+	return visible, nil
+}
+
+func projectLedBy(project db.Project, userID pgtype.UUID) bool {
+	return project.LeadType.Valid && project.LeadType.String == "member" && project.LeadID == userID
+}
+
+// grantCreatorProjectAccess lets a plain member see a project they just
+// created. Owners and admins already see every project, and a member who is
+// the lead is visible without a membership row.
+func (h *Handler) grantCreatorProjectAccess(ctx context.Context, member db.Member, project db.Project) {
+	if member.Role == "owner" || member.Role == "admin" || projectLedBy(project, member.UserID) {
+		return
+	}
+	err := h.Queries.InsertIntakeProjectMember(ctx, db.InsertIntakeProjectMemberParams{
+		WorkspaceID: project.WorkspaceID,
+		ProjectID:   project.ID,
+		UserID:      member.UserID,
+	})
+	if err != nil && !isUniqueViolation(err) {
+		slog.Error("grant project creator access failed", "error", err, "project_id", uuidToString(project.ID))
+	}
+}
+
+func (h *Handler) projectVisibleTo(ctx context.Context, member db.Member, project db.Project) (bool, error) {
+	visible, err := h.projectsVisibleTo(ctx, member, []db.Project{project})
+	if err != nil {
+		return false, err
+	}
+	return len(visible) == 1, nil
+}
+
 func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
+		return
+	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
 	if !ok {
 		return
@@ -160,6 +219,11 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		Status:      statusFilter,
 		Priority:    priorityFilter,
 	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list projects")
+		return
+	}
+	projects, err = h.projectsVisibleTo(r.Context(), member, projects)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list projects")
 		return
@@ -222,6 +286,19 @@ func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
+		return
+	}
+	visible, err := h.projectVisibleTo(r.Context(), member, project)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load project")
+		return
+	}
+	if !visible {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
 	resp := projectToResponse(project)
 	resp.IssueCount, resp.DoneCount = h.loadProjectIssueStats(r.Context(), wsUUID, project.ID)
 	resp.ResourceCount = h.loadProjectResourceCount(r.Context(), project.ID)
@@ -275,6 +352,10 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	workspaceID := h.resolveWorkspaceID(r)
 	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	member, ok := h.workspaceMember(w, r, workspaceID)
 	if !ok {
 		return
 	}
@@ -412,6 +493,7 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		resp := projectToResponse(project)
+		h.grantCreatorProjectAccess(r.Context(), member, project)
 		h.publish(protocol.EventProjectCreated, workspaceID, "member", userID, map[string]any{"project": resp})
 		writeJSON(w, http.StatusCreated, resp)
 		return
@@ -473,6 +555,7 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := projectToResponse(project)
 	resp.ResourceCount = int64(len(resourceResp))
+	h.grantCreatorProjectAccess(r.Context(), member, project)
 	h.publish(protocol.EventProjectCreated, workspaceID, "member", userID, map[string]any{"project": resp})
 	for _, rr := range resourceResp {
 		h.publish(protocol.EventProjectResourceCreated, workspaceID, "member", userID, map[string]any{
@@ -930,6 +1013,32 @@ func (h *Handler) SearchProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	if writeSearchCancellation(w, r, ctx.Err()) {
 		return
+	}
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
+		return
+	}
+	projects := make([]db.Project, len(results))
+	for i, row := range results {
+		projects[i] = row.project
+	}
+	visibleProjects, err := h.projectsVisibleTo(ctx, member, projects)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to search projects")
+		return
+	}
+	if len(visibleProjects) != len(results) {
+		allowed := make(map[pgtype.UUID]struct{}, len(visibleProjects))
+		for _, project := range visibleProjects {
+			allowed[project.ID] = struct{}{}
+		}
+		filtered := results[:0]
+		for _, row := range results {
+			if _, keep := allowed[row.project.ID]; keep {
+				filtered = append(filtered, row)
+			}
+		}
+		results = filtered
 	}
 
 	// Batch-fetch issue stats and resource counts
