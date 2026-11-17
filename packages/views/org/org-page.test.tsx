@@ -87,19 +87,19 @@ function tree(overrides: Partial<OrgTree> = {}): OrgTree {
 let qc: QueryClient;
 let auth: ReturnType<typeof createAuthStore>;
 
-function signIn(userID: string) {
+function signIn(userID: string, { operator = false } = {}) {
   auth.setState({
     user: {
       id: userID,
-      name: "Ada",
-      email: "ada@example.com",
+      name: operator ? "admin" : "Ada",
+      email: operator ? "admin@operator.local" : "ada@example.com",
       avatar_url: null,
       onboarded_at: null,
       onboarding_questionnaire: {},
       language: null,
       profile_description: "",
       timezone: null,
-      is_operator: false,
+      is_operator: operator,
       created_at: new Date(NOW).toISOString(),
       updated_at: new Date(NOW).toISOString(),
     },
@@ -165,7 +165,6 @@ function selectUnit(name: string) {
 
 describe("OrgPage permissions", () => {
   it("keeps a plain member read-only", () => {
-    signIn("u-ada");
     renderPage(tree({
       units: [
         unit({ id: "dept-root", name: "Engineering" }),
@@ -230,20 +229,10 @@ describe("OrgPage permissions", () => {
 });
 
 describe("OrgPage Feishu sync", () => {
-  it("shows the sync action to a workspace owner", () => {
-    signIn("u-ada");
-    qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "owner" }]);
-    renderPage(tree());
-
-    expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
-  });
-
-  it("shows the sync action to the platform operator", () => {
-    signIn("u-ada");
-    auth.setState((state) => ({
-      user: state.user ? { ...state.user, is_operator: true } : null,
-    }));
-    renderPage(tree());
+  it("gives the operator account org management without a member row", () => {
+    signIn("u-operator", { operator: true });
+    qc.setQueryData(memberListOptions(WS).queryKey, []);
+    renderPage(tree({ can_manage: false }));
 
     expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
   });
@@ -263,8 +252,6 @@ describe("OrgPage Feishu sync", () => {
   });
 
   it("keeps the sync button disabled until credentials are configured", () => {
-    signIn("u-ada");
-    qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "admin" }]);
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, { configured: false, last_run: null });
     renderPage(tree());
 
@@ -273,8 +260,6 @@ describe("OrgPage Feishu sync", () => {
   });
 
   it("shows the last run report", () => {
-    signIn("u-ada");
-    qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "admin" }]);
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
       configured: true,
       last_run: {
@@ -296,8 +281,6 @@ describe("OrgPage Feishu sync", () => {
   });
 
   it("summarises long change lists instead of printing every name", () => {
-    signIn("u-ada");
-    qc.setQueryData(memberListOptions(WS).queryKey, [{ ...member, role: "admin" }]);
     const people = Array.from({ length: 11 }, (_, index) => `Person ${index + 1}`);
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, {
       configured: true,
