@@ -49,4 +49,6 @@ export interface DispatchWorkInput {
   text: string;
   unit_id?: string;
   client_request_id: string;
+  /** Files uploaded before the dispatch; the server binds them to the root issue. */
+  attachment_ids?: string[];
 }

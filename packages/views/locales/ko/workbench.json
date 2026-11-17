@@ -21,6 +21,24 @@
       "one": "다음 주 고객 온보딩 자료 준비하기",
       "two": "어제 발생한 결제 실패 원인 조사하기",
       "three": "새 대시보드 출시 공지 작성하기"
+    },
+    "followup_placeholder": "이 작업에 덧붙이기…",
+    "thread_hint": "Enter로 부서에 보내기",
+    "leave_thread": "이 스레드 닫기",
+    "attach_files": "파일 첨부",
+    "remove_attachment": "{{name}} 제거",
+    "uploading": "업로드 중…",
+    "mention": "멘션하기",
+    "mention_label": "멘션",
+    "mention_agent": "에이전트",
+    "mention_squad": "스쿼드",
+    "filters": {
+      "label": "작업 필터",
+      "all": "전체",
+      "review": "검토 필요",
+      "active": "진행 중",
+      "completed": "완료",
+      "empty": "아직 아무것도 없습니다."
     }
   },
   "status": {
@@ -58,6 +76,25 @@
     "org_dispatch_leader_unavailable": "지금은 부서 책임자에게 연락할 수 없습니다. 잠시 후 다시 시도하세요.",
     "org_dispatch_unroutable": "어느 부서로 보낼지 판단하지 못했습니다. 부서를 지정하거나 설명을 보강하세요.",
     "org_dispatch_failed": "부서로 작업을 보내지 못했습니다.",
-    "generic": "문제가 발생했습니다. 다시 시도하세요."
+    "generic": "문제가 발생했습니다. 다시 시도하세요.",
+    "followup_failed": "이 작업에 덧붙이지 못했습니다. 다시 시도하세요.",
+    "upload_failed": "파일을 업로드하지 못했습니다. 다시 시도하세요."
+  },
+  "plan": {
+    "title": "계획"
+  },
+  "deliverables": {
+    "title": "산출물",
+    "version_count": "{{count}}판"
+  },
+  "review": {
+    "accept": "승인",
+    "reject": "반려",
+    "reason_label": "고칠 점",
+    "reason_placeholder": "부서에 고칠 점을 알려 주세요",
+    "submit_reject": "이 메모와 함께 반려",
+    "cancel": "취소",
+    "accept_failed": "결과를 승인하지 못했습니다. 다시 시도하세요.",
+    "reject_failed": "반려하지 못했습니다. 다시 시도하세요."
   }
 }

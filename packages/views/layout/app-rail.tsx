@@ -7,6 +7,7 @@ import { useChatStore } from "@multica/core/chat";
 import { chatSessionsOptions } from "@multica/core/chat/queries";
 import { countUnreadChatMessages } from "@multica/core/chat/unread";
 import { useInboxUnreadCount } from "@multica/core/inbox/queries";
+import { useMyDispatches } from "@multica/core/workbench";
 import {
   RAIL_SPACES,
   useCurrentWorkspace,
@@ -26,6 +27,7 @@ import { NewIssueButton, SearchButton } from "./global-actions";
 import { HelpLauncher } from "./help-launcher";
 import { isPathWithin } from "./panel-nav";
 import { useTeamAgentStatus } from "./panels/team-status";
+import { dispatchPhase } from "../workbench/use-workbench-conversation";
 import { RAIL_ICON_BUTTON_CLASS } from "./rail-styles";
 import { RailWorkspaces } from "./rail-workspaces";
 import { routeIconForPath } from "./route-icon-components";
@@ -68,10 +70,18 @@ function useRailBadges(): Partial<Record<RailSpaceId, RailBadge>> {
   );
 
   const { stuck } = useTeamAgentStatus(wsId);
+  // Delivered work waits on the requester; the badge says how much without
+  // opening the workbench. Reading the same cached list the page uses costs
+  // no extra request once either surface has loaded.
+  const { dispatches } = useMyDispatches(wsId ?? "");
+  const awaitingReview = dispatches.filter(
+    (item) => dispatchPhase(item, undefined) === "in_review",
+  ).length;
 
   const badges: Partial<Record<RailSpaceId, RailBadge>> = {};
   if (inboxUnread > 0) badges.inbox = { kind: "count", value: inboxUnread, tone: "brand" };
   if (chatUnread > 0) badges.chat = { kind: "count", value: chatUnread, tone: "neutral" };
+  if (awaitingReview > 0) badges.workbench = { kind: "count", value: awaitingReview, tone: "brand" };
   if (stuck.length > 0) badges.team = { kind: "dot" };
   return badges;
 }

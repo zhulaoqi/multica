@@ -21,6 +21,24 @@
       "one": "Preparar los materiales de incorporación de clientes de la próxima semana",
       "two": "Investigar los fallos de pago de ayer",
       "three": "Escribir el anuncio de lanzamiento del nuevo panel"
+    },
+    "followup_placeholder": "Añade algo a este trabajo…",
+    "thread_hint": "Enter para enviar al departamento",
+    "leave_thread": "Salir de esta conversación",
+    "attach_files": "Adjuntar archivos",
+    "remove_attachment": "Quitar {{name}}",
+    "uploading": "Subiendo…",
+    "mention": "Mencionar a alguien",
+    "mention_label": "Mencionar",
+    "mention_agent": "Agente",
+    "mention_squad": "Escuadrón",
+    "filters": {
+      "label": "Filtrar trabajo",
+      "all": "Todo",
+      "review": "Por revisar",
+      "active": "En curso",
+      "completed": "Hecho",
+      "empty": "Aún no hay nada aquí."
     }
   },
   "status": {
@@ -59,6 +77,25 @@
     "org_dispatch_leader_unavailable": "No se puede contactar con el responsable del departamento ahora mismo. Inténtalo más tarde.",
     "org_dispatch_unroutable": "No se pudo determinar qué departamento debe encargarse. Nombra uno o añade más detalles.",
     "org_dispatch_failed": "No se pudo enviar el trabajo al departamento.",
-    "generic": "Algo salió mal. Inténtalo de nuevo."
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "followup_failed": "No se pudo añadir a este trabajo. Inténtalo de nuevo.",
+    "upload_failed": "No se pudo subir un archivo. Inténtalo de nuevo."
+  },
+  "plan": {
+    "title": "Plan"
+  },
+  "deliverables": {
+    "title": "Entregables",
+    "version_count": "v{{count}}"
+  },
+  "review": {
+    "accept": "Aceptar",
+    "reject": "Devolver",
+    "reason_label": "Qué hay que corregir",
+    "reason_placeholder": "Dile al departamento qué corregir",
+    "submit_reject": "Devolver con esta nota",
+    "cancel": "Cancelar",
+    "accept_failed": "No se pudo aceptar el resultado. Inténtalo de nuevo.",
+    "reject_failed": "No se pudo devolver. Inténtalo de nuevo."
   }
 }

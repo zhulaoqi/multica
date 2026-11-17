@@ -19,7 +19,11 @@ import type { DispatchCandidate, DispatchListItem } from "@multica/core/workbenc
 import { ReadonlyContent } from "../editor/readonly-content";
 import { useT, useTimeAgo } from "../i18n";
 import { AppLink } from "../navigation";
+import { canReview } from "./dispatch-actions";
 import { dispatchResult } from "./dispatch-result";
+import { DispatchDeliverables } from "./dispatch-deliverables";
+import { DispatchPlan } from "./dispatch-plan";
+import { DispatchReview } from "./dispatch-review";
 import type { ChildProgress, DispatchPhase } from "./use-workbench-conversation";
 
 /** A submission that has not been accepted by the server yet. */
@@ -29,6 +33,8 @@ export interface WorkbenchAttempt {
   status: "pending" | "failed";
   error?: unknown;
   candidates: DispatchCandidate[];
+  /** Uploaded files to send again with a retry or a picked department. */
+  attachmentIds: string[];
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -143,11 +149,13 @@ function DispatchResult({ issueId }: { issueId: string }) {
  * the requester can follow the work in the issue view at any time.
  */
 export function DispatchConversation({
+  wsId,
   item,
   phase,
   progress,
   onRetry,
 }: {
+  wsId: string;
   item: DispatchListItem;
   phase: DispatchPhase;
   progress?: ChildProgress;
@@ -186,9 +194,16 @@ export function DispatchConversation({
               total: progress.total,
             })} />
           ) : null}
+          {progress && progress.total > 0 ? (
+            <DispatchPlan wsId={wsId} issueId={item.issue.id} progress={progress} />
+          ) : null}
           {phase === "completed" || phase === "in_review" ? (
             <DispatchResult issueId={item.issue.id} />
           ) : null}
+          {phase === "completed" || phase === "in_review" ? (
+            <DispatchDeliverables wsId={wsId} issueId={item.issue.id} />
+          ) : null}
+          {canReview(phase) ? <DispatchReview item={item} /> : null}
           {phase === "failed" ? (
             <p className="text-caption text-muted-foreground">
               {t(($) => $.card.failure_hint)}

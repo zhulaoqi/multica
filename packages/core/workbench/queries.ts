@@ -13,6 +13,7 @@ export function myDispatchesOptions(wsId: string) {
   return queryOptions({
     queryKey: workbenchKeys.dispatches(wsId),
     queryFn: () => api.listMyDispatches(DISPATCH_HISTORY_LIMIT),
+    enabled: wsId.length > 0,
     staleTime: 15_000,
     refetchOnWindowFocus: true,
   });

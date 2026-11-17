@@ -21,6 +21,24 @@
       "one": "Prepare next week's customer onboarding materials",
       "two": "Investigate yesterday's checkout failures",
       "three": "Write a launch announcement for the new dashboard"
+    },
+    "followup_placeholder": "Add to this work…",
+    "thread_hint": "Enter to send to the department",
+    "leave_thread": "Leave this thread",
+    "attach_files": "Attach files",
+    "remove_attachment": "Remove {{name}}",
+    "uploading": "Uploading…",
+    "mention": "Mention someone",
+    "mention_label": "Mention",
+    "mention_agent": "Agent",
+    "mention_squad": "Squad",
+    "filters": {
+      "label": "Filter work",
+      "all": "All",
+      "review": "Needs review",
+      "active": "In progress",
+      "completed": "Done",
+      "empty": "Nothing here yet."
     }
   },
   "status": {
@@ -59,6 +77,25 @@
     "org_dispatch_leader_unavailable": "The department lead can't be reached right now. Try again later.",
     "org_dispatch_unroutable": "Couldn't tell which department should take this. Name a department or add more detail.",
     "org_dispatch_failed": "The work couldn't be sent to the department.",
-    "generic": "Something went wrong. Try again."
+    "generic": "Something went wrong. Try again.",
+    "followup_failed": "Couldn't add to this work. Try again.",
+    "upload_failed": "A file didn't upload. Try again."
+  },
+  "plan": {
+    "title": "Plan"
+  },
+  "deliverables": {
+    "title": "Deliverables",
+    "version_count": "v{{count}}"
+  },
+  "review": {
+    "accept": "Accept",
+    "reject": "Send back",
+    "reason_label": "What needs fixing",
+    "reason_placeholder": "Tell the department what to fix",
+    "submit_reject": "Send back with this note",
+    "cancel": "Cancel",
+    "accept_failed": "Couldn't accept the result. Try again.",
+    "reject_failed": "Couldn't send it back. Try again."
   }
 }

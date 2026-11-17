@@ -13,7 +13,14 @@ import {
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
+import { api } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
+import {
+  useFileUpload,
+  type UploadResult,
+} from "@multica/core/hooks/use-file-upload";
+import { useCreateComment } from "@multica/core/issues/mutations";
+import { useActorName } from "@multica/core/workspace/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   parseDispatchCandidates,
@@ -22,13 +29,18 @@ import {
   type DispatchCandidate,
   type DispatchListItem,
 } from "@multica/core/workbench";
-import { orgTreeOptions } from "@multica/core/workspace/queries";
+import {
+  agentListOptions,
+  orgTreeOptions,
+  squadListOptions,
+} from "@multica/core/workspace/queries";
 import { createSafeId } from "@multica/core/utils";
 import { CollectionPageHeader } from "../layout";
 import { useT, useTimeAgo } from "../i18n";
 import { useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
-import { DispatchComposer } from "./dispatch-composer";
+import { followUpComment, subjectMention } from "./dispatch-actions";
+import { DispatchComposer, type ComposerMention } from "./dispatch-composer";
 import {
   DispatchAttemptConversation,
   DispatchConversation,
@@ -38,6 +50,29 @@ import {
   useWorkbenchConversation,
   type DispatchPhase,
 } from "./use-workbench-conversation";
+
+/** Which slice of the history the requester is looking at. */
+type DispatchFilter = "all" | "review" | "active" | "completed";
+
+const FILTERS: DispatchFilter[] = ["all", "review", "active", "completed"];
+
+function matchesFilter(phase: DispatchPhase, filter: DispatchFilter): boolean {
+  switch (filter) {
+    case "review":
+      return phase === "in_review";
+    case "active":
+      return (
+        phase === "queued" ||
+        phase === "decomposing" ||
+        phase === "progress" ||
+        phase === "failed"
+      );
+    case "completed":
+      return phase === "completed" || phase === "cancelled";
+    default:
+      return true;
+  }
+}
 
 function phaseDotClass(phase: DispatchPhase): string {
   switch (phase) {
@@ -62,6 +97,8 @@ function HistoryList({
   isLoading,
   error,
   phaseFor,
+  filter,
+  onFilterChange,
   onSelect,
 }: {
   dispatches: DispatchListItem[];
@@ -69,10 +106,26 @@ function HistoryList({
   isLoading: boolean;
   error: Error | null;
   phaseFor: (item: DispatchListItem) => DispatchPhase;
+  filter: DispatchFilter;
+  onFilterChange: (filter: DispatchFilter) => void;
   onSelect: (item: DispatchListItem) => void;
 }) {
   const { t } = useT("workbench");
   const timeAgo = useTimeAgo();
+
+  const counts: Record<DispatchFilter, number> = {
+    all: dispatches.length,
+    review: 0,
+    active: 0,
+    completed: 0,
+  };
+  for (const item of dispatches) {
+    const phase = phaseFor(item);
+    for (const key of ["review", "active", "completed"] as const) {
+      if (matchesFilter(phase, key)) counts[key] += 1;
+    }
+  }
+  const visible = dispatches.filter((item) => matchesFilter(phaseFor(item), filter));
 
   if (isLoading && dispatches.length === 0) {
     return (
@@ -98,42 +151,64 @@ function HistoryList({
     );
   }
   return (
-    <ul className="flex flex-col gap-0.5">
-      {dispatches.map((item) => {
-        const selected = item.issue.id === selectedId;
-        return (
-          <li key={item.issue.id}>
-            <button
-              type="button"
-              aria-current={selected ? "true" : undefined}
-              onClick={() => onSelect(item)}
-              className={cn(
-                "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
-                selected && "bg-muted",
-              )}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "size-1.5 shrink-0 rounded-full",
-                    phaseDotClass(phaseFor(item)),
-                  )}
-                />
-                <span className="min-w-0 flex-1 truncate text-body">
-                  {item.issue.title}
+    <div className="flex flex-col gap-1.5">
+      <div role="group" aria-label={t(($) => $.page.filters.label)} className="flex flex-wrap gap-1">
+        {FILTERS.map((key) => (
+          <Button
+            key={key}
+            variant={filter === key ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={filter === key}
+            className="h-6 gap-1 rounded-full px-2 text-caption"
+            onClick={() => onFilterChange(key)}
+          >
+            {t(($) => $.page.filters[key])}
+            <span className="tabular-nums text-muted-foreground">{counts[key]}</span>
+          </Button>
+        ))}
+      </div>
+      {visible.length === 0 ? (
+        <p className="px-2 py-3 text-caption text-muted-foreground">
+          {t(($) => $.page.filters.empty)}
+        </p>
+      ) : null}
+      <ul className="flex flex-col gap-0.5">
+        {visible.map((item) => {
+          const selected = item.issue.id === selectedId;
+          return (
+            <li key={item.issue.id}>
+              <button
+                type="button"
+                aria-current={selected ? "true" : undefined}
+                onClick={() => onSelect(item)}
+                className={cn(
+                  "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
+                  selected && "bg-muted",
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      phaseDotClass(phaseFor(item)),
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-body">
+                    {item.issue.title}
+                  </span>
                 </span>
-              </span>
-              <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
-                {item.unit_path || t(($) => $.page.unknown_department)}
-                {" · "}
-                {timeAgo(item.dispatched_at)}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+                <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
+                  {item.unit_path || t(($) => $.page.unknown_department)}
+                  {" · "}
+                  {timeAgo(item.dispatched_at)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -180,6 +255,58 @@ export function WorkbenchPage() {
   const [focusToken, setFocusToken] = useState(0);
   const [attempts, setAttempts] = useState<WorkbenchAttempt[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [filter, setFilter] = useState<DispatchFilter>("all");
+  const [followUpPending, setFollowUpPending] = useState(false);
+  const [followUpError, setFollowUpError] = useState<unknown>(null);
+  const [attachments, setAttachments] = useState<UploadResult[]>([]);
+  const [uploadFailed, setUploadFailed] = useState(false);
+  const { upload, uploading } = useFileUpload(api);
+  const followUp = useCreateComment(selected?.issue.id ?? "");
+  const { getActorName } = useActorName();
+  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const { data: squads = [] } = useQuery(squadListOptions(wsId));
+
+  const mentions = useMemo<ComposerMention[]>(
+    () => [
+      ...squads.map((squad) => ({
+        type: "squad" as const,
+        id: squad.id,
+        label: squad.name,
+        hint: t(($) => $.page.mention_squad),
+      })),
+      ...agents
+        .filter((agent) => !agent.archived_at)
+        .map((agent) => ({
+          type: "agent" as const,
+          id: agent.id,
+          label: agent.name,
+          hint: t(($) => $.page.mention_agent),
+        })),
+    ],
+    [agents, squads, t],
+  );
+
+  const attachFiles = async (files: FileList) => {
+    setUploadFailed(false);
+    for (const file of Array.from(files)) {
+      try {
+        const uploaded = await upload(file);
+        if (uploaded) {
+          setAttachments((prev) => [
+            ...prev.filter((entry) => entry.id !== uploaded.id),
+            uploaded,
+          ]);
+        }
+      } catch {
+        setUploadFailed(true);
+      }
+    }
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((entry) => entry.id !== id));
+  };
+  const attachmentIds = attachments.map((entry) => entry.id);
 
   // A dispatch URL that no longer resolves (issue deleted, another device
   // removed it) falls back to a fresh composition instead of an empty thread.
@@ -189,9 +316,47 @@ export function WorkbenchPage() {
     replace(workbenchPath);
   }, [selectedId, isLoading, selected, pathname, workbenchPath, replace]);
 
-  const pending = attempts.some((attempt) => attempt.status === "pending");
+  const pending =
+    attempts.some((attempt) => attempt.status === "pending") || followUpPending;
 
-  const submit = async (raw: string, unitId?: string, attemptId?: string) => {
+  /**
+   * While a thread is open the composer adds to that conversation: the text
+   * becomes a comment on the root issue that addresses the department, which
+   * is how a requester asks a follow-up or changes scope mid-flight.
+   */
+  const sendFollowUp = async (raw: string) => {
+    if (!selected) return;
+    setFollowUpPending(true);
+    setFollowUpError(null);
+    try {
+      const assigneeName =
+        selected.issue.assignee_type && selected.issue.assignee_id
+          ? getActorName(selected.issue.assignee_type, selected.issue.assignee_id)
+          : selected.unit_path || t(($) => $.page.unknown_department);
+      const mention = subjectMention(
+        selected.issue.assignee_type,
+        selected.issue.assignee_id,
+        assigneeName,
+      );
+      await followUp.mutateAsync({
+        content: followUpComment(mention, raw),
+        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+      });
+      setText("");
+      setAttachments([]);
+    } catch (err) {
+      setFollowUpError(err);
+    } finally {
+      setFollowUpPending(false);
+    }
+  };
+
+  const submitDispatch = async (
+    raw: string,
+    unitId?: string,
+    attemptId?: string,
+    files: string[] = [],
+  ) => {
     const trimmed = raw.trim();
     if (!trimmed || pending) return;
     // A new submission is its own thread; leaving a historical dispatch
@@ -205,6 +370,7 @@ export function WorkbenchPage() {
         text: trimmed,
         status: "pending",
         candidates: [],
+        attachmentIds: files,
       };
       const existing = prev.findIndex((attempt) => attempt.id === id);
       if (existing === -1) return [...prev, next];
@@ -216,9 +382,11 @@ export function WorkbenchPage() {
         text: trimmed,
         unitId,
         clientRequestId: id,
+        attachmentIds: files.length > 0 ? files : undefined,
       });
       setAttempts((prev) => prev.filter((attempt) => attempt.id !== id));
       setText("");
+      setAttachments([]);
       replace(p.workbenchDispatch(result.issue.id));
     } catch (err) {
       setAttempts((prev) =>
@@ -234,6 +402,16 @@ export function WorkbenchPage() {
         ),
       );
     }
+  };
+
+  const submit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || pending) return;
+    if (selected) {
+      void sendFollowUp(trimmed);
+      return;
+    }
+    void submitDispatch(trimmed, presetUnitId ?? undefined, undefined, attachmentIds);
   };
 
   const selectDispatch = (item: DispatchListItem) => {
@@ -269,6 +447,8 @@ export function WorkbenchPage() {
           isLoading={isLoading}
           error={error}
           phaseFor={phaseFor}
+          filter={filter}
+          onFilterChange={setFilter}
           onSelect={selectDispatch}
         />
       </div>
@@ -277,11 +457,15 @@ export function WorkbenchPage() {
 
   const conversation = selected ? (
     <DispatchConversation
+      wsId={wsId}
       item={selected}
       phase={phaseFor(selected)}
       progress={progressFor(selected.issue.id)}
       onRetry={() =>
-        void submit(selected.issue.description ?? selected.issue.title, selected.unit_id)
+        void submitDispatch(
+          selected.issue.description ?? selected.issue.title,
+          selected.unit_id,
+        )
       }
     />
   ) : attempts.length > 0 ? (
@@ -290,9 +474,16 @@ export function WorkbenchPage() {
         <DispatchAttemptConversation
           key={attempt.id}
           attempt={attempt}
-          onRetry={() => void submit(attempt.text, undefined, attempt.id)}
+          onRetry={() =>
+            void submitDispatch(attempt.text, undefined, attempt.id, attempt.attachmentIds)
+          }
           onPickCandidate={(candidate: DispatchCandidate) =>
-            void submit(attempt.text, candidate.unit_id, attempt.id)
+            void submitDispatch(
+              attempt.text,
+              candidate.unit_id,
+              attempt.id,
+              attempt.attachmentIds,
+            )
           }
         />
       ))}
@@ -344,20 +535,47 @@ export function WorkbenchPage() {
         </div>
       </div>
       <div className="border-t bg-background/80 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl px-4 py-3">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-4 py-3">
+          {followUpError ? (
+            <p role="alert" className="text-caption text-destructive">
+              {t(($) => $.errors.followup_failed)}
+            </p>
+          ) : null}
+          {uploadFailed ? (
+            <p role="alert" className="text-caption text-destructive">
+              {t(($) => $.errors.upload_failed)}
+            </p>
+          ) : null}
           <DispatchComposer
             value={text}
             onChange={setText}
-            onSubmit={(value) =>
-              void submit(value, presetUnitId ?? undefined)
-            }
+            onSubmit={submit}
             pending={pending}
-            unitPath={presetUnitId ? (presetUnitPath ?? "") : null}
+            unitPath={presetUnitId && !selected ? (presetUnitPath ?? "") : null}
             onClearUnit={
-              presetUnitId
+              presetUnitId && !selected
                 ? () => replace(workbenchPath)
                 : undefined
             }
+            threadTitle={selected ? selected.issue.title : null}
+            onExitThread={
+              selected
+                ? () => {
+                    setText("");
+                    setFollowUpError(null);
+                    setAttachments([]);
+                    push(workbenchPath);
+                  }
+                : undefined
+            }
+            attachments={attachments.map((entry) => ({
+              id: entry.id,
+              filename: entry.filename,
+            }))}
+            onAttachFiles={attachFiles}
+            onRemoveAttachment={removeAttachment}
+            uploading={uploading}
+            mentions={mentions}
             focusToken={focusToken}
           />
         </div>

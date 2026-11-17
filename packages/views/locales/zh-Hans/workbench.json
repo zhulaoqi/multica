@@ -21,6 +21,24 @@
       "one": "准备下周的客户上线材料",
       "two": "排查昨天结算失败的原因",
       "three": "给新看板写一篇发布公告"
+    },
+    "followup_placeholder": "在会话中追问…",
+    "thread_hint": "Enter 发送给部门",
+    "leave_thread": "退出这个会话",
+    "attach_files": "添加附件",
+    "remove_attachment": "移除 {{name}}",
+    "uploading": "上传中…",
+    "mention": "提及成员",
+    "mention_label": "提及",
+    "mention_agent": "智能体",
+    "mention_squad": "小队",
+    "filters": {
+      "label": "筛选派活",
+      "all": "全部",
+      "review": "待验收",
+      "active": "进行中",
+      "completed": "已完成",
+      "empty": "这里还没有内容。"
     }
   },
   "status": {
@@ -58,6 +76,25 @@
     "org_dispatch_leader_unavailable": "暂时联系不上部门负责人，请稍后再试。",
     "org_dispatch_unroutable": "无法判断该交给哪个部门，请点名部门或补充说明。",
     "org_dispatch_failed": "没能把这项工作交给部门。",
-    "generic": "出了点问题，请重试。"
+    "generic": "出了点问题，请重试。",
+    "followup_failed": "追问没有发出去，请重试。",
+    "upload_failed": "有文件没有上传成功，请重试。"
+  },
+  "plan": {
+    "title": "计划"
+  },
+  "deliverables": {
+    "title": "交付物",
+    "version_count": "{{count}} 版"
+  },
+  "review": {
+    "accept": "验收通过",
+    "reject": "打回",
+    "reason_label": "需要修改什么",
+    "reason_placeholder": "告诉部门需要修改的地方",
+    "submit_reject": "附上说明打回",
+    "cancel": "取消",
+    "accept_failed": "验收没有成功，请重试。",
+    "reject_failed": "打回没有成功，请重试。"
   }
 }

@@ -24,9 +24,10 @@ const (
 )
 
 type dispatchWorkRequest struct {
-	Text            string `json:"text"`
-	UnitID          string `json:"unit_id"`
-	ClientRequestID string `json:"client_request_id"`
+	Text            string   `json:"text"`
+	UnitID          string   `json:"unit_id"`
+	ClientRequestID string   `json:"client_request_id"`
+	AttachmentIDs   []string `json:"attachment_ids"`
 }
 
 type dispatchWorkRef struct {
@@ -84,6 +85,10 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	attachmentIDs, ok := parseUUIDSliceOrBadRequest(w, body.AttachmentIDs, "attachment_ids")
+	if !ok {
+		return
+	}
 
 	// A retried send may arrive after the first attempt committed but before
 	// its response reached the client.
@@ -128,6 +133,7 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 		Title:           service.DispatchTextTitle(text),
 		Description:     text,
 		ClientRequestID: pgtype.Text{String: uuidToString(clientID), Valid: true},
+		AttachmentIDs:   attachmentIDs,
 		Platform:        func() string { p, _, _ := middleware.ClientMetadataFromContext(r.Context()); return p }(),
 	})
 	if err != nil {

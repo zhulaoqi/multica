@@ -91,6 +91,63 @@ func TestDispatchWork_RoutesToOnlyDepartmentAndDerivesTitle(t *testing.T) {
 	}
 }
 
+func TestDispatchWork_BindsUploadedAttachmentsToTheRootIssue(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "workbench-attach-admin@example.com")
+	leader := insertIntakeDutyAgent(t, "workbench-attach-leader", admin)
+	unitID := createOrgUnitAs(t, admin, "附件部", "")
+	placeOrgAgent(t, admin, leader, unitID)
+	t.Cleanup(func() { clearDispatchFixtures(t) })
+
+	var attachmentID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO attachment (workspace_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
+		VALUES ($1, 'member', $2, 'brief.pdf', 'https://files.example/brief.pdf', 'application/pdf', 2048)
+		RETURNING id::text
+	`, testWorkspaceID, admin).Scan(&attachmentID); err != nil {
+		t.Fatalf("seed unbound attachment: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM attachment WHERE id = $1`, attachmentID)
+	})
+
+	status, res, body := postDispatchWork(t, admin, map[string]any{
+		"text":              "dispatch-test 按附件准备材料",
+		"client_request_id": testClientRequestID,
+		"attachment_ids":    []string{attachmentID},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", status, body)
+	}
+
+	var boundIssueID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT issue_id::text FROM attachment WHERE id = $1
+	`, attachmentID).Scan(&boundIssueID); err != nil {
+		t.Fatalf("load attachment binding: %v", err)
+	}
+	if boundIssueID != res.Issue.ID {
+		t.Fatalf("attachment issue = %s, want root issue %s", boundIssueID, res.Issue.ID)
+	}
+}
+
+func TestDispatchWork_RejectsMalformedAttachmentIDs(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "workbench-attach-bad@example.com")
+
+	status, _, body := postDispatchWork(t, admin, map[string]any{
+		"text":              "dispatch-test 坏附件",
+		"client_request_id": testClientRequestID,
+		"attachment_ids":    []string{"not-a-uuid"},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", status, body)
+	}
+	if n := countDispatchOrigins(t); n != 0 {
+		t.Fatalf("dispatch origins = %d, want 0", n)
+	}
+}
+
 func TestDispatchWork_RetryReturnsTheSameIssue(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-idempotent-admin@example.com")

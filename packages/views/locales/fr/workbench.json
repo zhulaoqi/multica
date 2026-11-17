@@ -21,6 +21,24 @@
       "one": "Préparer les supports d'intégration client de la semaine prochaine",
       "two": "Enquêter sur les échecs de paiement d'hier",
       "three": "Rédiger l'annonce de lancement du nouveau tableau de bord"
+    },
+    "followup_placeholder": "Ajouter à ce travail…",
+    "thread_hint": "Entrée pour envoyer au département",
+    "leave_thread": "Quitter cette conversation",
+    "attach_files": "Joindre des fichiers",
+    "remove_attachment": "Retirer {{name}}",
+    "uploading": "Envoi…",
+    "mention": "Mentionner quelqu'un",
+    "mention_label": "Mentionner",
+    "mention_agent": "Agent",
+    "mention_squad": "Équipe",
+    "filters": {
+      "label": "Filtrer le travail",
+      "all": "Tout",
+      "review": "À valider",
+      "active": "En cours",
+      "completed": "Terminé",
+      "empty": "Rien ici pour l'instant."
     }
   },
   "status": {
@@ -59,6 +77,25 @@
     "org_dispatch_leader_unavailable": "Le responsable du département est injoignable pour le moment. Réessayez plus tard.",
     "org_dispatch_unroutable": "Impossible de déterminer quel département doit s'en charger. Nommez-en un ou ajoutez des détails.",
     "org_dispatch_failed": "Le travail n'a pas pu être envoyé au département.",
-    "generic": "Une erreur est survenue. Réessayez."
+    "generic": "Une erreur est survenue. Réessayez.",
+    "followup_failed": "Impossible d'ajouter à ce travail. Réessayez.",
+    "upload_failed": "Un fichier n'a pas été envoyé. Réessayez."
+  },
+  "plan": {
+    "title": "Plan"
+  },
+  "deliverables": {
+    "title": "Livrables",
+    "version_count": "v{{count}}"
+  },
+  "review": {
+    "accept": "Accepter",
+    "reject": "Renvoyer",
+    "reason_label": "Ce qui doit être corrigé",
+    "reason_placeholder": "Indiquez au département ce qu'il faut corriger",
+    "submit_reject": "Renvoyer avec cette note",
+    "cancel": "Annuler",
+    "accept_failed": "Impossible d'accepter le résultat. Réessayez.",
+    "reject_failed": "Impossible de le renvoyer. Réessayez."
   }
 }

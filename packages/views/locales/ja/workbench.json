@@ -21,6 +21,24 @@
       "one": "来週の顧客オンボーディング資料を用意する",
       "two": "昨日の決済失敗の原因を調べる",
       "three": "新しいダッシュボードのリリース告知を書く"
+    },
+    "followup_placeholder": "この仕事に追記…",
+    "thread_hint": "Enter で部門に送信",
+    "leave_thread": "このスレッドを閉じる",
+    "attach_files": "ファイルを添付",
+    "remove_attachment": "{{name}} を削除",
+    "uploading": "アップロード中…",
+    "mention": "メンションする",
+    "mention_label": "メンション",
+    "mention_agent": "エージェント",
+    "mention_squad": "チーム",
+    "filters": {
+      "label": "作業を絞り込む",
+      "all": "すべて",
+      "review": "確認待ち",
+      "active": "進行中",
+      "completed": "完了",
+      "empty": "まだ何もありません。"
     }
   },
   "status": {
@@ -58,6 +76,25 @@
     "org_dispatch_leader_unavailable": "部署の責任者に現在連絡できません。しばらくしてから再試行してください。",
     "org_dispatch_unroutable": "どの部署に渡すか判断できませんでした。部署名を指定するか、詳細を追加してください。",
     "org_dispatch_failed": "部署に作業を渡せませんでした。",
-    "generic": "問題が発生しました。再試行してください。"
+    "generic": "問題が発生しました。再試行してください。",
+    "followup_failed": "この仕事に追記できませんでした。もう一度お試しください。",
+    "upload_failed": "ファイルをアップロードできませんでした。もう一度お試しください。"
+  },
+  "plan": {
+    "title": "計画"
+  },
+  "deliverables": {
+    "title": "成果物",
+    "version_count": "{{count}} 版"
+  },
+  "review": {
+    "accept": "承認",
+    "reject": "差し戻す",
+    "reason_label": "修正が必要な点",
+    "reason_placeholder": "部門に修正してほしい点を伝えてください",
+    "submit_reject": "このメモを付けて差し戻す",
+    "cancel": "キャンセル",
+    "accept_failed": "結果を承認できませんでした。もう一度お試しください。",
+    "reject_failed": "差し戻せませんでした。もう一度お試しください。"
   }
 }

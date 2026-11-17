@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@multica/core/api";
 import { issueTimelineOptions } from "@multica/core/issues/queries";
-import type { TimelineEntry } from "@multica/core/types";
+import type { MemberWithUser, TimelineEntry } from "@multica/core/types";
 import type { DispatchListItem, DispatchWorkResponse } from "@multica/core/workbench";
 import {
   orgTreeOptions,
+  workspaceKeys,
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
 import { WorkspaceSlugProvider } from "@multica/core/paths";
@@ -17,6 +18,28 @@ import { WorkbenchPage } from "./workbench-page";
 
 const WS = "ws-test";
 const NOW = "2026-11-12T08:00:00Z";
+
+// Review and follow-up writes go through the shared ApiClient; everything
+// else the page reads is seeded into the query cache, so the mock only needs
+// the write calls plus empty reads for the actor-name lookups.
+const apiState = vi.hoisted(() => ({
+  updateIssue: vi.fn(),
+  createComment: vi.fn(),
+  uploadFile: vi.fn(),
+  listMembers: vi.fn().mockResolvedValue([]),
+  listAgents: vi.fn().mockResolvedValue([]),
+  listSquads: vi.fn().mockResolvedValue([]),
+  listPlugins: vi.fn().mockResolvedValue({ plugins: [] }),
+}));
+
+vi.mock("@multica/core/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@multica/core/api")>();
+  return {
+    ...actual,
+    api: apiState,
+    getApi: () => apiState,
+  };
+});
 
 const state = vi.hoisted(() => ({
   dispatches: [] as DispatchListItem[],
@@ -354,4 +377,247 @@ describe("WorkbenchPage", () => {
       ),
     );
   });
+
+  it("accepts a delivered result and closes the work", async () => {
+    apiState.updateIssue.mockResolvedValue({
+      ...reviewItem().issue,
+      status: "done",
+      status_category: "done",
+    });
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() =>
+      expect(apiState.updateIssue).toHaveBeenCalledWith("issue-1", { status: "done" }),
+    );
+  });
+
+  it("sends a rejected result back with the reason and the department mention", async () => {
+    apiState.updateIssue.mockResolvedValue(reviewItem().issue);
+    apiState.createComment.mockResolvedValue(createdComment());
+    seedMember();
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send back" }));
+    await userEvent.type(screen.getByLabelText("What needs fixing"), "Add the pricing table");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send back with this note" }),
+    );
+
+    await waitFor(() =>
+      expect(apiState.createComment).toHaveBeenCalledWith(
+        "issue-1",
+        "[@Ada](mention://member/user-1)\n\nAdd the pricing table",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ),
+    );
+    await waitFor(() =>
+      expect(apiState.updateIssue).toHaveBeenCalledWith("issue-1", {
+        status: "in_progress",
+      }),
+    );
+  });
+
+  it("does not send a rejection without a reason", async () => {
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send back" }));
+
+    expect(
+      screen.getByRole("button", { name: "Send back with this note" }),
+    ).toBeDisabled();
+    expect(apiState.createComment).not.toHaveBeenCalled();
+  });
+
+  it("adds to an open thread instead of sending new work", async () => {
+    apiState.createComment.mockResolvedValue(createdComment());
+    seedMember();
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    expect(screen.getByText("Enter to send to the department")).toBeInTheDocument();
+    await submitText("Also add the screenshots");
+
+    await waitFor(() =>
+      expect(apiState.createComment).toHaveBeenCalledWith(
+        "issue-1",
+        "[@Ada](mention://member/user-1)\n\nAlso add the screenshots",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ),
+    );
+    expect(state.mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "What needs doing?" })).toHaveValue("");
+  });
+
+  it("filters the history to work waiting on the requester", async () => {
+    state.dispatches = [
+      dispatchItem(),
+      dispatchItem({
+        completed: true,
+        issue: {
+          ...dispatchItem().issue,
+          id: "issue-2",
+          title: "Finished work",
+          status: "done",
+          status_category: "done",
+        },
+      }),
+    ];
+    renderPage();
+
+    const group = screen.getByRole("group", { name: "Filter work" });
+    expect(within(group).getByRole("button", { name: /Needs review/ })).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole("button", { name: /Needs review/ }));
+
+    expect(screen.getByText("Prepare onboarding materials", { selector: "span" })).toBeInTheDocument();
+    expect(screen.queryByText("Finished work")).not.toBeInTheDocument();
+  });
+
+  it("sends uploaded files with the request", async () => {
+    apiState.uploadFile.mockResolvedValue({
+      id: "att-1",
+      filename: "brief.pdf",
+      url: "https://files.example/brief.pdf",
+      content_type: "application/pdf",
+      size_bytes: 10,
+    });
+    state.mutateAsync.mockResolvedValue(dispatchResponse());
+    renderPage();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(
+      input,
+      new File(["brief"], "brief.pdf", { type: "application/pdf" }),
+    );
+    expect(await screen.findByText("brief.pdf")).toBeInTheDocument();
+
+    await submitText("Investigate checkout failures");
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ attachmentIds: ["att-1"] }),
+      ),
+    );
+  });
+
+  it("attaches a file to a follow-up comment", async () => {
+    apiState.uploadFile.mockResolvedValue({
+      id: "att-1",
+      filename: "brief.pdf",
+      url: "https://files.example/brief.pdf",
+      content_type: "application/pdf",
+      size_bytes: 10,
+    });
+    apiState.createComment.mockResolvedValue(createdComment());
+    seedMember();
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(
+      input,
+      new File(["brief"], "brief.pdf", { type: "application/pdf" }),
+    );
+    expect(await screen.findByText("brief.pdf")).toBeInTheDocument();
+
+    await submitText("Use this brief");
+
+    await waitFor(() =>
+      expect(apiState.createComment).toHaveBeenCalledWith(
+        "issue-1",
+        "[@Ada](mention://member/user-1)\n\nUse this brief",
+        undefined,
+        undefined,
+        ["att-1"],
+        undefined,
+        undefined,
+      ),
+    );
+  });
+
+  it("inserts a mention into a follow-up", async () => {
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    qc.setQueryData(workspaceKeys.agents(WS), [
+      { id: "agent-1", name: "Reviewer" },
+    ]);
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Mention someone" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Reviewer/ }));
+
+    expect(screen.getByRole("textbox", { name: "What needs doing?" })).toHaveValue(
+      "[@Reviewer](mention://agent/agent-1) ",
+    );
+  });
+
+  it("leaves the thread and returns to a fresh composition", async () => {
+    state.dispatches = [reviewItem()];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Leave this thread" }));
+
+    expect(state.push).toHaveBeenCalledWith("/acme/workbench");
+  });
 });
+
+function reviewItem(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
+  const item = dispatchItem(overrides);
+  return {
+    ...item,
+    issue: { ...item.issue, assignee_type: "member", assignee_id: "user-1" },
+  };
+}
+
+function createdComment() {
+  return {
+    id: "comment-new",
+    author_type: "member",
+    author_id: "user-1",
+    content: "",
+    type: "comment",
+    parent_id: null,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+function seedMember() {
+  qc.setQueryData<MemberWithUser[]>(workspaceKeys.members(WS), [
+    {
+      id: "member-1",
+      workspace_id: WS,
+      user_id: "user-1",
+      role: "member",
+      created_at: NOW,
+      name: "Ada",
+      email: "ada@example.com",
+      avatar_url: null,
+    },
+  ]);
+}

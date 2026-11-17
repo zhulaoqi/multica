@@ -21,6 +21,24 @@
       "one": "準備下週的客戶上線資料",
       "two": "排查昨天結算失敗的原因",
       "three": "為新看板寫一篇發布公告"
+    },
+    "followup_placeholder": "在會話中追問…",
+    "thread_hint": "Enter 傳送給部門",
+    "leave_thread": "退出這個會話",
+    "attach_files": "新增附件",
+    "remove_attachment": "移除 {{name}}",
+    "uploading": "上傳中…",
+    "mention": "提及成員",
+    "mention_label": "提及",
+    "mention_agent": "智慧體",
+    "mention_squad": "小隊",
+    "filters": {
+      "label": "篩選派活",
+      "all": "全部",
+      "review": "待驗收",
+      "active": "進行中",
+      "completed": "已完成",
+      "empty": "這裡還沒有內容。"
     }
   },
   "status": {
@@ -58,6 +76,25 @@
     "org_dispatch_leader_unavailable": "暫時聯絡不上部門負責人，請稍後再試。",
     "org_dispatch_unroutable": "無法判斷該交給哪個部門，請點名部門或補充說明。",
     "org_dispatch_failed": "沒能把這項工作交給部門。",
-    "generic": "出了點問題，請重試。"
+    "generic": "出了點問題，請重試。",
+    "followup_failed": "追問沒有送出，請重試。",
+    "upload_failed": "有檔案沒有上傳成功，請重試。"
+  },
+  "plan": {
+    "title": "計畫"
+  },
+  "deliverables": {
+    "title": "交付物",
+    "version_count": "{{count}} 版"
+  },
+  "review": {
+    "accept": "驗收通過",
+    "reject": "退回",
+    "reason_label": "需要修改什麼",
+    "reason_placeholder": "告訴部門需要修改的地方",
+    "submit_reject": "附上說明退回",
+    "cancel": "取消",
+    "accept_failed": "驗收沒有成功，請重試。",
+    "reject_failed": "退回沒有成功，請重試。"
   }
 }

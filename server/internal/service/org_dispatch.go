@@ -61,7 +61,11 @@ type OrgDispatchParams struct {
 	Description string
 	// ClientRequestID deduplicates in-app retries; chat callers leave it empty.
 	ClientRequestID pgtype.Text
-	Origin          DispatchOriginInfo
+	// AttachmentIDs are files the requester uploaded with the request. They are
+	// bound to the root issue in the same create, so the squad leader can open
+	// the deck or screenshot that motivated the work.
+	AttachmentIDs []pgtype.UUID
+	Origin        DispatchOriginInfo
 	// Platform tags the IssueCreated analytics event with the caller's surface.
 	Platform string
 }
@@ -144,15 +148,16 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 	}
 
 	created, err := s.Issues.Create(ctx, IssueCreateParams{
-		WorkspaceID:  p.WorkspaceID,
-		Title:        p.Title,
-		Description:  pgtype.Text{String: p.Description, Valid: strings.TrimSpace(p.Description) != ""},
-		Status:       issuestatus.Todo,
-		Priority:     "none",
-		AssigneeType: pgtype.Text{String: "squad", Valid: true},
-		AssigneeID:   squad.ID,
-		CreatorType:  "member",
-		CreatorID:    p.ActorID,
+		WorkspaceID:   p.WorkspaceID,
+		Title:         p.Title,
+		Description:   pgtype.Text{String: p.Description, Valid: strings.TrimSpace(p.Description) != ""},
+		Status:        issuestatus.Todo,
+		Priority:      "none",
+		AssigneeType:  pgtype.Text{String: "squad", Valid: true},
+		AssigneeID:    squad.ID,
+		CreatorType:   "member",
+		CreatorID:     p.ActorID,
+		AttachmentIDs: p.AttachmentIDs,
 	}, IssueCreateOpts{Platform: p.Platform})
 	if err != nil {
 		return OrgDispatchResult{}, err
