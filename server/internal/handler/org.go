@@ -22,7 +22,7 @@ type orgUnitResponse struct {
 	ParentID   string `json:"parent_id"`
 	Name       string `json:"name"`
 	LeadUserID string `json:"lead_user_id"`
-	// CanManage marks units the requester may edit: workspace managers, or
+	// CanManage marks units the requester may edit: the platform operator, or
 	// the lead of this unit or one of its ancestors.
 	CanManage   bool   `json:"can_manage"`
 	Description string `json:"description"`
@@ -106,9 +106,9 @@ type orgImportResponse struct {
 
 // ListOrgUnits returns the flat organisation tree plus every agent that has a
 // unit and every member placed in one. Clients assemble the tree; the payload
-// stays stable when units move. Callers who cannot manage the workspace only
-// receive the departments they belong to or lead, so the org view answers
-// "where am I" instead of exposing the whole company.
+// stays stable when units move. Only the platform operator receives the whole
+// company; every other caller gets the departments they belong to or lead, so
+// the org view answers "where am I" without exposing the company directory.
 func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	access, ok := h.orgAccess(w, r)
 	if !ok {
@@ -234,7 +234,7 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 // agents pointing at units the operator did not ask for.
 func (h *Handler) ImportOrgUnits(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin"); !ok {
+	if _, ok := h.requireOperator(w, r, workspaceID, "workspace not found"); !ok {
 		return
 	}
 	var body orgImportBody
@@ -793,16 +793,19 @@ func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, 
 		return orgAccess{}, false
 	}
 	return orgAccess{
-		wsUUID:    wsUUID,
-		userID:    member.UserID,
-		admin:     roleAllowed(member.Role, "owner", "admin"),
+		wsUUID: wsUUID,
+		userID: member.UserID,
+		// The organisation spans the company, not one workspace. Only the
+		// platform operator sees the whole tree; workspace roles and unit
+		// leads stay inside their own department scope.
+		admin:     requestIsOperator(r),
 		units:     units,
 		ownUnitID: member.OrgUnitID,
 	}, true
 }
 
-// manages reports that the caller may administer the unit: workspace managers
-// may, and so may the lead of the unit itself or one of its ancestors.
+// manages reports that the caller may administer the unit: the platform
+// operator may, and so may the lead of the unit itself or one of its ancestors.
 func (a orgAccess) manages(unitID pgtype.UUID) bool {
 	if a.admin {
 		return true

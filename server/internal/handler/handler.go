@@ -1055,6 +1055,21 @@ func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 	return member, true
 }
 
+// requireOperator resolves the workspace and rejects every caller that is not
+// the platform operator. Workspace roles are intentionally not enough: the
+// company organisation is shared across workspaces.
+func (h *Handler) requireOperator(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
+	member, ok := h.requireWorkspaceMember(w, r, workspaceID, notFoundMsg)
+	if !ok {
+		return db.Member{}, false
+	}
+	if !requestIsOperator(r) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return db.Member{}, false
+	}
+	return member, true
+}
+
 func (h *Handler) requireWorkspaceRole(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string, roles ...string) (db.Member, bool) {
 	member, ok := h.requireWorkspaceMember(w, r, workspaceID, notFoundMsg)
 	if !ok {

@@ -112,7 +112,6 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
-  const userId = useAuthStore((state) => state.user?.id);
   const isOperator = useAuthStore((state) => state.user?.is_operator ?? false);
   const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
@@ -133,14 +132,11 @@ export function OrgPage() {
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   const forest = buildOrgForest(data);
-  // The tree response owns `can_manage`, but it is unavailable when the tree
-  // request fails. Fall back to the caller's workspace role so an admin can
-  // still reach the sync action on a degraded page.
-  const myRole = (members.data ?? []).find((member) => member.user_id === userId)?.role;
-  // The operator account is synthesised as an owner on the API and never has
-  // a member row, so the role lookup cannot see it.
-  const canManageOrg =
-    isOperator || data.can_manage || myRole === "owner" || myRole === "admin";
+  // The platform operator owns the company-wide organisation. The tree
+  // response carries the same answer, but it is unavailable when the tree
+  // request fails, so keep the operator flag as the fallback that still
+  // reaches the sync action on a degraded page.
+  const canManageOrg = isOperator || data.can_manage;
   // Landing on the caller's own department keeps plain members oriented; an
   // explicit click (including the unassigned pseudo-node) always wins.
   const activeSelected =

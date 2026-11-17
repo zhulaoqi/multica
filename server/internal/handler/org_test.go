@@ -8,7 +8,29 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/multica-ai/multica/server/internal/auth"
 )
+
+// operatorRequest marks the caller as the platform operator, which the auth
+// middleware does in production. Unit tests call handlers directly, so they
+// set the header themselves.
+func operatorRequest(userID, method, path string, body any) *http.Request {
+	req := newRequestAs(userID, method, path, body)
+	req.Header.Set(auth.OperatorHeader, "1")
+	return req
+}
+
+func operatorRequestWithParam(userID, method, path, name, value string, body any) *http.Request {
+	req := operatorRequest(userID, method, path, body)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add(name, value)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
+func operatorRequestWithAgent(userID, method, path, agentID string, body any) *http.Request {
+	return operatorRequestWithParam(userID, method, path, "agentId", agentID, body)
+}
 
 func createOrgTestAdmin(t *testing.T, email string) string {
 	t.Helper()
@@ -63,7 +85,7 @@ func TestImportOrgUnits_CreatesTreeAssignsLeadAndAgents(t *testing.T) {
 		{"path": "数据部", "lead_email": "nobody@example.com"},
 	}}
 	rec := httptest.NewRecorder()
-	testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", body))
+	testHandler.ImportOrgUnits(rec, operatorRequest(admin, "POST", "/api/org/units/import", body))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -85,7 +107,7 @@ func TestImportOrgUnits_CreatesTreeAssignsLeadAndAgents(t *testing.T) {
 	}
 
 	list := httptest.NewRecorder()
-	testHandler.ListOrgUnits(list, newRequestAs(admin, "GET", "/api/org/units", nil))
+	testHandler.ListOrgUnits(list, operatorRequest(admin, "GET", "/api/org/units", nil))
 	if list.Code != http.StatusOK {
 		t.Fatalf("list status = %d: %s", list.Code, list.Body.String())
 	}
@@ -160,7 +182,7 @@ func TestImportOrgUnits_CreatesTreeAssignsLeadAndAgents(t *testing.T) {
 		{"path": "平台部/风控组", "agents": []string{"org-settle-agent"}},
 	}
 	again := httptest.NewRecorder()
-	testHandler.ImportOrgUnits(again, newRequestAs(admin, "POST", "/api/org/units/import", body))
+	testHandler.ImportOrgUnits(again, operatorRequest(admin, "POST", "/api/org/units/import", body))
 	if again.Code != http.StatusOK {
 		t.Fatalf("second import status = %d: %s", again.Code, again.Body.String())
 	}
@@ -206,7 +228,7 @@ func TestImportOrgUnits_RejectsBadRows(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", body))
+			testHandler.ImportOrgUnits(rec, operatorRequest(admin, "POST", "/api/org/units/import", body))
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
 			}
@@ -243,7 +265,7 @@ func TestSetOrgAgentUnit_OwnerPlacesOwnTwinInOwnDepartment(t *testing.T) {
 	foreign := insertIntakeDutyAgent(t, "org-twin-foreign", admin)
 
 	rec := httptest.NewRecorder()
-	testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+	testHandler.ImportOrgUnits(rec, operatorRequest(admin, "POST", "/api/org/units/import", map[string]any{
 		"rows": []map[string]any{{"path": "研发部/开发一组"}, {"path": "研发部/开发二组"}},
 	}))
 	if rec.Code != http.StatusOK {
@@ -270,7 +292,7 @@ func TestSetOrgAgentUnit_OwnerPlacesOwnTwinInOwnDepartment(t *testing.T) {
 	}
 
 	place := httptest.NewRecorder()
-	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ownUnit}))
+	testHandler.SetOrgMemberUnit(place, operatorRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ownUnit}))
 	if place.Code != http.StatusNoContent {
 		t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
 	}
@@ -315,7 +337,7 @@ func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 	agentID := insertIntakeDutyAgent(t, "org-move-agent", admin)
 
 	rec := httptest.NewRecorder()
-	testHandler.ImportOrgUnits(rec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+	testHandler.ImportOrgUnits(rec, operatorRequest(admin, "POST", "/api/org/units/import", map[string]any{
 		"rows": []map[string]any{{"path": "平台部/支付组"}},
 	}))
 	if rec.Code != http.StatusOK {
@@ -335,7 +357,7 @@ func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 	}
 
 	moveRec := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(moveRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
+	testHandler.SetOrgAgentUnit(moveRec, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
 	if moveRec.Code != http.StatusNoContent {
 		t.Fatalf("move status = %d, want 204: %s", moveRec.Code, moveRec.Body.String())
 	}
@@ -350,7 +372,7 @@ func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 	}
 
 	clearRec := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(clearRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": ""}))
+	testHandler.SetOrgAgentUnit(clearRec, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": ""}))
 	if clearRec.Code != http.StatusNoContent {
 		t.Fatalf("clear status = %d, want 204: %s", clearRec.Code, clearRec.Body.String())
 	}
@@ -364,25 +386,34 @@ func TestSetOrgAgentUnit_MemberForbiddenAdminMovesAndClears(t *testing.T) {
 	}
 
 	missingRec := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(missingRec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{
+	testHandler.SetOrgAgentUnit(missingRec, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{
 		"unit_id": "00000000-0000-0000-0000-000000000000",
 	}))
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("unknown unit status = %d, want 404: %s", missingRec.Code, missingRec.Body.String())
 	}
 
-	for user, want := range map[string]bool{admin: true, member: false} {
+	// The whole company tree belongs to the platform operator. A workspace
+	// admin without that marker is scoped like any other member.
+	for name, tc := range map[string]struct {
+		req  *http.Request
+		want bool
+	}{
+		"operator":        {operatorRequest(admin, "GET", "/api/org/units", nil), true},
+		"workspace admin": {newRequestAs(admin, "GET", "/api/org/units", nil), false},
+		"member":          {newRequestAs(member, "GET", "/api/org/units", nil), false},
+	} {
 		list := httptest.NewRecorder()
-		testHandler.ListOrgUnits(list, newRequestAs(user, "GET", "/api/org/units", nil))
+		testHandler.ListOrgUnits(list, tc.req)
 		if list.Code != http.StatusOK {
-			t.Fatalf("list status = %d: %s", list.Code, list.Body.String())
+			t.Fatalf("%s list status = %d: %s", name, list.Code, list.Body.String())
 		}
 		var tree orgTreeResponse
 		if err := json.Unmarshal(list.Body.Bytes(), &tree); err != nil {
-			t.Fatalf("decode tree: %v", err)
+			t.Fatalf("%s decode tree: %v", name, err)
 		}
-		if tree.CanManage != want {
-			t.Fatalf("can_manage = %v, want %v", tree.CanManage, want)
+		if tree.CanManage != tc.want {
+			t.Fatalf("%s can_manage = %v, want %v", name, tree.CanManage, tc.want)
 		}
 	}
 }
@@ -396,7 +427,7 @@ func TestOrgUnitCrud_CreateRenameLeadDelete(t *testing.T) {
 
 	create := func(body map[string]any) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", body))
+		testHandler.CreateOrgUnit(rec, operatorRequest(admin, "POST", "/api/org/units", body))
 		return rec
 	}
 
@@ -434,7 +465,7 @@ func TestOrgUnitCrud_CreateRenameLeadDelete(t *testing.T) {
 
 	patch := func(unitID string, body map[string]any) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.UpdateOrgUnit(rec, orgRequestWithParam(admin, "PATCH", "/api/org/units/x", "unitId", unitID, body))
+		testHandler.UpdateOrgUnit(rec, operatorRequestWithParam(admin, "PATCH", "/api/org/units/x", "unitId", unitID, body))
 		return rec
 	}
 	if rec := patch(child.ID, map[string]any{"name": "结算组"}); rec.Code != http.StatusNoContent {
@@ -462,14 +493,14 @@ func TestOrgUnitCrud_CreateRenameLeadDelete(t *testing.T) {
 	// become unassigned rather than losing their workspace membership.
 	del := func(unitID string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		testHandler.DeleteOrgUnit(rec, operatorRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
 		return rec
 	}
 	if rec := del(root.ID); rec.Code != http.StatusConflict {
 		t.Fatalf("delete parent with child status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
 	move := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(move, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": child.ID}))
+	testHandler.SetOrgAgentUnit(move, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": child.ID}))
 	if move.Code != http.StatusNoContent {
 		t.Fatalf("place agent status = %d: %s", move.Code, move.Body.String())
 	}
@@ -529,18 +560,26 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 		testHandler.UpdateOrgUnit(rec, orgRequestWithParam(userID, "PATCH", "/api/org/units/x", "unitId", unitID, body))
 		return rec
 	}
-	createUnit := func(userID string, body map[string]any) *httptest.ResponseRecorder {
+	createUnit := func(userID string, operator bool, body map[string]any) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.CreateOrgUnit(rec, newRequestAs(userID, "POST", "/api/org/units", body))
+		req := newRequestAs(userID, "POST", "/api/org/units", body)
+		if operator {
+			req = operatorRequest(userID, "POST", "/api/org/units", body)
+		}
+		testHandler.CreateOrgUnit(rec, req)
 		return rec
 	}
-	deleteUnit := func(userID, unitID string) *httptest.ResponseRecorder {
+	deleteUnit := func(userID, unitID string, operator bool) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(userID, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		req := orgRequestWithParam(userID, "DELETE", "/api/org/units/x", "unitId", unitID, nil)
+		if operator {
+			req = operatorRequestWithParam(userID, "DELETE", "/api/org/units/x", "unitId", unitID, nil)
+		}
+		testHandler.DeleteOrgUnit(rec, req)
 		return rec
 	}
 
-	rootRec := createUnit(admin, map[string]any{"name": "研发中心", "lead_user_id": lead})
+	rootRec := createUnit(admin, true, map[string]any{"name": "研发中心", "lead_user_id": lead})
 	if rootRec.Code != http.StatusCreated {
 		t.Fatalf("create root status = %d: %s", rootRec.Code, rootRec.Body.String())
 	}
@@ -550,7 +589,7 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 	}
 
 	// A lead creates children under their own unit but not sibling roots.
-	childRec := createUnit(lead, map[string]any{"name": "支付组", "parent_id": root.ID})
+	childRec := createUnit(lead, false, map[string]any{"name": "支付组", "parent_id": root.ID})
 	if childRec.Code != http.StatusCreated {
 		t.Fatalf("lead create child status = %d: %s", childRec.Code, childRec.Body.String())
 	}
@@ -558,9 +597,14 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 	if err := json.Unmarshal(childRec.Body.Bytes(), &child); err != nil {
 		t.Fatalf("decode child: %v", err)
 	}
-	rootAgain := createUnit(lead, map[string]any{"name": "另一个部"})
+	rootAgain := createUnit(lead, false, map[string]any{"name": "另一个部"})
 	if rootAgain.Code != http.StatusForbidden {
 		t.Fatalf("lead create root status = %d, want 403: %s", rootAgain.Code, rootAgain.Body.String())
+	}
+	// Workspace admins no longer own the company tree either.
+	adminRoot := createUnit(admin, false, map[string]any{"name": "管理员建的根"})
+	if adminRoot.Code != http.StatusForbidden {
+		t.Fatalf("workspace admin create root status = %d, want 403: %s", adminRoot.Code, adminRoot.Body.String())
 	}
 
 	// Non-lead members cannot place or rename anything.
@@ -620,7 +664,7 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 	}
 
 	// Deleting a unit that still has members is refused.
-	if rec := deleteUnit(admin, child.ID); rec.Code != http.StatusConflict {
+	if rec := deleteUnit(admin, child.ID, true); rec.Code != http.StatusConflict {
 		t.Fatalf("delete occupied status = %d, want 409: %s", rec.Code, rec.Body.String())
 	}
 	// The member (no manage rights) cannot remove themselves either.
@@ -630,10 +674,10 @@ func TestOrgMemberUnitAndUnitLeadRights(t *testing.T) {
 	if rec := call(lead, "PUT", "/api/org/members/x/unit", "userId", other, map[string]any{"unit_id": ""}); rec.Code != http.StatusNoContent {
 		t.Fatalf("lead remove status = %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec := deleteUnit(lead, child.ID); rec.Code != http.StatusNoContent {
+	if rec := deleteUnit(lead, child.ID, false); rec.Code != http.StatusNoContent {
 		t.Fatalf("lead delete child status = %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec := deleteUnit(admin, root.ID); rec.Code != http.StatusNoContent {
+	if rec := deleteUnit(admin, root.ID, true); rec.Code != http.StatusNoContent {
 		t.Fatalf("admin delete root status = %d: %s", rec.Code, rec.Body.String())
 	}
 }
@@ -669,7 +713,7 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 			body["parent_id"] = parentID[0]
 		}
 		rec := httptest.NewRecorder()
-		testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", body))
+		testHandler.CreateOrgUnit(rec, operatorRequest(admin, "POST", "/api/org/units", body))
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("create unit %s status = %d: %s", name, rec.Code, rec.Body.String())
 		}
@@ -681,31 +725,35 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	}
 	deleteUnit := func(unitID string) int {
 		rec := httptest.NewRecorder()
-		testHandler.DeleteOrgUnit(rec, orgRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
+		testHandler.DeleteOrgUnit(rec, operatorRequestWithParam(admin, "DELETE", "/api/org/units/x", "unitId", unitID, nil))
 		return rec.Code
 	}
 	unitID := createUnit("支付组")
 	childID := createUnit("支付一组", unitID)
 	createUnit("销售组")
 
-	squadReq := func(userID, squad string, body any) *httptest.ResponseRecorder {
+	squadReq := func(userID, squad string, operator bool, body any) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		testHandler.SetOrgSquadUnit(rec, orgRequestWithParam(userID, "PUT", "/api/org/squads/x/unit", "squadId", squad, body))
+		req := orgRequestWithParam(userID, "PUT", "/api/org/squads/x/unit", "squadId", squad, body)
+		if operator {
+			req = operatorRequestWithParam(userID, "PUT", "/api/org/squads/x/unit", "squadId", squad, body)
+		}
+		testHandler.SetOrgSquadUnit(rec, req)
 		return rec
 	}
-	// A plain member cannot attach anything; the admin can.
-	if rec := squadReq(member, squadID, map[string]any{"unit_id": childID}); rec.Code != http.StatusForbidden {
+	// A plain member cannot attach anything; the operator can.
+	if rec := squadReq(member, squadID, false, map[string]any{"unit_id": childID}); rec.Code != http.StatusForbidden {
 		t.Fatalf("member squad attach status = %d, want 403: %s", rec.Code, rec.Body.String())
 	}
-	if rec := squadReq(admin, squadID, map[string]any{"unit_id": childID}); rec.Code != http.StatusNoContent {
-		t.Fatalf("admin squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
+	if rec := squadReq(admin, squadID, true, map[string]any{"unit_id": childID}); rec.Code != http.StatusNoContent {
+		t.Fatalf("operator squad attach status = %d, want 204: %s", rec.Code, rec.Body.String())
 	}
 
 	// The member's twin agent sits in their own department so the org view can
 	// bind it back to them through owner_id.
 	memberTwin := insertIntakeDutyAgent(t, "org-squad-member-twin", member)
 	twinAttach := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(twinAttach, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", memberTwin, map[string]any{"unit_id": childID}))
+	testHandler.SetOrgAgentUnit(twinAttach, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", memberTwin, map[string]any{"unit_id": childID}))
 	if twinAttach.Code != http.StatusNoContent {
 		t.Fatalf("admin twin attach status = %d, want 204: %s", twinAttach.Code, twinAttach.Body.String())
 	}
@@ -713,7 +761,7 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	// The member placed in a sub-department sees that department and its
 	// children only: no parent department and no sibling branches.
 	place := httptest.NewRecorder()
-	testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": childID}))
+	testHandler.SetOrgMemberUnit(place, operatorRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": childID}))
 	if place.Code != http.StatusNoContent {
 		t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
 	}
@@ -754,18 +802,18 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	if twin := tree.Agents[0]; twin.ID != memberTwin || twin.OwnerID != member || twin.Can == "" {
 		t.Fatalf("member twin = %+v, want id %s owned by the member with a responsibility", twin, memberTwin)
 	}
-	// The admin still sees everything, including each agent's availability.
+	// The operator still sees everything, including each agent's availability.
 	adminList := httptest.NewRecorder()
-	testHandler.ListOrgUnits(adminList, newRequestAs(admin, "GET", "/api/org/units", nil))
+	testHandler.ListOrgUnits(adminList, operatorRequest(admin, "GET", "/api/org/units", nil))
 	if adminList.Code != http.StatusOK {
-		t.Fatalf("admin list status = %d: %s", adminList.Code, adminList.Body.String())
+		t.Fatalf("operator list status = %d: %s", adminList.Code, adminList.Body.String())
 	}
 	var adminTree orgTreeResponse
 	if err := json.Unmarshal(adminList.Body.Bytes(), &adminTree); err != nil {
-		t.Fatalf("decode admin tree: %v", err)
+		t.Fatalf("decode operator tree: %v", err)
 	}
 	if len(adminTree.Units) != 3 {
-		t.Fatalf("admin tree has %d units, want 3", len(adminTree.Units))
+		t.Fatalf("operator tree has %d units, want 3", len(adminTree.Units))
 	}
 	statuses := map[string]string{}
 	owners := map[string]string{}
@@ -782,7 +830,7 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 
 	// A member outside every department sees an empty organisation.
 	clearPlace := httptest.NewRecorder()
-	testHandler.SetOrgMemberUnit(clearPlace, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ""}))
+	testHandler.SetOrgMemberUnit(clearPlace, operatorRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", member, map[string]any{"unit_id": ""}))
 	if clearPlace.Code != http.StatusNoContent {
 		t.Fatalf("clear member status = %d: %s", clearPlace.Code, clearPlace.Body.String())
 	}

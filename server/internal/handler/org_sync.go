@@ -103,11 +103,11 @@ func (e directoryUpstreamError) Unwrap() error { return e.err }
 // Units are matched by external_id so manual units and manual renames survive;
 // people are matched by email. Nothing is deleted: units and directory-linked
 // members that disappeared upstream are reported for an admin to handle.
-// Any workspace member may run it. The organisation page decides whether to
-// show the action based on organisation management access.
+// Only the platform operator may run it: the directory is company-wide and is
+// shared by every workspace.
 func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if _, ok := h.requireWorkspaceMember(w, r, workspaceID, "workspace not found"); !ok {
+	if _, ok := h.requireOperator(w, r, workspaceID, "workspace not found"); !ok {
 		return
 	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")

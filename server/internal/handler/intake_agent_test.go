@@ -127,7 +127,7 @@ func TestIntakeAgent_LeadConfiguresDirectReportTwin(t *testing.T) {
 	stranger := createPermissionTestMember(t, "intake-lead-stranger@example.com")
 
 	importRec := httptest.NewRecorder()
-	testHandler.ImportOrgUnits(importRec, newRequestAs(admin, "POST", "/api/org/units/import", map[string]any{
+	testHandler.ImportOrgUnits(importRec, operatorRequest(admin, "POST", "/api/org/units/import", map[string]any{
 		"rows": []map[string]any{
 			{"path": "研发部/开发一组", "lead_email": "intake-lead-lead@example.com"},
 			{"path": "研发部/开发二组"},
@@ -157,7 +157,7 @@ func TestIntakeAgent_LeadConfiguresDirectReportTwin(t *testing.T) {
 	}
 	for userID, unitID := range map[string]string{report: ownUnit, stranger: sisterUnit} {
 		place := httptest.NewRecorder()
-		testHandler.SetOrgMemberUnit(place, orgRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", userID, map[string]any{"unit_id": unitID}))
+		testHandler.SetOrgMemberUnit(place, operatorRequestWithParam(admin, "PUT", "/api/org/members/x/unit", "userId", userID, map[string]any{"unit_id": unitID}))
 		if place.Code != http.StatusNoContent {
 			t.Fatalf("place member status = %d: %s", place.Code, place.Body.String())
 		}

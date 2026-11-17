@@ -22,7 +22,7 @@ func createOrgUnitAs(t *testing.T, admin, name, parentID string) string {
 		body["parent_id"] = parentID
 	}
 	rec := httptest.NewRecorder()
-	testHandler.CreateOrgUnit(rec, newRequestAs(admin, "POST", "/api/org/units", body))
+	testHandler.CreateOrgUnit(rec, operatorRequest(admin, "POST", "/api/org/units", body))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create unit %s status = %d: %s", name, rec.Code, rec.Body.String())
 	}
@@ -36,16 +36,20 @@ func createOrgUnitAs(t *testing.T, admin, name, parentID string) string {
 func placeOrgAgent(t *testing.T, admin, agentID, unitID string) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	testHandler.SetOrgAgentUnit(rec, orgRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
+	testHandler.SetOrgAgentUnit(rec, operatorRequestWithAgent(admin, "PUT", "/api/org/agents/x/unit", agentID, map[string]any{"unit_id": unitID}))
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("place agent %s status = %d: %s", agentID, rec.Code, rec.Body.String())
 	}
 }
 
-func generateOrgUnitSquad(t *testing.T, userID, unitID string, body map[string]any) (int, orgUnitSquadResponse) {
+func generateOrgUnitSquad(t *testing.T, userID string, operator bool, unitID string, body map[string]any) (int, orgUnitSquadResponse) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	testHandler.GenerateOrgUnitSquad(rec, orgRequestWithParam(userID, "POST", "/api/org/units/x/squad", "unitId", unitID, body))
+	req := orgRequestWithParam(userID, "POST", "/api/org/units/x/squad", "unitId", unitID, body)
+	if operator {
+		req = operatorRequestWithParam(userID, "POST", "/api/org/units/x/squad", "unitId", unitID, body)
+	}
+	testHandler.GenerateOrgUnitSquad(rec, req)
 	var res orgUnitSquadResponse
 	if rec.Code == http.StatusOK || rec.Code == http.StatusCreated {
 		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
@@ -70,7 +74,7 @@ func TestGenerateOrgUnitSquad_CreatesThenSyncsDepartmentRoster(t *testing.T) {
 	placeOrgAgent(t, admin, worker, child)
 	placeOrgAgent(t, admin, outsider, other)
 
-	status, res := generateOrgUnitSquad(t, admin, root, map[string]any{
+	status, res := generateOrgUnitSquad(t, admin, true, root, map[string]any{
 		"name":         "研发小队",
 		"leader_id":    leader,
 		"wip_limit":    2,
@@ -101,7 +105,7 @@ func TestGenerateOrgUnitSquad_CreatesThenSyncsDepartmentRoster(t *testing.T) {
 	}
 
 	// A second call is a no-op sync, not a duplicate squad.
-	status, res = generateOrgUnitSquad(t, admin, root, map[string]any{})
+	status, res = generateOrgUnitSquad(t, admin, true, root, map[string]any{})
 	if status != http.StatusOK {
 		t.Fatalf("sync status = %d, want 200: %+v", status, res)
 	}
@@ -124,7 +128,7 @@ func TestGenerateOrgUnitSquad_CreatesThenSyncsDepartmentRoster(t *testing.T) {
 	if _, ok := findSquadMember(t, squadID, outsider); !ok {
 		t.Fatal("manual member outside the department was pruned; it must survive syncs")
 	}
-	status, res = generateOrgUnitSquad(t, admin, root, map[string]any{})
+	status, res = generateOrgUnitSquad(t, admin, true, root, map[string]any{})
 	if status != http.StatusOK || res.Removed != 0 {
 		t.Fatalf("follow-up sync = %d %+v, want a stable roster", status, res)
 	}
@@ -132,10 +136,10 @@ func TestGenerateOrgUnitSquad_CreatesThenSyncsDepartmentRoster(t *testing.T) {
 	// Only a department manager may generate its squad, and only with a leader
 	// agent the caller can wire into squads.
 	member := createPermissionTestMember(t, "org-gen-member@example.com")
-	if status, _ := generateOrgUnitSquad(t, member, root, map[string]any{"name": "越权小队", "leader_id": leader}); status != http.StatusForbidden {
+	if status, _ := generateOrgUnitSquad(t, member, false, root, map[string]any{"name": "越权小队", "leader_id": leader}); status != http.StatusForbidden {
 		t.Fatalf("member generate status = %d, want 403", status)
 	}
-	if status, _ := generateOrgUnitSquad(t, admin, child, map[string]any{"name": "无名小队"}); status != http.StatusBadRequest {
+	if status, _ := generateOrgUnitSquad(t, admin, true, child, map[string]any{"name": "无名小队"}); status != http.StatusBadRequest {
 		t.Fatalf("missing leader status = %d, want 400", status)
 	}
 }

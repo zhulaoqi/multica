@@ -237,11 +237,8 @@ describe("OrgPage Feishu sync", () => {
     expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
   });
 
-  it("keeps the sync action for a workspace admin when the tree fails", async () => {
-    signIn("u-ada");
-    qc.setQueryData(memberListOptions(WS).queryKey, [
-      { ...member, role: "admin" },
-    ]);
+  it("keeps the sync action for the operator when the tree fails", async () => {
+    signIn("u-operator", { operator: true });
     vi.mocked(api.listOrgUnits).mockRejectedValue(new Error("boom"));
     renderPage(tree(), { withTree: false });
 
@@ -249,6 +246,21 @@ describe("OrgPage Feishu sync", () => {
       await screen.findByText("Could not load the organisation tree."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
+  });
+
+  it("does not hand the company directory to a workspace owner", () => {
+    signIn("u-ada");
+    qc.setQueryData(memberListOptions(WS).queryKey, [
+      { ...member, role: "owner" },
+    ]);
+    renderPage(tree({ can_manage: false }));
+
+    expect(
+      screen.queryByRole("button", { name: "Sync from Feishu" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add top-level department" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the sync button disabled until credentials are configured", () => {

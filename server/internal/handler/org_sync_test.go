@@ -65,7 +65,7 @@ func directoryFixture() *fakeOrgDirectory {
 func syncOrg(t *testing.T, admin string) (int, orgSyncReport) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	testHandler.SyncOrgFromFeishu(rec, newRequestAs(admin, "POST", "/api/org/sync/feishu", nil))
+	testHandler.SyncOrgFromFeishu(rec, operatorRequest(admin, "POST", "/api/org/sync/feishu", nil))
 	var report orgSyncReport
 	if rec.Code == http.StatusOK {
 		if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
@@ -173,19 +173,19 @@ func TestSyncOrgFromFeishu_ReportsDetachedAndMovesPeople(t *testing.T) {
 	}
 }
 
-func TestSyncOrgFromFeishu_AllowsWorkspaceMember(t *testing.T) {
+func TestSyncOrgFromFeishu_RequiresOperator(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
 	member := createPermissionTestMember(t, "org-sync-member@example.com")
-	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
+	admin := createOrgTestAdmin(t, "org-sync-admin@example.com")
+	installOrgDirectory(t, directoryFixture())
 
-	code, _ := syncOrg(t, member)
-	if code != http.StatusOK {
-		t.Fatalf("member sync status = %d, want 200", code)
-	}
-
-	if code, _ := syncOrg(t, testUserID); code != http.StatusOK {
-		t.Fatalf("owner sync status = %d, want 200", code)
+	for name, caller := range map[string]string{"member": member, "workspace admin": admin} {
+		rec := httptest.NewRecorder()
+		testHandler.SyncOrgFromFeishu(rec, newRequestAs(caller, "POST", "/api/org/sync/feishu", nil))
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s sync status = %d, want 403", name, rec.Code)
+		}
 	}
 
 	rec := httptest.NewRecorder()
@@ -219,9 +219,8 @@ func TestSyncOrgFromFeishu_AllowsOperator(t *testing.T) {
 func TestSyncOrgFromFeishu_NotConfigured(t *testing.T) {
 	requireDB(t)
 	testHandler.OrgDirectory = nil
-	admin := createOrgTestAdmin(t, "org-sync-unconfigured@example.com")
 	rec := httptest.NewRecorder()
-	testHandler.SyncOrgFromFeishu(rec, newRequestAs(admin, "POST", "/api/org/sync/feishu", nil))
+	testHandler.SyncOrgFromFeishu(rec, operatorRequest(testUserID, "POST", "/api/org/sync/feishu", nil))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
