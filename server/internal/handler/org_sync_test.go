@@ -173,15 +173,15 @@ func TestSyncOrgFromFeishu_ReportsDetachedAndMovesPeople(t *testing.T) {
 	}
 }
 
-func TestSyncOrgFromFeishu_RequiresWorkspaceManager(t *testing.T) {
+func TestSyncOrgFromFeishu_AllowsWorkspaceMember(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
 	member := createPermissionTestMember(t, "org-sync-member@example.com")
 	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
 
 	code, _ := syncOrg(t, member)
-	if code != http.StatusForbidden {
-		t.Fatalf("member sync status = %d, want 403", code)
+	if code != http.StatusOK {
+		t.Fatalf("member sync status = %d, want 200", code)
 	}
 
 	if code, _ := syncOrg(t, testUserID); code != http.StatusOK {
