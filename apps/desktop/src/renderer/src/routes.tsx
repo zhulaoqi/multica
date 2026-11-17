@@ -30,6 +30,7 @@ import { AgentCreatedPage } from "./pages/agent-created-page";
 import { SquadsPage, SquadDetailPage as SquadDetailPageView } from "@multica/views/squads/components";
 import { OrgPage } from "@multica/views/org";
 import { OfficePage } from "@multica/views/office";
+import { WorkbenchPage } from "@multica/views/workbench";
 import { AllViewsPage } from "@multica/views/issue-views";
 import { InboxPage } from "@multica/views/inbox";
 import { ChatPage } from "@multica/views/chat";
@@ -150,6 +151,11 @@ export const appRoutes: RouteObject[] = [
           // safety net instead of an in-router <Navigate> (MUL-4741
           // invariant 1: the router never self-navigates).
           { index: true, element: null },
+          {
+            path: "workbench",
+            element: <WorkbenchPage />,
+            handle: { title: "Workbench" },
+          },
           {
             path: "issues",
             element: (

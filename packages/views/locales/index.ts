@@ -27,6 +27,7 @@ import enBilling from "./en/billing.json";
 import enOrg from "./en/org.json";
 import enAdmin from "./en/admin.json";
 import enOffice from "./en/office.json";
+import enWorkbench from "./en/workbench.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
@@ -55,6 +56,7 @@ import zhHansBilling from "./zh-Hans/billing.json";
 import zhHansOrg from "./zh-Hans/org.json";
 import zhHansAdmin from "./zh-Hans/admin.json";
 import zhHansOffice from "./zh-Hans/office.json";
+import zhHansWorkbench from "./zh-Hans/workbench.json";
 import zhHantCommon from "./zh-Hant/common.json";
 import zhHantAuth from "./zh-Hant/auth.json";
 import zhHantSettings from "./zh-Hant/settings.json";
@@ -83,6 +85,7 @@ import zhHantBilling from "./zh-Hant/billing.json";
 import zhHantOrg from "./zh-Hant/org.json";
 import zhHantAdmin from "./zh-Hant/admin.json";
 import zhHantOffice from "./zh-Hant/office.json";
+import zhHantWorkbench from "./zh-Hant/workbench.json";
 import koCommon from "./ko/common.json";
 import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
@@ -111,6 +114,7 @@ import koBilling from "./ko/billing.json";
 import koOrg from "./ko/org.json";
 import koAdmin from "./ko/admin.json";
 import koOffice from "./ko/office.json";
+import koWorkbench from "./ko/workbench.json";
 import jaCommon from "./ja/common.json";
 import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
@@ -139,6 +143,7 @@ import jaBilling from "./ja/billing.json";
 import jaOrg from "./ja/org.json";
 import jaAdmin from "./ja/admin.json";
 import jaOffice from "./ja/office.json";
+import jaWorkbench from "./ja/workbench.json";
 import frCommon from "./fr/common.json";
 import frAuth from "./fr/auth.json";
 import frSettings from "./fr/settings.json";
@@ -167,6 +172,7 @@ import frBilling from "./fr/billing.json";
 import frOrg from "./fr/org.json";
 import frAdmin from "./fr/admin.json";
 import frOffice from "./fr/office.json";
+import frWorkbench from "./fr/workbench.json";
 import esCommon from "./es/common.json";
 import esAuth from "./es/auth.json";
 import esSettings from "./es/settings.json";
@@ -195,6 +201,7 @@ import esBilling from "./es/billing.json";
 import esOrg from "./es/org.json";
 import esAdmin from "./es/admin.json";
 import esOffice from "./es/office.json";
+import esWorkbench from "./es/workbench.json";
 
 // Single source of truth for the resource bundle. Both apps (web layout +
 // desktop App.tsx) import from here so adding a locale or namespace happens
@@ -229,6 +236,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: enAdmin,
     billing: enBilling,
     office: enOffice,
+    workbench: enWorkbench,
   },
   "zh-Hans": {
     common: zhHansCommon,
@@ -259,6 +267,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: zhHansAdmin,
     billing: zhHansBilling,
     office: zhHansOffice,
+    workbench: zhHansWorkbench,
   },
   "zh-Hant": {
     common: zhHantCommon,
@@ -289,6 +298,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: zhHantAdmin,
     billing: zhHantBilling,
     office: zhHantOffice,
+    workbench: zhHantWorkbench,
   },
   ko: {
     common: koCommon,
@@ -319,6 +329,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: koAdmin,
     billing: koBilling,
     office: koOffice,
+    workbench: koWorkbench,
   },
   ja: {
     common: jaCommon,
@@ -349,6 +360,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: jaAdmin,
     billing: jaBilling,
     office: jaOffice,
+    workbench: jaWorkbench,
   },
   fr: {
     common: frCommon,
@@ -379,6 +391,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: frAdmin,
     billing: frBilling,
     office: frOffice,
+    workbench: frWorkbench,
   },
   es: {
     common: esCommon,
@@ -409,5 +422,6 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     admin: esAdmin,
     billing: esBilling,
     office: esOffice,
+    workbench: esWorkbench,
   },
 };

@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "工作台",
     "inbox": "收件箱",
     "chat": "聊天",
     "my_issues": "我的任務",
@@ -58,16 +59,17 @@
     "invitation_decline": "拒絕",
     "log_out": "退出登入",
     "new_issue": "新建任務",
-    "dispatch_work": "派活",
     "pinned_label": "固定",
     "show_more_pins": "再顯示 {{count}} 項...",
     "show_fewer_pins": "收起"
   },
   "spaces": {
+    "workbench": "工作台",
     "work": "工作",
     "team": "團隊"
   },
   "rail": {
+    "workbench": "工作台",
     "label": "應用導覽",
     "sheet_description": "切換空間和工作區。",
     "inbox": "收件箱",

@@ -20,6 +20,17 @@
       "idle": "Disponible",
       "offline": "Hors ligne"
     },
+    "activity": {
+      "working": "Au travail",
+      "idle": "Disponible",
+      "offline": "Hors ligne",
+      "chat": "En conversation",
+      "autopilot": "Exécute un autopilot",
+      "running_one": "{{count}} tâche en cours",
+      "running_other": "{{count}} tâches en cours",
+      "queued_one": "{{count}} tâche en attente",
+      "queued_other": "{{count}} tâches en attente"
+    },
     "rooms": {
       "meeting": "Salle de réunion",
       "kitchen": "Cuisine",
@@ -42,6 +53,7 @@
       "task_error": "Impossible de créer la tâche. Réessayez.",
       "task_error_agent_unavailable": "Cet agent ne peut pas accepter de travail pour le moment.",
       "task_error_issue_limit": "Cet espace de travail a atteint sa limite de tâches."
-    }
+    },
+    "company_name": "eclicktech"
   }
 }

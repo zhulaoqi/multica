@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "워크벤치",
+    "history": "최근 요청",
+    "new": "새 요청",
+    "empty_title": "팀에 무엇을 해야 하는지 알려주세요",
+    "empty_description": "할 일을 자신의 말로 설명하세요. 알맞은 부서로 전달되고 부서 책임자가 작업으로 나눕니다.",
+    "placeholder": "무엇을 해야 하나요?",
+    "send": "보내기",
+    "composer_hint": "Enter로 보내기, Shift+Enter로 줄바꿈",
+    "routing": "담당 부서를 찾는 중…",
+    "selected_department": "이 부서에만",
+    "route_automatically": "부서 자동 선택",
+    "open_history": "최근 요청",
+    "back": "뒤로",
+    "unknown_department": "부서",
+    "load_error": "최근 요청을 불러오지 못했습니다.",
+    "examples_label": "이렇게 요청할 수 있어요",
+    "empty_history": "보낸 작업이 여기에 표시됩니다.",
+    "examples": {
+      "one": "다음 주 고객 온보딩 자료 준비하기",
+      "two": "어제 발생한 결제 실패 원인 조사하기",
+      "three": "새 대시보드 출시 공지 작성하기"
+    }
+  },
+  "status": {
+    "queued": "부서로 보냈습니다. 책임자가 곧 시작합니다.",
+    "decomposing": "부서 책임자가 작업으로 나누는 중…",
+    "progress": "{{total}}개 중 {{done}}개 완료",
+    "in_review": "전달되었습니다. 검토를 기다리고 있습니다.",
+    "completed": "완료되었습니다.",
+    "failed": "부서 책임자가 작업을 시작하지 못했습니다. 부서에 알렸습니다.",
+    "cancelled": "이 작업은 취소되었습니다.",
+    "dispatched_at": "{{time}}에 보냄"
+  },
+  "card": {
+    "department": "부서",
+    "view_issue": "이슈 보기",
+    "retry": "다시 요청",
+    "failure_hint": "다시 시도하거나 이슈에서 후속 조치할 수 있습니다."
+  },
+  "result": {
+    "title": "결과",
+    "by": "{{name}}의 결과",
+    "empty": "이슈에 게시된 결과가 없습니다. 이슈를 열어 전달된 내용을 확인하세요."
+  },
+  "candidates": {
+    "title": "어느 부서가 맡아야 하나요?",
+    "agents_other": "에이전트 {{count}}개"
+  },
+  "errors": {
+    "ambiguous": "여러 부서가 맡을 수 있습니다. 하나를 선택하세요.",
+    "dispatch_text_required": "먼저 무엇을 해야 하는지 적어주세요.",
+    "dispatch_text_too_long": "너무 깁니다. 4,000자 이내로 작성하세요.",
+    "org_dispatch_unit_not_found": "해당 부서가 더 이상 없습니다. 다른 부서를 고르거나 자동 배정을 사용하세요.",
+    "org_dispatch_forbidden": "해당 부서에 대한 접근 권한이 없습니다.",
+    "org_dispatch_no_agents": "해당 부서에는 아직 에이전트가 없습니다. 조직 페이지에서 추가하세요.",
+    "org_dispatch_leader_unavailable": "지금은 부서 책임자에게 연락할 수 없습니다. 잠시 후 다시 시도하세요.",
+    "org_dispatch_unroutable": "어느 부서로 보낼지 판단하지 못했습니다. 부서를 지정하거나 설명을 보강하세요.",
+    "org_dispatch_failed": "부서로 작업을 보내지 못했습니다.",
+    "generic": "문제가 발생했습니다. 다시 시도하세요."
+  }
+}

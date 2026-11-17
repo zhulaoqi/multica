@@ -42,6 +42,9 @@ function box(graphics: Graphics, x: number, y: number, width: number, height: nu
   rect(graphics, x + 1, y + 1, width - 2, height - 2, fill);
 }
 
+/** Receptionists stand on tiles 23 and 24; one monitor flanks each. */
+const RECEPTION_MONITOR_XS = [23 * TILE - 7, 24 * TILE + 7] as const;
+
 /** Wall plaques beside each doorway, so every room reads at a glance. */
 const DOOR_SIGNS: { room: RoomId; tx: number; ty: number }[] = [
   { room: "meeting", tx: 10, ty: 12 },
@@ -526,7 +529,17 @@ export function buildRoom(pixi: typeof import("pixi.js"), layout: OfficeLayout):
         break;
       case "reception-desk":
         worktop(x, y, w, z);
-        place("pcSide", px + TILE, py - 18, z + 0.5);
+        // The staff stand behind the desk facing the lobby, so their monitors
+        // face them and the camera sees the backs, as on the agent desks.
+        // Each sits to the outer side of its receptionist to keep faces clear.
+        for (const monitorX of RECEPTION_MONITOR_XS) {
+          place("pcBack", monitorX, py - 14, z + 0.5);
+          drawn(z + 0.6, (graphics) => {
+            rect(graphics, monitorX - 1, py - 9, TILE + 2, 1, 0x9fe3f5, 0.45);
+            rect(graphics, monitorX - 1, py - 9, 1, 12, 0x9fe3f5, 0.45);
+            rect(graphics, monitorX + TILE, py - 9, 1, 12, 0x9fe3f5, 0.45);
+          });
+        }
         place("pot", px + (w - 1) * TILE - 2, py - 10, z + 0.5);
         break;
       case "whiteboard":

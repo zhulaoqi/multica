@@ -1,4 +1,4 @@
-import type { Container, Graphics, Sprite } from "pixi.js";
+import type { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { OfficeDir } from "@multica/core/office";
 import { hashSeed } from "./room";
 import { CHARACTER_SHEETS, officeTextures, type CharacterRow } from "./textures";
@@ -33,6 +33,20 @@ export type BubbleKind = "dots" | "alert" | "check" | "chat" | "sleep";
 const BUBBLE_POP_MS = 180;
 /** Bottom of the balloon tail, above the name label. */
 const BUBBLE_BOTTOM = -43;
+
+/**
+ * Activity caption: a speech bubble of real text saying what the agent is on.
+ * Desks sit three tiles (48px) apart, so the caption wraps at a width that
+ * keeps neighbouring captions from overlapping and is cut to two lines.
+ */
+const CAPTION_FONT_SIZE = 6;
+const CAPTION_WRAP = 38;
+const CAPTION_MAX_LINES = 2;
+const CAPTION_PAD_X = 3;
+const CAPTION_PAD_Y = 2;
+const CAPTION_DOT = 3;
+const CAPTION_TAIL = 3;
+const CAPTION_INK = { border: 0x334155, fill: 0xf8fafc, text: 0x0f172a } as const;
 
 const WALK_FRAMES = [0, 1, 2, 1] as const;
 const WALK_FRAME_MS = 150;
@@ -122,6 +136,8 @@ export interface CharacterView {
   setPose(pose: CharacterPose): void;
   setProp(prop: CharacterProp): void;
   setBubble(kind: BubbleKind | null): void;
+  /** What the agent is doing, shown as a text bubble; null hides it. */
+  setCaption(text: string | null): void;
   /** Advances frames, blinks, and balloons; call once per rendered frame. */
   tick(timeMs: number): void;
 }
@@ -167,22 +183,80 @@ export function createCharacter(
   rig.addChild(prop);
 
   const statusDot = new pixi.Graphics();
+  let statusColor = STATUS_COLORS.idle;
   const paintStatus = (status: AgentDeskStatus) => {
+    statusColor = STATUS_COLORS[status];
     statusDot.clear();
     statusDot.rect(4, -31, 5, 5).fill(0x1f2430);
-    statusDot.rect(5, -30, 3, 3).fill(STATUS_COLORS[status]);
+    statusDot.rect(5, -30, 3, 3).fill(statusColor);
+    if (captionText) paintCaption();
   };
-  if (options.status) {
-    paintStatus(options.status);
-    container.addChild(statusDot);
-  }
 
   const bubble = new pixi.Container();
   const bubbleArt = new pixi.Graphics();
   bubble.addChild(bubbleArt);
   bubble.position.set(0, BUBBLE_BOTTOM);
   bubble.visible = false;
-  container.addChild(bubble);
+
+  const caption = new pixi.Container();
+  caption.visible = false;
+  caption.eventMode = "none";
+  const captionPlate = new pixi.Graphics();
+  const captionLabel: Text = new pixi.Text({
+    text: "",
+    style: {
+      fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+      fontSize: CAPTION_FONT_SIZE,
+      fontWeight: "600",
+      fill: CAPTION_INK.text,
+      lineHeight: CAPTION_FONT_SIZE + 2,
+      wordWrap: true,
+      breakWords: true,
+      wordWrapWidth: CAPTION_WRAP,
+    },
+  });
+  // The camera zooms the world up to 3x on a 2x renderer.
+  captionLabel.resolution = 6;
+  caption.addChild(captionPlate, captionLabel);
+  let captionText: string | null = null;
+
+  /** Sets the caption text, cutting it with an ellipsis past the line budget. */
+  const fitCaption = (text: string) => {
+    const maxHeight = CAPTION_MAX_LINES * (CAPTION_FONT_SIZE + 2) + 1;
+    captionLabel.text = text;
+    const chars = Array.from(text);
+    while (captionLabel.height > maxHeight && chars.length > 1) {
+      chars.pop();
+      captionLabel.text = `${chars.join("").trimEnd()}…`;
+    }
+  };
+
+  const paintCaption = () => {
+    const width = Math.ceil(captionLabel.width) + CAPTION_DOT + 2 + CAPTION_PAD_X * 2;
+    const height = Math.ceil(captionLabel.height) + CAPTION_PAD_Y * 2;
+    const left = -Math.ceil(width / 2);
+    const top = BUBBLE_BOTTOM - CAPTION_TAIL - height;
+    captionPlate.clear();
+    captionPlate
+      .roundRect(left, top, width, height, 2)
+      .fill(CAPTION_INK.fill)
+      .stroke({ color: CAPTION_INK.border, width: 1 });
+    captionPlate
+      .poly([-CAPTION_TAIL, top + height, CAPTION_TAIL, top + height, 0, top + height + CAPTION_TAIL])
+      .fill(CAPTION_INK.fill);
+    captionPlate
+      .rect(left + CAPTION_PAD_X, top + CAPTION_PAD_Y + 2, CAPTION_DOT, CAPTION_DOT)
+      .fill(statusColor);
+    captionLabel.position.set(left + CAPTION_PAD_X + CAPTION_DOT + 2, top + CAPTION_PAD_Y);
+    // The pixel balloon stacks on top of the caption instead of covering it.
+    bubble.position.set(0, top - 1);
+  };
+
+  if (options.status) {
+    paintStatus(options.status);
+    container.addChild(statusDot);
+  }
+  container.addChild(caption, bubble);
 
   let walking = false;
   let pose: CharacterPose = "stand";
@@ -286,6 +360,19 @@ export function createCharacter(
       bubble.visible = true;
       bubblePopped = false;
       bubbleStartedAt = performance.now();
+    },
+    setCaption(text) {
+      const next = text?.trim() || null;
+      if (next === captionText) return;
+      captionText = next;
+      if (!next) {
+        caption.visible = false;
+        bubble.position.set(0, BUBBLE_BOTTOM);
+        return;
+      }
+      fitCaption(next);
+      paintCaption();
+      caption.visible = true;
     },
     tick(timeMs) {
       const dt = lastTickMs === null ? 0 : Math.max(0, (timeMs - lastTickMs) / 1000);

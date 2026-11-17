@@ -15,7 +15,7 @@ const claimDispatchCompletion = `-- name: ClaimDispatchCompletion :one
 UPDATE dispatch_origin
 SET notified_at = now()
 WHERE issue_id = $1 AND notified_at IS NULL
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id
 `
 
 // Marks the completion notice as sent. The conditional update is the
@@ -34,6 +34,7 @@ func (q *Queries) ClaimDispatchCompletion(ctx context.Context, issueID pgtype.UU
 		&i.ThreadID,
 		&i.CreatedAt,
 		&i.NotifiedAt,
+		&i.ClientRequestID,
 	)
 	return i, err
 }
@@ -41,22 +42,23 @@ func (q *Queries) ClaimDispatchCompletion(ctx context.Context, issueID pgtype.UU
 const createDispatchOrigin = `-- name: CreateDispatchOrigin :one
 INSERT INTO dispatch_origin (
     issue_id, workspace_id, requester_id, target_unit_id,
-    channel_type, installation_id, chat_id, thread_id
+    channel_type, installation_id, chat_id, thread_id, client_request_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (issue_id) DO NOTHING
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id
 `
 
 type CreateDispatchOriginParams struct {
-	IssueID        pgtype.UUID `json:"issue_id"`
-	WorkspaceID    pgtype.UUID `json:"workspace_id"`
-	RequesterID    pgtype.UUID `json:"requester_id"`
-	TargetUnitID   pgtype.UUID `json:"target_unit_id"`
-	ChannelType    string      `json:"channel_type"`
-	InstallationID pgtype.UUID `json:"installation_id"`
-	ChatID         pgtype.Text `json:"chat_id"`
-	ThreadID       pgtype.Text `json:"thread_id"`
+	IssueID         pgtype.UUID `json:"issue_id"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	RequesterID     pgtype.UUID `json:"requester_id"`
+	TargetUnitID    pgtype.UUID `json:"target_unit_id"`
+	ChannelType     string      `json:"channel_type"`
+	InstallationID  pgtype.UUID `json:"installation_id"`
+	ChatID          pgtype.Text `json:"chat_id"`
+	ThreadID        pgtype.Text `json:"thread_id"`
+	ClientRequestID pgtype.Text `json:"client_request_id"`
 }
 
 // Records where a dispatch came from so the requester can be told when the
@@ -72,6 +74,7 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		arg.InstallationID,
 		arg.ChatID,
 		arg.ThreadID,
+		arg.ClientRequestID,
 	)
 	var i DispatchOrigin
 	err := row.Scan(
@@ -85,12 +88,44 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		&i.ThreadID,
 		&i.CreatedAt,
 		&i.NotifiedAt,
+		&i.ClientRequestID,
+	)
+	return i, err
+}
+
+const getDispatchByClient = `-- name: GetDispatchByClient :one
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id FROM dispatch_origin
+WHERE workspace_id = $1 AND requester_id = $2 AND client_request_id = $3
+`
+
+type GetDispatchByClientParams struct {
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	RequesterID     pgtype.UUID `json:"requester_id"`
+	ClientRequestID pgtype.Text `json:"client_request_id"`
+}
+
+// Resolves a retried in-app send to the dispatch the first attempt created.
+func (q *Queries) GetDispatchByClient(ctx context.Context, arg GetDispatchByClientParams) (DispatchOrigin, error) {
+	row := q.db.QueryRow(ctx, getDispatchByClient, arg.WorkspaceID, arg.RequesterID, arg.ClientRequestID)
+	var i DispatchOrigin
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.RequesterID,
+		&i.TargetUnitID,
+		&i.ChannelType,
+		&i.InstallationID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.NotifiedAt,
+		&i.ClientRequestID,
 	)
 	return i, err
 }
 
 const getDispatchOrigin = `-- name: GetDispatchOrigin :one
-SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at FROM dispatch_origin WHERE issue_id = $1
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id FROM dispatch_origin WHERE issue_id = $1
 `
 
 func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (DispatchOrigin, error) {
@@ -107,6 +142,75 @@ func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (D
 		&i.ThreadID,
 		&i.CreatedAt,
 		&i.NotifiedAt,
+		&i.ClientRequestID,
 	)
 	return i, err
+}
+
+const listDispatchesByRequester = `-- name: ListDispatchesByRequester :many
+SELECT
+    d.issue_id,
+    d.target_unit_id,
+    d.created_at,
+    d.notified_at,
+    CASE
+        WHEN lt.id IS NULL THEN 'none'
+        WHEN lt.status = 'failed' AND lt.attempt >= lt.max_attempts THEN 'failed'
+        WHEN lt.status IN ('queued', 'claimed', 'running', 'deferred') THEN 'running'
+        ELSE lt.status
+    END::text AS leader_state
+FROM dispatch_origin d
+LEFT JOIN LATERAL (
+    SELECT id, status, attempt, max_attempts
+    FROM agent_task_queue
+    WHERE issue_id = d.issue_id AND is_leader_task
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+) lt ON TRUE
+WHERE d.workspace_id = $1 AND d.requester_id = $2
+ORDER BY d.created_at DESC
+LIMIT $3
+`
+
+type ListDispatchesByRequesterParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RequesterID pgtype.UUID `json:"requester_id"`
+	Limit       int32       `json:"limit"`
+}
+
+type ListDispatchesByRequesterRow struct {
+	IssueID      pgtype.UUID        `json:"issue_id"`
+	TargetUnitID pgtype.UUID        `json:"target_unit_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt   pgtype.Timestamptz `json:"notified_at"`
+	LeaderState  string             `json:"leader_state"`
+}
+
+// Workbench history. leader_state summarizes the latest squad-leader run:
+// a failed run is only terminal once its retries are exhausted; queued,
+// claimed, running and deferred all read as "running" to the requester.
+func (q *Queries) ListDispatchesByRequester(ctx context.Context, arg ListDispatchesByRequesterParams) ([]ListDispatchesByRequesterRow, error) {
+	rows, err := q.db.Query(ctx, listDispatchesByRequester, arg.WorkspaceID, arg.RequesterID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDispatchesByRequesterRow{}
+	for rows.Next() {
+		var i ListDispatchesByRequesterRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.TargetUnitID,
+			&i.CreatedAt,
+			&i.NotifiedAt,
+			&i.LeaderState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

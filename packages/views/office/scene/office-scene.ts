@@ -46,6 +46,13 @@ const RECEPTIONISTS = [
   { sheet: 1, tx: 23 },
   { sheet: 7, tx: 24 },
 ] as const;
+/**
+ * Company sign on the reception back wall, centred over the front desk
+ * (x 22..27) and kept clear of the doorway at x 27. Sorted just above the wall
+ * so the receptionists standing in front of it still cover it.
+ */
+const COMPANY_SIGN = { centerX: 24.5 * 16, top: 25 * 16 - 7, zIndex: 26 * 16 + 1 } as const;
+const COMPANY_SIGN_ACCENT = 0xf39800;
 const MOVE_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
 
 export type { OfficeAgentView };
@@ -63,6 +70,8 @@ export interface OfficeSceneOptions {
   localName: string;
   /** Display name per room, drawn in each room's top-left corner. */
   roomNames: Record<RoomId, string>;
+  /** Shown on the sign behind the reception desk. */
+  companyName: string;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent and wants to talk to it. */
@@ -206,6 +215,7 @@ export class OfficeScene {
 
     const scene = new OfficeScene(pixi, app, camera, world, room, options, layout);
     scene.addRoomLabels(options.roomNames);
+    scene.addCompanySign(options.companyName);
     scene.addReceptionists();
     scene.attachInput();
     scene.updateCamera(1, true);
@@ -408,6 +418,34 @@ export class OfficeScene {
       tag.eventMode = "none";
       this.world.addChild(tag);
     }
+  }
+
+  private addCompanySign(name: string) {
+    if (!name.trim()) return;
+    const sign = new this.pixi.Container();
+    const text = new this.pixi.Text({
+      text: name,
+      style: {
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+        fontSize: 7,
+        fontWeight: "700",
+        fill: 0xf8fafc,
+        letterSpacing: 0.3,
+      },
+    });
+    text.resolution = 6;
+    const width = Math.ceil(text.width) + 10;
+    const height = Math.ceil(text.height) + 4;
+    text.position.set(7, 2);
+    const plate = new this.pixi.Graphics();
+    plate.rect(0, 0, width, height).fill(0x1f2430);
+    plate.rect(1, 1, width - 2, height - 2).fill(0x12304f);
+    plate.rect(2, 2, 2, height - 4).fill(COMPANY_SIGN_ACCENT);
+    sign.addChild(plate, text);
+    sign.position.set(Math.round(COMPANY_SIGN.centerX - width / 2), COMPANY_SIGN.top);
+    sign.zIndex = COMPANY_SIGN.zIndex;
+    sign.eventMode = "none";
+    this.world.addChild(sign);
   }
 
   /** Two front-desk staff stand behind the reception desk, clear of the agent station at (26, 26). */

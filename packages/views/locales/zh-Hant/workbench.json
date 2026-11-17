@@ -1,0 +1,63 @@
+{
+  "page": {
+    "title": "工作台",
+    "history": "最近派工",
+    "new": "新增派工",
+    "empty_title": "告訴團隊要做什麼",
+    "empty_description": "用一句話描述要做的事，系統會判斷交給哪個部門，部門負責人再拆分成任務。",
+    "placeholder": "想做什麼？",
+    "send": "傳送",
+    "composer_hint": "Enter 傳送，Shift+Enter 換行",
+    "routing": "正在判斷交給哪個部門…",
+    "selected_department": "僅交給該部門",
+    "route_automatically": "由系統自動選擇部門",
+    "open_history": "最近派工",
+    "back": "返回",
+    "unknown_department": "部門",
+    "load_error": "載入最近派工失敗。",
+    "examples_label": "可以這樣說",
+    "empty_history": "派出的工作會出現在這裡。",
+    "examples": {
+      "one": "準備下週的客戶上線資料",
+      "two": "排查昨天結算失敗的原因",
+      "three": "為新看板寫一篇發布公告"
+    }
+  },
+  "status": {
+    "queued": "已交給部門，負責人稍後接手。",
+    "decomposing": "部門負責人正在拆解任務…",
+    "progress": "已完成 {{done}}/{{total}} 項任務",
+    "in_review": "部門已交付，等待你驗收。",
+    "completed": "已完成。",
+    "failed": "部門負責人未能啟動這項工作，已通知該部門。",
+    "cancelled": "這項工作已取消。",
+    "dispatched_at": "{{time}}送出"
+  },
+  "card": {
+    "department": "部門",
+    "view_issue": "查看 issue",
+    "retry": "重新派工",
+    "failure_hint": "可以重試，或到 issue 裡追蹤。"
+  },
+  "result": {
+    "title": "結果",
+    "by": "{{name}} 的交付結果",
+    "empty": "issue 上沒有發布結果，打開 issue 查看交付內容。"
+  },
+  "candidates": {
+    "title": "交給哪個部門？",
+    "agents_other": "{{count}} 個 Agent"
+  },
+  "errors": {
+    "ambiguous": "有多個部門可以承接，請選擇一個。",
+    "dispatch_text_required": "先寫清楚要做什麼。",
+    "dispatch_text_too_long": "內容太長了，請控制在 4000 字以內。",
+    "org_dispatch_unit_not_found": "該部門已不存在，請另選一個或交給系統判斷。",
+    "org_dispatch_forbidden": "你沒有該部門的權限。",
+    "org_dispatch_no_agents": "該部門還沒有 Agent，請先到組織頁新增。",
+    "org_dispatch_leader_unavailable": "暫時聯絡不上部門負責人，請稍後再試。",
+    "org_dispatch_unroutable": "無法判斷該交給哪個部門，請點名部門或補充說明。",
+    "org_dispatch_failed": "沒能把這項工作交給部門。",
+    "generic": "出了點問題，請重試。"
+  }
+}

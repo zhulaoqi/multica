@@ -200,7 +200,7 @@ describe("JoinPage", () => {
     await user.click(
       await screen.findByRole("button", { name: "Join Workspace" }),
     );
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/issues"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/workbench"));
   });
 
   it("shows an error when join fails for another reason", async () => {

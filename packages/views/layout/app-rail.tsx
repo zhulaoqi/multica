@@ -22,7 +22,7 @@ import { useT } from "../i18n";
 import { AppLink, useNavigation } from "../navigation";
 import { AccountMenu } from "./account-menu";
 import { useAppShell } from "./app-shell-context";
-import { DispatchWorkButton, NewIssueButton, SearchButton } from "./global-actions";
+import { NewIssueButton, SearchButton } from "./global-actions";
 import { HelpLauncher } from "./help-launcher";
 import { isPathWithin } from "./panel-nav";
 import { useTeamAgentStatus } from "./panels/team-status";
@@ -179,6 +179,12 @@ export function AppRail({
   const settingsPeek = usePeekHandlers("settings", space === "settings");
 
   const items: Record<RailSpaceId, { href: string; icon: IconComponent; label: string; fullLabel: string }> = {
+    workbench: {
+      href: p.workbench(),
+      icon: routeIconForPath(p.workbench()),
+      label: t(($) => $.rail.workbench),
+      fullLabel: t(($) => $.nav.workbench),
+    },
     inbox: {
       href: p.inbox(),
       icon: routeIconForPath(p.inbox()),
@@ -225,7 +231,6 @@ export function AppRail({
       {globalActions ? (
         <div className="my-2 flex flex-col items-center gap-1">
           <NewIssueButton className={RAIL_ICON_BUTTON_CLASS} tooltipSide="right" />
-          <DispatchWorkButton className={RAIL_ICON_BUTTON_CLASS} tooltipSide="right" />
           <SearchButton className={RAIL_ICON_BUTTON_CLASS} tooltipSide="right" />
         </div>
       ) : (

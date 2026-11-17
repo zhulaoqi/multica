@@ -1,0 +1,64 @@
+{
+  "page": {
+    "title": "Workbench",
+    "history": "Recent work",
+    "new": "New work",
+    "empty_title": "Tell the team what needs doing",
+    "empty_description": "Describe the work in your own words. Multica routes it to the right department, and its lead breaks it into tasks.",
+    "placeholder": "What needs doing?",
+    "send": "Send",
+    "composer_hint": "Enter to send, Shift+Enter for a new line",
+    "routing": "Finding the right department…",
+    "selected_department": "Only this department",
+    "route_automatically": "Choose the department automatically",
+    "open_history": "Recent work",
+    "back": "Back",
+    "unknown_department": "Department",
+    "load_error": "Couldn't load recent work.",
+    "examples_label": "Try asking for",
+    "empty_history": "Work you send will appear here.",
+    "examples": {
+      "one": "Prepare next week's customer onboarding materials",
+      "two": "Investigate yesterday's checkout failures",
+      "three": "Write a launch announcement for the new dashboard"
+    }
+  },
+  "status": {
+    "queued": "Sent to the department. Its lead will pick it up shortly.",
+    "decomposing": "The department lead is breaking this into tasks…",
+    "progress": "{{done}} of {{total}} tasks done",
+    "in_review": "Delivered. Waiting for your review.",
+    "completed": "Completed.",
+    "failed": "The department lead couldn't start this. The department owner has been notified.",
+    "cancelled": "This work was cancelled.",
+    "dispatched_at": "Sent {{time}}"
+  },
+  "card": {
+    "department": "Department",
+    "view_issue": "View issue",
+    "retry": "Send again",
+    "failure_hint": "You can retry, or follow up on the issue."
+  },
+  "result": {
+    "title": "Result",
+    "by": "Result from {{name}}",
+    "empty": "No result was posted on the issue. Open the issue to see what was delivered."
+  },
+  "candidates": {
+    "title": "Which department should take this?",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "errors": {
+    "ambiguous": "Several departments could take this. Pick one below.",
+    "dispatch_text_required": "Write what needs doing first.",
+    "dispatch_text_too_long": "That's too long. Keep it under 4,000 characters.",
+    "org_dispatch_unit_not_found": "That department no longer exists. Choose another or let Multica route it.",
+    "org_dispatch_forbidden": "You don't have access to that department.",
+    "org_dispatch_no_agents": "That department has no agents yet. Add one on the organization page.",
+    "org_dispatch_leader_unavailable": "The department lead can't be reached right now. Try again later.",
+    "org_dispatch_unroutable": "Couldn't tell which department should take this. Name a department or add more detail.",
+    "org_dispatch_failed": "The work couldn't be sent to the department.",
+    "generic": "Something went wrong. Try again."
+  }
+}

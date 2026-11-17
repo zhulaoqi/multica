@@ -225,8 +225,8 @@
         "description": "Abre tu flujo de creación de tareas preferido."
       },
       "dispatchWork": {
-        "label": "Enviar trabajo",
-        "description": "Elige un departamento y envíale una solicitud; su líder reparte el trabajo y avisa al terminar."
+        "label": "Abrir el centro de trabajo",
+        "description": "Describe el trabajo con tus palabras; Multica lo envía al departamento adecuado y su responsable lo divide en tareas."
       },
       "toggleSidebar": {
         "label": "Mostrar u ocultar la barra lateral izquierda",

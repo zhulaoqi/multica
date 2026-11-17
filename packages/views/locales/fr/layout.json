@@ -1,5 +1,6 @@
 {
   "nav": {
+    "workbench": "Atelier",
     "inbox": "Boîte de réception",
     "chat": "Discussion",
     "my_issues": "Mes tâches",
@@ -58,16 +59,17 @@
     "invitation_decline": "Refuser",
     "log_out": "Se déconnecter",
     "new_issue": "Nouvelle tâche",
-    "dispatch_work": "Envoyer du travail",
     "pinned_label": "Épinglés",
     "show_more_pins": "Afficher {{count}} de plus…",
     "show_fewer_pins": "Afficher moins"
   },
   "spaces": {
+    "workbench": "Atelier",
     "work": "Travail",
     "team": "Équipe"
   },
   "rail": {
+    "workbench": "Atelier",
     "label": "Navigation de l'application",
     "sheet_description": "Changer d'espace et d'espace de travail.",
     "inbox": "Boîte",

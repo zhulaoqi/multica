@@ -2,12 +2,11 @@ import type { ReactNode } from "react";
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithI18n } from "../test/i18n";
-import { DispatchWorkButton, NewIssueButton, SearchButton } from "./global-actions";
+import { NewIssueButton, SearchButton } from "./global-actions";
 
-const state = vi.hoisted(() => ({ pathname: "/acme/inbox", hasDraft: false, modal: null as string | null }));
+const state = vi.hoisted(() => ({ pathname: "/acme/inbox", hasDraft: false }));
 const openCreateIssueWithPreference = vi.hoisted(() => vi.fn());
 const setSearchOpen = vi.hoisted(() => vi.fn());
-const openModal = vi.hoisted(() => vi.fn());
 
 vi.mock("../navigation", () => ({
   useNavigation: () => ({ pathname: state.pathname }),
@@ -20,9 +19,6 @@ vi.mock("@multica/core/issues/stores/draft-store", () => ({
 vi.mock("../search/search-store", () => ({
   useSearchStore: { getState: () => ({ setOpen: setSearchOpen }) },
 }));
-vi.mock("@multica/core/modals", () => ({
-  useModalStore: { getState: () => ({ modal: state.modal, open: openModal }) },
-}));
 vi.mock("@multica/core/shortcuts", () => ({ useShortcut: () => null }));
 vi.mock("@multica/ui/components/common/tooltip-hint", () => ({
   TooltipHint: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -31,10 +27,8 @@ vi.mock("@multica/ui/components/common/tooltip-hint", () => ({
 beforeEach(() => {
   state.pathname = "/acme/inbox";
   state.hasDraft = false;
-  state.modal = null;
   openCreateIssueWithPreference.mockClear();
   setSearchOpen.mockClear();
-  openModal.mockClear();
 });
 
 describe("NewIssueButton", () => {
@@ -55,21 +49,6 @@ describe("NewIssueButton", () => {
     state.hasDraft = true;
     renderWithI18n(<NewIssueButton className="" tooltipSide="bottom" />);
     expect(screen.getByRole("button", { name: /^new issue$/i }).querySelector(".bg-brand")).not.toBeNull();
-  });
-});
-
-describe("DispatchWorkButton", () => {
-  it("opens the department dispatch dialog", () => {
-    renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Send work" }));
-    expect(openModal).toHaveBeenCalledWith("dispatch-work");
-  });
-
-  it("does not replace an already open modal", () => {
-    state.modal = "create-issue";
-    renderWithI18n(<DispatchWorkButton className="" tooltipSide="bottom" />);
-    fireEvent.click(screen.getByRole("button", { name: "Send work" }));
-    expect(openModal).not.toHaveBeenCalled();
   });
 });
 

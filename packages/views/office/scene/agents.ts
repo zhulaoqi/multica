@@ -62,6 +62,8 @@ export interface OfficeAgentView {
   id: string;
   name: string;
   status: AgentDeskStatus;
+  /** What the agent is doing right now, shown in a bubble over its head. */
+  activity?: string | null;
 }
 
 /** A human avatar the agents can react to (the local player and peers). */
@@ -178,6 +180,7 @@ export class OfficeAgents {
       const existing = this.avatars.get(agent.id);
       if (existing) {
         if (existing.label.text !== agent.name) existing.label.text = agent.name;
+        existing.view.setCaption(agent.activity ?? null);
         if (existing.status !== agent.status) {
           const wasOffline = existing.status === "offline";
           existing.status = agent.status;
@@ -359,6 +362,7 @@ export class OfficeAgents {
     view.container.position.set(this.layout.door.x, this.layout.door.y);
     view.container.visible = false;
     view.setDir("up");
+    view.setCaption(agent.activity ?? null);
     view.container.eventMode = "static";
     view.container.cursor = "pointer";
     view.container.hitArea = new this.pixi.Rectangle(-8, -32, 16, 33);

@@ -243,8 +243,8 @@
         "description": "Open your preferred issue creation flow."
       },
       "dispatchWork": {
-        "label": "Send work",
-        "description": "Pick a department and hand it a brief; its leader splits the work and reports back."
+        "label": "Open workbench",
+        "description": "Describe work in your own words; Multica routes it to the right department and its lead breaks it down."
       },
       "toggleSidebar": {
         "label": "Toggle left sidebar",

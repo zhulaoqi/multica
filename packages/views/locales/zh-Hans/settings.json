@@ -241,8 +241,8 @@
         "description": "打开你常用的任务创建流程。"
       },
       "dispatchWork": {
-        "label": "派活",
-        "description": "选择部门并提交任务说明，队长会拆解任务并在完成后通知你。"
+        "label": "打开工作台",
+        "description": "用一句话描述要做的事，自动交给合适的部门，由部门负责人拆解。"
       },
       "toggleSidebar": {
         "label": "显示或隐藏左侧边栏",

@@ -11,6 +11,7 @@ import { clearWorkspaceStorage } from "../platform/storage-cleanup";
 import { defaultStorage } from "../platform/storage";
 import { getCurrentWsId, getCurrentSlug } from "../platform/workspace-storage";
 import { issueKeys } from "../issues/queries";
+import { workbenchKeys } from "../workbench/queries";
 import { isSidebarTableRequest, type SidebarIssuesRequest } from "../issues/sidebar-list";
 import { refreshIssueUnread } from "../issues/unread";
 import { refreshSubscribedIssues, subscribedIssueKeys } from "../issues/subscribed";
@@ -652,6 +653,7 @@ function invalidateWorkspaceScopedQueries(qc: QueryClient): void {
   const wsId = getCurrentWsId();
   if (wsId) {
     qc.invalidateQueries({ queryKey: issueKeys.all(wsId) });
+    qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
     void refreshIssueUnread(qc, wsId);
     qc.invalidateQueries({ queryKey: subscribedIssueKeys.all(wsId) });
     // Through the inbox's own entry point, not a plain invalidate: a reconnect
@@ -996,6 +998,9 @@ export function useRealtimeSync(
         const wsId = getCurrentWsId();
         if (!wsId) return;
         qc.invalidateQueries({ queryKey: agentTaskSnapshotKeys.list(wsId) });
+        // Workbench history surfaces the leader run's state (queued → running
+        // → failed/completed); any task lifecycle change can move it.
+        qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
         // Working-agent projections have their own bounded refresh below.
         // 30d activity series shares the same lifecycle signal — any task
         // completion / failure shifts the histogram. (Dispatch alone
@@ -1142,6 +1147,7 @@ export function useRealtimeSync(
           statusChanged: payload.status_changed,
           projectChanged: payload.project_changed,
         });
+        qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
         onIssueDuplicateMarkChanged(
           qc,
           wsId,
@@ -1159,7 +1165,10 @@ export function useRealtimeSync(
       const { issue } = p as IssueCreatedPayload;
       if (!issue) return;
       const wsId = getCurrentWsId();
-      if (wsId) onIssueCreated(qc, wsId, issue);
+      if (wsId) {
+        onIssueCreated(qc, wsId, issue);
+        qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
+      }
     });
 
     const unsubIssueDeleted = ws.on("issue:deleted", (p) => {

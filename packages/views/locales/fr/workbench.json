@@ -1,0 +1,64 @@
+{
+  "page": {
+    "title": "Atelier",
+    "history": "Travail récent",
+    "new": "Nouveau travail",
+    "empty_title": "Dites à l'équipe quoi faire",
+    "empty_description": "Décrivez le travail avec vos mots. Multica l'envoie au bon département, dont le responsable le découpe en tâches.",
+    "placeholder": "Que faut-il faire ?",
+    "send": "Envoyer",
+    "composer_hint": "Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne",
+    "routing": "Recherche du bon département…",
+    "selected_department": "Ce département uniquement",
+    "route_automatically": "Choisir le département automatiquement",
+    "open_history": "Travail récent",
+    "back": "Retour",
+    "unknown_department": "Département",
+    "load_error": "Impossible de charger le travail récent.",
+    "examples_label": "Essayez de demander",
+    "empty_history": "Le travail envoyé apparaîtra ici.",
+    "examples": {
+      "one": "Préparer les supports d'intégration client de la semaine prochaine",
+      "two": "Enquêter sur les échecs de paiement d'hier",
+      "three": "Rédiger l'annonce de lancement du nouveau tableau de bord"
+    }
+  },
+  "status": {
+    "queued": "Envoyé au département. Son responsable s'en saisit bientôt.",
+    "decomposing": "Le responsable du département le découpe en tâches…",
+    "progress": "{{done}} tâches terminées sur {{total}}",
+    "in_review": "Livré. En attente de votre validation.",
+    "completed": "Terminé.",
+    "failed": "Le responsable du département n'a pas pu démarrer. Le département a été prévenu.",
+    "cancelled": "Ce travail a été annulé.",
+    "dispatched_at": "Envoyé {{time}}"
+  },
+  "card": {
+    "department": "Département",
+    "view_issue": "Voir l'issue",
+    "retry": "Renvoyer",
+    "failure_hint": "Vous pouvez réessayer ou suivre l'issue."
+  },
+  "result": {
+    "title": "Résultat",
+    "by": "Résultat de {{name}}",
+    "empty": "Aucun résultat n'a été publié sur l'issue. Ouvrez l'issue pour voir ce qui a été livré."
+  },
+  "candidates": {
+    "title": "Quel département doit s'en charger ?",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "errors": {
+    "ambiguous": "Plusieurs départements peuvent s'en charger. Choisissez-en un.",
+    "dispatch_text_required": "Indiquez d'abord ce qu'il faut faire.",
+    "dispatch_text_too_long": "C'est trop long. Restez sous 4 000 caractères.",
+    "org_dispatch_unit_not_found": "Ce département n'existe plus. Choisissez-en un autre ou laissez Multica l'acheminer.",
+    "org_dispatch_forbidden": "Vous n'avez pas accès à ce département.",
+    "org_dispatch_no_agents": "Ce département n'a pas encore d'agents. Ajoutez-en un depuis la page organisation.",
+    "org_dispatch_leader_unavailable": "Le responsable du département est injoignable pour le moment. Réessayez plus tard.",
+    "org_dispatch_unroutable": "Impossible de déterminer quel département doit s'en charger. Nommez-en un ou ajoutez des détails.",
+    "org_dispatch_failed": "Le travail n'a pas pu être envoyé au département.",
+    "generic": "Une erreur est survenue. Réessayez."
+  }
+}

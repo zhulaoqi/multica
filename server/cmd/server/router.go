@@ -2591,6 +2591,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Post("/api/issues/{id}/intake-blocker", h.CreateIntakeBlocker)
 
 			r.Route("/api/org", func(r chi.Router) {
+				r.Post("/dispatch", h.DispatchWork)
+				r.Get("/dispatches", h.ListMyDispatches)
 				r.Get("/units", h.ListOrgUnits)
 				r.Post("/units", h.CreateOrgUnit)
 				r.Post("/units/import", h.ImportOrgUnits)

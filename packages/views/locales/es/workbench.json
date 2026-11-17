@@ -1,0 +1,64 @@
+{
+  "page": {
+    "title": "Centro de trabajo",
+    "history": "Trabajo reciente",
+    "new": "Nuevo trabajo",
+    "empty_title": "Dile al equipo qué hay que hacer",
+    "empty_description": "Describe el trabajo con tus palabras. Multica lo envía al departamento adecuado y su responsable lo divide en tareas.",
+    "placeholder": "¿Qué hay que hacer?",
+    "send": "Enviar",
+    "composer_hint": "Enter para enviar, Mayús+Enter para una línea nueva",
+    "routing": "Buscando el departamento adecuado…",
+    "selected_department": "Solo este departamento",
+    "route_automatically": "Elegir el departamento automáticamente",
+    "open_history": "Trabajo reciente",
+    "back": "Atrás",
+    "unknown_department": "Departamento",
+    "load_error": "No se pudo cargar el trabajo reciente.",
+    "examples_label": "Prueba a pedir",
+    "empty_history": "El trabajo que envíes aparecerá aquí.",
+    "examples": {
+      "one": "Preparar los materiales de incorporación de clientes de la próxima semana",
+      "two": "Investigar los fallos de pago de ayer",
+      "three": "Escribir el anuncio de lanzamiento del nuevo panel"
+    }
+  },
+  "status": {
+    "queued": "Enviado al departamento. Su responsable lo retomará en breve.",
+    "decomposing": "El responsable del departamento lo está dividiendo en tareas…",
+    "progress": "{{done}} de {{total}} tareas hechas",
+    "in_review": "Entregado. Esperando tu revisión.",
+    "completed": "Completado.",
+    "failed": "El responsable del departamento no pudo empezar. Se ha avisado al departamento.",
+    "cancelled": "Este trabajo se canceló.",
+    "dispatched_at": "Enviado {{time}}"
+  },
+  "card": {
+    "department": "Departamento",
+    "view_issue": "Ver issue",
+    "retry": "Enviar de nuevo",
+    "failure_hint": "Puedes reintentar o seguir el issue."
+  },
+  "result": {
+    "title": "Resultado",
+    "by": "Resultado de {{name}}",
+    "empty": "No se publicó ningún resultado en el issue. Abre el issue para ver lo que se entregó."
+  },
+  "candidates": {
+    "title": "¿Qué departamento debería encargarse?",
+    "agents_one": "{{count}} agente",
+    "agents_other": "{{count}} agentes"
+  },
+  "errors": {
+    "ambiguous": "Varios departamentos podrían encargarse. Elige uno.",
+    "dispatch_text_required": "Primero escribe qué hay que hacer.",
+    "dispatch_text_too_long": "Es demasiado largo. Usa menos de 4000 caracteres.",
+    "org_dispatch_unit_not_found": "Ese departamento ya no existe. Elige otro o deja que Multica lo enrute.",
+    "org_dispatch_forbidden": "No tienes acceso a ese departamento.",
+    "org_dispatch_no_agents": "Ese departamento aún no tiene agentes. Añade uno en la página de organización.",
+    "org_dispatch_leader_unavailable": "No se puede contactar con el responsable del departamento ahora mismo. Inténtalo más tarde.",
+    "org_dispatch_unroutable": "No se pudo determinar qué departamento debe encargarse. Nombra uno o añade más detalles.",
+    "org_dispatch_failed": "No se pudo enviar el trabajo al departamento.",
+    "generic": "Algo salió mal. Inténtalo de nuevo."
+  }
+}

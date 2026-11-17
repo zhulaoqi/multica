@@ -19,6 +19,15 @@
       "idle": "空闲",
       "offline": "离线"
     },
+    "activity": {
+      "working": "工作中",
+      "idle": "空闲中",
+      "offline": "已下线",
+      "chat": "正在聊天",
+      "autopilot": "正在跑自动任务",
+      "running_other": "{{count}} 个任务进行中",
+      "queued_other": "{{count}} 个任务排队中"
+    },
     "rooms": {
       "meeting": "会议室",
       "kitchen": "茶水间",
@@ -41,6 +50,7 @@
       "task_error": "任务创建失败，请重试。",
       "task_error_agent_unavailable": "这个智能体暂时无法接任务。",
       "task_error_issue_limit": "这个工作区的任务数已达上限。"
-    }
+    },
+    "company_name": "易点天下 eclicktech"
   }
 }

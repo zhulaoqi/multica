@@ -34,7 +34,7 @@
   "commands": {
     "current_theme_aria": "現在のテーマ",
     "new_issue": "新規タスク",
-    "dispatch_work": "部門に仕事を送る",
+    "dispatch_work": "ワークベンチを開く",
     "new_project": "新規プロジェクト",
     "new_autopilot": "新規オートパイロット",
     "chat_with_agent": "エージェントとチャット",

@@ -128,8 +128,7 @@ export function GlobalShortcuts() {
         return;
       }
       if (actionId === "dispatchWork") {
-        if (useModalStore.getState().modal) return;
-        useModalStore.getState().open("dispatch-work");
+        navigation.push(workspacePaths.workbench());
         return;
       }
 
