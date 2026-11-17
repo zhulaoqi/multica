@@ -5,6 +5,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@multica/core/i18n/react";
+import { issueDetailOptions } from "@multica/core/issues/queries";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import type { Agent, MemberWithUser } from "@multica/core/types";
 import enCommon from "../locales/en/common.json";
@@ -43,7 +44,13 @@ vi.mock("@multica/core/paths", () => ({
     agentDetail: (id: string) => `/workspace-test/agents/${id}`,
   }),
 }));
+const snapshot = vi.hoisted(() => ({ tasks: [] as unknown[] }));
+
 vi.mock("@multica/core/agents", () => ({
+  agentTaskSnapshotOptions: (wsId: string) => ({
+    queryKey: ["agent-task-snapshot", wsId],
+    queryFn: async () => snapshot.tasks,
+  }),
   useWorkspacePresenceMap: () => ({
     byAgent: new Map([
       [
@@ -89,10 +96,14 @@ vi.mock("../layout", () => ({
 vi.mock("./components/office-canvas", () => ({
   OfficeCanvas: forwardRef(function MockOfficeCanvas(
     {
+      agents,
       peers,
+      companyName,
       onFocusAgentChange,
     }: {
+      agents: { id: string; activity?: string | null }[];
       peers: unknown[];
+      companyName: string;
       onFocusAgentChange: (agentId: string | null) => void;
     },
     ref: Ref<unknown>,
@@ -101,6 +112,14 @@ vi.mock("./components/office-canvas", () => ({
     return (
       <div data-testid="office-canvas">
         {peers.length}
+        <span data-testid="company-name">{companyName}</span>
+        {agents.map((agent) => (
+          <span
+            key={agent.id}
+            data-testid={`activity-${agent.id}`}
+            data-activity={agent.activity ?? ""}
+          />
+        ))}
         <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
           focus-agent
         </button>
@@ -161,6 +180,12 @@ function renderPage({
   });
   qc.setQueryData(memberListOptions(WS).queryKey, members);
   qc.setQueryData(agentListOptions(WS).queryKey, agents);
+  qc.setQueryData(["agent-task-snapshot", WS], snapshot.tasks);
+  qc.setQueryData(issueDetailOptions(WS, "issue-11").queryKey, {
+    id: "issue-11",
+    identifier: "MAKE-11",
+    title: "Write the launch post",
+  } as never);
   return render(
     <QueryClientProvider client={qc}>
       <I18nProvider locale="en" resources={TEST_RESOURCES}>
@@ -177,6 +202,7 @@ async function openPanel(user: ReturnType<typeof userEvent.setup>) {
 
 describe("OfficePage", () => {
   beforeEach(() => {
+    snapshot.tasks = [];
     room.peers = [];
     room.joined = true;
     room.error = null;
@@ -202,6 +228,19 @@ describe("OfficePage", () => {
     expect(screen.getByText("Atlas")).toBeInTheDocument();
     expect(screen.getByText("Working")).toBeInTheDocument();
     expect(screen.getByTestId("office-canvas")).toHaveTextContent("1");
+  });
+
+  it("captions a working agent with the issue it is running", () => {
+    snapshot.tasks = [
+      { id: "task-1", agent_id: "agent-1", issue_id: "issue-11", status: "running" },
+    ];
+    renderPage();
+
+    expect(screen.getByTestId("activity-agent-1")).toHaveAttribute(
+      "data-activity",
+      "MAKE-11 Write the launch post",
+    );
+    expect(screen.getByTestId("company-name")).toHaveTextContent("eclicktech");
   });
 
   it("opens the interaction panel from the roster and walks over", async () => {

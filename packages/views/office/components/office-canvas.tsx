@@ -22,6 +22,7 @@ export interface OfficeCanvasProps {
   peers: OfficePeerView[];
   localName: string;
   roomNames: Record<RoomId, string>;
+  companyName: string;
   spawn: OfficePosition;
   onLocalMove: (position: OfficePosition) => void;
   /** The player reached an agent (walked over or clicked it). */
@@ -53,6 +54,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       peers,
       localName,
       roomNames,
+      companyName,
       spawn,
       onLocalMove,
       onAgentActivate,
@@ -73,6 +75,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     nameRef.current = localName;
     const roomNamesRef = useRef(roomNames);
     roomNamesRef.current = roomNames;
+    const companyNameRef = useRef(companyName);
+    companyNameRef.current = companyName;
 
     const [ready, setReady] = useState(false);
 
@@ -104,6 +108,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
           height: Math.max(1, Math.round(rect.height)),
           localName: nameRef.current,
           roomNames: roomNamesRef.current,
+          companyName: companyNameRef.current,
           spawn: spawnRef.current,
           onLocalMove: (position) => callbacks.current.onLocalMove(position),
           onAgentActivate: (agentId) =>

@@ -19,6 +19,15 @@
       "idle": "アイドル",
       "offline": "オフライン"
     },
+    "activity": {
+      "working": "作業中",
+      "idle": "手が空いています",
+      "offline": "オフライン",
+      "chat": "チャット中",
+      "autopilot": "オートパイロット実行中",
+      "running_other": "{{count}} 件のタスクを実行中",
+      "queued_other": "{{count}} 件のタスクが待機中"
+    },
     "rooms": {
       "meeting": "会議室",
       "kitchen": "給湯室",
@@ -41,6 +50,7 @@
       "task_error": "タスクを作成できませんでした。もう一度お試しください。",
       "task_error_agent_unavailable": "このエージェントは現在タスクを受け付けられません。",
       "task_error_issue_limit": "このワークスペースはタスク数の上限に達しています。"
-    }
+    },
+    "company_name": "eclicktech"
   }
 }

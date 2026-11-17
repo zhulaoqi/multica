@@ -20,6 +20,17 @@
       "idle": "Idle",
       "offline": "Offline"
     },
+    "activity": {
+      "working": "Working",
+      "idle": "Free",
+      "offline": "Offline",
+      "chat": "In a chat",
+      "autopilot": "Running an autopilot",
+      "running_one": "{{count}} task running",
+      "running_other": "{{count}} tasks running",
+      "queued_one": "{{count}} task waiting",
+      "queued_other": "{{count}} tasks waiting"
+    },
     "rooms": {
       "meeting": "Meeting room",
       "kitchen": "Pantry",
@@ -42,6 +53,7 @@
       "task_error": "Couldn't create the task. Try again.",
       "task_error_agent_unavailable": "This agent can't take work right now.",
       "task_error_issue_limit": "This workspace has reached its issue limit."
-    }
+    },
+    "company_name": "eclicktech"
   }
 }

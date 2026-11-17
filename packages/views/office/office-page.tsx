@@ -27,6 +27,7 @@ import { OfficeRoster } from "./components/office-roster";
 import type { AgentDeskStatus } from "./scene/characters";
 import { isTypingTarget } from "./scene/input";
 import { buildOfficeLayout, spawnFor, type RoomId } from "./scene/layout";
+import { useAgentActivityText } from "./use-agent-activity";
 import { useOpenAgentChat } from "./use-open-agent-chat";
 
 const EMPTY_AGENTS: Agent[] = [];
@@ -96,16 +97,31 @@ export function OfficePage() {
     [peers, nameById, t],
   );
 
-  const agentViews = useMemo(
+  const agentStatuses = useMemo(
     () =>
       agents
         .filter((agent) => !agent.archived_at)
-        .map((agent) => ({
-          id: agent.id,
-          name: agent.name,
-          status: deskStatus(byAgent.get(agent.id)),
-        })),
+        .map((agent) => {
+          const detail = byAgent.get(agent.id);
+          return {
+            id: agent.id,
+            name: agent.name,
+            status: deskStatus(detail),
+            queuedCount: detail?.queuedCount ?? 0,
+          };
+        }),
     [agents, byAgent],
+  );
+  const activityById = useAgentActivityText(wsId, agentStatuses);
+  const agentViews = useMemo(
+    () =>
+      agentStatuses.map(({ id, name, status }) => ({
+        id,
+        name,
+        status,
+        activity: activityById.get(id) ?? null,
+      })),
+    [agentStatuses, activityById],
   );
 
   const rosterMembers = useMemo(() => {
@@ -224,6 +240,7 @@ export function OfficePage() {
               peers={peerViews}
               localName={localName}
               roomNames={roomNames}
+              companyName={t(($) => $.page.company_name)}
               spawn={spawn}
               onLocalMove={handleLocalMove}
               onAgentActivate={handleAgentActivate}
