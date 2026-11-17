@@ -16,6 +16,7 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
     generateOrgUnitSquad: vi.fn(),
     registerIntakeAgent: vi.fn(),
     patchIntakeAgent: vi.fn(),
+    listOrgUnits: vi.fn(),
   },
 }));
 import { WorkspaceSlugProvider } from "@multica/core/paths";
@@ -145,8 +146,8 @@ const navAdapter: NavigationAdapter = {
   getShareableUrl: (path) => path,
 };
 
-function renderPage(data: OrgTree) {
-  qc.setQueryData(orgTreeOptions(WS).queryKey, data);
+function renderPage(data: OrgTree, { withTree = true } = {}) {
+  if (withTree) qc.setQueryData(orgTreeOptions(WS).queryKey, data);
   renderWithI18n(
     <QueryClientProvider client={qc}>
       <WorkspaceSlugProvider slug="acme">
@@ -228,6 +229,20 @@ describe("OrgPage permissions", () => {
 });
 
 describe("OrgPage Feishu sync", () => {
+  it("keeps the sync action for a workspace admin when the tree fails", async () => {
+    signIn("u-ada");
+    qc.setQueryData(memberListOptions(WS).queryKey, [
+      { ...member, role: "admin" },
+    ]);
+    vi.mocked(api.listOrgUnits).mockRejectedValue(new Error("boom"));
+    renderPage(tree(), { withTree: false });
+
+    expect(
+      await screen.findByText("Could not load the organisation tree."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync from Feishu" })).toBeEnabled();
+  });
+
   it("keeps the sync button disabled until credentials are configured", () => {
     qc.setQueryData(orgSyncStatusOptions(WS).queryKey, { configured: false, last_run: null });
     renderPage(tree());

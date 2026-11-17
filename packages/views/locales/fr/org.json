@@ -85,5 +85,7 @@
   "squad_default_name": "Escouade {{name}}",
   "squad_issue_counts": "{{active}} en cours · {{review}} en revue · {{blocked}} bloquées",
   "squad_limits": "{{wip}} en cours · {{max}} par envoi",
-  "dispatch_work": "Assigner du travail"
+  "dispatch_work": "Assigner du travail",
+  "retry": "Réessayer",
+  "sync_status_unavailable": "Impossible de lire l’état de synchronisation Feishu. Vous pouvez tout de même lancer une synchronisation."
 }

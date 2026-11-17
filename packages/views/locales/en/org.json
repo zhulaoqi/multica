@@ -85,5 +85,7 @@
   "squad_default_name": "{{name}} squad",
   "squad_issue_counts": "{{active}} active · {{review}} in review · {{blocked}} blocked",
   "squad_limits": "{{wip}} open · {{max}} per dispatch",
-  "dispatch_work": "Assign work"
+  "dispatch_work": "Assign work",
+  "retry": "Retry",
+  "sync_status_unavailable": "Couldn’t read the Feishu sync status. You can still try syncing."
 }

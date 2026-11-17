@@ -84,5 +84,7 @@
   "squad_default_name": "{{name}}小队",
   "squad_issue_counts": "{{active}} 进行中 · {{review}} 待评审 · {{blocked}} 受阻",
   "squad_limits": "并行 {{wip}} · 单次 {{max}}",
-  "dispatch_work": "派活"
+  "dispatch_work": "派活",
+  "retry": "重试",
+  "sync_status_unavailable": "读取飞书同步状态失败，仍可尝试同步。"
 }

@@ -119,7 +119,10 @@ export function TeamPanel() {
   const liveSquads = useMemo(() => squads.filter((squad) => !squad.archived_at), [squads]);
   const { data: members = [] } = useQuery({ ...memberListOptions(wsId), enabled: !!wsId });
   const { data: skills = [] } = useQuery({ ...skillListOptions(wsId), enabled: !!wsId });
-  const { data: orgTree } = useQuery({ ...orgTreeOptions(wsId), enabled: !!wsId });
+  const { data: orgTree, isError: orgUnavailable } = useQuery({
+    ...orgTreeOptions(wsId),
+    enabled: !!wsId,
+  });
   const { data: runtimes = [] } = useQuery({ ...runtimeListOptions(wsId), enabled: !!wsId });
   const machineCounts = useMemo(() => {
     const machines = buildRuntimeMachines(runtimes, { now: Date.now() }).filter(
@@ -131,6 +134,13 @@ export function TeamPanel() {
   const mineCount = userId ? agents.filter((agent) => agent.owner_id === userId).length : 0;
   const myRole = members.find((member) => member.user_id === userId)?.role;
   const canManageMembers = myRole === "owner" || myRole === "admin";
+  // A workspace with no organisation should not carry a dead directory entry.
+  // Managers always keep it: they need the create and sync actions, including
+  // when the tree request itself fails. While the list is still loading we
+  // keep it to avoid a flicker.
+  const showOrgLink =
+    canManageMembers ||
+    (!orgUnavailable && (orgTree === undefined || orgTree.units.length > 0));
   const teamUserIds = useMemo(
     () => teamUserIdsFor(orgTree, userId, canManageMembers),
     [orgTree, userId, canManageMembers],
@@ -256,13 +266,15 @@ export function TeamPanel() {
 
         <PanelSection label={t(($) => $.panels.team.squads_and_members)}>
           <PanelList>
-            <PanelLink
-              href={p.org()}
-              icon={<Network />}
-              label={t(($) => $.nav.org)}
-              active={isPathWithin(pathname, p.org())}
-              trailing={<PanelCount value={orgTree?.units.length ?? 0} />}
-            />
+            {showOrgLink && (
+              <PanelLink
+                href={p.org()}
+                icon={<Network />}
+                label={t(($) => $.nav.org)}
+                active={isPathWithin(pathname, p.org())}
+                trailing={<PanelCount value={orgTree?.units.length ?? 0} />}
+              />
+            )}
             <PanelLink
               href={p.squads()}
               icon={<Users />}
