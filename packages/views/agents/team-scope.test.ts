@@ -19,7 +19,7 @@ const tree = {
 
 describe("teamUserIdsFor", () => {
   it("collects the lead and everyone in the units they manage", () => {
-    const ids = teamUserIdsFor(tree, "me", false);
+    const ids = teamUserIdsFor(tree, "me");
 
     expect(ids).not.toBeNull();
     expect(Array.from(ids!).sort()).toEqual(["me", "sub"]);
@@ -29,18 +29,13 @@ describe("teamUserIdsFor", () => {
     const ids = teamUserIdsFor(
       { ...tree, units: tree.units.map((unit) => ({ ...unit, can_manage: false })) },
       "me",
-      false,
     );
 
     expect(ids).toBeNull();
   });
 
-  it("returns null for workspace admins, whose all-agents scope covers it", () => {
-    expect(teamUserIdsFor(tree, "me", true)).toBeNull();
-  });
-
   it("returns null without an org tree or a user", () => {
-    expect(teamUserIdsFor(null, "me", false)).toBeNull();
-    expect(teamUserIdsFor(tree, null, false)).toBeNull();
+    expect(teamUserIdsFor(null, "me")).toBeNull();
+    expect(teamUserIdsFor(tree, null)).toBeNull();
   });
 });

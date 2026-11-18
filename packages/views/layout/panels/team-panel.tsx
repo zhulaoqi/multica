@@ -144,8 +144,8 @@ export function TeamPanel() {
     canManageMembers ||
     (!orgUnavailable && (orgTree === undefined || orgTree.units.length > 0));
   const teamUserIds = useMemo(
-    () => teamUserIdsFor(orgTree, userId, canManageMembers),
-    [orgTree, userId, canManageMembers],
+    () => teamUserIdsFor(orgTree, userId),
+    [orgTree, userId],
   );
   const teamAgentCount = teamUserIds
     ? agents.filter((agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id)).length

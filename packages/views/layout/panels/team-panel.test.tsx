@@ -10,6 +10,7 @@ import type { AgentRuntime } from "@multica/core/types";
 import {
   agentListOptions,
   memberListOptions,
+  orgTreeOptions,
   skillListOptions,
   squadListOptions,
   workspaceListOptions,
@@ -229,5 +230,35 @@ describe("TeamPanel member directory", () => {
     renderPanel([]);
 
     expect(screen.getByRole("link", { name: /1 member/ })).toBeInTheDocument();
+  });
+
+  it("keeps the team lens for a workspace owner who leads a department", () => {
+    signIn();
+    qc.setQueryData(memberListOptions(WS).queryKey, [memberRow("owner")]);
+    qc.setQueryData(orgTreeOptions(WS).queryKey, {
+      units: [{
+        id: "unit-rd",
+        parent_id: "",
+        name: "Engineering",
+        lead_user_id: "user-1",
+        can_manage: true,
+        description: "",
+        position: 0,
+      }],
+      agents: [],
+      members: [{
+        user_id: "user-1",
+        unit_id: "unit-rd",
+        name: "Ada",
+        email: "ada@example.com",
+        avatar_url: null,
+      }],
+      squads: [],
+      can_manage: false,
+      my_unit_id: "unit-rd",
+    });
+    renderPanel([]);
+
+    expect(screen.getByRole("link", { name: /Team agents/ })).toBeInTheDocument();
   });
 });

@@ -11,17 +11,15 @@ type OrgSnapshot = {
  *
  * `can_manage` on an org unit is inherited from its ancestors server-side
  * (see `orgUserLeadsUnit`), so the units it marks are exactly the lead's
- * subtree — no parent walk needed here. Returns `null` when the viewer is not
- * a department lead or is a workspace admin: an admin's "all agents" scope
- * already covers the same rows, and showing a second lens would only add a
- * menu entry that duplicates it.
+ * subtree — no parent walk needed here. Returns `null` when the viewer leads
+ * no department. A workspace role does not widen the org scope, so owners and
+ * admins who lead a department keep the lens too.
  */
 export function teamUserIdsFor(
   orgTree: OrgSnapshot | null | undefined,
   userId: string | null | undefined,
-  isWorkspaceAdmin: boolean,
 ): ReadonlySet<string> | null {
-  if (!orgTree || !userId || isWorkspaceAdmin) return null;
+  if (!orgTree || !userId) return null;
   const managedUnitIds = new Set(
     orgTree.units.filter((unit) => unit.can_manage).map((unit) => unit.id),
   );

@@ -5,7 +5,7 @@ export const OrgUnitSchema = z.object({
   parent_id: z.string().optional().default(""),
   name: z.string(),
   lead_user_id: z.string().optional().default(""),
-  // Whether the requester may edit this unit (workspace manager, or the
+  // Whether the requester may edit this unit (the platform operator, or the
   // lead of the unit or one of its ancestors).
   can_manage: z.boolean().optional().default(false),
   description: z.string().optional().default(""),

@@ -455,11 +455,11 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     (orgTree?.units.some((unit) => unit.can_manage) ?? false);
 
   // "My team" users: members of the units this viewer leads, including
-  // themselves. Workspace admins skip the lens — "all" already shows
-  // everything.
+  // themselves. A workspace role does not widen the org scope, so owners and
+  // admins who lead a department keep the lens.
   const teamUserIds = useMemo<ReadonlySet<string> | null>(
-    () => teamUserIdsFor(orgTree, currentUser?.id, isWorkspaceAdmin),
-    [orgTree, currentUser, isWorkspaceAdmin],
+    () => teamUserIdsFor(orgTree, currentUser?.id),
+    [orgTree, currentUser],
   );
 
   // Leads land on "team" until they pick a scope themselves. A stale value
