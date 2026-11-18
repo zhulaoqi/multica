@@ -106,6 +106,16 @@ In `server/internal/handler/`, distinguish UUID sources before using them in wri
 
 Workspace-scoped queries filter by `workspace_id`; membership gates access and `X-Workspace-ID` selects the workspace. Assignees are polymorphic: interpret `assignee_id` together with `assignee_type`.
 
+## Workspace Department Scope
+
+A workspace is a project owned by one department (`workspace.org_unit_id`, NULL for legacy flat workspaces).
+
+- Every authorization check on an owned workspace resolves through `server/internal/workspaceaccess` (`Resolve`, `Allowed`, `IsManager`). Do not reintroduce `GetMemberByUserAndWorkspace` as an access check on those paths.
+- Access = member row AND (stored owner/admin OR `member.org_unit_id` inside the project subtree). `IsManager` (owner/admin or department lead) gates settings and member management; integrations, plugins, MCP, runtimes, share links and billing stay on the stored role.
+- A `member` row means "joined the project" and owns seats, notifications, presence and rosters. `workspace_directory_member` is the department candidate directory: it grants nothing and only feeds candidates and org-page `in_project`.
+- New member/organization queries must filter by the project subtree; new reads must not bypass it. The department lead always has a real member row and owns the project; a lead is removed only after transferring the department lead.
+- Existing workspaces are converted with `server/cmd/reset_project_members`, never by deleting member rows in SQL.
+
 ## Desktop Rules
 
 - Workspace session routes are tab destinations. Pre-workspace one-shot flows (create workspace, accept invite) use `WindowOverlay` in `apps/desktop/src/renderer/src/stores/window-overlay-store.ts`, not new routes. Stale workspace tabs heal by dropping stale tab groups.
