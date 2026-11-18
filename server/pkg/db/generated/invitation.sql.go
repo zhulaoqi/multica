@@ -153,6 +153,19 @@ func (q *Queries) ExpireStalePendingInvitations(ctx context.Context, arg ExpireS
 	return items, nil
 }
 
+const expireWorkspacePendingInvitations = `-- name: ExpireWorkspacePendingInvitations :exec
+UPDATE workspace_invitation
+SET status = 'expired', updated_at = now()
+WHERE workspace_id = $1 AND status = 'pending'
+`
+
+// Department-owned projects add members directly. Any invitation still pending
+// when a workspace becomes or stays owned is retired so it cannot be accepted.
+func (q *Queries) ExpireWorkspacePendingInvitations(ctx context.Context, workspaceID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, expireWorkspacePendingInvitations, workspaceID)
+	return err
+}
+
 const getInvitation = `-- name: GetInvitation :one
 SELECT id, workspace_id, inviter_id, invitee_email, invitee_user_id, role, status, created_at, updated_at, expires_at FROM workspace_invitation
 WHERE id = $1

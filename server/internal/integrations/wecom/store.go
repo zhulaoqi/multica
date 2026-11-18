@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -61,19 +62,16 @@ func (s *Store) GetInstallation(ctx context.Context, id pgtype.UUID) (Installati
 	return installationFromRow(row)
 }
 
-// IsWorkspaceMember re-checks membership at inbound time. With channel_* FKs
-// removed (MUL-3515 §4) a stale binding could otherwise route a message to a
-// user who has since left the workspace.
+// IsWorkspaceMember re-checks project access at inbound time. With channel_*
+// FKs removed (MUL-3515 §4) a stale binding could otherwise route a message to
+// a user who has left the project or the owning department.
 func (s *Store) IsWorkspaceMember(ctx context.Context, workspaceID, userID pgtype.UUID) (bool, error) {
-	_, err := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      userID,
-		WorkspaceID: workspaceID,
-	})
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, workspaceID, userID, false)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
 	}
-	return true, nil
+	return access.Allowed(), nil
 }

@@ -79,17 +79,23 @@ func (h *Handler) requireDaemonWorkspaceAccess(w http.ResponseWriter, r *http.Re
 		return true
 	}
 
-	// PAT/JWT fallback: check membership cache before hitting DB.
+	// PAT/JWT fallback: check the membership cache before hitting the DB. A
+	// cache hit is an access grant even for a department project: every path
+	// that moves a member out of the owning department invalidates the entry
+	// (department change, org sync, member removal).
 	userID := requestUserID(r)
-	if userID != "" {
-		if h.MembershipCache.Get(r.Context(), userID, workspaceID) {
-			return true
-		}
+	if userID != "" && h.MembershipCache.Get(r.Context(), userID, workspaceID) {
+		return true
 	}
 
 	_, ok := h.requireWorkspaceMember(w, r, workspaceID, "not found")
 	if ok && userID != "" {
-		h.MembershipCache.Set(r.Context(), userID, workspaceID)
+		// Cache only legacy grants. A department project's access depends on
+		// the member's placement as well as the row, so it is resolved on
+		// every check instead of being remembered here.
+		if access, err := h.getWorkspaceAccess(r.Context(), userID, workspaceID); err == nil && access.Legacy() {
+			h.MembershipCache.Set(r.Context(), userID, workspaceID)
+		}
 	}
 	return ok
 }
@@ -303,11 +309,13 @@ func (h *Handler) verifyDaemonWorkspaceAccess(r *http.Request, workspaceID strin
 	if h.MembershipCache.Get(r.Context(), userID, workspaceID) {
 		return true
 	}
-	_, err := h.getWorkspaceMember(r.Context(), userID, workspaceID)
-	if err != nil {
+	access, err := h.workspaceAccess(r, userID, workspaceID)
+	if err != nil || !access.Allowed() {
 		return false
 	}
-	h.MembershipCache.Set(r.Context(), userID, workspaceID)
+	if access.Legacy() {
+		h.MembershipCache.Set(r.Context(), userID, workspaceID)
+	}
 	return true
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/channel"
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 )
@@ -208,15 +209,17 @@ func (r *identityResolver) ResolveSender(ctx context.Context, inst engine.Resolv
 		}
 		return engine.ResolvedIdentity{}, err
 	}
-	// Binding existence no longer proves membership (no FK); re-check.
-	if _, err := r.q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      binding.MulticaUserID,
-		WorkspaceID: inst.WorkspaceID,
-	}); err != nil {
+	// Binding existence no longer proves access (no FK); re-check the project
+	// policy. A member row outside the owning department's subtree is denied.
+	access, err := workspaceaccess.Resolve(ctx, r.q, inst.WorkspaceID, binding.MulticaUserID, false)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return engine.ResolvedIdentity{}, engine.ErrSenderNotMember
 		}
 		return engine.ResolvedIdentity{}, err
+	}
+	if !access.Allowed() {
+		return engine.ResolvedIdentity{}, engine.ErrSenderNotMember
 	}
 	return engine.ResolvedIdentity{UserID: binding.MulticaUserID}, nil
 }

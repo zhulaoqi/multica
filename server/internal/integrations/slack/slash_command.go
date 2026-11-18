@@ -13,6 +13,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
 	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -67,7 +68,7 @@ const (
 type slashQueries interface {
 	GetChannelInstallationByAppID(ctx context.Context, arg db.GetChannelInstallationByAppIDParams) (db.ChannelInstallation, error)
 	GetChannelUserBindingByUserID(ctx context.Context, arg db.GetChannelUserBindingByUserIDParams) (db.ChannelUserBinding, error)
-	GetMemberByUserAndWorkspace(ctx context.Context, arg db.GetMemberByUserAndWorkspaceParams) (db.Member, error)
+	GetWorkspaceAccess(ctx context.Context, arg db.GetWorkspaceAccessParams) (db.GetWorkspaceAccessRow, error)
 }
 
 // quickCreateEnqueuer is the narrow slice of *service.TaskService the slash
@@ -335,14 +336,15 @@ func (p *SlashCommandProcessor) resolveUser(ctx context.Context, inst engine.Res
 		}
 		return pgtype.UUID{}, err
 	}
-	if _, err := p.q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      binding.MulticaUserID,
-		WorkspaceID: inst.WorkspaceID,
-	}); err != nil {
+	access, err := workspaceaccess.ResolveWith(ctx, p.q, inst.WorkspaceID, binding.MulticaUserID, false)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return pgtype.UUID{}, engine.ErrSenderNotMember
 		}
 		return pgtype.UUID{}, err
+	}
+	if !access.Allowed() {
+		return pgtype.UUID{}, engine.ErrSenderNotMember
 	}
 	return binding.MulticaUserID, nil
 }

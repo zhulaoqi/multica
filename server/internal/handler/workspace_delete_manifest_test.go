@@ -60,6 +60,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"contact_sales_inquiry":              workspaceDeleteKeep,
 	"daemon_connection":                  workspaceDelete,
 	"daemon_token":                       workspaceDelete,
+	"dispatch_origin":                    workspaceDelete,
 	"dingtalk_group_presence":            workspaceDelete,
 	"dingtalk_bot_identity":              workspaceDelete,
 	"dingtalk_group_route":               workspaceDelete,
@@ -155,6 +156,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"webhook_delivery":                   workspaceDelete,
 	"wecom_install_session":              workspaceDelete,
 	"workspace":                          workspaceDelete,
+	"workspace_directory_member":         workspaceDelete,
 	"workspace_invitation":               workspaceDelete,
 	"workspace_share_link":               workspaceDelete,
 }

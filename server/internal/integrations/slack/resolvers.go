@@ -11,6 +11,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/channel"
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 )
@@ -184,7 +185,7 @@ func (r *installationResolver) ResolveInstallation(ctx context.Context, msg chan
 type identityQueries interface {
 	GetChannelUserBindingByUserID(ctx context.Context, arg db.GetChannelUserBindingByUserIDParams) (db.ChannelUserBinding, error)
 	FindReusableChannelUserBinding(ctx context.Context, arg db.FindReusableChannelUserBindingParams) (db.ChannelUserBinding, error)
-	GetMemberByUserAndWorkspace(ctx context.Context, arg db.GetMemberByUserAndWorkspaceParams) (db.Member, error)
+	GetWorkspaceAccess(ctx context.Context, arg db.GetWorkspaceAccessParams) (db.GetWorkspaceAccessRow, error)
 	CreateChannelUserBinding(ctx context.Context, arg db.CreateChannelUserBindingParams) (db.ChannelUserBinding, error)
 }
 
@@ -213,13 +214,12 @@ func (r *identityResolver) ResolveSender(ctx context.Context, inst engine.Resolv
 		}
 		binding, reused = cand, true
 	}
-	// Binding existence no longer proves membership (no FK); re-check. For a
-	// reused link this also gates materialization: we never persist a binding for
-	// a user who has since left the workspace.
-	if _, err := r.q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      binding.MulticaUserID,
-		WorkspaceID: inst.WorkspaceID,
-	}); err != nil {
+	// Binding existence no longer proves access (no FK); re-check the project
+	// policy. For a reused link this also gates materialization: we never persist
+	// a binding for a user who has since left the project or the owning
+	// department's subtree.
+	access, err := workspaceaccess.ResolveWith(ctx, r.q, inst.WorkspaceID, binding.MulticaUserID, false)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			if reused {
 				// Same human, no longer a member: prompt a fresh link rather than
@@ -229,6 +229,12 @@ func (r *identityResolver) ResolveSender(ctx context.Context, inst engine.Resolv
 			return engine.ResolvedIdentity{}, engine.ErrSenderNotMember
 		}
 		return engine.ResolvedIdentity{}, err
+	}
+	if !access.Allowed() {
+		if reused {
+			return engine.ResolvedIdentity{}, engine.ErrSenderUnbound
+		}
+		return engine.ResolvedIdentity{}, engine.ErrSenderNotMember
 	}
 	if reused {
 		// Materialize the reused link as a binding on THIS installation so later

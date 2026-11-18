@@ -12,8 +12,8 @@ import (
 )
 
 const createMember = `-- name: CreateMember :one
-INSERT INTO member (workspace_id, user_id, role)
-VALUES ($1, $2, $3)
+INSERT INTO member (workspace_id, user_id, role, org_unit_id)
+VALUES ($1, $2, $3, $4)
 RETURNING id, workspace_id, user_id, role, created_at, org_unit_id
 `
 
@@ -21,10 +21,16 @@ type CreateMemberParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	UserID      pgtype.UUID `json:"user_id"`
 	Role        string      `json:"role"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
 }
 
 func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
-	row := q.db.QueryRow(ctx, createMember, arg.WorkspaceID, arg.UserID, arg.Role)
+	row := q.db.QueryRow(ctx, createMember,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Role,
+		arg.OrgUnitID,
+	)
 	var i Member
 	err := row.Scan(
 		&i.ID,
@@ -90,13 +96,30 @@ func (q *Queries) GetMemberByUserAndWorkspace(ctx context.Context, arg GetMember
 }
 
 const getRealtimeMemberships = `-- name: GetRealtimeMemberships :many
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
 SELECT m.user_id, m.workspace_id
 FROM member m
+JOIN workspace w ON w.id = m.workspace_id
 JOIN (
     SELECT unnest($1::uuid[]) AS user_id,
            unnest($2::uuid[]) AS workspace_id
 ) AS requested
     ON m.user_id = requested.user_id AND m.workspace_id = requested.workspace_id
+WHERE w.org_unit_id IS NULL
+   OR m.role IN ('owner', 'admin')
+   OR EXISTS (
+       SELECT 1 FROM project_scope scope
+       WHERE scope.workspace_id = m.workspace_id AND scope.unit_id = m.org_unit_id
+   )
 `
 
 type GetRealtimeMembershipsParams struct {
@@ -109,6 +132,8 @@ type GetRealtimeMembershipsRow struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
+// Realtime fanout follows the same department scope as content access: a
+// member row outside the owning department's subtree no longer receives events.
 func (q *Queries) GetRealtimeMemberships(ctx context.Context, arg GetRealtimeMembershipsParams) ([]GetRealtimeMembershipsRow, error) {
 	rows, err := q.db.Query(ctx, getRealtimeMemberships, arg.UserIds, arg.WorkspaceIds)
 	if err != nil {
@@ -127,6 +152,74 @@ func (q *Queries) GetRealtimeMemberships(ctx context.Context, arg GetRealtimeMem
 		return nil, err
 	}
 	return items, nil
+}
+
+const getWorkspaceAccess = `-- name: GetWorkspaceAccess :one
+WITH RECURSIVE scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $1
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT
+    w.id AS workspace_id,
+    w.org_unit_id AS root_unit_id,
+    (root.id IS NOT NULL)::bool AS root_exists,
+    COALESCE(root.lead_user_id, '00000000-0000-0000-0000-000000000000'::uuid) AS root_lead_user_id,
+    m.id AS member_id,
+    COALESCE(m.role, '') AS role,
+    m.org_unit_id AS member_org_unit_id,
+    m.created_at AS member_created_at,
+    (
+        m.org_unit_id IS NOT NULL
+        AND m.org_unit_id IN (SELECT unit_id FROM scope)
+    )::bool AS in_subtree
+FROM workspace w
+LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = $2
+WHERE w.id = $1
+`
+
+type GetWorkspaceAccessParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+type GetWorkspaceAccessRow struct {
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	RootUnitID      pgtype.UUID        `json:"root_unit_id"`
+	RootExists      bool               `json:"root_exists"`
+	RootLeadUserID  pgtype.UUID        `json:"root_lead_user_id"`
+	MemberID        pgtype.UUID        `json:"member_id"`
+	Role            string             `json:"role"`
+	MemberOrgUnitID pgtype.UUID        `json:"member_org_unit_id"`
+	MemberCreatedAt pgtype.Timestamptz `json:"member_created_at"`
+	InSubtree       bool               `json:"in_subtree"`
+}
+
+// One row with everything the access policy needs: the owning department,
+// whether it still exists, the caller's member row and whether it sits in the
+// department subtree. Scalar subqueries avoid LEFT JOIN nullability on every
+// column.
+func (q *Queries) GetWorkspaceAccess(ctx context.Context, arg GetWorkspaceAccessParams) (GetWorkspaceAccessRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceAccess, arg.ID, arg.UserID)
+	var i GetWorkspaceAccessRow
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.RootUnitID,
+		&i.RootExists,
+		&i.RootLeadUserID,
+		&i.MemberID,
+		&i.Role,
+		&i.MemberOrgUnitID,
+		&i.MemberCreatedAt,
+		&i.InSubtree,
+	)
+	return i, err
 }
 
 const listMembers = `-- name: ListMembers :many
@@ -164,9 +257,12 @@ func (q *Queries) ListMembers(ctx context.Context, workspaceID pgtype.UUID) ([]M
 
 const listMembersWithUser = `-- name: ListMembersWithUser :many
 SELECT m.id, m.workspace_id, m.user_id, m.role, m.created_at, m.org_unit_id,
-       u.name as user_name, u.email as user_email, u.avatar_url as user_avatar_url
+       u.name as user_name, u.email as user_email, u.avatar_url as user_avatar_url,
+       (root.lead_user_id IS NOT NULL AND root.lead_user_id = m.user_id) as is_org_lead
 FROM member m
 JOIN "user" u ON u.id = m.user_id
+JOIN workspace w ON w.id = m.workspace_id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
 WHERE m.workspace_id = $1
 ORDER BY m.created_at ASC
 `
@@ -181,6 +277,7 @@ type ListMembersWithUserRow struct {
 	UserName      string             `json:"user_name"`
 	UserEmail     string             `json:"user_email"`
 	UserAvatarUrl pgtype.Text        `json:"user_avatar_url"`
+	IsOrgLead     pgtype.Bool        `json:"is_org_lead"`
 }
 
 func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UUID) ([]ListMembersWithUserRow, error) {
@@ -202,6 +299,7 @@ func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UU
 			&i.UserName,
 			&i.UserEmail,
 			&i.UserAvatarUrl,
+			&i.IsOrgLead,
 		); err != nil {
 			return nil, err
 		}
@@ -213,12 +311,142 @@ func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UU
 	return items, nil
 }
 
-const listWorkspaceManagerUserIDs = `-- name: ListWorkspaceManagerUserIDs :many
-SELECT user_id FROM member
-WHERE workspace_id = $1 AND role IN ('owner', 'admin')
-ORDER BY created_at ASC
+const listOwnedWorkspaceMemberRows = `-- name: ListOwnedWorkspaceMemberRows :many
+SELECT
+    w.id AS workspace_id,
+    w.name AS workspace_name,
+    w.org_unit_id AS root_unit_id,
+    root.lead_user_id AS root_lead_user_id,
+    lead_user.name AS root_lead_name,
+    lead_user.email AS root_lead_email,
+    m.id AS member_id,
+    m.user_id,
+    m.role,
+    m.org_unit_id AS member_org_unit_id,
+    member_unit.name AS member_unit_name,
+    member_user.name AS member_name,
+    member_user.email AS member_email
+FROM workspace w
+JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN "user" lead_user ON lead_user.id = root.lead_user_id
+LEFT JOIN member m ON m.workspace_id = w.id
+LEFT JOIN "user" member_user ON member_user.id = m.user_id
+LEFT JOIN org_unit member_unit ON member_unit.id = m.org_unit_id AND member_unit.workspace_id = w.id
+WHERE w.org_unit_id IS NOT NULL
+ORDER BY w.created_at ASC, w.id ASC, m.created_at ASC, m.id ASC
 `
 
+type ListOwnedWorkspaceMemberRowsRow struct {
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	WorkspaceName   string      `json:"workspace_name"`
+	RootUnitID      pgtype.UUID `json:"root_unit_id"`
+	RootLeadUserID  pgtype.UUID `json:"root_lead_user_id"`
+	RootLeadName    pgtype.Text `json:"root_lead_name"`
+	RootLeadEmail   pgtype.Text `json:"root_lead_email"`
+	MemberID        pgtype.UUID `json:"member_id"`
+	UserID          pgtype.UUID `json:"user_id"`
+	Role            pgtype.Text `json:"role"`
+	MemberOrgUnitID pgtype.UUID `json:"member_org_unit_id"`
+	MemberUnitName  pgtype.Text `json:"member_unit_name"`
+	MemberName      pgtype.Text `json:"member_name"`
+	MemberEmail     pgtype.Text `json:"member_email"`
+}
+
+// One-time project-member cleanup: every member row of a department-owned
+// workspace together with the owning department and its lead. The LEFT JOINs
+// keep a workspace whose lead has no member row, which the cleanup promotes
+// before computing the removal set. Archived and directory rows are not part
+// of the decision; only member rows are.
+func (q *Queries) ListOwnedWorkspaceMemberRows(ctx context.Context) ([]ListOwnedWorkspaceMemberRowsRow, error) {
+	rows, err := q.db.Query(ctx, listOwnedWorkspaceMemberRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOwnedWorkspaceMemberRowsRow{}
+	for rows.Next() {
+		var i ListOwnedWorkspaceMemberRowsRow
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.WorkspaceName,
+			&i.RootUnitID,
+			&i.RootLeadUserID,
+			&i.RootLeadName,
+			&i.RootLeadEmail,
+			&i.MemberID,
+			&i.UserID,
+			&i.Role,
+			&i.MemberOrgUnitID,
+			&i.MemberUnitName,
+			&i.MemberName,
+			&i.MemberEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectMemberUserIDs = `-- name: ListProjectMemberUserIDs :many
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT m.user_id
+FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+WHERE m.workspace_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
+  )
+ORDER BY m.created_at ASC
+`
+
+// Everyone who may act in the project: every member row for a legacy
+// workspace, owners/admins and subtree members otherwise.
+func (q *Queries) ListProjectMemberUserIDs(ctx context.Context, workspaceID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listProjectMemberUserIDs, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var user_id pgtype.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceManagerUserIDs = `-- name: ListWorkspaceManagerUserIDs :many
+SELECT m.user_id FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+WHERE m.workspace_id = $1
+  AND (m.role IN ('owner', 'admin') OR root.lead_user_id = m.user_id)
+ORDER BY m.created_at ASC
+`
+
+// Project managers for notifications: stored owners/admins plus the lead of
+// the owning department, whose stored role may still be member.
 func (q *Queries) ListWorkspaceManagerUserIDs(ctx context.Context, workspaceID pgtype.UUID) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceManagerUserIDs, workspaceID)
 	if err != nil {
@@ -232,6 +460,61 @@ func (q *Queries) ListWorkspaceManagerUserIDs(ctx context.Context, workspaceID p
 			return nil, err
 		}
 		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceSubtreeUnits = `-- name: ListWorkspaceSubtreeUnits :many
+WITH RECURSIVE scope AS (
+    SELECT u.id, u.parent_id, u.name, u.lead_user_id, u.description, u.position
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $1
+    UNION ALL
+    SELECT child.id, child.parent_id, child.name, child.lead_user_id,
+           child.description, child.position
+    FROM scope
+    JOIN org_unit child ON child.parent_id = scope.id
+)
+SELECT id, parent_id, name, lead_user_id, description, position
+FROM scope
+ORDER BY position ASC, name ASC
+`
+
+type ListWorkspaceSubtreeUnitsRow struct {
+	ID          pgtype.UUID `json:"id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+	Name        string      `json:"name"`
+	LeadUserID  pgtype.UUID `json:"lead_user_id"`
+	Description string      `json:"description"`
+	Position    int32       `json:"position"`
+}
+
+// The project's department subtree. Empty for a legacy workspace, which still
+// reads the whole tree.
+func (q *Queries) ListWorkspaceSubtreeUnits(ctx context.Context, id pgtype.UUID) ([]ListWorkspaceSubtreeUnitsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceSubtreeUnits, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceSubtreeUnitsRow{}
+	for rows.Next() {
+		var i ListWorkspaceSubtreeUnitsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Name,
+			&i.LeadUserID,
+			&i.Description,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -28,6 +28,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/realtime"
 	"github.com/multica-ai/multica/server/internal/runtimeapps"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/featureflag"
@@ -703,10 +704,8 @@ func ResolveAutopilotTriggerPrincipal(ctx context.Context, q *db.Queries, trigge
 	if !trig.CreatedByType.Valid || trig.CreatedByType.String != "member" || !trig.CreatedByID.Valid {
 		return pgtype.UUID{}
 	}
-	if _, err := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      trig.CreatedByID,
-		WorkspaceID: workspaceID,
-	}); err != nil {
+	access, err := resolveWorkspaceAccess(ctx, q, workspaceID, trig.CreatedByID)
+	if err != nil || !access.Allowed() {
 		return pgtype.UUID{}
 	}
 	return trig.CreatedByID
@@ -6749,15 +6748,15 @@ func (s *TaskService) exhaustDelegatedFailureRecovery(ctx context.Context, targe
 		// who originated (or is accountable for) the delegated work.
 		_, recipient := delegatedFailureRecoveryAttribution(target)
 		if recipient.Valid {
-			_, err = qtx.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-				UserID:      recipient,
-				WorkspaceID: target.issue.WorkspaceID,
-			})
-			if errors.Is(err, pgx.ErrNoRows) {
+			access, accessErr := workspaceaccess.Resolve(ctx, qtx, target.issue.WorkspaceID, recipient, false)
+			if errors.Is(accessErr, pgx.ErrNoRows) {
 				return nil
 			}
-			if err != nil {
-				return fmt.Errorf("validate delegated failure exhaustion recipient: %w", err)
+			if accessErr != nil {
+				return fmt.Errorf("validate delegated failure exhaustion recipient: %w", accessErr)
+			}
+			if !access.Allowed() {
+				return nil
 			}
 
 			details, err := json.Marshal(map[string]any{

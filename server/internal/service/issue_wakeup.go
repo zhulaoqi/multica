@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/eventcontract"
@@ -302,8 +303,8 @@ func (s *IssueWakeupService) EditInstruction(ctx context.Context, issueID, id, m
 	if err != nil {
 		return err
 	}
-	membership, err := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{UserID: member, WorkspaceID: issue.WorkspaceID})
-	if err != nil {
+	access, err := resolveWorkspaceAccess(ctx, q, issue.WorkspaceID, member)
+	if err != nil || !access.Allowed() {
 		return ErrWakeupForbidden
 	}
 	w, err := q.LockIssueWakeup(ctx, id)
@@ -313,7 +314,7 @@ func (s *IssueWakeupService) EditInstruction(ctx context.Context, issueID, id, m
 	if w.IssueID != issue.ID || w.WorkspaceID != issue.WorkspaceID {
 		return pgx.ErrNoRows
 	}
-	if w.SystemRule.Valid || (w.CreatedBy != member && membership.Role != "owner" && membership.Role != "admin") {
+	if w.SystemRule.Valid || (w.CreatedBy != member && !access.IsManager()) {
 		return ErrWakeupForbidden
 	}
 	agent, err := q.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: w.AgentID, WorkspaceID: issue.WorkspaceID})
@@ -484,7 +485,11 @@ func (s *IssueWakeupService) save(ctx context.Context, issueID, member, source, 
 	}
 	if filterActor.Valid {
 		if in.FilterActorType == "member" {
-			_, err = q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{UserID: filterActor, WorkspaceID: issue.WorkspaceID})
+			var access workspaceaccess.Access
+			access, err = resolveWorkspaceAccess(ctx, q, issue.WorkspaceID, filterActor)
+			if err == nil && !access.Allowed() {
+				err = pgx.ErrNoRows
+			}
 		} else {
 			_, err = q.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{ID: filterActor, WorkspaceID: issue.WorkspaceID})
 		}
@@ -528,11 +533,11 @@ func (s *IssueWakeupService) save(ctx context.Context, issueID, member, source, 
 		if old.SystemRule.Valid {
 			return out, ErrWakeupForbidden
 		}
-		membership, e := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{UserID: member, WorkspaceID: issue.WorkspaceID})
-		if e != nil {
+		access, e := resolveWorkspaceAccess(ctx, q, issue.WorkspaceID, member)
+		if e != nil || !access.Allowed() {
 			return out, ErrWakeupForbidden
 		}
-		if old.CreatedBy != member && membership.Role != "owner" && membership.Role != "admin" {
+		if old.CreatedBy != member && !access.IsManager() {
 			return out, ErrWakeupForbidden
 		}
 		if enable != nil && old.Enabled {
@@ -631,11 +636,15 @@ func (s *IssueWakeupService) authorize(ctx context.Context, q *db.Queries, ws, m
 	if !member.Valid || a.ArchivedAt.Valid || !a.RuntimeID.Valid {
 		return ErrWakeupForbidden
 	}
-	if _, err := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{UserID: member, WorkspaceID: ws}); err != nil {
+	access, err := resolveWorkspaceAccess(ctx, q, ws, member)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrWakeupForbidden
 		}
 		return err
+	}
+	if !access.Allowed() {
+		return ErrWakeupForbidden
 	}
 	if !CanMemberInvokeAgent(ctx, q, a, member, ws) {
 		return ErrWakeupForbidden
@@ -1445,8 +1454,8 @@ func (s *IssueWakeupService) Disable(ctx context.Context, issueID, id, member pg
 	if err != nil {
 		return out, err
 	}
-	membership, err := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{UserID: member, WorkspaceID: issue.WorkspaceID})
-	if err != nil {
+	access, err := resolveWorkspaceAccess(ctx, q, issue.WorkspaceID, member)
+	if err != nil || !access.Allowed() {
 		return out, ErrWakeupForbidden
 	}
 	out, err = q.LockIssueWakeup(ctx, id)
@@ -1456,7 +1465,7 @@ func (s *IssueWakeupService) Disable(ctx context.Context, issueID, id, member pg
 	if out.IssueID != issue.ID || out.WorkspaceID != issue.WorkspaceID {
 		return db.IssueWakeup{}, pgx.ErrNoRows
 	}
-	if out.SystemRule.Valid || (out.CreatedBy != member && membership.Role != "owner" && membership.Role != "admin") {
+	if out.SystemRule.Valid || (out.CreatedBy != member && !access.IsManager()) {
 		return db.IssueWakeup{}, ErrWakeupForbidden
 	}
 	_, err = tx.Exec(ctx, "UPDATE issue_wakeup SET enabled=false,disabled_at=COALESCE(disabled_at,now()),updated_at=now() WHERE id=$1", id)

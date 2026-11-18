@@ -117,7 +117,7 @@ func (h *Handler) invocationTargetsAdmit(ctx context.Context, agent db.Agent, ac
 	workspaceBroad := actorType == "agent" || actorType == "system"
 	isWorkspaceMember := false
 	if effectiveUser != "" {
-		if _, err := h.getWorkspaceMember(ctx, effectiveUser, workspaceID); err == nil {
+		if access, err := h.getWorkspaceAccess(ctx, effectiveUser, workspaceID); err == nil && access.Allowed() {
 			isWorkspaceMember = true
 		}
 	}
@@ -160,11 +160,11 @@ func (h *Handler) canAccessPrivateAgent(ctx context.Context, agent db.Agent, act
 	if uuidToString(agent.OwnerID) == actorID {
 		return true
 	}
-	member, err := h.getWorkspaceMember(ctx, actorID, workspaceID)
-	if err != nil {
+	access, err := h.getWorkspaceAccess(ctx, actorID, workspaceID)
+	if err != nil || !access.Allowed() {
 		return false
 	}
-	if roleAllowed(member.Role, "owner", "admin") {
+	if access.IsAdmin() {
 		return true
 	}
 	if agent.PermissionMode == "public_to" {

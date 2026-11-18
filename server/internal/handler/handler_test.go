@@ -2102,7 +2102,9 @@ func TestCreateWorkspaceUsesRequestedSlug(t *testing.T) {
 		testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, slug)
 	})
 
-	req := newRequest("POST", "/api/workspaces", map[string]string{
+	// Slug handling is independent of the department gate; run as the operator
+	// so the project can be created without a department.
+	req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]string{
 		"name": "Handler Create Workspace Requested",
 		"slug": slug,
 	})
@@ -2123,7 +2125,7 @@ func TestCreateWorkspaceSlugConflictReturnsConflict(t *testing.T) {
 		testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, retriedSlug)
 	})
 
-	req := newRequest("POST", "/api/workspaces", map[string]string{
+	req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]string{
 		"name": "Duplicate Handler Workspace",
 		"slug": handlerTestWorkspaceSlug,
 	})

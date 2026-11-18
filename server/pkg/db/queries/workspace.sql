@@ -1,21 +1,59 @@
 -- name: ListWorkspaces :many
-SELECT w.id, w.name, w.slug, w.description, w.settings,
-       w.created_at, w.updated_at, w.context, w.repos,
-       w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed
+-- A member-row is access unless the workspace is department-owned; then only
+-- owners/admins or members placed in the owning department's subtree keep it.
+-- The recursive scope is computed once for every owned workspace.
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT w.*
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR EXISTS (
+          SELECT 1 FROM project_scope scope
+          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
+      )
+  )
 ORDER BY w.created_at ASC;
 
 -- name: ListDaemonWorkspaces :many
 -- Daemons only need the membership set and display name to discover which
 -- workspaces should have local runtimes. Keep this projection intentionally
 -- narrow so the periodic consistency check never reads UI-only JSON/text
--- columns such as settings, repos, or context.
+-- columns such as settings, repos, or context. The access predicate matches
+-- ListWorkspaces: an out-of-department member row must not boot a runtime.
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
 SELECT w.id, w.name
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR EXISTS (
+          SELECT 1 FROM project_scope scope
+          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
+      )
+  )
 ORDER BY w.id ASC;
 
 -- name: GetDaemonWorkspace :one
@@ -56,6 +94,25 @@ UPDATE workspace SET
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateWorkspaceOrgUnit :one
+-- Reassigning the owning department is operator-only and never clears it: a
+-- NULL would silently turn the project back into a legacy workspace.
+UPDATE workspace SET org_unit_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ListOrgUnitsForWorkspaces :many
+-- Creation options: every department in the workspaces the caller belongs to,
+-- so a department lead can pick a unit without knowing where it lives. The
+-- caller filters to units they lead.
+SELECT u.id AS unit_id, u.parent_id, u.name, u.lead_user_id, u.position,
+       w.id AS workspace_id, w.name AS workspace_name
+FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+JOIN org_unit u ON u.workspace_id = w.id
+WHERE m.user_id = $1
+ORDER BY w.created_at ASC, u.position ASC, u.name ASC;
 
 -- name: IncrementIssueCounter :one
 UPDATE workspace SET issue_counter = issue_counter + 1
@@ -238,5 +295,10 @@ cleared_vcs_connections AS (
 ),
 cleared_client_usage_workspace AS (
     UPDATE client_usage_daily SET workspace_id = NULL WHERE workspace_id = $1
+),
+-- The department directory has no FK to workspace; sweep it in the same
+-- transaction so a deleted project leaves no candidate rows behind.
+cleared_directory AS (
+    DELETE FROM workspace_directory_member WHERE workspace_id = $1
 )
 DELETE FROM workspace WHERE workspace.id = $1;

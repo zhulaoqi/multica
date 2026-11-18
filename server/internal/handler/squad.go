@@ -15,6 +15,7 @@ import (
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -211,22 +212,11 @@ func (h *Handler) squadsVisibleTo(ctx context.Context, member db.Member, squads 
 	for _, squad := range joined {
 		allowed[squad.ID] = struct{}{}
 	}
-	units, err := h.Queries.ListOrgUnits(ctx, member.WorkspaceID)
+	units, err := h.orgUnitsForScope(ctx, member.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
-	people, err := h.Queries.ListOrgUnitMembers(ctx, member.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-	var own pgtype.UUID
-	for _, person := range people {
-		if person.UserID == member.UserID {
-			own = person.OrgUnitID
-			break
-		}
-	}
-	visibleUnits := orgscope.Visible(units, own, member.UserID, false)
+	visibleUnits := orgscope.Visible(units, member.OrgUnitID, member.UserID, false)
 	kept := squads[:0]
 	for _, squad := range squads {
 		_, memberOf := allowed[squad.ID]
@@ -932,9 +922,8 @@ func (h *Handler) AddSquadMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-			UserID: memberUUID, WorkspaceID: wsUUID,
-		}); err != nil {
+		access, err := workspaceaccess.Resolve(r.Context(), h.Queries, wsUUID, memberUUID, false)
+		if err != nil || !access.Allowed() {
 			writeError(w, http.StatusBadRequest, "member not found in this workspace")
 			return
 		}

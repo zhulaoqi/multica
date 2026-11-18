@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -235,9 +236,8 @@ func (h *Handler) ReplaceIntakeMembers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		seen[uuidToString(id)] = struct{}{}
-		if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-			UserID: id, WorkspaceID: parseUUID(workspaceID),
-		}); err != nil {
+		access, err := workspaceaccess.Resolve(r.Context(), h.Queries, parseUUID(workspaceID), id, false)
+		if err != nil || !access.Allowed() {
 			writeError(w, http.StatusUnprocessableEntity, "user is not a workspace member")
 			return
 		}
@@ -276,13 +276,11 @@ func (h *Handler) intakeCallerMaintains(r *http.Request, userID string) bool {
 	if workspaceID == "" || userID == "" {
 		return false
 	}
-	member, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-		UserID: parseUUID(userID), WorkspaceID: parseUUID(workspaceID),
-	})
-	if err != nil {
+	access, err := workspaceaccess.Resolve(r.Context(), h.Queries, parseUUID(workspaceID), parseUUID(userID), false)
+	if err != nil || !access.Allowed() {
 		return false
 	}
-	if member.Role == "owner" || member.Role == "admin" {
+	if access.Role == "owner" || access.Role == "admin" {
 		return true
 	}
 	n, err := h.Queries.CountIntakeLeadProjects(r.Context(), db.CountIntakeLeadProjectsParams{

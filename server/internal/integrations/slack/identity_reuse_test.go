@@ -39,8 +39,13 @@ func (f *fakeIdentityQueries) FindReusableChannelUserBinding(_ context.Context, 
 	return f.reusable, f.reusableErr
 }
 
-func (f *fakeIdentityQueries) GetMemberByUserAndWorkspace(_ context.Context, _ db.GetMemberByUserAndWorkspaceParams) (db.Member, error) {
-	return db.Member{}, f.memberErr
+// GetWorkspaceAccess reports a legacy flat workspace: a valid member row means
+// access, an invalid one is the fake's not-a-member case (memberErr).
+func (f *fakeIdentityQueries) GetWorkspaceAccess(_ context.Context, arg db.GetWorkspaceAccessParams) (db.GetWorkspaceAccessRow, error) {
+	if f.memberErr != nil {
+		return db.GetWorkspaceAccessRow{}, f.memberErr
+	}
+	return db.GetWorkspaceAccessRow{WorkspaceID: arg.ID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
 }
 
 func (f *fakeIdentityQueries) CreateChannelUserBinding(_ context.Context, arg db.CreateChannelUserBindingParams) (db.ChannelUserBinding, error) {

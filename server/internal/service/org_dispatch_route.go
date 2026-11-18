@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/orgscope"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -79,19 +80,16 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		return RouteResult{}, ErrDispatchTextTooLong
 	}
 
-	member, err := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      actorID,
-		WorkspaceID: wsUUID,
-	})
-	if err != nil {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, wsUUID, actorID, false)
+	if err != nil || !access.Allowed() {
 		return RouteResult{}, ErrDispatchRequesterNotInTeam
 	}
-	units, err := s.Queries.ListOrgUnits(ctx, wsUUID)
+	units, err := orgUnitsForUser(ctx, s.Queries, wsUUID, access)
 	if err != nil {
 		return RouteResult{}, fmt.Errorf("list org units: %w", err)
 	}
 	paths := orgscope.Paths(units)
-	visible := orgscope.Visible(units, member.OrgUnitID, member.UserID, isWorkspaceAdmin(member.Role))
+	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin())
 
 	if explicitUnitID.Valid {
 		unit, ok := findUnit(units, explicitUnitID)
@@ -185,7 +183,7 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 
 	// 5. The requester's own department.
 	for _, unit := range dispatchable {
-		if member.OrgUnitID.Valid && unit.ID == member.OrgUnitID {
+		if access.MemberUnit.Valid && unit.ID == access.MemberUnit {
 			return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
 		}
 	}

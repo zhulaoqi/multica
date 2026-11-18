@@ -6,8 +6,10 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -17,12 +19,19 @@ type contextKey int
 const (
 	ctxKeyWorkspaceID contextKey = iota
 	ctxKeyMember
+	ctxKeyAccess
 )
 
 // MemberFromContext returns the workspace member injected by the workspace middleware.
 func MemberFromContext(ctx context.Context) (db.Member, bool) {
 	m, ok := ctx.Value(ctxKeyMember).(db.Member)
 	return m, ok
+}
+
+// AccessFromContext returns the resolved department-scope access for the request.
+func AccessFromContext(ctx context.Context) (workspaceaccess.Access, bool) {
+	access, ok := ctx.Value(ctxKeyAccess).(workspaceaccess.Access)
+	return access, ok
 }
 
 // WorkspaceIDFromContext returns the workspace ID injected by the workspace middleware.
@@ -158,44 +167,80 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Write([]byte(`{"error":"` + msg + `"}`))
 }
 
+// accessMode selects which workspaceaccess predicate the route requires.
+type accessMode int
+
+const (
+	// accessContent requires project content access (issues, agents, …).
+	accessContent accessMode = iota
+	// accessViewer also admits managers, so settings pages open even when the
+	// organisation moved them outside the owning subtree.
+	accessViewer
+	// accessManager requires project-management rights.
+	accessManager
+	// accessStrictRole requires content access AND a stored role.
+	accessStrictRole
+)
+
 // RequireWorkspaceMember resolves the workspace from slug (preferred) or UUID
-// (fallback), validates membership, and injects the member and workspace ID
-// into the request context.
+// (fallback), validates project access, and injects the member, workspace ID,
+// and resolved access into the request context.
 func RequireWorkspaceMember(queries *db.Queries) func(http.Handler) http.Handler {
-	return buildMiddleware(queries, resolveWorkspaceUUID(queries), nil)
+	return buildMiddleware(queries, resolveWorkspaceUUID(queries), accessContent, nil)
 }
 
 // RequireWorkspaceRole is like RequireWorkspaceMember but additionally checks
-// that the member has one of the specified roles.
+// that the member has one of the specified stored roles.
 func RequireWorkspaceRole(queries *db.Queries, roles ...string) func(http.Handler) http.Handler {
-	return buildMiddleware(queries, resolveWorkspaceUUID(queries), roles)
+	return buildMiddleware(queries, resolveWorkspaceUUID(queries), accessStrictRole, roles)
+}
+
+// RequireWorkspaceViewer admits content readers and project managers.
+func RequireWorkspaceViewer(queries *db.Queries) func(http.Handler) http.Handler {
+	return buildMiddleware(queries, resolveWorkspaceUUID(queries), accessViewer, nil)
+}
+
+// RequireWorkspaceManager admits project managers (stored owner/admin or the
+// owning department lead) and the platform operator.
+func RequireWorkspaceManager(queries *db.Queries) func(http.Handler) http.Handler {
+	return buildMiddleware(queries, resolveWorkspaceUUID(queries), accessManager, nil)
 }
 
 // RequireWorkspaceMemberFromURL resolves the workspace ID from a chi URL
-// parameter, validates membership, and injects into context.
+// parameter, validates project access, and injects into context.
 func RequireWorkspaceMemberFromURL(queries *db.Queries, param string) func(http.Handler) http.Handler {
-	return buildMiddleware(queries, func(r *http.Request) (string, error) {
-		id := chi.URLParam(r, param)
-		if id == "" {
-			return "", nil
-		}
-		return id, nil
-	}, nil)
+	return buildMiddleware(queries, urlResolver(param), accessContent, nil)
+}
+
+// RequireWorkspaceViewerFromURL is RequireWorkspaceMemberFromURL for settings
+// reads that managers may open outside their content subtree.
+func RequireWorkspaceViewerFromURL(queries *db.Queries, param string) func(http.Handler) http.Handler {
+	return buildMiddleware(queries, urlResolver(param), accessViewer, nil)
+}
+
+// RequireWorkspaceManagerFromURL is RequireWorkspaceMemberFromURL for
+// project-management routes.
+func RequireWorkspaceManagerFromURL(queries *db.Queries, param string) func(http.Handler) http.Handler {
+	return buildMiddleware(queries, urlResolver(param), accessManager, nil)
 }
 
 // RequireWorkspaceRoleFromURL is like RequireWorkspaceMemberFromURL but
-// additionally checks that the member has one of the specified roles.
+// additionally checks that the member has one of the specified stored roles.
 func RequireWorkspaceRoleFromURL(queries *db.Queries, param string, roles ...string) func(http.Handler) http.Handler {
-	return buildMiddleware(queries, func(r *http.Request) (string, error) {
+	return buildMiddleware(queries, urlResolver(param), accessStrictRole, roles)
+}
+
+func urlResolver(param string) workspaceResolver {
+	return func(r *http.Request) (string, error) {
 		id := chi.URLParam(r, param)
 		if id == "" {
 			return "", nil
 		}
 		return id, nil
-	}, roles)
+	}
 }
 
-func buildMiddleware(queries *db.Queries, resolve workspaceResolver, roles []string) func(http.Handler) http.Handler {
+func buildMiddleware(queries *db.Queries, resolve workspaceResolver, mode accessMode, roles []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			workspaceID, resolveErr := resolve(r)
@@ -238,39 +283,71 @@ func buildMiddleware(queries *db.Queries, resolve workspaceResolver, roles []str
 				writeError(w, http.StatusBadRequest, "invalid workspace_id")
 				return
 			}
-			var member db.Member
-			if r.Header.Get(auth.OperatorHeader) == "1" {
-				if _, err := queries.GetWorkspace(r.Context(), wsUUID); err != nil {
+
+			isOperator := r.Header.Get(auth.OperatorHeader) == "1"
+			access, err := workspaceaccess.Resolve(r.Context(), queries, wsUUID, userUUID, isOperator)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
 					writeError(w, http.StatusNotFound, "workspace not found")
 					return
 				}
-				member = db.Member{ID: userUUID, WorkspaceID: wsUUID, UserID: userUUID, Role: "owner"}
-			} else {
-				member, err = queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-					UserID:      userUUID,
-					WorkspaceID: wsUUID,
-				})
-				if err != nil {
-					writeError(w, http.StatusNotFound, "workspace not found")
-					return
-				}
+				writeError(w, http.StatusInternalServerError, "failed to resolve workspace access")
+				return
+			}
+			if !isOperator && !access.HasMember {
+				writeError(w, http.StatusNotFound, "workspace not found")
+				return
 			}
 
-			if len(roles) > 0 {
-				allowed := false
-				for _, role := range roles {
-					if member.Role == role {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
+			switch mode {
+			case accessViewer:
+				if !access.Viewer() {
 					writeError(w, http.StatusForbidden, "insufficient permissions")
 					return
 				}
+			case accessManager:
+				if !access.IsManager() {
+					writeError(w, http.StatusForbidden, "insufficient permissions")
+					return
+				}
+			default:
+				if !access.Allowed() {
+					writeError(w, http.StatusForbidden, "insufficient permissions")
+					return
+				}
+				if mode == accessStrictRole {
+					allowed := false
+					for _, role := range roles {
+						if access.Role == role {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						writeError(w, http.StatusForbidden, "insufficient permissions")
+						return
+					}
+				}
+			}
+
+			member := db.Member{
+				ID:          access.MemberID,
+				WorkspaceID: wsUUID,
+				UserID:      userUUID,
+				Role:        access.Role,
+				CreatedAt:   access.MemberSince,
+				OrgUnitID:   access.MemberUnit,
+			}
+			if isOperator {
+				member = db.Member{ID: userUUID, WorkspaceID: wsUUID, UserID: userUUID, Role: "owner"}
+			}
+			if len(roles) > 0 && mode != accessStrictRole {
+				writeError(w, http.StatusInternalServerError, "role check requires the strict access mode")
+				return
 			}
 
 			ctx := SetMemberContext(r.Context(), workspaceID, member)
+			ctx = context.WithValue(ctx, ctxKeyAccess, access)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

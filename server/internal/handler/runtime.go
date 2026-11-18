@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/agentconfig"
+	"github.com/multica-ai/multica/server/internal/memberrevoke"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
@@ -598,7 +599,7 @@ func (h *Handler) UpdateAgentRuntime(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		if plan.hasDependencies() {
+		if plan.HasDependencies() {
 			writeJSON(w, http.StatusConflict, h.runtimeWorkspaceAccessRevocationResponse(plan, "runtime_has_nonowner_dependents"))
 			return
 		}
@@ -744,14 +745,10 @@ func (h *Handler) runtimeLookup(source string) service.RuntimeLookup {
 	return service.RuntimeLookup{Queries: h.Queries, Metrics: h.Metrics, Source: source}
 }
 
-// runtimeWorkspaceAccessRevocationPlan is the owner-visible snapshot of work
-// that an access restriction must revoke. It intentionally excludes
-// the runtime owner's agents. Hidden Builder agents owned by teammates also
-// represent work borrowing the owner's machine and must lose access.
-type runtimeWorkspaceAccessRevocationPlan struct {
-	Agents []db.Agent
-	Tasks  []db.AgentTaskQueue
-}
+// runtimeWorkspaceAccessRevocationPlan is the shared snapshot of work that an
+// access restriction must revoke. It is defined in memberrevoke so the
+// member-removal transaction and the runtime access change share one shape.
+type runtimeWorkspaceAccessRevocationPlan = memberrevoke.RuntimeAccessRevocationPlan
 
 var errRuntimeOwnerChanged = errors.New("runtime owner changed during request")
 
@@ -765,10 +762,6 @@ func writeRuntimeRevocationBusy(w http.ResponseWriter, err error) bool {
 		"error": "runtime work is changing; retry to review the current plan.",
 	})
 	return true
-}
-
-func (p runtimeWorkspaceAccessRevocationPlan) hasDependencies() bool {
-	return len(p.Agents) > 0 || len(p.Tasks) > 0
 }
 
 // updateRuntimeAccessIfNoDependencies applies grants without disrupting work.
@@ -825,7 +818,7 @@ func (h *Handler) updateRuntimeAccessIfNoDependencies(ctx context.Context, rt db
 			return db.AgentRuntime{}, runtimeWorkspaceAccessRevocationPlan{}, false, fmt.Errorf("list non-owner tasks: %w", err)
 		}
 		plan := runtimeWorkspaceAccessRevocationPlan{Agents: agents, Tasks: tasks}
-		if plan.hasDependencies() {
+		if plan.HasDependencies() {
 			return lockedRuntime, plan, false, nil
 		}
 	}
@@ -1197,7 +1190,7 @@ func (h *Handler) RevokeRuntimeWorkspaceAccess(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	plan, err := lockRuntimeRevocationPlan(r.Context(), qtx, next)
+	plan, err := memberrevoke.LockRuntimeAccessRevocationPlan(r.Context(), qtx, next)
 	if err != nil {
 		if !writeRuntimeRevocationBusy(w, err) {
 			writeError(w, http.StatusInternalServerError, "failed to lock runtime dependencies")
@@ -1212,7 +1205,7 @@ func (h *Handler) RevokeRuntimeWorkspaceAccess(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	updated, result, readyChats, err := applyRuntimeAccessRevocation(r.Context(), qtx, next)
+	updated, result, readyChats, err := memberrevoke.ApplyRuntimeAccessRevocation(r.Context(), qtx, next)
 	if err != nil {
 		slog.Error("revoke runtime access failed", "error", err, "runtime_id", runtimeID)
 		writeError(w, http.StatusInternalServerError, "failed to revoke runtime access")

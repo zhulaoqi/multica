@@ -49,16 +49,13 @@ func memberMayInvokeAgent(ctx context.Context, queries *db.Queries, agent db.Age
 		return false, fmt.Errorf("list agent invocation targets: %w", err)
 	}
 	isWorkspaceMember := false
-	switch _, err := queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      memberUserID,
-		WorkspaceID: workspaceID,
-	}); {
-	case err == nil:
+	switch access, err := resolveWorkspaceAccess(ctx, queries, workspaceID, memberUserID); {
+	case err == nil && access.Allowed():
 		isWorkspaceMember = true
-	case errors.Is(err, pgx.ErrNoRows):
-		// Not a member. A fact, not a failure.
+	case err == nil, errors.Is(err, pgx.ErrNoRows):
+		// No access to this project. A fact, not a failure.
 	default:
-		return false, fmt.Errorf("load workspace member: %w", err)
+		return false, fmt.Errorf("load workspace access: %w", err)
 	}
 	for _, t := range targets {
 		switch t.TargetType {

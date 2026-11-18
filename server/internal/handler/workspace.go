@@ -21,6 +21,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/orgscope"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -106,8 +107,11 @@ type WorkspaceResponse struct {
 	Repos       any     `json:"repos"`
 	IssuePrefix string  `json:"issue_prefix"`
 	AvatarURL   *string `json:"avatar_url"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	// OrgUnitID is the owning department, or null for a legacy flat
+	// workspace. Clients treat a null value as "every member row has access".
+	OrgUnitID *string `json:"org_unit_id"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
 }
 
 func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
@@ -135,6 +139,7 @@ func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
 		Repos:       repos,
 		IssuePrefix: w.IssuePrefix,
 		AvatarURL:   h.resolveAvatarURLPtr(textToPtr(w.AvatarUrl)),
+		OrgUnitID:   uuidToPtr(w.OrgUnitID),
 		CreatedAt:   timestampToString(w.CreatedAt),
 		UpdatedAt:   timestampToString(w.UpdatedAt),
 	}
@@ -205,6 +210,11 @@ type CreateWorkspaceRequest struct {
 	Description *string `json:"description"`
 	Context     *string `json:"context"`
 	IssuePrefix *string `json:"issue_prefix"`
+	// SourceWorkspaceID and OrgUnitID name the department this project takes
+	// over. Non-operators must provide both; the operator may omit them to
+	// create a legacy workspace without a department.
+	SourceWorkspaceID *string `json:"source_workspace_id"`
+	OrgUnitID         *string `json:"org_unit_id"`
 }
 
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -278,6 +288,19 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		issuePrefix = defaultIssuePrefixFromSlug(req.Slug)
 	}
 
+	sourceWorkspaceID := ""
+	if req.SourceWorkspaceID != nil {
+		sourceWorkspaceID = strings.TrimSpace(*req.SourceWorkspaceID)
+	}
+	orgUnitID := ""
+	if req.OrgUnitID != nil {
+		orgUnitID = strings.TrimSpace(*req.OrgUnitID)
+	}
+	dept, ok := h.resolveCreateDepartment(w, r, userID, sourceWorkspaceID, orgUnitID)
+	if !ok {
+		return
+	}
+
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create workspace")
@@ -303,24 +326,33 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = qtx.CreateMember(r.Context(), db.CreateMemberParams{
-		WorkspaceID: ws.ID,
-		UserID:      parseUUID(userID),
-		Role:        "owner",
-	})
-	if err != nil {
-		slog.Warn("add owner failed", append(logger.RequestAttrs(r), "error", err)...)
-		writeError(w, http.StatusInternalServerError, "failed to add owner")
-		return
-	}
+	if dept != nil {
+		ws, err = h.createProjectFromDepartment(r.Context(), qtx, ws, dept, userID)
+		if err != nil {
+			slog.Warn("create project department failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to create workspace")
+			return
+		}
+	} else {
+		_, err = qtx.CreateMember(r.Context(), db.CreateMemberParams{
+			WorkspaceID: ws.ID,
+			UserID:      parseUUID(userID),
+			Role:        "owner",
+		})
+		if err != nil {
+			slog.Warn("add owner failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to add owner")
+			return
+		}
 
-	// Seed the 7 built-in issue statuses inside the same transaction, so a
-	// workspace is never visible without its status catalog — an issue cannot
-	// be created before its status can be resolved. (MUL-6243)
-	if err := issuestatus.Ensure(r.Context(), qtx, ws.ID); err != nil {
-		slog.Warn("seed issue statuses failed", append(logger.RequestAttrs(r), "error", err)...)
-		writeError(w, http.StatusInternalServerError, "failed to seed issue statuses")
-		return
+		// Seed the 7 built-in issue statuses inside the same transaction, so a
+		// workspace is never visible without its status catalog — an issue cannot
+		// be created before its status can be resolved. (MUL-6243)
+		if err := issuestatus.Ensure(r.Context(), qtx, ws.ID); err != nil {
+			slog.Warn("seed issue statuses failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to seed issue statuses")
+			return
+		}
 	}
 
 	// NOTE: CreateWorkspace deliberately does NOT mark the user as
@@ -535,6 +567,10 @@ type MemberWithUserResponse struct {
 	Name        string  `json:"name"`
 	Email       string  `json:"email"`
 	AvatarURL   *string `json:"avatar_url"`
+	OrgUnitID   *string `json:"org_unit_id"`
+	// IsOrgLead marks the owning department's lead, who manages the project
+	// even when their stored role has not been promoted to owner.
+	IsOrgLead bool `json:"is_org_lead"`
 }
 
 func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
@@ -550,7 +586,7 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visible, userUUID, ok := h.visibleMemberScope(w, r, wsUUID)
+	visible, userUUID, manager, subtree, ok := h.visibleMemberScope(w, r, wsUUID)
 	if !ok {
 		return
 	}
@@ -559,8 +595,13 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 	for _, m := range members {
 		// The caller always keeps their own row: role lookups and permission
 		// checks read it even when they are not placed in a department.
-		if visible != nil && !visible[m.OrgUnitID] && m.UserID != userUUID {
-			continue
+		if m.UserID != userUUID {
+			if subtree != nil && !manager && m.Role != "owner" && m.Role != "admin" && !subtree[m.OrgUnitID] {
+				continue
+			}
+			if visible != nil && !visible[m.OrgUnitID] {
+				continue
+			}
 		}
 		resp = append(resp, MemberWithUserResponse{
 			ID:          uuidToString(m.ID),
@@ -571,6 +612,8 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 			Name:        m.UserName,
 			Email:       m.UserEmail,
 			AvatarURL:   h.resolveAvatarURLPtr(textToPtr(m.UserAvatarUrl)),
+			OrgUnitID:   uuidToPtr(m.OrgUnitID),
+			IsOrgLead:   m.IsOrgLead.Bool,
 		})
 	}
 
@@ -578,37 +621,52 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // visibleMemberScope narrows the workspace roster to the caller's department
-// scope. The company directory is operator-owned, so an operator gets nil
-// (unrestricted); everyone else reads the same departments the organisation
-// page shows. A non-operator without a department sees only themselves.
-func (h *Handler) visibleMemberScope(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) (map[pgtype.UUID]bool, pgtype.UUID, bool) {
+// scope. Managers (operator, stored owner/admin, owning department lead) see
+// every member row. For a department-owned project, non-managers additionally
+// only see rows that pass the project access predicate. Everyone else then
+// sees the departments the organisation page shows; a caller without a
+// department sees only themselves.
+//
+// subtree is non-nil only for an owned workspace; nil means the legacy
+// flat-member rule applies.
+func (h *Handler) visibleMemberScope(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) (visible map[pgtype.UUID]bool, userUUID pgtype.UUID, manager bool, subtree map[pgtype.UUID]bool, ok bool) {
 	if requestIsOperator(r) {
-		return nil, pgtype.UUID{}, true
+		return nil, pgtype.UUID{}, true, nil, true
 	}
-	userUUID, ok := parseUUIDOrBadRequest(w, requestUserID(r), "user id")
+	userUUID, ok = parseUUIDOrBadRequest(w, requestUserID(r), "user id")
 	if !ok {
-		return nil, pgtype.UUID{}, false
+		return nil, pgtype.UUID{}, false, nil, false
 	}
-	member, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-		UserID:      userUUID,
-		WorkspaceID: wsUUID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusForbidden, "not a workspace member")
-			return nil, pgtype.UUID{}, false
+	access, err := h.workspaceAccess(r, uuidToString(userUUID), uuidToString(wsUUID))
+	if err != nil || !access.HasMember {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("read member scope failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to list members")
+			return nil, pgtype.UUID{}, false, nil, false
 		}
-		slog.Error("read member scope failed", append(logger.RequestAttrs(r), "error", err)...)
-		writeError(w, http.StatusInternalServerError, "failed to list members")
-		return nil, pgtype.UUID{}, false
+		writeError(w, http.StatusForbidden, "not a workspace member")
+		return nil, pgtype.UUID{}, false, nil, false
+	}
+	// A legacy workspace keeps the flat-member roster rules: its owner is not
+	// an operator, so only the operator reads every member row. Department
+	// projects stay inside their department, where a manager may see all rows.
+	if !access.Legacy() && access.IsManager() {
+		return nil, userUUID, true, nil, true
 	}
 	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
 	if err != nil {
 		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to list members")
-		return nil, pgtype.UUID{}, false
+		return nil, pgtype.UUID{}, false, nil, false
 	}
-	return orgscope.Visible(units, member.OrgUnitID, userUUID, false), userUUID, true
+	if !access.Legacy() {
+		if len(units) > 0 {
+			subtree = orgscope.Subtree(units, access.RootUnitID)
+		} else {
+			subtree = map[pgtype.UUID]bool{}
+		}
+	}
+	return orgscope.Visible(units, access.MemberUnit, userUUID, false), userUUID, false, subtree, true
 }
 
 type CreateMemberRequest struct {
@@ -626,7 +684,19 @@ func (h *Handler) memberWithUserResponse(member db.Member, user db.User) MemberW
 		Name:        user.Name,
 		Email:       user.Email,
 		AvatarURL:   h.resolveAvatarURLPtr(textToPtr(user.AvatarUrl)),
+		OrgUnitID:   uuidToPtr(member.OrgUnitID),
 	}
+}
+
+// isWorkspaceOrgLead reports whether userID leads the project's owning
+// department. The lead always manages the project, so removal and role
+// demotion must not strand the department without a manager.
+func (h *Handler) isWorkspaceOrgLead(ctx context.Context, workspaceID pgtype.UUID, userID pgtype.UUID) bool {
+	access, err := workspaceaccess.Resolve(ctx, h.Queries, workspaceID, userID, false)
+	if err != nil {
+		return false
+	}
+	return access.IsOrgLead()
 }
 
 func normalizeMemberRole(role string) (string, bool) {
@@ -651,6 +721,10 @@ func (h *Handler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 	workspaceID := workspaceIDFromURL(r, "id")
 	requester, ok := h.workspaceMember(w, r, workspaceID)
 	if !ok {
+		return
+	}
+	if !h.workspaceManageable(r, workspaceID, requestUserID(r)) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
 
@@ -683,6 +757,10 @@ func (h *Handler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 
 	if (target.Role == "owner" || role == "owner") && requester.Role != "owner" {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	if role != "owner" && h.isWorkspaceOrgLead(r.Context(), target.WorkspaceID, target.UserID) {
+		writeErrorCode(w, http.StatusBadRequest, codeOrgLeadCannotBeRemove, "reassign the department lead before changing their role")
 		return
 	}
 
@@ -729,6 +807,10 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.workspaceManageable(r, workspaceID, requestUserID(r)) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
 
 	memberID := chi.URLParam(r, "memberId")
 	memberUUID, ok := parseUUIDOrBadRequest(w, memberID, "member id")
@@ -743,6 +825,10 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 
 	if target.Role == "owner" && requester.Role != "owner" {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	if h.isWorkspaceOrgLead(r.Context(), target.WorkspaceID, target.UserID) {
+		writeErrorCode(w, http.StatusBadRequest, codeOrgLeadCannotBeRemove, "reassign the department lead before removing them")
 		return
 	}
 
@@ -789,6 +875,11 @@ func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 	workspaceID := workspaceIDFromURL(r, "id")
 	member, ok := h.workspaceMember(w, r, workspaceID)
 	if !ok {
+		return
+	}
+
+	if h.isWorkspaceOrgLead(r.Context(), member.WorkspaceID, member.UserID) {
+		writeErrorCode(w, http.StatusBadRequest, codeOrgLeadCannotBeRemove, "reassign the department lead before leaving the project")
 		return
 	}
 

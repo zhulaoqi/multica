@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 )
@@ -46,22 +47,19 @@ func (s *ChannelStore) WithTx(tx pgx.Tx) *ChannelStore {
 	return &ChannelStore{Queries: s.Queries.WithTx(tx)}
 }
 
-// IsWorkspaceMember reports whether userID is currently a member of
-// workspaceID. With the lark_user_binding -> member foreign key removed
-// (MUL-3515 §4), a binding row no longer proves membership, so the inbound
-// identity step calls this to re-check it explicitly. ErrNoRows -> not a member.
+// IsWorkspaceMember reports whether userID may currently access workspaceID.
+// With the lark_user_binding -> member foreign key removed (MUL-3515 §4), a
+// binding row no longer proves access, so the inbound identity step calls this
+// to re-check the project policy explicitly. ErrNoRows -> not a member.
 func (s *ChannelStore) IsWorkspaceMember(ctx context.Context, workspaceID, userID pgtype.UUID) (bool, error) {
-	_, err := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      userID,
-		WorkspaceID: workspaceID,
-	})
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, workspaceID, userID, false)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
 	}
-	return true, nil
+	return access.Allowed(), nil
 }
 
 // ---- installation ----

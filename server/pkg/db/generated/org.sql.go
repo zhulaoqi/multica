@@ -43,6 +43,26 @@ func (q *Queries) ClearOrgUnitSquads(ctx context.Context, arg ClearOrgUnitSquads
 	return err
 }
 
+const countDirectoryMembersInUnit = `-- name: CountDirectoryMembersInUnit :one
+SELECT count(*)::int
+FROM workspace_directory_member
+WHERE workspace_id = $1 AND org_unit_id = $2
+`
+
+type CountDirectoryMembersInUnitParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+// A unit that still describes directory members cannot be deleted: they would
+// lose their placement, not their project membership.
+func (q *Queries) CountDirectoryMembersInUnit(ctx context.Context, arg CountDirectoryMembersInUnitParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countDirectoryMembersInUnit, arg.WorkspaceID, arg.OrgUnitID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countOrgUnitChildren = `-- name: CountOrgUnitChildren :one
 SELECT count(*)::int
 FROM org_unit
@@ -100,6 +120,39 @@ func (q *Queries) CreateOrgUnit(ctx context.Context, arg CreateOrgUnitParams) (p
 		arg.Name,
 		arg.LeadUserID,
 		arg.Position,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const createOrgUnitClone = `-- name: CreateOrgUnitClone :one
+INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, description, position, external_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id
+`
+
+type CreateOrgUnitCloneParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+	Name        string      `json:"name"`
+	LeadUserID  pgtype.UUID `json:"lead_user_id"`
+	Description string      `json:"description"`
+	Position    int32       `json:"position"`
+	ExternalID  pgtype.Text `json:"external_id"`
+}
+
+// Copy one unit into a newly created workspace when it takes over a department
+// from an existing one. The caller remaps parent_id and lead_user_id.
+func (q *Queries) CreateOrgUnitClone(ctx context.Context, arg CreateOrgUnitCloneParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createOrgUnitClone,
+		arg.WorkspaceID,
+		arg.ParentID,
+		arg.Name,
+		arg.LeadUserID,
+		arg.Description,
+		arg.Position,
+		arg.ExternalID,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
@@ -318,10 +371,26 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 }
 
 const listOrgUnitMemberIDs = `-- name: ListOrgUnitMemberIDs :many
-SELECT user_id, org_unit_id
-FROM member
-WHERE workspace_id = $1
-ORDER BY user_id
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT m.user_id, m.org_unit_id
+FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+WHERE m.workspace_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
+  )
+ORDER BY m.user_id
 `
 
 type ListOrgUnitMemberIDsRow struct {
@@ -329,10 +398,11 @@ type ListOrgUnitMemberIDsRow struct {
 	OrgUnitID pgtype.UUID `json:"org_unit_id"`
 }
 
-// Every member's unit assignment, ids only. Manager surfaces (team runtime
-// visibility) walk the unit tree in Go and do not want the full roster's
-// names/emails — the org page's ListOrgUnitMembers is far too heavy for a
-// list endpoint that runs on every Runtimes page load.
+// Every project member's unit assignment, ids only. Manager surfaces (team
+// runtime visibility) walk the unit tree in Go and do not want the full
+// roster's names/emails — the org page's ListOrgUnitMembers is far too heavy
+// for a list endpoint that runs on every Runtimes page load. Department-owned
+// workspaces exclude member rows outside the owning subtree.
 func (q *Queries) ListOrgUnitMemberIDs(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitMemberIDsRow, error) {
 	rows, err := q.db.Query(ctx, listOrgUnitMemberIDs, workspaceID)
 	if err != nil {
@@ -429,6 +499,54 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 			&i.LeadUserID,
 			&i.Description,
 			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgUnitsForCopy = `-- name: ListOrgUnitsForCopy :many
+SELECT id, parent_id, name, lead_user_id, description, position, external_id
+FROM org_unit
+WHERE workspace_id = $1
+ORDER BY position ASC, name ASC
+`
+
+type ListOrgUnitsForCopyRow struct {
+	ID          pgtype.UUID `json:"id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+	Name        string      `json:"name"`
+	LeadUserID  pgtype.UUID `json:"lead_user_id"`
+	Description string      `json:"description"`
+	Position    int32       `json:"position"`
+	ExternalID  pgtype.Text `json:"external_id"`
+}
+
+// A new project copies the complete tree of the workspace it takes its
+// department from, preserving manual units (external_id NULL) as well as
+// synced ones.
+func (q *Queries) ListOrgUnitsForCopy(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitsForCopyRow, error) {
+	rows, err := q.db.Query(ctx, listOrgUnitsForCopy, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgUnitsForCopyRow{}
+	for rows.Next() {
+		var i ListOrgUnitsForCopyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.Name,
+			&i.LeadUserID,
+			&i.Description,
+			&i.Position,
+			&i.ExternalID,
 		); err != nil {
 			return nil, err
 		}
@@ -570,6 +688,40 @@ func (q *Queries) ListSyncedOrgUnits(ctx context.Context, workspaceID pgtype.UUI
 	return items, nil
 }
 
+const listWorkspaceDirectoryFeishuIdentities = `-- name: ListWorkspaceDirectoryFeishuIdentities :many
+SELECT i.user_id, i.email, i.name
+FROM feishu_identity i
+JOIN workspace_directory_member d ON d.user_id = i.user_id AND d.workspace_id = $1
+`
+
+type ListWorkspaceDirectoryFeishuIdentitiesRow struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Email  string      `json:"email"`
+	Name   string      `json:"name"`
+}
+
+// The same report for a department project: its directory rows carry the
+// company roster even though most people are not project members.
+func (q *Queries) ListWorkspaceDirectoryFeishuIdentities(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceDirectoryFeishuIdentitiesRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceDirectoryFeishuIdentities, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceDirectoryFeishuIdentitiesRow{}
+	for rows.Next() {
+		var i ListWorkspaceDirectoryFeishuIdentitiesRow
+		if err := rows.Scan(&i.UserID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaceFeishuIdentities = `-- name: ListWorkspaceFeishuIdentities :many
 SELECT i.user_id, i.email, i.name
 FROM feishu_identity i
@@ -582,8 +734,8 @@ type ListWorkspaceFeishuIdentitiesRow struct {
 	Name   string      `json:"name"`
 }
 
-// Directory-linked people in one workspace, so a sync can report who disappeared
-// upstream without touching manually invited members.
+// Directory-linked people in one legacy workspace, so a sync can report who
+// disappeared upstream without touching manually invited members.
 func (q *Queries) ListWorkspaceFeishuIdentities(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceFeishuIdentitiesRow, error) {
 	rows, err := q.db.Query(ctx, listWorkspaceFeishuIdentities, workspaceID)
 	if err != nil {
@@ -723,6 +875,8 @@ type UpdateOrgUnitFromExternalParams struct {
 	ParentID    pgtype.UUID `json:"parent_id"`
 }
 
+// The caller keeps the owning department's root parent unchanged (see
+// upsertDirectoryUnits): a project reads its scope from that unit.
 func (q *Queries) UpdateOrgUnitFromExternal(ctx context.Context, arg UpdateOrgUnitFromExternalParams) error {
 	_, err := q.db.Exec(ctx, updateOrgUnitFromExternal,
 		arg.ID,

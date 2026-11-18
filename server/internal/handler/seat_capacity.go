@@ -136,8 +136,12 @@ func (h *Handler) beginCapacityConsume(ctx context.Context, workspaceID, token, 
 		return false, deleteCapacityIntentForAction(ctx, q, token, seatcapacity.ActionConsumeInvitation)
 	}
 	if !decision.Allowed {
-		if expireErr := q.ExpireInvitationForCapacityRecovery(ctx, uuidToPG(invitationID)); expireErr != nil {
-			return false, fmt.Errorf("expire invitation after rejected capacity consume: %w", expireErr)
+		// Direct add uses a synthetic operation token and no invitation row;
+		// there is nothing to expire in that case.
+		if invitationID != uuid.Nil {
+			if expireErr := q.ExpireInvitationForCapacityRecovery(ctx, uuidToPG(invitationID)); expireErr != nil {
+				return false, fmt.Errorf("expire invitation after rejected capacity consume: %w", expireErr)
+			}
 		}
 		if deleteErr := deleteCapacityIntentForAction(ctx, q, token, seatcapacity.ActionConsumeInvitation); deleteErr != nil {
 			return false, fmt.Errorf("discard rejected invitation consume intent: %w", deleteErr)
@@ -221,14 +225,6 @@ func enqueueCapacityRelease(ctx context.Context, q *db.Queries, workspaceID, tok
 		WorkspaceID: uuidToPG(workspaceID), OperationToken: uuidToPG(token),
 		SubjectID: uuidToPG(token), NextAttemptAt: seatcapacity.RetryDue(time.Now()),
 	})
-	return err
-}
-
-func enqueueMemberCapacityRelease(ctx context.Context, q *db.Queries, workspaceID, memberID uuid.UUID) error {
-	operationToken := uuid.New()
-	params := capacityIntentParams(workspaceID, operationToken, seatcapacity.ActionReleaseMember, time.Now())
-	params.MemberID = uuidToPG(memberID)
-	_, err := q.UpsertSeatCapacityIntent(ctx, params)
 	return err
 }
 

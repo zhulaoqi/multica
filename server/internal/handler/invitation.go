@@ -16,6 +16,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/seatcapacity"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -66,6 +67,14 @@ func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 	var req CreateMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Department-owned projects pull colleagues from the department directory
+	// instead of sending email invitations, so the target's placement can be
+	// checked at pull-in time.
+	if ws, err := h.Queries.GetWorkspace(r.Context(), requester.WorkspaceID); err == nil && ws.OrgUnitID.Valid {
+		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "department projects add members directly")
 		return
 	}
 
@@ -253,6 +262,13 @@ func (h *Handler) ListWorkspaceInvitations(w http.ResponseWriter, r *http.Reques
 	workspaceID := workspaceIDFromURL(r, "id")
 	workspaceUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
 	if !ok {
+		return
+	}
+
+	// Department projects never have live pending invitations: conversion
+	// expires them and new member adds are direct.
+	if ws, err := h.Queries.GetWorkspace(r.Context(), workspaceUUID); err == nil && ws.OrgUnitID.Valid {
+		writeJSON(w, http.StatusOK, []InvitationResponse{})
 		return
 	}
 
@@ -506,6 +522,37 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusGone, "invitation has expired")
 		return
 	}
+
+	// The workspace may have become department-owned after this invitation
+	// was issued. Revalidate the invitee's directory placement now: an
+	// invitation is not a way around the department scope.
+	ws, err := h.Queries.GetWorkspace(r.Context(), inv.WorkspaceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workspace not found")
+		return
+	}
+	var inviteeUnit pgtype.UUID
+	if ws.OrgUnitID.Valid {
+		directoryRow, dirErr := h.Queries.GetDirectoryMember(r.Context(), db.GetDirectoryMemberParams{
+			WorkspaceID: inv.WorkspaceID,
+			UserID:      user.ID,
+		})
+		if dirErr != nil {
+			writeErrorCode(w, http.StatusForbidden, codeMemberOutsideDept, "you are not in this project's department")
+			return
+		}
+		subtree, subtreeErr := workspaceaccess.SubtreeUnits(r.Context(), h.Queries, inv.WorkspaceID)
+		if subtreeErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load project departments")
+			return
+		}
+		if !workspaceaccess.UnitIDs(subtree)[directoryRow.OrgUnitID] {
+			writeErrorCode(w, http.StatusForbidden, codeMemberOutsideDept, "you are outside this project's department")
+			return
+		}
+		inviteeUnit = directoryRow.OrgUnitID
+	}
+
 	capacityActive, err := h.beginCapacityConsume(r.Context(), uuid.UUID(inv.WorkspaceID.Bytes), uuid.UUID(inv.ID.Bytes), uuid.UUID(inv.ID.Bytes), uuid.UUID(user.ID.Bytes))
 	if err != nil {
 		writeSeatCapacityError(w, err)
@@ -532,14 +579,37 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID: accepted.WorkspaceID,
 		UserID:      user.ID,
 		Role:        accepted.Role,
+		OrgUnitID:   inviteeUnit,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
-			writeError(w, http.StatusConflict, "you are already a member of this workspace")
+			// A historical member row can exist (organisation sync used to
+			// create one per employee). Restore its placement instead of
+			// failing the acceptance.
+			if !inviteeUnit.Valid {
+				writeError(w, http.StatusConflict, "you are already a member of this workspace")
+				return
+			}
+			if setErr := qtx.SetMemberOrgUnit(r.Context(), db.SetMemberOrgUnitParams{
+				WorkspaceID: accepted.WorkspaceID,
+				UserID:      user.ID,
+				OrgUnitID:   inviteeUnit,
+			}); setErr != nil {
+				writeError(w, http.StatusInternalServerError, "failed to create membership")
+				return
+			}
+			member, err = qtx.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+				UserID:      user.ID,
+				WorkspaceID: accepted.WorkspaceID,
+			})
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "failed to load membership")
+				return
+			}
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to create membership")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to create membership")
-		return
 	}
 
 	// Accepting an invite marks the invitee as onboarded. The web /

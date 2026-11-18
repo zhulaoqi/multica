@@ -58,6 +58,13 @@ SELECT EXISTS (
       AND expires_at > now()
 );
 
+-- name: ExpireWorkspacePendingInvitations :exec
+-- Department-owned projects add members directly. Any invitation still pending
+-- when a workspace becomes or stays owned is retired so it cannot be accepted.
+UPDATE workspace_invitation
+SET status = 'expired', updated_at = now()
+WHERE workspace_id = $1 AND status = 'pending';
+
 -- name: ExpireStalePendingInvitations :many
 -- Mark any past-due pending invitations for (workspace_id, invitee_email) as expired,
 -- so the next CreateInvitation does not collide with the partial unique index

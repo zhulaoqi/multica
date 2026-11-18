@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -47,19 +48,19 @@ func ResolveAutopilotNotificationRecipient(
 		if !autopilot.CreatedByID.Valid {
 			return AutopilotNotificationRecipient{}, false, nil
 		}
-		member, err := queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-			UserID:      autopilot.CreatedByID,
-			WorkspaceID: autopilot.WorkspaceID,
-		})
+		access, err := workspaceaccess.Resolve(ctx, queries, autopilot.WorkspaceID, autopilot.CreatedByID, false)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return AutopilotNotificationRecipient{}, false, nil
 		}
 		if err != nil {
 			return AutopilotNotificationRecipient{}, false, fmt.Errorf("load autopilot member creator: %w", err)
 		}
+		if !access.Allowed() {
+			return AutopilotNotificationRecipient{}, false, nil
+		}
 		return AutopilotNotificationRecipient{
 			Type: "member",
-			ID:   member.UserID,
+			ID:   autopilot.CreatedByID,
 		}, true, nil
 	}
 	if autopilot.CreatedByType != "agent" {
@@ -77,15 +78,15 @@ func ResolveAutopilotNotificationRecipient(
 		return AutopilotNotificationRecipient{}, false, nil
 	}
 
-	member, err := queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      agent.OwnerID,
-		WorkspaceID: autopilot.WorkspaceID,
-	})
+	access, err := workspaceaccess.Resolve(ctx, queries, autopilot.WorkspaceID, agent.OwnerID, false)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AutopilotNotificationRecipient{}, false, nil
 	}
 	if err != nil {
 		return AutopilotNotificationRecipient{}, false, fmt.Errorf("load autopilot creator agent owner: %w", err)
 	}
-	return AutopilotNotificationRecipient{Type: "member", ID: member.UserID}, true, nil
+	if !access.Allowed() {
+		return AutopilotNotificationRecipient{}, false, nil
+	}
+	return AutopilotNotificationRecipient{Type: "member", ID: agent.OwnerID}, true, nil
 }

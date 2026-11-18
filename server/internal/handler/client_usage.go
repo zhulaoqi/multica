@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/middleware"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -131,15 +132,18 @@ func (h *Handler) UpsertClientUsage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to record client usage")
 			return
 		}
-		if _, err := queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-			UserID: userUUID, WorkspaceID: workspaceUUID,
-		}); err != nil {
+		access, err := workspaceaccess.Resolve(r.Context(), queries, workspaceUUID, userUUID, false)
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				writeError(w, http.StatusForbidden, "workspace not found")
 				return
 			}
 			slog.Error("failed to validate client usage workspace", "error", err)
 			writeError(w, http.StatusInternalServerError, "failed to record client usage")
+			return
+		}
+		if !access.Allowed() {
+			writeError(w, http.StatusForbidden, "workspace not found")
 			return
 		}
 	}

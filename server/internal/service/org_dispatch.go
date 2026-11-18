@@ -17,6 +17,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/orgsquad"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -110,14 +111,11 @@ type OrgDispatchService struct {
 // Dispatch creates the root issue for one department. The squad leader is the
 // only agent woken: it decomposes the request and assigns the children.
 func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) (OrgDispatchResult, error) {
-	member, err := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      p.ActorID,
-		WorkspaceID: p.WorkspaceID,
-	})
-	if err != nil {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, p.WorkspaceID, p.ActorID, false)
+	if err != nil || !access.Allowed() {
 		return OrgDispatchResult{}, ErrDispatchRequesterNotInTeam
 	}
-	units, err := s.Queries.ListOrgUnits(ctx, p.WorkspaceID)
+	units, err := orgUnitsForUser(ctx, s.Queries, p.WorkspaceID, access)
 	if err != nil {
 		return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
 	}
@@ -125,7 +123,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 	if !ok {
 		return OrgDispatchResult{}, ErrOrgUnitNotFound
 	}
-	if !canDispatchToUnit(member, units, unit.ID) {
+	if !canDispatchToUnit(access, units, unit.ID) {
 		return OrgDispatchResult{}, ErrOrgUnitNoAccess
 	}
 
@@ -274,18 +272,15 @@ func (s *OrgDispatchService) ensureSquad(
 // the requester may dispatch to. Exact paths win; otherwise unique substring
 // matches are returned so the caller can ask for a fuller name.
 func (s *OrgDispatchService) ResolveUnits(ctx context.Context, wsUUID, actorID pgtype.UUID, query string) ([]UnitMatch, error) {
-	member, err := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      actorID,
-		WorkspaceID: wsUUID,
-	})
-	if err != nil {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, wsUUID, actorID, false)
+	if err != nil || !access.Allowed() {
 		return nil, ErrDispatchRequesterNotInTeam
 	}
-	units, err := s.Queries.ListOrgUnits(ctx, wsUUID)
+	units, err := orgUnitsForUser(ctx, s.Queries, wsUUID, access)
 	if err != nil {
 		return nil, fmt.Errorf("list org units: %w", err)
 	}
-	visible := orgscope.Visible(units, member.OrgUnitID, member.UserID, isWorkspaceAdmin(member.Role))
+	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin())
 	paths := orgscope.Paths(units)
 
 	var exact, partial []UnitMatch
@@ -434,14 +429,24 @@ func findUnit(units []db.ListOrgUnitsRow, unitID pgtype.UUID) (db.ListOrgUnitsRo
 	return db.ListOrgUnitsRow{}, false
 }
 
+// orgUnitsForUser scopes the org tree to what a project member may see: the
+// owning department's subtree for a department project, the whole tree for a
+// legacy flat workspace.
+func orgUnitsForUser(ctx context.Context, q *db.Queries, workspaceID pgtype.UUID, access workspaceaccess.Access) ([]db.ListOrgUnitsRow, error) {
+	if access.RootUnitID.Valid {
+		return workspaceaccess.SubtreeUnits(ctx, q, workspaceID)
+	}
+	return q.ListOrgUnits(ctx, workspaceID)
+}
+
 // canDispatchToUnit mirrors the org page's visibility: managers dispatch
 // anywhere, everyone else only to their own department subtree and to the
 // departments they lead.
-func canDispatchToUnit(member db.Member, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
-	if isWorkspaceAdmin(member.Role) {
+func canDispatchToUnit(access workspaceaccess.Access, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
+	if access.IsAdmin() {
 		return true
 	}
-	visible := orgscope.Visible(units, member.OrgUnitID, member.UserID, false)
+	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, false)
 	return visible[unitID]
 }
 

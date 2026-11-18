@@ -47,6 +47,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/storage"
 	"github.com/multica-ai/multica/server/internal/util"
 	"github.com/multica-ai/multica/server/internal/util/secretbox"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	composiosdk "github.com/multica-ai/multica/server/pkg/composio"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/featureflag"
@@ -1799,6 +1800,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.With(middleware.RequireOperator()).Get("/api/operator/overview", h.OperatorOverview)
 		r.With(middleware.RequireOperator()).Get("/api/operator/directories", h.OperatorDirectories)
 		r.With(middleware.RequireOperator()).Post("/api/operator/directories/{workspaceId}/sync", h.OperatorSyncDirectory)
+		// Reassigning the owning department is operator-only and never
+		// clears it; that would silently turn the project back into a
+		// legacy flat workspace.
+		r.With(middleware.RequireOperator()).Put("/api/operator/workspaces/{workspaceId}/department", h.SetWorkspaceDepartment)
 		// Credential minting is human-only (MUL-8154): an agent task token
 		// (mat_) or cloud-node PAT (mcn_) authenticates as its owner, so
 		// without this guard a prompt-injected agent could trade its scoped,
@@ -1839,14 +1844,38 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
 			r.Post("/", h.CreateWorkspace)
+			// Creation options must stay a static route: chi resolves it
+			// before /{id}.
+			r.Get("/creation-options", h.ListWorkspaceCreateOptions)
 			r.Route("/{id}", func(r chi.Router) {
-				// Member-level access
+				// Settings reads. Managers keep access even when the
+				// organisation moved them outside the owning subtree, so
+				// the settings pages still open; content routes below
+				// require project content access instead.
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+					r.Use(middleware.RequireWorkspaceViewerFromURL(queries, "id"))
 					r.Get("/", h.GetWorkspace)
 					r.Get("/members", h.ListMembersWithUser)
-					r.Post("/leave", h.LeaveWorkspace)
 					r.Get("/invitations", h.ListWorkspaceInvitations)
+				})
+				// Project management: stored owner/admin or the owning
+				// department lead.
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceManagerFromURL(queries, "id"))
+					r.Put("/", h.UpdateWorkspace)
+					r.Patch("/", h.UpdateWorkspace)
+					r.Get("/members/candidates", h.ListProjectMemberCandidates)
+					r.Post("/members/direct", h.AddProjectMemberDirect)
+					r.Route("/members/{memberId}", func(r chi.Router) {
+						r.Patch("/", h.UpdateMember)
+						r.Delete("/", h.DeleteMember)
+					})
+					r.Delete("/invitations/{invitationId}", h.RevokeInvitation)
+				})
+				// Member-level content access
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
+					r.Post("/leave", h.LeaveWorkspace)
 					// Listing GitHub installations is member-visible so the
 					// integrations tab no longer renders blank for non-admins;
 					// the handler strips the management handle and adds a
@@ -1877,17 +1906,15 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// bytes stay off the authenticated app/API origin.
 					r.Get("/plugins/{installationId}/surfaces/{surfaceKey}/launch", h.GetPluginSurfaceLaunch)
 				})
-				// Admin-level access
+				// Strict admin access: stored owner/admin only. Department
+				// leads manage members and settings through the manager
+				// group above but do not receive integration, plugin, MCP,
+				// runtime-profile, or share-link authority.
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
-					r.Put("/", h.UpdateWorkspace)
-					r.Patch("/", h.UpdateWorkspace)
+					// Email invitations. Department-owned projects return 409
+					// and use the direct-add route instead.
 					r.Post("/members", h.CreateInvitation)
-					r.Route("/members/{memberId}", func(r chi.Router) {
-						r.Patch("/", h.UpdateMember)
-						r.Delete("/", h.DeleteMember)
-					})
-					r.Delete("/invitations/{invitationId}", h.RevokeInvitation)
 					// Curating the shared MCP library is an admin action.
 					// Creating an entry binds it to no agent; an agent owner
 					// adds it to their own agent through the agent routes.
@@ -2791,14 +2818,17 @@ type membershipChecker struct {
 }
 
 func (mc *membershipChecker) IsMember(ctx context.Context, userID, workspaceID string) (bool, error) {
-	_, err := mc.queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      parseUUID(userID),
-		WorkspaceID: parseUUID(workspaceID),
-	})
+	// Realtime and socket authorization follow project content access, not
+	// the bare member row: a department-scoped workspace must not admit a
+	// member the organisation moved outside its subtree.
+	access, err := workspaceaccess.Resolve(ctx, mc.queries, parseUUID(workspaceID), parseUUID(userID), false)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
-	return err == nil, err
+	if err != nil {
+		return false, err
+	}
+	return access.Allowed(), nil
 }
 
 func (mc *membershipChecker) Members(ctx context.Context, identities []realtime.MembershipIdentity) (map[realtime.MembershipIdentity]bool, error) {

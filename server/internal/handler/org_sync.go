@@ -16,6 +16,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/feishu/contact"
 	"github.com/multica-ai/multica/server/internal/logger"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -39,7 +40,14 @@ type orgSyncReport struct {
 	MembersWithoutEmail []string `json:"members_without_email"`
 	DetachedDepartments []string `json:"detached_departments"`
 	DetachedUsers       []string `json:"detached_users"`
-	SyncedAt            string   `json:"synced_at"`
+	// OwnersOutsideDepartment names stored owners/admins whose new placement
+	// left the project subtree. They keep access by role; sync never demotes
+	// them.
+	OwnersOutsideDepartment []string `json:"owners_outside_department"`
+	// AccessRevoked names ordinary members the sync moved out of the subtree;
+	// their sessions are cut after the run commits.
+	AccessRevoked []string `json:"access_revoked"`
+	SyncedAt      string   `json:"synced_at"`
 }
 
 type orgSyncStatusResponse struct {
@@ -49,14 +57,16 @@ type orgSyncStatusResponse struct {
 
 func newOrgSyncReport() orgSyncReport {
 	return orgSyncReport{
-		CreatedUnits:        []string{},
-		UpdatedUnits:        []string{},
-		LeadsAssigned:       []string{},
-		MembersAdded:        []string{},
-		MembersMoved:        []string{},
-		MembersWithoutEmail: []string{},
-		DetachedDepartments: []string{},
-		DetachedUsers:       []string{},
+		CreatedUnits:            []string{},
+		UpdatedUnits:            []string{},
+		LeadsAssigned:           []string{},
+		MembersAdded:            []string{},
+		MembersMoved:            []string{},
+		MembersWithoutEmail:     []string{},
+		DetachedDepartments:     []string{},
+		DetachedUsers:           []string{},
+		OwnersOutsideDepartment: []string{},
+		AccessRevoked:           []string{},
 	}
 }
 
@@ -150,18 +160,22 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 	defer tx.Rollback(ctx)
 	qtx := h.Queries.WithTx(tx)
 
-	unitIDs, err := h.upsertDirectoryUnits(ctx, qtx, wsUUID, ordered, &report)
+	ws, err := qtx.GetWorkspace(ctx, wsUUID)
+	if err != nil {
+		return orgSyncReport{}, fmt.Errorf("load workspace: %w", err)
+	}
+	unitIDs, err := h.upsertDirectoryUnits(ctx, qtx, wsUUID, ws.OrgUnitID, ordered, &report)
 	if err != nil {
 		return orgSyncReport{}, err
 	}
-	userIDs, err := h.upsertDirectoryUsers(ctx, qtx, wsUUID, users, unitIDs, &report)
+	userIDs, err := h.upsertDirectoryUsers(ctx, qtx, ws, users, unitIDs, &report)
 	if err != nil {
 		return orgSyncReport{}, err
 	}
 	if err := h.assignDirectoryLeads(ctx, qtx, wsUUID, ordered, unitIDs, userIDs, &report); err != nil {
 		return orgSyncReport{}, err
 	}
-	if err := h.reportDetachedEntities(ctx, qtx, wsUUID, ordered, users, userIDs, &report); err != nil {
+	if err := h.reportDetachedEntities(ctx, qtx, wsUUID, ws.OrgUnitID.Valid, ordered, users, userIDs, &report); err != nil {
 		return orgSyncReport{}, err
 	}
 
@@ -178,6 +192,13 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return orgSyncReport{}, err
+	}
+	// A successful sync can move people out of the project subtree. Their
+	// member rows stay (the lead may pull them back), but live sessions and
+	// daemon caches must learn about the loss of access.
+	if ws.OrgUnitID.Valid {
+		removed := h.disconnectMembersOutsideProject(ctx, wsUUID)
+		h.publishAccessRevocations(wsUUID, "", removed)
 	}
 	return report, nil
 }
@@ -239,6 +260,7 @@ func (h *Handler) upsertDirectoryUnits(
 	ctx context.Context,
 	qtx *db.Queries,
 	wsUUID pgtype.UUID,
+	rootUnitID pgtype.UUID,
 	departments []contact.Department,
 	report *orgSyncReport,
 ) (map[string]pgtype.UUID, error) {
@@ -261,12 +283,19 @@ func (h *Handler) upsertDirectoryUnits(
 			parent = unitIDs[department.ParentID]
 		}
 		if current, ok := byExternal[department.ID]; ok {
-			if current.Name != department.Name || !orgUUIDEqual(current.ParentID, parent) {
+			nextParent := parent
+			// A project's owning department root keeps its parent: projects read
+			// their scope from that unit, so a directory reshuffle must not move
+			// it. The workspace decides its parent, not the directory.
+			if current.ID == rootUnitID {
+				nextParent = current.ParentID
+			}
+			if current.Name != department.Name || !orgUUIDEqual(current.ParentID, nextParent) {
 				if err := qtx.UpdateOrgUnitFromExternal(ctx, db.UpdateOrgUnitFromExternalParams{
 					ID:          current.ID,
 					WorkspaceID: wsUUID,
 					Name:        department.Name,
-					ParentID:    parent,
+					ParentID:    nextParent,
 				}); err != nil {
 					return nil, fmt.Errorf("update unit %q: %w", department.Name, err)
 				}
@@ -290,18 +319,43 @@ func (h *Handler) upsertDirectoryUnits(
 	return unitIDs, nil
 }
 
-// upsertDirectoryUsers creates missing users and members, then places everyone
-// under their department. Users without an email cannot be matched or created
-// and are reported instead of silently skipped.
+// upsertDirectoryUsers creates missing users, refreshes the department
+// directory for everyone, and keeps placements current. Users without an email
+// cannot be matched or created and are reported instead of silently skipped.
+//
+// A legacy workspace still creates a member row per person, as it always has.
+// A department project never does: its member rows are only the people the
+// department lead pulled in, and sync merely updates their placement so a
+// department change revokes access through the project scope.
 func (h *Handler) upsertDirectoryUsers(
 	ctx context.Context,
 	qtx *db.Queries,
-	wsUUID pgtype.UUID,
+	ws db.Workspace,
 	users []contact.User,
 	unitIDs map[string]pgtype.UUID,
 	report *orgSyncReport,
 ) (map[string]pgtype.UUID, error) {
+	wsUUID := ws.ID
+	owned := ws.OrgUnitID.Valid
+	directory, err := qtx.ListDirectoryMembers(ctx, wsUUID)
+	if err != nil {
+		return nil, fmt.Errorf("list directory: %w", err)
+	}
+	directoryByUser := make(map[pgtype.UUID]db.ListDirectoryMembersRow, len(directory))
+	for _, row := range directory {
+		directoryByUser[row.UserID] = row
+	}
+	members, err := qtx.ListMembers(ctx, wsUUID)
+	if err != nil {
+		return nil, fmt.Errorf("list members: %w", err)
+	}
+	memberByUser := make(map[pgtype.UUID]db.Member, len(members))
+	for _, member := range members {
+		memberByUser[member.UserID] = member
+	}
+
 	userIDs := make(map[string]pgtype.UUID, len(users))
+	nameByUser := make(map[pgtype.UUID]string, len(users))
 	for _, person := range users {
 		if person.Email == "" {
 			report.MembersWithoutEmail = append(report.MembersWithoutEmail, person.Name)
@@ -332,32 +386,51 @@ func (h *Handler) upsertDirectoryUsers(
 			}
 		}
 		userIDs[person.OpenID] = user.ID
+		nameByUser[user.ID] = person.Name
 
 		unit := unitIDs[person.DepartmentID]
-		currentUnit := pgtype.UUID{}
-		member, err := qtx.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-			UserID:      user.ID,
+		if previous, ok := directoryByUser[user.ID]; ok {
+			if unit.Valid && !orgUUIDEqual(previous.OrgUnitID, unit) {
+				report.MembersMoved = append(report.MembersMoved, person.Name)
+			}
+		} else {
+			report.MembersAdded = append(report.MembersAdded, person.Name)
+		}
+		if _, err := qtx.UpsertDirectoryMember(ctx, db.UpsertDirectoryMemberParams{
 			WorkspaceID: wsUUID,
-		})
+			UserID:      user.ID,
+			OrgUnitID:   unit,
+		}); err != nil {
+			return nil, fmt.Errorf("place directory member %q: %w", email, err)
+		}
+
+		member, isMember := memberByUser[user.ID]
 		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			if _, err := qtx.CreateMember(ctx, db.CreateMemberParams{
+		case owned:
+			// Only update an existing project member; never create one.
+			if isMember && unit.Valid && !orgUUIDEqual(member.OrgUnitID, unit) {
+				if err := qtx.SetMemberOrgUnit(ctx, db.SetMemberOrgUnitParams{
+					WorkspaceID: wsUUID,
+					UserID:      user.ID,
+					OrgUnitID:   unit,
+				}); err != nil {
+					return nil, fmt.Errorf("place member %q: %w", email, err)
+				}
+				member.OrgUnitID = unit
+				memberByUser[user.ID] = member
+			}
+		case !isMember:
+			createdMember, err := qtx.CreateMember(ctx, db.CreateMemberParams{
 				WorkspaceID: wsUUID,
 				UserID:      user.ID,
 				Role:        "member",
-			}); err != nil {
+				OrgUnitID:   unit,
+			})
+			if err != nil {
 				return nil, fmt.Errorf("add member %q: %w", email, err)
 			}
-			report.MembersAdded = append(report.MembersAdded, person.Name)
-		case err != nil:
-			return nil, fmt.Errorf("read member %q: %w", email, err)
-		default:
-			currentUnit = member.OrgUnitID
-		}
-		if unit.Valid && !orgUUIDEqual(currentUnit, unit) {
-			if currentUnit.Valid {
-				report.MembersMoved = append(report.MembersMoved, person.Name)
-			}
+			memberByUser[user.ID] = createdMember
+		case unit.Valid && !orgUUIDEqual(member.OrgUnitID, unit):
 			if err := qtx.SetMemberOrgUnit(ctx, db.SetMemberOrgUnitParams{
 				WorkspaceID: wsUUID,
 				UserID:      user.ID,
@@ -365,7 +438,10 @@ func (h *Handler) upsertDirectoryUsers(
 			}); err != nil {
 				return nil, fmt.Errorf("place member %q: %w", email, err)
 			}
+			member.OrgUnitID = unit
+			memberByUser[user.ID] = member
 		}
+
 		if err := qtx.SaveFeishuIdentity(ctx, db.SaveFeishuIdentityParams{
 			UserID:    user.ID,
 			OpenID:    person.OpenID,
@@ -377,7 +453,54 @@ func (h *Handler) upsertDirectoryUsers(
 			return nil, fmt.Errorf("record feishu identity %q: %w", email, err)
 		}
 	}
+	if owned {
+		if err := reportProjectScopeChanges(ctx, qtx, wsUUID, memberByUser, nameByUser, report); err != nil {
+			return nil, err
+		}
+	}
 	return userIDs, nil
+}
+
+// reportProjectScopeChanges separates members who left the department subtree
+// into ordinary members (their access is revoked) and owners/admins, who keep
+// access by role and are only reported.
+func reportProjectScopeChanges(
+	ctx context.Context,
+	qtx *db.Queries,
+	wsUUID pgtype.UUID,
+	members map[pgtype.UUID]db.Member,
+	nameByUser map[pgtype.UUID]string,
+	report *orgSyncReport,
+) error {
+	units, err := qtx.ListWorkspaceSubtreeUnits(ctx, wsUUID)
+	if err != nil {
+		return fmt.Errorf("list project departments: %w", err)
+	}
+	subtree := make(map[pgtype.UUID]bool, len(units))
+	for _, unit := range units {
+		subtree[unit.ID] = true
+	}
+	revoked := make([]string, 0)
+	owners := make([]string, 0)
+	for userID, member := range members {
+		if subtree[member.OrgUnitID] {
+			continue
+		}
+		name := nameByUser[userID]
+		if name == "" {
+			name = util.UUIDToString(userID)
+		}
+		if member.Role == "owner" || member.Role == "admin" {
+			owners = append(owners, name)
+			continue
+		}
+		revoked = append(revoked, name)
+	}
+	sort.Strings(revoked)
+	sort.Strings(owners)
+	report.AccessRevoked = append(report.AccessRevoked, revoked...)
+	report.OwnersOutsideDepartment = append(report.OwnersOutsideDepartment, owners...)
+	return nil
 }
 
 // assignDirectoryLeads fills empty unit leads from the directory's department
@@ -422,6 +545,7 @@ func (h *Handler) reportDetachedEntities(
 	ctx context.Context,
 	qtx *db.Queries,
 	wsUUID pgtype.UUID,
+	owned bool,
 	departments []contact.Department,
 	users []contact.User,
 	userIDs map[string]pgtype.UUID,
@@ -448,9 +572,25 @@ func (h *Handler) reportDetachedEntities(
 			presentEmails[strings.ToLower(person.Email)] = struct{}{}
 		}
 	}
-	identities, err := qtx.ListWorkspaceFeishuIdentities(ctx, wsUUID)
-	if err != nil {
-		return fmt.Errorf("list directory members: %w", err)
+	identities := []db.ListWorkspaceFeishuIdentitiesRow{}
+	if owned {
+		directoryIdentities, err := qtx.ListWorkspaceDirectoryFeishuIdentities(ctx, wsUUID)
+		if err != nil {
+			return fmt.Errorf("list directory members: %w", err)
+		}
+		for _, identity := range directoryIdentities {
+			identities = append(identities, db.ListWorkspaceFeishuIdentitiesRow{
+				UserID: identity.UserID,
+				Email:  identity.Email,
+				Name:   identity.Name,
+			})
+		}
+	} else {
+		memberIdentities, err := qtx.ListWorkspaceFeishuIdentities(ctx, wsUUID)
+		if err != nil {
+			return fmt.Errorf("list directory members: %w", err)
+		}
+		identities = memberIdentities
 	}
 	for _, identity := range identities {
 		if _, ok := presentEmails[strings.ToLower(identity.Email)]; !ok {

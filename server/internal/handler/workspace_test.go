@@ -66,7 +66,7 @@ func TestCreateWorkspace_DoesNotMarkOnboarded(t *testing.T) {
 		_, _ = testPool.Exec(context.Background(), `UPDATE "user" SET onboarded_at = NULL WHERE id = $1`, testUserID)
 	})
 
-	req := newRequest("POST", "/api/workspaces", map[string]any{
+	req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]any{
 		"name": "Onboarding Invariant Probe",
 		"slug": slug,
 	})
@@ -159,7 +159,9 @@ func TestCreateWorkspace_AllowedEmails(t *testing.T) {
 			testHandler.cfg = cfg
 			t.Cleanup(func() { testHandler.cfg = prev })
 
-			req := newRequest("POST", "/api/workspaces", map[string]any{
+			// Operator callers still pass the config gates but need no
+			// department, so this test isolates the allowlist.
+			req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]any{
 				"name": "Allowlist Create",
 				"slug": slug,
 			})
@@ -1472,7 +1474,7 @@ func TestCreateWorkspace_ChineseNameDerivesPrefixFromSlug(t *testing.T) {
 	_, _ = testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, slug)
 	dbfx.Cleanup(t, `DELETE FROM workspace WHERE slug = $1`, slug)
 
-	req := newRequest("POST", "/api/workspaces", map[string]any{
+	req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]any{
 		"name": "前端团队",
 		"slug": slug,
 	})
@@ -1500,7 +1502,7 @@ func TestCreateWorkspace_HonorsExplicitIssuePrefix(t *testing.T) {
 	_, _ = testPool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, slug)
 	dbfx.Cleanup(t, `DELETE FROM workspace WHERE slug = $1`, slug)
 
-	req := newRequest("POST", "/api/workspaces", map[string]any{
+	req := operatorRequest(testUserID, "POST", "/api/workspaces", map[string]any{
 		"name":         "前端团队",
 		"slug":         slug,
 		"issue_prefix": "fe",

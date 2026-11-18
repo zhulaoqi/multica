@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -119,16 +120,17 @@ func (s *BindingTokenService) RedeemAndBind(ctx context.Context, raw string, mul
 		return RedeemedBindingToken{}, err
 	}
 
-	// Explicit membership gate (no member FK): returning before Commit rolls the
+	// Explicit access gate (no member FK): returning before Commit rolls the
 	// consume back, so a non-member's attempt does not burn the token.
-	if _, err := qtx.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-		UserID:      multicaUserID,
-		WorkspaceID: row.WorkspaceID,
-	}); err != nil {
+	access, err := workspaceaccess.Resolve(ctx, qtx, row.WorkspaceID, multicaUserID, false)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return RedeemedBindingToken{}, ErrBindingNotWorkspaceMember
 		}
 		return RedeemedBindingToken{}, fmt.Errorf("check membership: %w", err)
+	}
+	if !access.Allowed() {
+		return RedeemedBindingToken{}, ErrBindingNotWorkspaceMember
 	}
 
 	if _, err := qtx.CreateChannelUserBinding(ctx, db.CreateChannelUserBindingParams{

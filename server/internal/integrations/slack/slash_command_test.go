@@ -37,8 +37,13 @@ func (f *fakeSlashQueries) GetChannelUserBindingByUserID(_ context.Context, _ db
 	return f.binding, f.bindErr
 }
 
-func (f *fakeSlashQueries) GetMemberByUserAndWorkspace(_ context.Context, _ db.GetMemberByUserAndWorkspaceParams) (db.Member, error) {
-	return db.Member{}, f.memberErr
+// GetWorkspaceAccess reports a legacy flat workspace: a valid member row means
+// access, an invalid one is the fake's not-a-member case (memberErr).
+func (f *fakeSlashQueries) GetWorkspaceAccess(_ context.Context, arg db.GetWorkspaceAccessParams) (db.GetWorkspaceAccessRow, error) {
+	if f.memberErr != nil {
+		return db.GetWorkspaceAccessRow{}, f.memberErr
+	}
+	return db.GetWorkspaceAccessRow{WorkspaceID: arg.ID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
 }
 
 // fakeQuickCreate records the last EnqueueQuickCreateTask call so tests can

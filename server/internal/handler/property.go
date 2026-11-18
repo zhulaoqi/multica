@@ -21,6 +21,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/issueproperty"
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -332,10 +333,8 @@ func (h *Handler) resolveActorRefs(r *http.Request, workspaceID string, refs []a
 		if err != nil {
 			return http.StatusBadRequest, fmt.Sprintf("actor id in %q must be a UUID", ref)
 		}
-		if _, err := h.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-			UserID:      refUUID,
-			WorkspaceID: wsUUID,
-		}); err != nil {
+		access, err := workspaceaccess.Resolve(ctx, h.Queries, wsUUID, refUUID, false)
+		if err != nil || !access.Allowed() {
 			return http.StatusBadRequest, fmt.Sprintf("%q does not refer to a member of this workspace", ref)
 		}
 	}

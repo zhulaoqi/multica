@@ -607,14 +607,15 @@ func notifyMentionedMembers(
 		}
 	}
 
-	// If @all is present, expand to all workspace members.
+	// If @all is present, expand to every project member. A department project
+	// reaches only the people inside its owning subtree.
 	if hasAll {
-		members, err := queries.ListMembers(context.Background(), parseUUID(e.WorkspaceID))
+		userIDs, err := queries.ListProjectMemberUserIDs(context.Background(), parseUUID(e.WorkspaceID))
 		if err != nil {
 			slog.Error("failed to list members for @all mention", "workspace_id", e.WorkspaceID, "error", err)
 		} else {
-			for _, m := range members {
-				recipientIDs[util.UUIDToString(m.UserID)] = true
+			for _, id := range userIDs {
+				recipientIDs[util.UUIDToString(id)] = true
 			}
 		}
 	}

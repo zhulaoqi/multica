@@ -82,6 +82,10 @@ deleted_notification_preferences AS (
 deleted_pins AS (
     DELETE FROM pinned_item WHERE pinned_item.workspace_id = $1
 ),
+deleted_directory_members AS (
+    DELETE FROM workspace_directory_member
+    WHERE workspace_directory_member.workspace_id = $1
+),
 deleted_daemon_tokens AS (
     DELETE FROM daemon_token WHERE daemon_token.workspace_id = $1
 ),
@@ -373,6 +377,9 @@ deleted_issue_dependencies AS (
 deleted_issue_subscribers AS (
     DELETE FROM issue_subscriber
     WHERE issue_id IN (SELECT id FROM ws_issues)
+),
+deleted_dispatch_origins AS (
+    DELETE FROM dispatch_origin WHERE workspace_id = $1
 ),
 deleted_issue_labels AS (
     DELETE FROM issue_to_label

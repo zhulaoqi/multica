@@ -9,9 +9,7 @@ import (
 	"sort"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
-	"github.com/multica-ai/multica/server/pkg/taskfailure"
 )
 
 var errRuntimeManagedByConnection = errors.New("runtime managed by connection")
@@ -92,57 +90,4 @@ func resolveRuntimeAccess(ctx context.Context, q *db.Queries, rt db.AgentRuntime
 		}
 	}
 	return next, nil
-}
-
-// Both explicit access changes and workspace departure use the same lock order
-// and cancellation settlement, inside their caller's transaction.
-func lockRuntimeRevocationPlan(ctx context.Context, qtx *db.Queries, next db.AgentRuntime) (runtimeWorkspaceAccessRevocationPlan, error) {
-	agents, err := qtx.ListNonOwnerAgentsByRuntimeForUpdate(ctx, db.ListNonOwnerAgentsByRuntimeForUpdateParams{
-		RuntimeID: next.ID, RuntimeOwnerID: next.OwnerID, SharedWith: next.SharedWith,
-	})
-	if err != nil {
-		return runtimeWorkspaceAccessRevocationPlan{}, err
-	}
-	if _, err := qtx.LockRuntimeRevocationChatSessions(ctx, db.LockRuntimeRevocationChatSessionsParams{
-		RuntimeID: next.ID, RuntimeOwnerID: next.OwnerID, SharedWith: next.SharedWith,
-	}); err != nil {
-		return runtimeWorkspaceAccessRevocationPlan{}, err
-	}
-	tasks, err := qtx.ListNonOwnerActiveTasksByRuntimeForUpdate(ctx, db.ListNonOwnerActiveTasksByRuntimeForUpdateParams{
-		RuntimeID: next.ID, RuntimeOwnerID: next.OwnerID, SharedWith: next.SharedWith,
-	})
-	return runtimeWorkspaceAccessRevocationPlan{Agents: agents, Tasks: tasks}, err
-}
-
-func applyRuntimeAccessRevocation(ctx context.Context, qtx *db.Queries, next db.AgentRuntime) (db.AgentRuntime, service.RuntimeTeardownResult, []pgtype.UUID, error) {
-	var result service.RuntimeTeardownResult
-	updated, err := qtx.UpdateAgentRuntimeVisibility(ctx, db.UpdateAgentRuntimeVisibilityParams{
-		ID: next.ID, Visibility: next.Visibility, SharedWith: next.SharedWith,
-	})
-	if err != nil {
-		return updated, result, nil, err
-	}
-	result.CancelledTasks, err = qtx.CancelNonOwnerTasksByRuntime(ctx, db.CancelNonOwnerTasksByRuntimeParams{
-		RuntimeID: next.ID, RuntimeOwnerID: next.OwnerID, SharedWith: next.SharedWith,
-		FailureReason: string(taskfailure.ReasonRuntimeAccessRevoked),
-	})
-	if err != nil {
-		return updated, result, nil, err
-	}
-	readyChats, err := service.PrepareRuntimeAccessCancellation(ctx, qtx, result.CancelledTasks)
-	if err != nil {
-		return updated, result, nil, err
-	}
-	result.UnboundAgents, err = qtx.UnbindNonOwnerAgentsFromRuntime(ctx, db.UnbindNonOwnerAgentsFromRuntimeParams{
-		RuntimeID: next.ID, RuntimeOwnerID: next.OwnerID, SharedWith: next.SharedWith,
-	})
-	if err != nil {
-		return updated, result, nil, err
-	}
-	ids := make([]pgtype.UUID, len(result.UnboundAgents))
-	for i, a := range result.UnboundAgents {
-		ids[i] = a.ID
-	}
-	result.PausedAutopilots, err = qtx.PauseAutopilotsByUnboundAgents(ctx, ids)
-	return updated, result, readyChats, err
 }

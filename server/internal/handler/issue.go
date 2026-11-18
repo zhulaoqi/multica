@@ -31,6 +31,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/qoderruntime"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	agentpkg "github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -4278,10 +4279,8 @@ func (h *Handler) validateAssigneePair(ctx context.Context, r *http.Request, wor
 	}
 	switch assigneeType.String {
 	case "member":
-		if _, err := h.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
-			UserID:      assigneeID,
-			WorkspaceID: wsUUID,
-		}); err != nil {
+		access, err := workspaceaccess.Resolve(ctx, h.Queries, wsUUID, assigneeID, false)
+		if err != nil || !access.Allowed() {
 			return http.StatusBadRequest, "assignee_id does not refer to a member of this workspace"
 		}
 		return 0, ""

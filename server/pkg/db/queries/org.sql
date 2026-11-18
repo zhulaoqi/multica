@@ -132,14 +132,31 @@ WHERE m.workspace_id = $1
 ORDER BY u.name;
 
 -- name: ListOrgUnitMemberIDs :many
--- Every member's unit assignment, ids only. Manager surfaces (team runtime
--- visibility) walk the unit tree in Go and do not want the full roster's
--- names/emails — the org page's ListOrgUnitMembers is far too heavy for a
--- list endpoint that runs on every Runtimes page load.
-SELECT user_id, org_unit_id
-FROM member
-WHERE workspace_id = $1
-ORDER BY user_id;
+-- Every project member's unit assignment, ids only. Manager surfaces (team
+-- runtime visibility) walk the unit tree in Go and do not want the full
+-- roster's names/emails — the org page's ListOrgUnitMembers is far too heavy
+-- for a list endpoint that runs on every Runtimes page load. Department-owned
+-- workspaces exclude member rows outside the owning subtree.
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT m.user_id, m.org_unit_id
+FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+WHERE m.workspace_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
+  )
+ORDER BY m.user_id;
 
 -- name: SetMemberOrgUnit :exec
 UPDATE member
@@ -150,6 +167,20 @@ WHERE workspace_id = $1 AND user_id = $2;
 SELECT count(*)::int
 FROM member
 WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: CountDirectoryMembersInUnit :one
+-- A unit that still describes directory members cannot be deleted: they would
+-- lose their placement, not their project membership.
+SELECT count(*)::int
+FROM workspace_directory_member
+WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: CreateOrgUnitClone :one
+-- Copy one unit into a newly created workspace when it takes over a department
+-- from an existing one. The caller remaps parent_id and lead_user_id.
+INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, description, position, external_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id;
 
 -- name: ListSyncedOrgUnits :many
 -- Units this workspace imported from a directory, keyed by the directory's id.
@@ -164,6 +195,8 @@ VALUES ($1, $2, $3, $4)
 RETURNING id;
 
 -- name: UpdateOrgUnitFromExternal :exec
+-- The caller keeps the owning department's root parent unchanged (see
+-- upsertDirectoryUnits): a project reads its scope from that unit.
 UPDATE org_unit
 SET name = $3, parent_id = $4, updated_at = now()
 WHERE id = $1 AND workspace_id = $2;
@@ -186,9 +219,25 @@ WHERE workspace_id = $1
 ORDER BY created_at DESC
 LIMIT 1;
 
+-- name: ListOrgUnitsForCopy :many
+-- A new project copies the complete tree of the workspace it takes its
+-- department from, preserving manual units (external_id NULL) as well as
+-- synced ones.
+SELECT id, parent_id, name, lead_user_id, description, position, external_id
+FROM org_unit
+WHERE workspace_id = $1
+ORDER BY position ASC, name ASC;
+
 -- name: ListWorkspaceFeishuIdentities :many
--- Directory-linked people in one workspace, so a sync can report who disappeared
--- upstream without touching manually invited members.
+-- Directory-linked people in one legacy workspace, so a sync can report who
+-- disappeared upstream without touching manually invited members.
 SELECT i.user_id, i.email, i.name
 FROM feishu_identity i
 JOIN member m ON m.user_id = i.user_id AND m.workspace_id = $1;
+
+-- name: ListWorkspaceDirectoryFeishuIdentities :many
+-- The same report for a department project: its directory rows carry the
+-- company roster even though most people are not project members.
+SELECT i.user_id, i.email, i.name
+FROM feishu_identity i
+JOIN workspace_directory_member d ON d.user_id = i.user_id AND d.workspace_id = $1;

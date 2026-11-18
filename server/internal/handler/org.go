@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -69,6 +72,10 @@ type orgMemberResponse struct {
 	Name      string  `json:"name"`
 	Email     string  `json:"email"`
 	AvatarURL *string `json:"avatar_url"`
+	// InProject distinguishes a project member from a department colleague the
+	// manager may still pull in. Legacy workspaces treat every member row as a
+	// project member.
+	InProject bool `json:"in_project"`
 }
 
 type orgTreeResponse struct {
@@ -141,6 +148,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	}
 	var ownUnitID pgtype.UUID
 	for _, member := range members {
+		if access.owned && !access.unitIDs[member.OrgUnitID] {
+			continue
+		}
 		if member.UserID == access.userID {
 			ownUnitID = member.OrgUnitID
 			resp.MyUnitID = uuidToString(member.OrgUnitID)
@@ -195,16 +205,42 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			RuntimeMode: agent.RuntimeMode,
 		})
 	}
+	rendered := make(map[pgtype.UUID]bool, len(members))
 	for _, member := range members {
+		if access.owned && !access.unitIDs[member.OrgUnitID] {
+			continue
+		}
 		if visible != nil && !visible[member.OrgUnitID] {
 			continue
 		}
+		rendered[member.UserID] = true
 		resp.Members = append(resp.Members, orgMemberResponse{
 			UserID:    uuidToString(member.UserID),
 			UnitID:    uuidToString(member.OrgUnitID),
 			Name:      member.Name,
 			Email:     member.Email,
 			AvatarURL: textPtr(member.AvatarUrl),
+			InProject: true,
+		})
+	}
+	if access.owned {
+		projectIDs, err := h.Queries.ListProjectMemberUserIDs(r.Context(), access.wsUUID)
+		if err != nil {
+			slog.Error("list project members failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "could not list project members")
+			return
+		}
+		inProject := make(map[pgtype.UUID]bool, len(projectIDs))
+		for _, userID := range projectIDs {
+			inProject[userID] = true
+		}
+		merged, err := h.listProjectDirectoryMembers(w, r, access, visible, rendered, inProject)
+		if err != nil {
+			return
+		}
+		resp.Members = append(resp.Members, merged...)
+		sort.SliceStable(resp.Members, func(i, j int) bool {
+			return resp.Members[i].Name < resp.Members[j].Name
 		})
 	}
 	for _, squad := range squads {
@@ -227,6 +263,50 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// listProjectDirectoryMembers merges the department directory into an owned
+// project's roster. Directory rows grant no access; in_project marks the people
+// a manager can still pull in versus those already working in the project.
+func (h *Handler) listProjectDirectoryMembers(
+	w http.ResponseWriter,
+	r *http.Request,
+	access orgAccess,
+	visible map[pgtype.UUID]bool,
+	rendered map[pgtype.UUID]bool,
+	inProject map[pgtype.UUID]bool,
+) ([]orgMemberResponse, error) {
+	unitIDs := make([]pgtype.UUID, 0, len(access.unitIDs))
+	for id := range access.unitIDs {
+		unitIDs = append(unitIDs, id)
+	}
+	rows, err := h.Queries.ListDirectoryMembersInUnits(r.Context(), db.ListDirectoryMembersInUnitsParams{
+		WorkspaceID: access.wsUUID,
+		UnitIds:     unitIDs,
+	})
+	if err != nil {
+		slog.Error("list directory members failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not list the department directory")
+		return nil, err
+	}
+	out := make([]orgMemberResponse, 0, len(rows))
+	for _, row := range rows {
+		if rendered[row.UserID] {
+			continue
+		}
+		if visible != nil && !visible[row.OrgUnitID] {
+			continue
+		}
+		out = append(out, orgMemberResponse{
+			UserID:    uuidToString(row.UserID),
+			UnitID:    uuidToString(row.OrgUnitID),
+			Name:      row.Name,
+			Email:     row.Email,
+			AvatarURL: textPtr(row.AvatarUrl),
+			InProject: inProject[row.UserID],
+		})
+	}
+	return out, nil
 }
 
 // ImportOrgUnits upserts units from row paths, then assigns leads and agents.
@@ -405,7 +485,7 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	lead := pgtype.UUID{}
 	if body.LeadUserID != nil && *body.LeadUserID != "" {
-		lead, ok = h.orgLeadRef(w, r, access.wsUUID, *body.LeadUserID)
+		lead, ok = h.orgLeadRef(w, r, access, *body.LeadUserID)
 		if !ok {
 			return
 		}
@@ -478,7 +558,7 @@ func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
 	if body.LeadUserID != nil {
 		lead := pgtype.UUID{}
 		if *body.LeadUserID != "" {
-			lead, ok = h.orgLeadRef(w, r, wsUUID, *body.LeadUserID)
+			lead, ok = h.orgLeadRef(w, r, access, *body.LeadUserID)
 			if !ok {
 				return
 			}
@@ -490,6 +570,15 @@ func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
 		}); err != nil {
 			h.importOrgFailed(w, r, err)
 			return
+		}
+		// The lead of the owning department is always a project owner; that is
+		// how creation, backfill and the operator's department change arrange
+		// it. A previous owner is not demoted.
+		if access.rootUnitID.Valid && unitID == access.rootUnitID && lead.Valid {
+			if err := h.ensureProjectOwner(r.Context(), h.Queries, wsUUID, lead, access.rootUnitID); err != nil {
+				h.importOrgFailed(w, r, err)
+				return
+			}
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -515,6 +604,10 @@ func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
+	if access.rootUnitID.Valid && unitID == access.rootUnitID {
+		writeError(w, http.StatusConflict, "项目所属部门不能被删除")
+		return
+	}
 	children, err := h.Queries.CountOrgUnitChildren(r.Context(), db.CountOrgUnitChildrenParams{
 		WorkspaceID: wsUUID,
 		ParentID:    unitID,
@@ -537,6 +630,18 @@ func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	if members > 0 {
 		writeError(w, http.StatusConflict, "先移走这个部门里的成员")
+		return
+	}
+	directoryMembers, err := h.Queries.CountDirectoryMembersInUnit(r.Context(), db.CountDirectoryMembersInUnitParams{
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitID,
+	})
+	if err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	if directoryMembers > 0 {
+		writeError(w, http.StatusConflict, "先移走这个部门目录里的成员")
 		return
 	}
 	if err := h.Queries.ClearOrgUnitAgents(r.Context(), db.ClearOrgUnitAgentsParams{
@@ -601,23 +706,66 @@ func (h *Handler) orgUnitRef(w http.ResponseWriter, r *http.Request, wsUUID pgty
 	return id, true
 }
 
-func (h *Handler) orgLeadRef(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, raw string) (pgtype.UUID, bool) {
+// ensureProjectOwner promotes the owning department's lead to project owner.
+// The lead may not have a member row yet (the operator changed departments or
+// picked a new lead); the row is created at the department root so the project
+// always has someone who can administer it.
+func (h *Handler) ensureProjectOwner(ctx context.Context, q *db.Queries, workspaceID, userID, rootUnitID pgtype.UUID) error {
+	member, err := q.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+	})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		_, err := q.CreateMember(ctx, db.CreateMemberParams{
+			WorkspaceID: workspaceID,
+			UserID:      userID,
+			Role:        "owner",
+			OrgUnitID:   rootUnitID,
+		})
+		return err
+	case err != nil:
+		return err
+	case member.Role == "owner":
+		return nil
+	default:
+		_, err := q.UpdateMemberRole(ctx, db.UpdateMemberRoleParams{ID: member.ID, Role: "owner"})
+		return err
+	}
+}
+
+// orgLeadRef accepts a project member, or for a department project a colleague
+// from its directory: the directory describes the department, and a manager
+// may name a lead before pulling them into the project.
+func (h *Handler) orgLeadRef(w http.ResponseWriter, r *http.Request, access orgAccess, raw string) (pgtype.UUID, bool) {
 	userID, ok := parseUUIDOrBadRequest(w, raw, "lead user id")
 	if !ok {
 		return pgtype.UUID{}, false
 	}
 	if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
 		UserID:      userID,
-		WorkspaceID: wsUUID,
-	}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusBadRequest, "lead is not a member of this workspace")
-			return pgtype.UUID{}, false
-		}
+		WorkspaceID: access.wsUUID,
+	}); err == nil {
+		return userID, true
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		h.importOrgFailed(w, r, err)
 		return pgtype.UUID{}, false
 	}
-	return userID, true
+	if access.owned {
+		row, err := h.Queries.GetDirectoryMember(r.Context(), db.GetDirectoryMemberParams{
+			WorkspaceID: access.wsUUID,
+			UserID:      userID,
+		})
+		switch {
+		case err == nil && access.unitIDs[row.OrgUnitID]:
+			return userID, true
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
+			h.importOrgFailed(w, r, err)
+			return pgtype.UUID{}, false
+		}
+	}
+	writeError(w, http.StatusBadRequest, "lead is not a member of this workspace")
+	return pgtype.UUID{}, false
 }
 
 // SetOrgAgentUnit places an agent in a unit, or clears its unit when unit_id
@@ -736,6 +884,19 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			h.importOrgFailed(w, r, err)
 			return
 		}
+		// The directory is the department-wide placement record; a manual move
+		// in an owned project updates it so the next sync and the candidate
+		// picker agree with the tree.
+		if access.owned {
+			if _, err := h.Queries.UpsertDirectoryMember(r.Context(), db.UpsertDirectoryMemberParams{
+				WorkspaceID: access.wsUUID,
+				UserID:      entityUUID,
+				OrgUnitID:   unitUUID,
+			}); err != nil {
+				h.importOrgFailed(w, r, err)
+				return
+			}
+		}
 	case "squad":
 		if err := h.Queries.SetSquadOrgUnit(r.Context(), db.SetSquadOrgUnitParams{
 			ID:          entityUUID,
@@ -761,6 +922,11 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 	if entityType != "squad" {
 		h.syncOrgSquadsAfterPlacement(r.Context(), access.wsUUID, access.units, currentUnit, unitUUID)
 	}
+	// Clearing a member's placement moves them out of the project subtree;
+	// their member row stays so a lead can place them again.
+	if entityType == "member" && access.owned && !access.unitIDs[unitUUID] {
+		h.publishAccessRevocations(access.wsUUID, requestUserID(r), h.disconnectMembersOutsideProject(r.Context(), access.wsUUID))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -771,7 +937,12 @@ type orgAccess struct {
 	wsUUID pgtype.UUID
 	userID pgtype.UUID
 	admin  bool
-	units  []db.ListOrgUnitsRow
+	// owned is true when the workspace is a department project. units then
+	// holds only the owning department's subtree; unitIDs is its id set.
+	owned      bool
+	rootUnitID pgtype.UUID
+	unitIDs    map[pgtype.UUID]bool
+	units      []db.ListOrgUnitsRow
 	// ownUnitID is the caller's own department, if they are placed in one.
 	ownUnitID pgtype.UUID
 }
@@ -786,7 +957,17 @@ func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, 
 	if !ok {
 		return orgAccess{}, false
 	}
-	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	ws, err := h.Queries.GetWorkspace(r.Context(), wsUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workspace not found")
+		return orgAccess{}, false
+	}
+	var units []db.ListOrgUnitsRow
+	if ws.OrgUnitID.Valid {
+		units, err = workspaceaccess.SubtreeUnits(r.Context(), h.Queries, wsUUID)
+	} else {
+		units, err = h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	}
 	if err != nil {
 		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "could not list organisation units")
@@ -795,12 +976,15 @@ func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, 
 	return orgAccess{
 		wsUUID: wsUUID,
 		userID: member.UserID,
-		// The organisation spans the company, not one workspace. Only the
-		// platform operator sees the whole tree; workspace roles and unit
-		// leads stay inside their own department scope.
-		admin:     requestIsOperator(r),
-		units:     units,
-		ownUnitID: member.OrgUnitID,
+		// Directory editing stays with the platform operator and department
+		// leads. A project owner who does not lead a unit manages members, not
+		// the company tree.
+		admin:      requestIsOperator(r),
+		owned:      ws.OrgUnitID.Valid,
+		rootUnitID: ws.OrgUnitID,
+		unitIDs:    workspaceaccess.UnitIDs(units),
+		units:      units,
+		ownUnitID:  member.OrgUnitID,
 	}, true
 }
 

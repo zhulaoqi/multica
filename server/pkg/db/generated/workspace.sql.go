@@ -14,7 +14,7 @@ import (
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (name, slug, description, context, issue_prefix)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
 `
 
 type CreateWorkspaceParams struct {
@@ -48,6 +48,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.IssueCounter,
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
+		&i.OrgUnitID,
 	)
 	return i, err
 }
@@ -190,6 +191,9 @@ cleared_vcs_connections AS (
 ),
 cleared_client_usage_workspace AS (
     UPDATE client_usage_daily SET workspace_id = NULL WHERE workspace_id = $1
+),
+cleared_directory AS (
+    DELETE FROM workspace_directory_member WHERE workspace_id = $1
 )
 DELETE FROM workspace WHERE workspace.id = $1
 `
@@ -204,6 +208,8 @@ DELETE FROM workspace WHERE workspace.id = $1
 // their issue links, and CI statuses here. issue_vcs_pull_request has no
 // workspace_id, so reach it through the workspace's PRs; vcs_commit_status has
 // none either, so reach it through the workspace's connections.
+// The department directory has no FK to workspace; sweep it in the same
+// transaction so a deleted project leaves no candidate rows behind.
 func (q *Queries) DeleteWorkspace(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteWorkspace, id)
 	return err
@@ -230,7 +236,7 @@ func (q *Queries) GetDaemonWorkspace(ctx context.Context, id pgtype.UUID) (GetDa
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id FROM workspace
 WHERE id = $1
 `
 
@@ -251,6 +257,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.IssueCounter,
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
+		&i.OrgUnitID,
 	)
 	return i, err
 }
@@ -270,7 +277,7 @@ func (q *Queries) GetWorkspaceAttributionFailClosed(ctx context.Context, id pgty
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id FROM workspace
 WHERE slug = $1
 `
 
@@ -291,6 +298,7 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.IssueCounter,
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
+		&i.OrgUnitID,
 	)
 	return i, err
 }
@@ -309,10 +317,28 @@ func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (in
 }
 
 const listDaemonWorkspaces = `-- name: ListDaemonWorkspaces :many
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
 SELECT w.id, w.name
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR EXISTS (
+          SELECT 1 FROM project_scope scope
+          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
+      )
+  )
 ORDER BY w.id ASC
 `
 
@@ -324,7 +350,8 @@ type ListDaemonWorkspacesRow struct {
 // Daemons only need the membership set and display name to discover which
 // workspaces should have local runtimes. Keep this projection intentionally
 // narrow so the periodic consistency check never reads UI-only JSON/text
-// columns such as settings, repos, or context.
+// columns such as settings, repos, or context. The access predicate matches
+// ListWorkspaces: an out-of-department member row must not boot a runtime.
 func (q *Queries) ListDaemonWorkspaces(ctx context.Context, userID pgtype.UUID) ([]ListDaemonWorkspacesRow, error) {
 	rows, err := q.db.Query(ctx, listDaemonWorkspaces, userID)
 	if err != nil {
@@ -345,16 +372,86 @@ func (q *Queries) ListDaemonWorkspaces(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
+const listOrgUnitsForWorkspaces = `-- name: ListOrgUnitsForWorkspaces :many
+SELECT u.id AS unit_id, u.parent_id, u.name, u.lead_user_id, u.position,
+       w.id AS workspace_id, w.name AS workspace_name
+FROM member m
+JOIN workspace w ON w.id = m.workspace_id
+JOIN org_unit u ON u.workspace_id = w.id
+WHERE m.user_id = $1
+ORDER BY w.created_at ASC, u.position ASC, u.name ASC
+`
+
+type ListOrgUnitsForWorkspacesRow struct {
+	UnitID        pgtype.UUID `json:"unit_id"`
+	ParentID      pgtype.UUID `json:"parent_id"`
+	Name          string      `json:"name"`
+	LeadUserID    pgtype.UUID `json:"lead_user_id"`
+	Position      int32       `json:"position"`
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	WorkspaceName string      `json:"workspace_name"`
+}
+
+// Creation options: every department in the workspaces the caller belongs to,
+// so a department lead can pick a unit without knowing where it lives. The
+// caller filters to units they lead.
+func (q *Queries) ListOrgUnitsForWorkspaces(ctx context.Context, userID pgtype.UUID) ([]ListOrgUnitsForWorkspacesRow, error) {
+	rows, err := q.db.Query(ctx, listOrgUnitsForWorkspaces, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgUnitsForWorkspacesRow{}
+	for rows.Next() {
+		var i ListOrgUnitsForWorkspacesRow
+		if err := rows.Scan(
+			&i.UnitID,
+			&i.ParentID,
+			&i.Name,
+			&i.LeadUserID,
+			&i.Position,
+			&i.WorkspaceID,
+			&i.WorkspaceName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT w.id, w.name, w.slug, w.description, w.settings,
-       w.created_at, w.updated_at, w.context, w.repos,
-       w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed
+WITH RECURSIVE project_scope AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.org_unit_id IS NOT NULL
+    UNION ALL
+    SELECT scope.workspace_id, child.id
+    FROM project_scope scope
+    JOIN org_unit child ON child.parent_id = scope.unit_id
+)
+SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed, w.org_unit_id
 FROM member m
 JOIN workspace w ON w.id = m.workspace_id
 WHERE m.user_id = $1
+  AND (
+      w.org_unit_id IS NULL
+      OR m.role IN ('owner', 'admin')
+      OR EXISTS (
+          SELECT 1 FROM project_scope scope
+          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
+      )
+  )
 ORDER BY w.created_at ASC
 `
 
+// A member-row is access unless the workspace is department-owned; then only
+// owners/admins or members placed in the owning department's subtree keep it.
+// The recursive scope is computed once for every owned workspace.
 func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Workspace, error) {
 	rows, err := q.db.Query(ctx, listWorkspaces, userID)
 	if err != nil {
@@ -378,6 +475,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.IssueCounter,
 			&i.AvatarUrl,
 			&i.AttributionFailClosed,
+			&i.OrgUnitID,
 		); err != nil {
 			return nil, err
 		}
@@ -444,7 +542,7 @@ UPDATE workspace SET
     avatar_url = COALESCE($8, avatar_url),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
 `
 
 type UpdateWorkspaceParams struct {
@@ -484,6 +582,42 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.IssueCounter,
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
+		&i.OrgUnitID,
+	)
+	return i, err
+}
+
+const updateWorkspaceOrgUnit = `-- name: UpdateWorkspaceOrgUnit :one
+UPDATE workspace SET org_unit_id = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
+`
+
+type UpdateWorkspaceOrgUnitParams struct {
+	ID        pgtype.UUID `json:"id"`
+	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+}
+
+// Reassigning the owning department is operator-only and never clears it: a
+// NULL would silently turn the project back into a legacy workspace.
+func (q *Queries) UpdateWorkspaceOrgUnit(ctx context.Context, arg UpdateWorkspaceOrgUnitParams) (Workspace, error) {
+	row := q.db.QueryRow(ctx, updateWorkspaceOrgUnit, arg.ID, arg.OrgUnitID)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Settings,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Context,
+		&i.Repos,
+		&i.IssuePrefix,
+		&i.IssueCounter,
+		&i.AvatarUrl,
+		&i.AttributionFailClosed,
+		&i.OrgUnitID,
 	)
 	return i, err
 }

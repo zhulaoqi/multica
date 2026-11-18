@@ -71,6 +71,12 @@ func (h *Handler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Department-owned projects admit members only through a manager pulling
+	// a colleague in, so an open share link has no meaning there.
+	if ws, err := h.Queries.GetWorkspace(r.Context(), requester.WorkspaceID); err == nil && ws.OrgUnitID.Valid {
+		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "share links are unavailable for department projects")
+		return
+	}
 
 	var req CreateShareLinkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -288,6 +294,13 @@ func (h *Handler) JoinByShareLink(w http.ResponseWriter, r *http.Request) {
 	linkPreview, err := h.Queries.GetActiveShareLinkByCode(r.Context(), code)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "share link not found or expired")
+		return
+	}
+	// The workspace may have been converted to a department project after the
+	// link was minted; the conversion deactivates links, so this is the
+	// real-time revalidation for a link that slipped through.
+	if ws, wsErr := h.Queries.GetWorkspace(r.Context(), linkPreview.WorkspaceID); wsErr == nil && ws.OrgUnitID.Valid {
+		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "this project adds members directly")
 		return
 	}
 	if _, memberErr := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{

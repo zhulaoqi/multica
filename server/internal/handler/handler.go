@@ -42,6 +42,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/storage"
 	"github.com/multica-ai/multica/server/internal/util"
 	"github.com/multica-ai/multica/server/internal/util/secretbox"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/featureflag"
 	"github.com/multica-ai/multica/server/pkg/llm"
@@ -1027,6 +1028,35 @@ func (h *Handler) getWorkspaceMember(ctx context.Context, userID, workspaceID st
 	})
 }
 
+// getWorkspaceAccess is the authorization counterpart of getWorkspaceMember.
+// It answers "may this user act in this workspace?" for department-owned
+// projects; the raw member row alone no longer grants content access.
+func (h *Handler) getWorkspaceAccess(ctx context.Context, userID, workspaceID string) (workspaceaccess.Access, error) {
+	userUUID, err := util.ParseUUID(userID)
+	if err != nil {
+		return workspaceaccess.Access{}, err
+	}
+	wsUUID, err := util.ParseUUID(workspaceID)
+	if err != nil {
+		return workspaceaccess.Access{}, err
+	}
+	return workspaceaccess.Resolve(ctx, h.Queries, wsUUID, userUUID, false)
+}
+
+// ctxWorkspaceAccess returns access resolved by the workspace middleware.
+func ctxWorkspaceAccess(ctx context.Context) (workspaceaccess.Access, bool) {
+	return middleware.AccessFromContext(ctx)
+}
+
+// workspaceAccess returns the access resolved by middleware, or resolves it for
+// handlers invoked directly (tests, middleware-less routes).
+func (h *Handler) workspaceAccess(r *http.Request, userID, workspaceID string) (workspaceaccess.Access, error) {
+	if access, ok := ctxWorkspaceAccess(r.Context()); ok {
+		return access, nil
+	}
+	return h.getWorkspaceAccess(r.Context(), userID, workspaceID)
+}
+
 func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
@@ -1046,13 +1076,96 @@ func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 		return operatorMember(userID, workspaceID), true
 	}
 
-	member, err := h.getWorkspaceMember(r.Context(), userID, workspaceID)
-	if err != nil {
+	access, err := h.getWorkspaceAccess(r.Context(), userID, workspaceID)
+	if err != nil || !access.HasMember {
 		writeError(w, http.StatusNotFound, notFoundMsg)
 		return db.Member{}, false
 	}
+	if !access.Allowed() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return db.Member{}, false
+	}
 
-	return member, true
+	return db.Member{
+		ID:          access.MemberID,
+		WorkspaceID: access.WorkspaceID,
+		UserID:      access.UserID,
+		Role:        access.Role,
+		CreatedAt:   access.MemberSince,
+		OrgUnitID:   access.MemberUnit,
+	}, true
+}
+
+// requireWorkspaceManager admits the owning department lead in addition to the
+// stored owner/admin roles. It does not require content access: a lead moved
+// outside the subtree still manages members and settings.
+func (h *Handler) requireWorkspaceManager(w http.ResponseWriter, r *http.Request, workspaceID, notFoundMsg string) (db.Member, bool) {
+	if workspaceID == "" {
+		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return db.Member{}, false
+	}
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return db.Member{}, false
+	}
+
+	if requestIsOperator(r) {
+		if _, err := h.Queries.GetWorkspace(r.Context(), parseUUID(workspaceID)); err != nil {
+			writeError(w, http.StatusNotFound, notFoundMsg)
+			return db.Member{}, false
+		}
+		return operatorMember(userID, workspaceID), true
+	}
+
+	access, err := h.getWorkspaceAccess(r.Context(), userID, workspaceID)
+	if err != nil || !access.HasMember {
+		writeError(w, http.StatusNotFound, notFoundMsg)
+		return db.Member{}, false
+	}
+	if !access.IsManager() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return db.Member{}, false
+	}
+	return db.Member{
+		ID:          access.MemberID,
+		WorkspaceID: access.WorkspaceID,
+		UserID:      access.UserID,
+		Role:        access.Role,
+		CreatedAt:   access.MemberSince,
+		OrgUnitID:   access.MemberUnit,
+	}, true
+}
+
+// orgUnitsForScope returns the tree a workspace reads: the owning department's
+// subtree for a department project, or the whole tree for a legacy workspace.
+func (h *Handler) orgUnitsForScope(ctx context.Context, workspaceID pgtype.UUID) ([]db.ListOrgUnitsRow, error) {
+	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if ws.OrgUnitID.Valid {
+		return workspaceaccess.SubtreeUnits(ctx, h.Queries, workspaceID)
+	}
+	return h.Queries.ListOrgUnits(ctx, workspaceID)
+}
+
+// workspaceManageable reports whether the caller may administer the project.
+func (h *Handler) workspaceManageable(r *http.Request, workspaceID, userID string) bool {
+	if requestIsOperator(r) {
+		return true
+	}
+	if workspaceID == "" {
+		return false
+	}
+	access, ok := ctxWorkspaceAccess(r.Context())
+	if ok && uuidToString(access.WorkspaceID) == workspaceID {
+		return access.IsManager()
+	}
+	resolved, err := h.getWorkspaceAccess(r.Context(), userID, workspaceID)
+	if err != nil {
+		return false
+	}
+	return resolved.IsManager()
 }
 
 // requireOperator resolves the workspace and rejects every caller that is not
@@ -1087,8 +1200,8 @@ func (h *Handler) requireWorkspaceRole(w http.ResponseWriter, r *http.Request, w
 func (h *Handler) isWorkspaceEntity(ctx context.Context, userType, userID, workspaceID string) bool {
 	switch userType {
 	case "member":
-		_, err := h.getWorkspaceMember(ctx, userID, workspaceID)
-		return err == nil
+		access, err := h.getWorkspaceAccess(ctx, userID, workspaceID)
+		return err == nil && access.Allowed()
 	case "agent":
 		userUUID, err := util.ParseUUID(userID)
 		if err != nil {
