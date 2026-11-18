@@ -65,8 +65,10 @@ import type {
   Reaction,
   IssueReaction,
   Workspace,
+  WorkspaceCreateOptions,
   WorkspaceRepo,
   WorkspaceMcpServer,
+  ProjectMemberCandidate,
   MemberWithUser,
   User,
   Skill,
@@ -523,6 +525,14 @@ import {
   type IssueView,
   type IssueViewPreference,
   type CreateIssueViewRequest,
+  WorkspaceSchema,
+  WorkspaceListSchema,
+  EMPTY_WORKSPACE,
+  MemberWithUserSchema,
+  MemberWithUserListSchema,
+  WorkspaceCreateOptionsSchema,
+  EMPTY_WORKSPACE_CREATE_OPTIONS,
+  ProjectMemberCandidateListSchema,
 } from "./schemas";
 import {
   DispatchListResponseSchema,
@@ -3187,17 +3197,60 @@ export class ApiClient {
 
   // Workspaces
   async listWorkspaces(): Promise<Workspace[]> {
-    return this.fetch("/api/workspaces");
+    const raw = await this.fetch<unknown>("/api/workspaces");
+    return parseWithFallback<Workspace[]>(raw, WorkspaceListSchema, [], {
+      endpoint: "GET /api/workspaces",
+    });
   }
 
   async getWorkspace(id: string): Promise<Workspace> {
-    return this.fetch(`/api/workspaces/${id}`);
+    const raw = await this.fetch<unknown>(`/api/workspaces/${id}`);
+    return parseWithFallback<Workspace>(raw, WorkspaceSchema, EMPTY_WORKSPACE, {
+      endpoint: "GET /api/workspaces/{id}",
+    });
   }
 
-  async createWorkspace(data: { name: string; slug: string; description?: string; context?: string; issue_prefix?: string }): Promise<Workspace> {
-    return this.fetch("/api/workspaces", {
+  async createWorkspace(data: {
+    name: string;
+    slug: string;
+    description?: string;
+    context?: string;
+    issue_prefix?: string;
+    /** Department to take over; required for non-operators. */
+    source_workspace_id?: string;
+    org_unit_id?: string;
+  }): Promise<Workspace> {
+    const raw = await this.fetch<unknown>("/api/workspaces", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+    return parseWithFallback<Workspace>(raw, WorkspaceSchema, EMPTY_WORKSPACE, {
+      endpoint: "POST /api/workspaces",
+    });
+  }
+
+  /** What the create-project screen may offer: leadable departments. */
+  async listWorkspaceCreateOptions(sourceWorkspaceId?: string): Promise<WorkspaceCreateOptions> {
+    const query = sourceWorkspaceId
+      ? `?source_workspace_id=${encodeURIComponent(sourceWorkspaceId)}`
+      : "";
+    const raw = await this.fetch<unknown>(`/api/workspaces/creation-options${query}`);
+    return parseWithFallback<WorkspaceCreateOptions>(
+      raw,
+      WorkspaceCreateOptionsSchema,
+      EMPTY_WORKSPACE_CREATE_OPTIONS,
+      { endpoint: "GET /api/workspaces/creation-options" },
+    );
+  }
+
+  /** Operator-only: move a project to another department of the same tree. */
+  async setWorkspaceDepartment(workspaceId: string, orgUnitId: string): Promise<Workspace> {
+    const raw = await this.fetch<unknown>(`/api/operator/workspaces/${workspaceId}/department`, {
+      method: "PUT",
+      body: JSON.stringify({ org_unit_id: orgUnitId }),
+    });
+    return parseWithFallback<Workspace>(raw, WorkspaceSchema, EMPTY_WORKSPACE, {
+      endpoint: "PUT /api/operator/workspaces/{id}/department",
     });
   }
 
@@ -3550,7 +3603,10 @@ export class ApiClient {
 
   // Members
   async listMembers(workspaceId: string): Promise<MemberWithUser[]> {
-    return this.fetch(`/api/workspaces/${workspaceId}/members`);
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/members`);
+    return parseWithFallback<MemberWithUser[]>(raw, MemberWithUserListSchema, [], {
+      endpoint: "GET /api/workspaces/{id}/members",
+    });
   }
 
   async createMember(workspaceId: string, data: CreateMemberRequest): Promise<Invitation> {
@@ -3571,6 +3627,46 @@ export class ApiClient {
     await this.fetch(`/api/workspaces/${workspaceId}/members/${memberId}`, {
       method: "DELETE",
     });
+  }
+
+  /**
+   * Pulls a department colleague into the project. Department projects replace
+   * email invitations with this explicit add; legacy workspaces keep inviting.
+   */
+  async addProjectMember(workspaceId: string, userId: string): Promise<MemberWithUser> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/members/direct`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId }),
+    });
+    return parseWithFallback<MemberWithUser>(raw, MemberWithUserSchema, {
+      id: "",
+      workspace_id: workspaceId,
+      user_id: userId,
+      role: "member",
+      created_at: "",
+      name: "",
+      email: "",
+      avatar_url: null,
+      org_unit_id: null,
+      is_org_lead: false,
+    }, { endpoint: "POST /api/workspaces/{id}/members/direct" });
+  }
+
+  /** Directory colleagues inside the project's department subtree. */
+  async listProjectMemberCandidates(
+    workspaceId: string,
+    query = "",
+  ): Promise<ProjectMemberCandidate[]> {
+    const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/members/candidates${suffix}`,
+    );
+    return parseWithFallback<ProjectMemberCandidate[]>(
+      raw,
+      ProjectMemberCandidateListSchema,
+      [],
+      { endpoint: "GET /api/workspaces/{id}/members/candidates" },
+    );
   }
 
   async leaveWorkspace(workspaceId: string): Promise<void> {

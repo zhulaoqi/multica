@@ -18,6 +18,9 @@ export const OrgMemberSchema = z.object({
   name: z.string(),
   email: z.string().optional().default(""),
   avatar_url: z.string().nullable().optional().default(null),
+  // Department colleagues appear in the tree whether or not they joined the
+  // project. Older servers only returned members, so the default holds.
+  in_project: z.boolean().optional().default(true),
 });
 
 export const OrgAgentSchema = z.object({

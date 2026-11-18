@@ -20,6 +20,15 @@ export const workspaceKeys = {
     ["workspaces", wsId, "squads", squadId, "members-status"] as const,
   skills: (wsId: string) => ["workspaces", wsId, "skills"] as const,
   org: (wsId: string) => ["workspaces", wsId, "org"] as const,
+  // Account-level: which departments the caller may create a project for.
+  // An optional source workspace scopes the answer to that workspace's tree,
+  // which the operator also uses to pick a new department for a project.
+  createOptions: (sourceWorkspaceId?: string) =>
+    ["workspaces", "creation-options", sourceWorkspaceId ?? ""] as const,
+  // Nested under the member key so a member change refreshes candidates
+  // through the same prefix invalidation.
+  memberCandidates: (wsId: string, query: string) =>
+    ["workspaces", wsId, "members", "candidates", query] as const,
   // Directory sync status sits beside the tree key so invalidating the org
   // subtree also refreshes a report that a sync just rewrote.
   orgSync: (wsId: string) => ["workspaces", wsId, "org-sync"] as const,
@@ -60,6 +69,36 @@ export function memberListOptions(wsId: string) {
   return queryOptions({
     queryKey: workspaceKeys.members(wsId),
     queryFn: () => api.listMembers(wsId),
+  });
+}
+
+/**
+ * Departments the caller may create a project for. With a source workspace,
+ * the server answers for that workspace's tree (operator-only on the create
+ * screen), which also powers moving a project to another department.
+ */
+export function workspaceCreateOptionsQuery(sourceWorkspaceId?: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.createOptions(sourceWorkspaceId),
+    queryFn: () => api.listWorkspaceCreateOptions(sourceWorkspaceId),
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Directory colleagues a manager may pull into the project. Server-side
+ * search, so the query text is part of the key; only fetched when asked.
+ */
+export function projectMemberCandidatesOptions(
+  wsId: string,
+  query: string,
+  enabled: boolean,
+) {
+  return queryOptions({
+    queryKey: workspaceKeys.memberCandidates(wsId, query),
+    queryFn: () => api.listProjectMemberCandidates(wsId, query),
+    enabled: enabled && !!wsId,
+    staleTime: 15 * 1000,
   });
 }
 

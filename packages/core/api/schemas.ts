@@ -98,6 +98,8 @@ import type {
   TimelineEntry,
   User,
   WebhookDelivery,
+  Workspace,
+  WorkspaceCreateOptions,
   WorkspaceMcpServer,
 } from "../types";
 import type { CloudRuntimeNode } from "../runtimes/cloud-runtime";
@@ -3854,6 +3856,72 @@ export const EMPTY_SHARE_LINK_INFO: ShareLinkInfo = {
   role: "member",
 };
 
+export const WorkspaceSchema = z.object({
+  id: z.string(),
+  name: z.string().optional().default(""),
+  slug: z.string().optional().default(""),
+  description: z.string().nullable().optional().default(null),
+  context: z.string().nullable().optional().default(null),
+  settings: z.record(z.string(), z.unknown()).optional().default({}),
+  repos: z.array(z.object({ url: z.string(), description: z.string().optional() })).optional().default([]),
+  issue_prefix: z.string().optional().default(""),
+  avatar_url: z.string().nullable().optional().default(null),
+  // Older servers omit the field; null keeps the legacy flat-workspace
+  // semantics, which is what those servers implement.
+  org_unit_id: z.string().nullable().optional().default(null),
+  created_at: z.string().optional().default(""),
+  updated_at: z.string().optional().default(""),
+}).loose();
+
+export const WorkspaceListSchema = z.array(WorkspaceSchema).default([]);
+
+export const EMPTY_WORKSPACE: Workspace = {
+  id: "",
+  name: "",
+  slug: "",
+  description: null,
+  context: null,
+  settings: {},
+  repos: [],
+  issue_prefix: "",
+  avatar_url: null,
+  org_unit_id: null,
+  created_at: "",
+  updated_at: "",
+};
+
+export const WorkspaceDepartmentOptionSchema = z.object({
+  source_workspace_id: z.string(),
+  source_workspace_name: z.string().optional().default(""),
+  unit_id: z.string(),
+  path: z.string().optional().default(""),
+}).loose();
+
+export const WorkspaceCreateOptionsSchema = z.object({
+  can_create: z.boolean().optional().default(false),
+  can_create_unassigned: z.boolean().optional().default(false),
+  departments: z.array(WorkspaceDepartmentOptionSchema).optional().default([]),
+}).loose();
+
+export const EMPTY_WORKSPACE_CREATE_OPTIONS: WorkspaceCreateOptions = {
+  can_create: false,
+  can_create_unassigned: false,
+  departments: [],
+};
+
+export const ProjectMemberCandidateSchema = z.object({
+  user_id: z.string(),
+  name: z.string().optional().default(""),
+  email: z.string().optional().default(""),
+  avatar_url: z.string().nullable().optional().default(null),
+  org_unit_id: z.string().nullable().optional().default(null),
+  path: z.string().optional().default(""),
+  in_project: z.boolean().optional().default(false),
+}).loose();
+
+export const ProjectMemberCandidateListSchema =
+  z.array(ProjectMemberCandidateSchema).default([]);
+
 export const MemberWithUserSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -3863,7 +3931,11 @@ export const MemberWithUserSchema = z.object({
   name: z.string().optional().default(""),
   email: z.string().optional().default(""),
   avatar_url: z.string().nullable().optional().default(null),
+  org_unit_id: z.string().nullable().optional().default(null),
+  is_org_lead: z.boolean().optional().default(false),
 }).loose();
+
+export const MemberWithUserListSchema = z.array(MemberWithUserSchema).default([]);
 
 export const JoinShareLinkResponseSchema = z.object({
   member: MemberWithUserSchema,
@@ -3885,6 +3957,8 @@ export const EMPTY_JOIN_SHARE_LINK_RESPONSE: {
     name: "",
     email: "",
     avatar_url: null,
+    org_unit_id: null,
+    is_org_lead: false,
   },
   workspace_id: "",
   workspace_slug: "",

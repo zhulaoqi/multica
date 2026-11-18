@@ -19,6 +19,12 @@ export function useCreateWorkspace() {
       description?: string;
       /** Omit to let the server derive it from the slug. */
       issue_prefix?: string;
+      /**
+       * Department the new project takes over. Non-operators must provide
+       * both; the operator may omit them to create a legacy workspace.
+       */
+      source_workspace_id?: string;
+      org_unit_id?: string;
     }) => api.createWorkspace(data),
     // Seed the workspace list cache BEFORE callers navigate to /{newWs.slug}/issues.
     // The destination [workspaceSlug]/layout queries by slug from this cache;
@@ -37,6 +43,47 @@ export function useCreateWorkspace() {
     // success path so the canonical response seeded above is not fetched again.
     onError: () => {
       qc.invalidateQueries({ queryKey: workspaceKeys.list() });
+    },
+  });
+}
+
+/**
+ * Pulls a department colleague into the project. Seeds nothing optimistically:
+ * the server decides eligibility and seat capacity, and the member list is the
+ * roster everyone reads from.
+ */
+export function useAddProjectMember(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.addProjectMember(wsId, userId),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.org(wsId) });
+    },
+  });
+}
+
+/**
+ * Operator-only department change. The server recomputes access and retires
+ * pending invitations and share links, so both caches are invalidated rather
+ * than patched locally.
+ */
+export function useSetWorkspaceDepartment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workspaceId, orgUnitId }: { workspaceId: string; orgUnitId: string }) =>
+      api.setWorkspaceDepartment(workspaceId, orgUnitId),
+    onSuccess: (workspace) => {
+      qc.setQueryData<Workspace[]>(workspaceKeys.list(), (old = []) =>
+        old.map((item) => (item.id === workspace.id ? workspace : item)),
+      );
+    },
+    onSettled: (_data, _error, { workspaceId }) => {
+      void qc.invalidateQueries({ queryKey: workspaceKeys.list() });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.members(workspaceId) });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.invitations(workspaceId) });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.shareLinks(workspaceId) });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.org(workspaceId) });
     },
   });
 }

@@ -13,6 +13,8 @@ import { forgetLocalSearchIndex } from "../search-index/instance";
 import {
   useCreateWorkspace,
   useDeleteWorkspace,
+  useAddProjectMember,
+  useSetWorkspaceDepartment,
   useLeaveWorkspace,
   useUpdateWorkspaceMcpServer,
 } from "./mutations";
@@ -42,6 +44,7 @@ const makeWorkspace = (id: string, slug: string): Workspace => ({
   repos: [],
   issue_prefix: "MUL",
   avatar_url: null,
+  org_unit_id: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 });
@@ -386,5 +389,77 @@ describe("useLeaveWorkspace", () => {
       await result.current.mutateAsync("ws-3");
     });
     expect(forgetLocalSearchIndex).toHaveBeenCalledWith("ws-3");
+  });
+});
+
+describe("useAddProjectMember", () => {
+  it("invalidates the roster and org tree after a direct add", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const addProjectMember = vi.fn().mockResolvedValue({
+      id: "m-2",
+      workspace_id: "ws-1",
+      user_id: "u-2",
+      role: "member",
+      created_at: "",
+      name: "Bo",
+      email: "bo@example.com",
+      avatar_url: null,
+      org_unit_id: "unit-1",
+      is_org_lead: false,
+    });
+    setApiInstance({ addProjectMember } as unknown as ApiClient);
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useAddProjectMember("ws-1"), {
+      wrapper: createWrapper(qc),
+    });
+    await act(async () => {
+      await result.current.mutateAsync("u-2");
+    });
+
+    expect(addProjectMember).toHaveBeenCalledWith("ws-1", "u-2");
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: workspaceKeys.members("ws-1"),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: workspaceKeys.org("ws-1"),
+    });
+    qc.clear();
+    vi.restoreAllMocks();
+  });
+});
+
+describe("useSetWorkspaceDepartment", () => {
+  it("replaces the list row and invalidates rosters and retired invitations", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const setWorkspaceDepartment = vi.fn().mockResolvedValue({
+      ...makeWorkspace("ws-1", "acme"),
+      org_unit_id: "unit-2",
+    });
+    setApiInstance({ setWorkspaceDepartment } as unknown as ApiClient);
+    qc.setQueryData<Workspace[]>(workspaceKeys.list(), [makeWorkspace("ws-1", "acme")]);
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    const { result } = renderHook(() => useSetWorkspaceDepartment(), {
+      wrapper: createWrapper(qc),
+    });
+    await act(async () => {
+      await result.current.mutateAsync({ workspaceId: "ws-1", orgUnitId: "unit-2" });
+    });
+
+    expect(
+      qc.getQueryData<Workspace[]>(workspaceKeys.list())?.[0]?.org_unit_id,
+    ).toBe("unit-2");
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: workspaceKeys.members("ws-1"),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: workspaceKeys.invitations("ws-1"),
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: workspaceKeys.shareLinks("ws-1"),
+    });
+    qc.clear();
+    vi.restoreAllMocks();
   });
 });

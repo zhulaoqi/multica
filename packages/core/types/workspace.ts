@@ -15,8 +15,43 @@ export interface Workspace {
   repos: WorkspaceRepo[];
   issue_prefix: string;
   avatar_url: string | null;
+  /**
+   * Owning department, or null for a legacy flat workspace where every member
+   * row has access. Department projects only admit members placed inside the
+   * unit's subtree. Optional because cached payloads from older clients omit
+   * it; treat `undefined` exactly like null.
+   */
+  org_unit_id?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** One department a caller may create a project for. */
+export interface WorkspaceDepartmentOption {
+  source_workspace_id: string;
+  source_workspace_name: string;
+  unit_id: string;
+  /** Full department path, e.g. "研发部 / 平台组". */
+  path: string;
+}
+
+/** What the create-project screen may offer the caller. */
+export interface WorkspaceCreateOptions {
+  can_create: boolean;
+  /** Operators may create a project without a department; nobody else can. */
+  can_create_unassigned: boolean;
+  departments: WorkspaceDepartmentOption[];
+}
+
+/** One directory colleague a department project may pull in. */
+export interface ProjectMemberCandidate {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  org_unit_id: string | null;
+  path: string;
+  in_project: boolean;
 }
 
 /**
@@ -101,6 +136,13 @@ export interface MemberWithUser {
   name: string;
   email: string;
   avatar_url: string | null;
+  /** Department placement; null/undefined when unplaced or from an older server. */
+  org_unit_id?: string | null;
+  /**
+   * True for the owning department's lead. The server promotes that person to
+   * owner, so this only matters if their stored role drifted. Defaults false.
+   */
+  is_org_lead?: boolean;
 }
 
 export interface Invitation {

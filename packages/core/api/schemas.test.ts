@@ -79,6 +79,7 @@ import {
 import { IssueUnreadPageSchema, EMPTY_ISSUE_UNREAD_PAGE } from "./schemas";
 import { OperatorOverviewSchema, EMPTY_OPERATOR_OVERVIEW } from "./schemas";
 import { parseWithFallback } from "./schema";
+import { WorkspaceSchema, MemberWithUserSchema, WorkspaceCreateOptionsSchema, EMPTY_WORKSPACE_CREATE_OPTIONS, ProjectMemberCandidateSchema } from "./schemas";
 
 describe("IssueUnreadPageSchema", () => {
   const endpoint = "GET /api/issues/unread";
@@ -2537,5 +2538,79 @@ describe("UserSchema is_operator", () => {
   it("keeps a true flag", () => {
     const parsed = UserSchema.parse({ id: "u1", is_operator: true });
     expect(parsed.is_operator).toBe(true);
+  });
+});
+
+describe("WorkspaceSchema department scope", () => {
+  it("treats a missing org_unit_id as a legacy workspace", () => {
+    const parsed = WorkspaceSchema.parse({ id: "w1", name: "Old", slug: "old" });
+    expect(parsed.org_unit_id).toBeNull();
+  });
+
+  it("keeps the owning department", () => {
+    const parsed = WorkspaceSchema.parse({ id: "w1", org_unit_id: "unit-1" });
+    expect(parsed.org_unit_id).toBe("unit-1");
+  });
+});
+
+describe("MemberWithUserSchema department fields", () => {
+  it("defaults department placement and lead flag for older servers", () => {
+    const parsed = MemberWithUserSchema.parse({
+      id: "m1",
+      workspace_id: "w1",
+      user_id: "u1",
+      role: "member",
+    });
+    expect(parsed.org_unit_id).toBeNull();
+    expect(parsed.is_org_lead).toBe(false);
+  });
+
+  it("keeps a department lead", () => {
+    const parsed = MemberWithUserSchema.parse({
+      id: "m1",
+      workspace_id: "w1",
+      user_id: "u1",
+      role: "member",
+      org_unit_id: "unit-1",
+      is_org_lead: true,
+    });
+    expect(parsed.is_org_lead).toBe(true);
+    expect(parsed.org_unit_id).toBe("unit-1");
+  });
+});
+
+describe("WorkspaceCreateOptionsSchema", () => {
+  it("falls back to 'cannot create' when the payload is malformed", () => {
+    const parsed = parseWithFallback(
+      { can_create: "yes", departments: "nope" },
+      WorkspaceCreateOptionsSchema,
+      EMPTY_WORKSPACE_CREATE_OPTIONS,
+      { endpoint: "GET /api/workspaces/creation-options" },
+    );
+    expect(parsed).toEqual(EMPTY_WORKSPACE_CREATE_OPTIONS);
+  });
+
+  it("keeps departments with their source workspace", () => {
+    const parsed = WorkspaceCreateOptionsSchema.parse({
+      can_create: true,
+      departments: [
+        {
+          source_workspace_id: "w1",
+          source_workspace_name: "Company",
+          unit_id: "unit-1",
+          path: "研发部 / 平台组",
+        },
+      ],
+    });
+    expect(parsed.can_create).toBe(true);
+    expect(parsed.departments[0]?.path).toBe("研发部 / 平台组");
+  });
+});
+
+describe("ProjectMemberCandidateSchema", () => {
+  it("defaults in_project for older servers", () => {
+    const parsed = ProjectMemberCandidateSchema.parse({ user_id: "u1" });
+    expect(parsed.in_project).toBe(false);
+    expect(parsed.path).toBe("");
   });
 });

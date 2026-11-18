@@ -3290,3 +3290,83 @@ describe("ApiClient Feishu organisation sync", () => {
     expect(status).toEqual({ configured: false, last_run: null });
   });
 });
+
+describe("ApiClient department projects", () => {
+  const json = (value: unknown, status = 200) =>
+    new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
+
+  it("reads creation options and degrades to 'cannot create' on a malformed payload", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ departments: "nope" })));
+    const client = new ApiClient("https://api.example.test");
+
+    const options = await client.listWorkspaceCreateOptions();
+
+    expect(options).toEqual({
+      can_create: false,
+      can_create_unassigned: false,
+      departments: [],
+    });
+  });
+
+  it("adds a project member through the direct-add endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({
+      id: "m1",
+      workspace_id: "w1",
+      user_id: "u1",
+      role: "member",
+      org_unit_id: "unit-1",
+      is_org_lead: true,
+    }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const member = await client.addProjectMember("w1", "u1");
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/api/workspaces/w1/members/direct");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ user_id: "u1" });
+    expect(member.is_org_lead).toBe(true);
+  });
+
+  it("lists candidates with server-side search", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json([
+      { user_id: "u1", name: "Ada", in_project: true },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const candidates = await client.listProjectMemberCandidates("w1", " ada ");
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/workspaces/w1/members/candidates?q=ada",
+    );
+    expect(candidates[0]?.in_project).toBe(true);
+  });
+
+  it("changes the department through the operator endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ id: "w1", org_unit_id: "unit-2" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const workspace = await client.setWorkspaceDepartment("w1", "unit-2");
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/api/operator/workspaces/w1/department");
+    expect(init?.method).toBe("PUT");
+    expect(JSON.parse(String(init?.body))).toEqual({ org_unit_id: "unit-2" });
+    expect(workspace.org_unit_id).toBe("unit-2");
+  });
+
+  it("keeps a legacy workspace list when older servers omit department fields", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json([
+      { id: "w1", name: "Old", slug: "old" },
+    ])));
+    const client = new ApiClient("https://api.example.test");
+
+    const workspaces = await client.listWorkspaces();
+
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0]?.org_unit_id).toBeNull();
+  });
+});
