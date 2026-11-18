@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "工作台",
     "inbox": "收件箱",
-    "chat": "聊天",
+    "chat": "私聊",
     "my_issues": "我的任務",
     "issues": "任務",
     "intake": "收口",
@@ -75,7 +75,7 @@
     "inbox": "收件箱",
     "work": "工作",
     "team": "團隊",
-    "chat": "聊天",
+    "chat": "私聊",
     "autopilots": "自動化",
     "switch_workspace": "切換工作區",
     "invitation_from": "{{name}} 邀請你加入",

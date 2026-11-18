@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "Atelier",
     "inbox": "Boîte de réception",
-    "chat": "Discussion",
+    "chat": "Discussion privée",
     "my_issues": "Mes tâches",
     "issues": "Tâches",
     "intake": "Demandes",
@@ -75,7 +75,7 @@
     "inbox": "Boîte",
     "work": "Travail",
     "team": "Équipe",
-    "chat": "Chat",
+    "chat": "Discussion privée",
     "autopilots": "Auto",
     "switch_workspace": "Changer d'espace de travail",
     "invitation_from": "{{name}} vous a invité",

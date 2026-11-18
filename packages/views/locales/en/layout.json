@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "Workbench",
     "inbox": "Inbox",
-    "chat": "Chat",
+    "chat": "Private chat",
     "my_issues": "My Issues",
     "issues": "Issues",
     "intake": "Intake",
@@ -75,7 +75,7 @@
     "inbox": "Inbox",
     "work": "Work",
     "team": "Team",
-    "chat": "Chat",
+    "chat": "Private chat",
     "autopilots": "Auto",
     "switch_workspace": "Switch workspace",
     "invitation_from": "{{name}} invited you",

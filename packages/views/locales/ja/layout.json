@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "ワークベンチ",
     "inbox": "インボックス",
-    "chat": "チャット",
+    "chat": "個別チャット",
     "my_issues": "マイタスク",
     "issues": "タスク",
     "intake": "受付",
@@ -75,7 +75,7 @@
     "inbox": "受信箱",
     "work": "作業",
     "team": "チーム",
-    "chat": "チャット",
+    "chat": "個別チャット",
     "autopilots": "自動化",
     "switch_workspace": "ワークスペースを切り替え",
     "invitation_from": "{{name}} さんから招待されています",

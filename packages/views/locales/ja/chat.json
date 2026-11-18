@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "チャット",
+    "title": "個別チャット",
     "no_agent_title": "チャットできるエージェントはまだいません",
     "no_agent_description": "エージェントを作成すると、ここで要望を話し合い、タスクに分解してもらえます。",
     "no_agent_action": "新規エージェント",

@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "Centro de trabajo",
     "inbox": "Bandeja de entrada",
-    "chat": "Chat",
+    "chat": "Chat privado",
     "my_issues": "Mis tareas",
     "issues": "Tareas",
     "intake": "Solicitudes",
@@ -75,7 +75,7 @@
     "inbox": "Bandeja de entrada",
     "work": "Trabajo",
     "team": "Equipo",
-    "chat": "Chat",
+    "chat": "Chat privado",
     "autopilots": "Auto",
     "switch_workspace": "Cambiar de espacio de trabajo",
     "invitation_from": "{{name}} te ha invitado",

@@ -2,7 +2,7 @@
   "nav": {
     "workbench": "워크벤치",
     "inbox": "인박스",
-    "chat": "채팅",
+    "chat": "개인 채팅",
     "my_issues": "내 태스크",
     "issues": "태스크",
     "intake": "접수",
@@ -75,7 +75,7 @@
     "inbox": "인박스",
     "work": "작업",
     "team": "팀",
-    "chat": "채팅",
+    "chat": "개인 채팅",
     "autopilots": "자동화",
     "switch_workspace": "워크스페이스 전환",
     "invitation_from": "{{name}} 님이 초대했습니다",

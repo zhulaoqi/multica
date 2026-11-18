@@ -468,7 +468,7 @@ describe("ChatPage responsive layout", () => {
       screen.queryByRole("button", { name: "select-thread" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("chat-input")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Private chat" })).toBeInTheDocument();
   });
 
   it.each([TABLET, FOLD_INNER_LANDSCAPE])("keeps both panes at %spx", (width) => {

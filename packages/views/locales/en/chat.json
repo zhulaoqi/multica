@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Chat",
+    "title": "Private chat",
     "no_agent_title": "No agent to chat with yet",
     "no_agent_description": "Create an agent, then talk through a request here and let it turn the request into issues.",
     "no_agent_action": "New agent",

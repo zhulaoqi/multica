@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "Chat",
+    "title": "Chat privado",
     "select_prompt": "Elige una conversación, o empieza una nueva con +",
     "agent_link_no_access": "No tienes acceso para chatear con este agente.",
     "no_agent_title": "Aún no hay ningún agente con el que conversar",

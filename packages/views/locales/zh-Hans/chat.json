@@ -1,6 +1,6 @@
 {
   "page": {
-    "title": "聊天",
+    "title": "私聊",
     "no_agent_title": "还没有可以对话的智能体",
     "no_agent_description": "创建一个智能体后，就能在这里和它聊需求，让它拆成任务。",
     "no_agent_action": "新建智能体",
