@@ -20,6 +20,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/issuestatus"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
+	"github.com/multica-ai/multica/server/internal/orgscope"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -549,9 +550,19 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]MemberWithUserResponse, len(members))
-	for i, m := range members {
-		resp[i] = MemberWithUserResponse{
+	visible, userUUID, ok := h.visibleMemberScope(w, r, wsUUID)
+	if !ok {
+		return
+	}
+
+	resp := make([]MemberWithUserResponse, 0, len(members))
+	for _, m := range members {
+		// The caller always keeps their own row: role lookups and permission
+		// checks read it even when they are not placed in a department.
+		if visible != nil && !visible[m.OrgUnitID] && m.UserID != userUUID {
+			continue
+		}
+		resp = append(resp, MemberWithUserResponse{
 			ID:          uuidToString(m.ID),
 			WorkspaceID: uuidToString(m.WorkspaceID),
 			UserID:      uuidToString(m.UserID),
@@ -560,10 +571,44 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 			Name:        m.UserName,
 			Email:       m.UserEmail,
 			AvatarURL:   h.resolveAvatarURLPtr(textToPtr(m.UserAvatarUrl)),
-		}
+		})
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// visibleMemberScope narrows the workspace roster to the caller's department
+// scope. The company directory is operator-owned, so an operator gets nil
+// (unrestricted); everyone else reads the same departments the organisation
+// page shows. A non-operator without a department sees only themselves.
+func (h *Handler) visibleMemberScope(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) (map[pgtype.UUID]bool, pgtype.UUID, bool) {
+	if requestIsOperator(r) {
+		return nil, pgtype.UUID{}, true
+	}
+	userUUID, ok := parseUUIDOrBadRequest(w, requestUserID(r), "user id")
+	if !ok {
+		return nil, pgtype.UUID{}, false
+	}
+	member, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+		UserID:      userUUID,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusForbidden, "not a workspace member")
+			return nil, pgtype.UUID{}, false
+		}
+		slog.Error("read member scope failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list members")
+		return nil, pgtype.UUID{}, false
+	}
+	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	if err != nil {
+		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list members")
+		return nil, pgtype.UUID{}, false
+	}
+	return orgscope.Visible(units, member.OrgUnitID, userUUID, false), userUUID, true
 }
 
 type CreateMemberRequest struct {
