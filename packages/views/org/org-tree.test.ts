@@ -52,8 +52,8 @@ describe("buildOrgForest", () => {
         { id: "ag2", name: "Loose", unit_id: "", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "offline" },
       ],
       members: [
-        { user_id: "u1", unit_id: "b", name: "Ann", email: "ann@example.com", avatar_url: null },
-        { user_id: "u2", unit_id: "gone", name: "Bob", email: "bob@example.com", avatar_url: null },
+        { user_id: "u1", unit_id: "b", name: "Ann", email: "ann@example.com", avatar_url: null, in_project: true },
+        { user_id: "u2", unit_id: "gone", name: "Bob", email: "bob@example.com", avatar_url: null, in_project: true },
       ],
     });
     expect(forest.roots).toHaveLength(1);

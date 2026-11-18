@@ -165,7 +165,15 @@
     "creation_disabled_lede": "该 易研 实例不允许创建新的工作区。等管理员把你邀请到某个工作区后，接受邀请并刷新即可继续。",
     "creation_disabled_logout": "退出登录",
     "creation_disabled_headline_resume": "继续使用 {{name}}。",
-    "creation_disabled_lede_resume": "该实例已禁用创建工作区，继续进入你已有的工作区即可。"
+    "creation_disabled_lede_resume": "该实例已禁用创建工作区，继续进入你已有的工作区即可。",
+    "department_label": "所属部门",
+    "department_hint": "该部门及其下级部门的成员才能加入此项目。",
+    "department_unassigned": "不指定部门（旧版）",
+    "department_loading": "正在加载部门…",
+    "no_department_headline": "你目前还不是部门负责人。",
+    "no_department_lede": "只有部门负责人和平台管理员可以创建项目。请联系部门负责人或管理员创建项目，并将你加入。",
+    "no_department_body": "项目归属于某个部门，部门成员需由负责人显式拉入。若部门刚刚调整，请刷新页面；否则请联系平台管理员。",
+    "department_required_error": "请选择项目所属部门。"
   },
   "step_runtime": {
     "scanning_headline": "正在连接这台电脑...",

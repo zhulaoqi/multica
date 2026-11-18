@@ -165,7 +165,15 @@
     "creation_disabled_lede": "This yiyan instance does not allow new workspaces to be created. Once an administrator invites you to a workspace, accept the invitation and refresh to continue.",
     "creation_disabled_logout": "Log out",
     "creation_disabled_headline_resume": "Continue with {{name}}.",
-    "creation_disabled_lede_resume": "Workspace creation is disabled on this instance, so you'll continue into your existing workspace."
+    "creation_disabled_lede_resume": "Workspace creation is disabled on this instance, so you'll continue into your existing workspace.",
+    "department_label": "Department",
+    "department_hint": "Members of this department and its sub-departments can join this project.",
+    "department_unassigned": "No department (legacy)",
+    "department_loading": "Loading departments…",
+    "no_department_headline": "You don't lead a department yet.",
+    "no_department_lede": "Only department leads and platform administrators can create a project. Ask your department lead or administrator to create one and add you.",
+    "no_department_body": "A project belongs to one department. If your department changed recently, refresh the page; otherwise contact a platform administrator.",
+    "department_required_error": "Choose the department this project belongs to."
   },
   "step_runtime": {
     "scanning_headline": "Connecting this computer…",

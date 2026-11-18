@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgSyncReport, type OrgTree } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentMember } from "@multica/core/permissions";
 import {
   memberListOptions,
   orgSyncStatusOptions,
@@ -113,6 +114,7 @@ export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
   const isOperator = useAuthStore((state) => state.user?.is_operator ?? false);
+  const { isManager } = useCurrentMember(wsId);
   const queryClient = useQueryClient();
   const tree = useQuery(orgTreeOptions(wsId));
   const members = useQuery(memberListOptions(wsId));
@@ -149,6 +151,10 @@ export function OrgPage() {
     label: member.name || member.email,
   }));
   const canAnyManage = canManageOrg || data.units.some((unit) => unit.can_manage);
+  // Pulling a colleague into the project is a member-management action, not a
+  // directory edit: the project's managers may do it, the directory lead may
+  // not unless they also manage the project.
+  const canAddToProject = isOperator || isManager;
   const moveChoices = unitChoices.filter((choice) => choice.manage);
   // Unassigned people keep their twins on their own row; those agents leave
   // the unassigned agent list.
@@ -285,6 +291,13 @@ export function OrgPage() {
             unitChoices={unitChoices}
             actions={actions}
             onSelect={setSelected}
+            canAddToProject={canAddToProject}
+            onAddToProject={(userId) =>
+              void run(
+                () => api.addProjectMember(wsId, userId),
+                t(($) => $.action_failed),
+              )
+            }
           />
         ) : activeSelected === NO_UNIT ? (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">

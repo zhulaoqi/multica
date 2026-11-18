@@ -783,7 +783,21 @@
     "prefix_new_label": "새 접두사",
     "prefix_rule": "영문자와 숫자만, 최대 10자까지 사용할 수 있습니다.",
     "prefix_confirm_action": "{{prefix}}(으)로 변경",
-    "prefix_external_warning": "PR 제목, 브랜치 이름, 문서, 채팅에 있는 이전 키({{oldExample}} 등)는 업데이트되지 않으므로 해당 링크가 작동하지 않습니다."
+    "prefix_external_warning": "PR 제목, 브랜치 이름, 문서, 채팅에 있는 이전 키({{oldExample}} 등)는 업데이트되지 않으므로 해당 링크가 작동하지 않습니다.",
+    "department_label": "소속 부서",
+    "department_hint": "프로젝트 구성원은 이 부서 또는 하위 부서 소속이어야 합니다.",
+    "department_unassigned": "부서 없음",
+    "change_department": "부서 변경",
+    "department_dialog_title": "프로젝트 소속 부서 변경",
+    "department_dialog_description": "이 프로젝트를 같은 워크스페이스의 다른 부서로 이동합니다.",
+    "department_select_label": "부서",
+    "department_loading": "부서 불러오는 중…",
+    "department_change_warning": "부서를 변경하면 모든 구성원의 액세스가 다시 계산되고, 대기 중인 초대는 취소되며, 공유 링크는 비활성화됩니다.",
+    "department_confirm_action": "프로젝트 이동",
+    "department_saving": "이동 중…",
+    "department_changed": "프로젝트 소속 부서를 변경했습니다",
+    "department_change_failed": "프로젝트 부서를 변경하지 못했습니다",
+    "leave_department_lead": "이 프로젝트의 소속 부서 책임자입니다. 나가기 전에 부서 책임자를 이전하세요."
   },
   "delete_workspace_dialog": {
     "title": "워크스페이스 삭제",
@@ -1140,7 +1154,28 @@
     "invitation_meta": "{{sent}} 발송 · {{expires}} 만료",
     "revoke_invitation_aria": "{{email}}에 보낸 초대 취소",
     "seats_used": "{{purchased}}석 중 {{used}}석 사용",
-    "manage_seats": "좌석 관리"
+    "manage_seats": "좌석 관리",
+    "add_member_title": "구성원 추가",
+    "add_member_description": "이 프로젝트의 소속 부서에서 동료를 선택하면 즉시 참여합니다.",
+    "remove_action_project": "프로젝트에서 제외",
+    "remove_member_description_project": "{{name}} 님을 이 프로젝트에서 제외할까요? 조직 디렉터리의 부서 배치는 유지되어 다시 추가할 수 있습니다.",
+    "department_lead_badge": "부서 책임자",
+    "candidate_search_placeholder": "이름 또는 이메일로 검색",
+    "candidates_loading": "동료 불러오는 중…",
+    "candidates_empty": "이 부서에서 동료를 찾지 못했습니다.",
+    "candidate_add": "추가",
+    "candidate_adding": "추가 중…",
+    "candidate_in_project": "참여 중",
+    "toast_member_added": "{{name}} 님을 프로젝트에 추가했습니다",
+    "toast_member_add_failed": "구성원을 추가하지 못했습니다",
+    "errors": {
+      "department_required": "프로젝트 소속 부서를 선택하세요.",
+      "department_forbidden": "자신이 책임자인 부서에만 프로젝트를 만들 수 있습니다.",
+      "member_outside_department": "이 사람은 프로젝트 소속 부서 밖에 있습니다.",
+      "direct_add_only": "이 프로젝트는 소속 부서에서 구성원을 추가하며 초대는 지원하지 않습니다.",
+      "last_owner_required": "프로젝트에는 owner가 최소 한 명 있어야 합니다.",
+      "org_lead_cannot_be_removed": "부서 책임자는 제외할 수 없습니다. 먼저 부서 책임자를 이전하세요."
+    }
   },
   "lark": {
     "section_title": "Lark",

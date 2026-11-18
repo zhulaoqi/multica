@@ -119,6 +119,8 @@ export function MemberRow({
   onMove,
   twin = null,
   placeUnitId = "",
+  canAddToProject = false,
+  onAddToProject,
 }: {
   member: OrgMember;
   canMove: boolean;
@@ -129,6 +131,10 @@ export function MemberRow({
   onMove: (unitId: string) => void;
   twin?: OrgAgent | null;
   placeUnitId?: string;
+  /** The caller manages project members, so a department colleague outside
+   * the project can be pulled in from here. */
+  canAddToProject?: boolean;
+  onAddToProject?: (userId: string) => void | Promise<void>;
 }) {
   const { t } = useT("org");
   const myUserId = useAuthStore((state) => state.user?.id ?? "");
@@ -146,6 +152,23 @@ export function MemberRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-body">{member.name}</div>
         <div className="truncate text-caption text-muted-foreground">{member.email}</div>
+        {!member.in_project ? (
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-caption text-muted-foreground">
+              {t(($) => $.not_in_project)}
+            </span>
+            {canAddToProject && onAddToProject ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-caption"
+                onClick={() => void onAddToProject(member.user_id)}
+              >
+                {t(($) => $.add_to_project)}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {twin ? (
           <div className="mt-1 flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1">
             <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -590,6 +613,8 @@ export function OrgCanvas({
   unitChoices,
   actions,
   onSelect,
+  canAddToProject,
+  onAddToProject,
 }: {
   node: OrgNode;
   path: string;
@@ -603,6 +628,8 @@ export function OrgCanvas({
     run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
   };
   onSelect: (unitId: string) => void;
+  canAddToProject?: boolean;
+  onAddToProject?: (userId: string) => void | Promise<void>;
 }) {
   const { t } = useT("org");
   const { unit, agents, members, squads, children } = node;
@@ -701,6 +728,8 @@ export function OrgCanvas({
                 choices={manageableChoices}
                 twin={twins.get(member.user_id) ?? null}
                 placeUnitId={member.unit_id}
+                canAddToProject={canAddToProject}
+                onAddToProject={onAddToProject}
                 onMove={(unitId) =>
                   void run(
                     () => api.setOrgMemberUnit(member.user_id, unitId),

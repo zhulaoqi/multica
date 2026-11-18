@@ -12,8 +12,18 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@multica/ui/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@multica/ui/components/ui/select";
 import { cn } from "@multica/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { errorCode } from "@multica/core/api";
 import { useCreateWorkspace } from "@multica/core/workspace/mutations";
+import { workspaceCreateOptionsQuery } from "@multica/core/workspace/queries";
 import type { Workspace } from "@multica/core/types";
 import { isImeComposing } from "@multica/core/utils";
 import { matchLocale } from "@multica/core/i18n";
@@ -107,7 +117,32 @@ export function StepWorkspace({
   // copy and the footer CTA so the disabled state can't
   // leak a clickable create affordance even if /api/config arrives late
   // (#3433 review feedback).
-  const workspaceCreationAllowed = !workspaceCreationDisabled;
+  const instanceAllowsCreation = !workspaceCreationDisabled;
+  // A project belongs to exactly one department. The server tells us which
+  // departments this user leads (and, for the platform operator, that an
+  // unassigned workspace is allowed); nothing else may create one.
+  const { data: createOptions } = useQuery(workspaceCreateOptionsQuery());
+  const departments = createOptions?.departments ?? [];
+  const canCreateUnassigned = createOptions?.can_create_unassigned ?? false;
+  const departmentAllowsCreation =
+    (createOptions?.can_create ?? false) || canCreateUnassigned;
+  const workspaceCreationAllowed =
+    instanceAllowsCreation && departmentAllowsCreation;
+  const [departmentKey, setDepartmentKey] = useState("");
+  const selectedDepartment =
+    departments.find(
+      (option) =>
+        departmentKey === `${option.source_workspace_id}:${option.unit_id}`,
+    ) ??
+    departments[0] ??
+    null;
+  const selectedDepartmentKey = selectedDepartment
+    ? `${selectedDepartment.source_workspace_id}:${selectedDepartment.unit_id}`
+    : "";
+  const departmentItems = departments.map((option) => ({
+    value: `${option.source_workspace_id}:${option.unit_id}`,
+    label: option.path || option.source_workspace_name,
+  }));
   const logout = useLogout();
 
   const reusing = existing ?? null;
@@ -118,8 +153,17 @@ export function StepWorkspace({
   // and a workspace already exists, default to "existing" so the user
   // can press the CTA immediately — the only valid action.
   const [mode, setMode] = useState<"existing" | "create" | null>(() =>
-    !workspaceCreationAllowed && existing ? "existing" : null,
+    !instanceAllowsCreation && existing ? "existing" : null,
   );
+  // The department gate arrives with the options query, after the first
+  // render. Once it rules creation out, a user who already has a workspace
+  // should be able to press the CTA without picking a card first.
+  useEffect(() => {
+    if (!existing || createOptions === undefined) return;
+    if (!instanceAllowsCreation || !departmentAllowsCreation) {
+      setMode((current) => current ?? "existing");
+    }
+  }, [existing, createOptions, instanceAllowsCreation, departmentAllowsCreation]);
   const pickExisting = () =>
     setMode((m) => (m === "existing" ? null : "existing"));
   const pickCreate = () =>
@@ -150,7 +194,10 @@ export function StepWorkspace({
       : null;
   const slugError = slugValidationError ?? slugReservedError ?? slugServerError;
   const canCreate =
-    name.trim().length > 0 && slug.trim().length > 0 && !slugError;
+    name.trim().length > 0 &&
+    slug.trim().length > 0 &&
+    !slugError &&
+    (departments.length > 0 ? selectedDepartment !== null : canCreateUnassigned);
 
   // What the workspace will actually be created with. Clearing the prefix
   // input reverts to the slug-derived default rather than blocking the CTA —
@@ -208,6 +255,11 @@ export function StepWorkspace({
         // created workspace agree either way — but submitting it explicitly
         // is what makes an edited prefix stick.
         issue_prefix: effectivePrefix,
+        // The department the project takes over. The server rejects a missing
+        // pair from non-operators; the operator may omit both for a legacy
+        // workspace, which is exactly the unassigned path.
+        source_workspace_id: selectedDepartment?.source_workspace_id,
+        org_unit_id: selectedDepartment?.unit_id,
       },
       {
         onSuccess: onCreated,
@@ -215,6 +267,11 @@ export function StepWorkspace({
           if (isWorkspaceSlugConflict(error)) {
             setSlugServerError(t(($) => $.step_workspace.slug_taken_error));
             toast.error(t(($) => $.step_workspace.slug_conflict_toast));
+            return;
+          }
+          const code = errorCode(error);
+          if (code === "department_required" || code === "department_forbidden") {
+            toast.error(t(($) => $.step_workspace.department_required_error));
             return;
           }
           toast.error(
@@ -288,6 +345,36 @@ export function StepWorkspace({
   // while every other form in the product labels at body weight.
   const createFields = (
     <FieldGroup>
+      {departments.length > 0 ? (
+        <Field>
+          <FieldLabel htmlFor="ws-department">
+            {t(($) => $.step_workspace.department_label)}
+          </FieldLabel>
+          <Select
+            items={departmentItems}
+            value={selectedDepartmentKey}
+            onValueChange={(value) => value && setDepartmentKey(value)}
+          >
+            <SelectTrigger id="ws-department" className="w-full">
+              <SelectValue>{() => selectedDepartment?.path ?? ""}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {departmentItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            {t(($) => $.step_workspace.department_hint)}
+          </FieldDescription>
+        </Field>
+      ) : canCreateUnassigned ? (
+        <p className="text-caption text-muted-foreground">
+          {t(($) => $.step_workspace.department_unassigned)}
+        </p>
+      ) : null}
       <Field>
         <FieldLabel htmlFor="ws-name">
           {t(($) => $.step_workspace.name_label)}
@@ -401,18 +488,22 @@ export function StepWorkspace({
               ? workspaceCreationAllowed
                 ? t(($) => $.step_workspace.headline_resume, { name: reusing.name })
                 : t(($) => $.step_workspace.creation_disabled_headline_resume, { name: reusing.name })
-              : workspaceCreationAllowed
+              : workspaceCreationAllowed || createOptions === undefined
                 ? t(($) => $.step_workspace.headline_first)
-                : t(($) => $.step_workspace.creation_disabled_headline)
+                : instanceAllowsCreation
+                  ? t(($) => $.step_workspace.no_department_headline)
+                  : t(($) => $.step_workspace.creation_disabled_headline)
           }
           description={
             reusing
               ? workspaceCreationAllowed
                 ? t(($) => $.step_workspace.lede_resume)
                 : t(($) => $.step_workspace.creation_disabled_lede_resume)
-              : workspaceCreationAllowed
+              : workspaceCreationAllowed || createOptions === undefined
                 ? t(($) => $.step_workspace.lede_first)
-                : t(($) => $.step_workspace.creation_disabled_lede)
+                : instanceAllowsCreation
+                  ? t(($) => $.step_workspace.no_department_lede)
+                  : t(($) => $.step_workspace.creation_disabled_lede)
           }
         />
 
@@ -424,11 +515,10 @@ export function StepWorkspace({
                 selected={mode === "existing"}
                 onSelect={pickExisting}
               />
-              {/* Hide the create-new card entirely when the self-host
-                  gate (DISABLE_WORKSPACE_CREATION) is on (#3433) — the
-                  backend would 403 the POST and the user would be stuck
-                  with a useless form. */}
-              {!workspaceCreationDisabled && (
+              {/* Hide the create-new card when no department is available to
+                  this user — the backend would reject the POST and leave the
+                  form useless. The existing-workspace card still works. */}
+              {workspaceCreationAllowed && (
                 <CreateNewWorkspaceCard
                   selected={mode === "create"}
                   onSelect={pickCreate}
@@ -437,16 +527,22 @@ export function StepWorkspace({
                 </CreateNewWorkspaceCard>
               )}
             </div>
-          ) : workspaceCreationDisabled ? (
-            <CreationDisabledNotice onLogout={logout} />
-          ) : (
+          ) : createOptions === undefined ? (
+            <p className="text-body text-muted-foreground">
+              {t(($) => $.step_workspace.department_loading)}
+            </p>
+          ) : workspaceCreationAllowed ? (
             createFields
+          ) : instanceAllowsCreation ? (
+            <NoDepartmentNotice />
+          ) : (
+            <CreationDisabledNotice onLogout={logout} />
           )}
         </div>
 
       </div>
 
-      {!(workspaceCreationDisabled && !reusing) && (
+      {!(workspaceCreationAllowed === false && !reusing) && (
         <StepFooter hint={hint}>
           <Button
             className="w-full"
@@ -476,6 +572,20 @@ function CreationDisabledNotice({ onLogout }: { onLogout: () => void }) {
         {t(($) => $.step_workspace.creation_disabled_logout)}
       </Button>
     </div>
+  );
+}
+
+/**
+ * Shown when the instance allows workspace creation but this user leads no
+ * department. Projects belong to a department, so there is nothing to submit;
+ * the escape is asking a lead or the platform operator, not a useless form.
+ */
+function NoDepartmentNotice() {
+  const { t } = useT("onboarding");
+  return (
+    <p className="text-body text-muted-foreground">
+      {t(($) => $.step_workspace.no_department_body)}
+    </p>
   );
 }
 

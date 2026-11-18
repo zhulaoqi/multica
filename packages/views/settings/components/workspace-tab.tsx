@@ -29,12 +29,26 @@ import {
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
-import { useLeaveWorkspace, useDeleteWorkspace } from "@multica/core/workspace/mutations";
+import { useCurrentMember } from "@multica/core/permissions";
+import {
+  useLeaveWorkspace,
+  useDeleteWorkspace,
+  useSetWorkspaceDepartment,
+} from "@multica/core/workspace/mutations";
 import {
   memberListOptions,
+  orgTreeOptions,
+  workspaceCreateOptionsQuery,
   workspaceKeys,
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@multica/ui/components/ui/select";
 import { issueKeys } from "@multica/core/issues/queries";
 import { api } from "@multica/core/api";
 import {
@@ -47,6 +61,7 @@ import type { Workspace } from "@multica/core/types";
 import { AvatarUploadControl } from "../../common/avatar-upload-control";
 import { useNavigation } from "../../navigation";
 import { DeleteWorkspaceDialog } from "./delete-workspace-dialog";
+import { unitPaths } from "../../org/org-tree";
 import { useT } from "../../i18n";
 import {
   SettingsCard,
@@ -153,10 +168,17 @@ export function WorkspaceTab() {
     onConfirm: () => Promise<void>;
   } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [departmentDialogOpen, setDepartmentDialogOpen] = useState(false);
+  const [departmentDraft, setDepartmentDraft] = useState("");
 
-  const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
-  const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
-  const isOwner = currentMember?.role === "owner";
+  // Manager rights cover the project owner, admins and the lead of the
+  // department that owns the project; the operator manages every project.
+  const { isManager, isOwner, isOrgLead } = useCurrentMember(wsId ?? "");
+  const isOperator = user?.is_operator ?? false;
+  const canManageWorkspace = isManager || isOperator;
+  // Deleting stays with the stored owner (or the operator), not the
+  // department lead whose role may still be member.
+  const canDeleteWorkspace = isOwner || isOperator;
   // Mirror the backend invariant (server/internal/handler/workspace.go:569):
   // a workspace must always have at least one owner, so the sole owner can't
   // leave. Pre-flight here instead of letting the 400 round-trip become a
@@ -164,6 +186,36 @@ export function WorkspaceTab() {
   const ownerCount = members.filter((m) => m.role === "owner").length;
   const isSoleOwner = isOwner && ownerCount <= 1;
   const isSoleMember = members.length <= 1;
+  // The project's department lead cannot leave; the project needs its lead.
+  const canLeave = !isSoleOwner && !isOrgLead;
+
+  // The org tree is already scoped to the project's department, so the owning
+  // unit's path is what identifies the department here.
+  const { data: orgTree } = useQuery({
+    ...orgTreeOptions(wsId ?? ""),
+    enabled: !!wsId,
+  });
+  const departmentPath = useMemo(() => {
+    const unitID = workspace?.org_unit_id;
+    if (!unitID) return null;
+    const units = orgTree?.units ?? [];
+    return (
+      unitPaths(units).get(unitID) ??
+      units.find((unit) => unit.id === unitID)?.name ??
+      null
+    );
+  }, [orgTree?.units, workspace?.org_unit_id]);
+  // Only the operator may move a project between departments, so the full
+  // workspace tree is fetched lazily when the dialog opens.
+  const { data: departmentOptions, isLoading: departmentOptionsLoading } = useQuery({
+    ...workspaceCreateOptionsQuery(wsId),
+    enabled: departmentDialogOpen && isOperator && !!wsId,
+  });
+  const departmentItems = (departmentOptions?.departments ?? []).map((option) => ({
+    value: option.unit_id,
+    label: option.path || option.source_workspace_name,
+  }));
+  const setDepartment = useSetWorkspaceDepartment();
 
   // Reset form state only when the user switches to a different workspace.
   // Keying on workspace?.id (not the object ref) avoids wiping unsaved edits
@@ -267,6 +319,22 @@ export function WorkspaceTab() {
         }
       },
     });
+  };
+
+  const handleChangeDepartment = async () => {
+    if (!workspace || !departmentDraft) return;
+    try {
+      await setDepartment.mutateAsync({
+        workspaceId: workspace.id,
+        orgUnitId: departmentDraft,
+      });
+      setDepartmentDialogOpen(false);
+      toast.success(t(($) => $.workspace.department_changed));
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : t(($) => $.workspace.department_change_failed),
+      );
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -475,6 +543,34 @@ export function WorkspaceTab() {
               ) : null}
             </span>
           </SettingsRow>
+
+          <SettingsRow
+            anchor="department"
+            label={t(($) => $.workspace.department_label)}
+            description={t(($) => $.workspace.department_hint)}
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-body text-foreground sm:text-right">
+                {departmentPath ?? (
+                  <span className="text-muted-foreground">
+                    {t(($) => $.workspace.department_unassigned)}
+                  </span>
+                )}
+              </span>
+              {isOperator ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDepartmentDraft(workspace.org_unit_id ?? "");
+                    setDepartmentDialogOpen(true);
+                  }}
+                >
+                  {t(($) => $.workspace.change_department)}
+                </Button>
+              ) : null}
+            </span>
+          </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 
@@ -488,24 +584,26 @@ export function WorkspaceTab() {
               anchor="leave"
               label={t(($) => $.workspace.leave_title)}
               description={
-                isSoleOwner
-                  ? isSoleMember
-                    ? t(($) => $.workspace.leave_sole_member)
-                    : t(($) => $.workspace.leave_sole_owner)
-                  : t(($) => $.workspace.leave_default)
+                isOrgLead
+                  ? t(($) => $.workspace.leave_department_lead)
+                  : isSoleOwner
+                    ? isSoleMember
+                      ? t(($) => $.workspace.leave_sole_member)
+                      : t(($) => $.workspace.leave_sole_owner)
+                    : t(($) => $.workspace.leave_default)
               }
             >
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleLeaveWorkspace}
-                disabled={actionId === "leave" || isSoleOwner}
+                disabled={actionId === "leave" || !canLeave}
               >
                 {actionId === "leave" ? t(($) => $.workspace.leaving) : t(($) => $.workspace.leave_button)}
               </Button>
             </SettingsRow>
 
-            {isOwner && (
+            {canDeleteWorkspace && (
               <SettingsRow
                 anchor="delete"
                 label={
@@ -606,6 +704,78 @@ export function WorkspaceTab() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={departmentDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && setDepartment.isPending) return;
+          setDepartmentDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t(($) => $.workspace.department_dialog_title)}</DialogTitle>
+            <DialogDescription>
+              {t(($) => $.workspace.department_dialog_description)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="workspace-department">
+              {t(($) => $.workspace.department_select_label)}
+            </Label>
+            {departmentOptionsLoading ? (
+              <p className="text-caption text-muted-foreground">
+                {t(($) => $.workspace.department_loading)}
+              </p>
+            ) : (
+              <Select
+                items={departmentItems}
+                value={departmentDraft}
+                onValueChange={(value) => value && setDepartmentDraft(value)}
+              >
+                <SelectTrigger id="workspace-department" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <p className="text-caption leading-5 text-destructive">
+              {t(($) => $.workspace.department_change_warning)}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDepartmentDialogOpen(false)}
+              disabled={setDepartment.isPending}
+            >
+              {t(($) => $.workspace.confirm_cancel)}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleChangeDepartment()}
+              disabled={
+                setDepartment.isPending ||
+                !departmentDraft ||
+                departmentDraft === workspace.org_unit_id
+              }
+              aria-busy={setDepartment.isPending || undefined}
+            >
+              {setDepartment.isPending
+                ? t(($) => $.workspace.department_saving)
+                : t(($) => $.workspace.department_confirm_action)}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

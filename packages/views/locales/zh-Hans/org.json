@@ -86,5 +86,7 @@
   "squad_limits": "并行 {{wip}} · 单次 {{max}}",
   "dispatch_work": "派活",
   "retry": "重试",
-  "sync_status_unavailable": "读取飞书同步状态失败，仍可尝试同步。"
+  "sync_status_unavailable": "读取飞书同步状态失败，仍可尝试同步。",
+  "not_in_project": "未加入项目",
+  "add_to_project": "加入项目"
 }

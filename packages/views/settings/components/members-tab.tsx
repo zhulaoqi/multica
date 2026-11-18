@@ -24,6 +24,7 @@ import type {
   Invitation,
   MemberRole,
   MemberWithUser,
+  ProjectMemberCandidate,
   PurchaseWorkspaceSeatsRequest,
   ShareLink,
   WorkspaceSeatPurchasePreview,
@@ -81,9 +82,12 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useFeatureEnabled } from "@multica/core/config";
 import { BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG } from "@multica/core/feature-flags";
 import { useCurrentWorkspace } from "@multica/core/paths";
+import { useCurrentMember } from "@multica/core/permissions";
+import { useAddProjectMember } from "@multica/core/workspace/mutations";
 import {
   invitationListOptions,
   memberListOptions,
+  projectMemberCandidatesOptions,
   shareLinkListOptions,
   workspaceKeys,
 } from "@multica/core/workspace/queries";
@@ -177,6 +181,7 @@ function MemberRow({
   ownerCount,
   isSelf,
   busy,
+  departmentProject,
   onRoleChange,
   onRemove,
 }: {
@@ -188,6 +193,9 @@ function MemberRow({
   ownerCount: number;
   isSelf: boolean;
   busy: boolean;
+  /** The project belongs to a department, so removing means leaving the
+   *  project while the directory placement stays. */
+  departmentProject: boolean;
   onRoleChange: (role: MemberRole) => void;
   onRemove: () => void;
 }) {
@@ -196,8 +204,15 @@ function MemberRow({
   const roleConfig = useRoleLabels();
   const rc = roleConfig[member.role];
   const RoleIcon = rc.icon;
+  // The owning department's lead stays in the project; transfer the lead
+  // first. The server enforces the same rule.
+  const isProjectLead = member.is_org_lead ?? false;
   const canEditRole = canManage && !isSelf && (member.role !== "owner" || canManageOwners);
-  const canRemove = canManage && !isSelf && (member.role !== "owner" || canManageOwners);
+  const canRemove =
+    canManage &&
+    !isSelf &&
+    !isProjectLead &&
+    (member.role !== "owner" || canManageOwners);
   const isLastOwner = member.role === "owner" && ownerCount <= 1;
   const showMenu = canEditRole || canRemove;
 
@@ -210,6 +225,11 @@ function MemberRow({
           {isSelf ? (
             <Badge variant="secondary" className="shrink-0">
               {t(($) => $.members.you)}
+            </Badge>
+          ) : null}
+          {isProjectLead ? (
+            <Badge variant="secondary" className="shrink-0">
+              {t(($) => $.members.department_lead_badge)}
             </Badge>
           ) : null}
         </div>
@@ -289,7 +309,9 @@ function MemberRow({
             {canRemove && (
               <DropdownMenuItem variant="destructive" onClick={onRemove}>
                 <UserMinus className="h-3.5 w-3.5" />
-                {t(($) => $.members.remove_action)}
+                {departmentProject
+                  ? t(($) => $.members.remove_action_project)
+                  : t(($) => $.members.remove_action)}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -422,6 +444,9 @@ export function MembersTab() {
   const { data: invitations = [] } = useQuery(invitationListOptions(wsId));
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [candidateQuery, setCandidateQuery] = useState("");
+  const [addingUserId, setAddingUserId] = useState<string | null>(null);
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const requestedView = resolveSettingsLocation(
     navigation?.searchParams ?? new URLSearchParams(),
@@ -476,30 +501,52 @@ export function MembersTab() {
       inviteSeatPurchase?.phase === "waiting" ? 2_000 : false,
   });
 
-  const currentMember = members.find((m) => m.user_id === user?.id) ?? null;
-  const canManageWorkspace = currentMember?.role === "owner" || currentMember?.role === "admin";
+  const { isManager, isOwner, isAdmin, member: currentMember } = useCurrentMember(wsId);
+  const isOperator = user?.is_operator ?? false;
+  const canManageWorkspace = isManager || isOperator;
+  // Owner assignment and personal integrations keep the strict role; the
+  // department lead manages people and project settings only.
+  const canManageOwners = isOwner || isOperator;
+  const canManageIntegrations = isAdmin || isOperator;
+  // A workspace owned by a department admits colleagues explicitly; email
+  // invitations and share links are closed there.
+  const departmentProject = !!workspace?.org_unit_id;
 
   // The Team panel's invite button links here with `?invite=1`; it waits for
   // the member list so only managers get the dialog.
   const inviteRequested = navigation?.searchParams.has("invite") ?? false;
   useEffect(() => {
     if (!inviteRequested || !navigation || !currentMember) return;
-    if (canManageWorkspace) setInviteOpen(true);
+    if (canManageWorkspace) {
+      if (departmentProject) setAddOpen(true);
+      else setInviteOpen(true);
+    }
     const params = new URLSearchParams(navigation.searchParams);
     params.delete("invite");
     navigation.replace(`${navigation.pathname}?${params}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- consume the intent once the role is known
   }, [inviteRequested, currentMember?.role]);
-  const isOwner = currentMember?.role === "owner";
   const ownerCount = members.filter((m) => m.role === "owner").length;
-  // Only owners/admins may list share links; skip the request for plain
-  // members (the server would 403) once the current member's role is known.
-  const { data: shareLinks = [] } = useQuery(shareLinkListOptions(wsId, canManageWorkspace));
+  // Only strict admins may list share links; skip the request for everyone
+  // else (the server would 403) once the current member's role is known.
+  const { data: shareLinks = [] } = useQuery(
+    shareLinkListOptions(wsId, canManageIntegrations && !departmentProject),
+  );
   const billingEnabled = useFeatureEnabled(BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG, false);
   const seats = useQuery({
     ...workspaceSubscriptionSummaryOptions(wsId),
     enabled: billingEnabled && canManageWorkspace,
   }).data?.seatCapacity;
+  // Department colleagues a manager can pull in. The server filters to the
+  // project's department subtree and marks the ones already in the project.
+  const { data: candidates = [], isLoading: candidatesLoading } = useQuery(
+    projectMemberCandidatesOptions(
+      wsId,
+      candidateQuery.trim(),
+      addOpen && departmentProject && canManageWorkspace,
+    ),
+  );
+  const addProjectMember = useAddProjectMember(wsId);
   const needle = memberQuery.trim().toLocaleLowerCase();
   const visibleMembers = needle
     ? members.filter(
@@ -795,6 +842,40 @@ export function MembersTab() {
     });
   };
 
+  // The server's department error codes carry no user copy of their own.
+  const memberErrorMessage = (error: unknown, fallback: string) => {
+    switch (errorCode(error)) {
+      case "member_outside_department":
+        return t(($) => $.members.errors.member_outside_department);
+      case "direct_add_only":
+        return t(($) => $.members.errors.direct_add_only);
+      case "last_owner_required":
+        return t(($) => $.members.errors.last_owner_required);
+      case "org_lead_cannot_be_removed":
+        return t(($) => $.members.errors.org_lead_cannot_be_removed);
+      case "department_required":
+        return t(($) => $.members.errors.department_required);
+      case "department_forbidden":
+        return t(($) => $.members.errors.department_forbidden);
+      default:
+        return error instanceof Error ? error.message : fallback;
+    }
+  };
+
+  const handleAddCandidate = async (candidate: ProjectMemberCandidate) => {
+    setAddingUserId(candidate.user_id);
+    try {
+      await addProjectMember.mutateAsync(candidate.user_id);
+      toast.success(
+        t(($) => $.members.toast_member_added, { name: candidate.name }),
+      );
+    } catch (e) {
+      toast.error(memberErrorMessage(e, t(($) => $.members.toast_member_add_failed)));
+    } finally {
+      setAddingUserId(null);
+    }
+  };
+
   const handleRoleChange = async (memberId: string, role: MemberRole) => {
     if (!workspace) return;
     setMemberActionId(memberId);
@@ -803,7 +884,7 @@ export function MembersTab() {
       qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
       toast.success(t(($) => $.members.toast_role_updated));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.members.toast_role_failed));
+      toast.error(memberErrorMessage(e, t(($) => $.members.toast_role_failed)));
     } finally {
       setMemberActionId(null);
     }
@@ -813,7 +894,9 @@ export function MembersTab() {
     if (!workspace) return;
     setConfirmAction({
       title: t(($) => $.members.remove_member_title, { name: member.name }),
-      description: t(($) => $.members.remove_member_description, { name: member.name, workspace: workspace.name }),
+      description: departmentProject
+        ? t(($) => $.members.remove_member_description_project, { name: member.name })
+        : t(($) => $.members.remove_member_description, { name: member.name, workspace: workspace.name }),
       variant: "destructive",
       onConfirm: async () => {
         setMemberActionId(member.id);
@@ -822,7 +905,7 @@ export function MembersTab() {
           qc.invalidateQueries({ queryKey: workspaceKeys.members(wsId) });
           toast.success(t(($) => $.members.toast_member_removed));
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : t(($) => $.members.toast_member_remove_failed));
+          toast.error(memberErrorMessage(e, t(($) => $.members.toast_member_remove_failed)));
         } finally {
           setMemberActionId(null);
         }
@@ -897,8 +980,16 @@ export function MembersTab() {
   ];
   const views: { value: MembersView; label: string; count: number }[] = [
     { value: "members", label: t(($) => $.members.members_label), count: members.length },
-    { value: "invitations", label: t(($) => $.members.pending_label), count: invitations.length },
-    ...(canManageWorkspace
+    ...(departmentProject
+      ? []
+      : [
+          {
+            value: "invitations" as const,
+            label: t(($) => $.members.pending_label),
+            count: invitations.length,
+          },
+        ]),
+    ...(canManageIntegrations && !departmentProject
       ? [{ value: "links" as const, label: t(($) => $.members.share_links_label), count: shareLinks.length }]
       : []),
   ];
@@ -910,9 +1001,13 @@ export function MembersTab() {
       scope="workspace"
       actions={
         canManageWorkspace ? (
-          <Button onClick={() => setInviteOpen(true)}>
+          <Button
+            onClick={() => (departmentProject ? setAddOpen(true) : setInviteOpen(true))}
+          >
             <Plus />
-            {t(($) => $.members.invite_title)}
+            {departmentProject
+              ? t(($) => $.members.add_member_title)
+              : t(($) => $.members.invite_title)}
           </Button>
         ) : undefined
       }
@@ -977,7 +1072,8 @@ export function MembersTab() {
                   <MemberRow
                     member={m}
                     canManage={canManageWorkspace}
-                    canManageOwners={isOwner}
+                    canManageOwners={canManageOwners}
+                    departmentProject={departmentProject}
                     ownerCount={ownerCount}
                     isSelf={m.user_id === user?.id}
                     busy={memberActionId === m.id}
@@ -1101,6 +1197,99 @@ export function MembersTab() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          if (!open && addingUserId) return;
+          setAddOpen(open);
+          if (!open) setCandidateQuery("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t(($) => $.members.add_member_title)}</DialogTitle>
+            <DialogDescription>
+              {t(($) => $.members.add_member_description)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                value={candidateQuery}
+                onChange={(event) => setCandidateQuery(event.target.value)}
+                placeholder={t(($) => $.members.candidate_search_placeholder)}
+                aria-label={t(($) => $.members.candidate_search_placeholder)}
+                className="pl-8"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-80 space-y-px overflow-y-auto">
+              {candidatesLoading ? (
+                <p className="px-2 py-6 text-center text-caption text-muted-foreground">
+                  {t(($) => $.members.candidates_loading)}
+                </p>
+              ) : candidates.length === 0 ? (
+                <p className="px-2 py-6 text-center text-caption text-muted-foreground">
+                  {t(($) => $.members.candidates_empty)}
+                </p>
+              ) : (
+                candidates.map((candidate) => (
+                  <div
+                    key={candidate.user_id}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2"
+                  >
+                    <ActorAvatar
+                      actorType="member"
+                      actorId={candidate.user_id}
+                      size="md"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-body font-medium">
+                        {candidate.name || candidate.email}
+                      </div>
+                      <div className="truncate text-caption text-muted-foreground">
+                        {candidate.path || candidate.email}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        candidate.in_project || addingUserId === candidate.user_id
+                      }
+                      aria-busy={addingUserId === candidate.user_id || undefined}
+                      onClick={() => void handleAddCandidate(candidate)}
+                    >
+                      {candidate.in_project
+                        ? t(($) => $.members.candidate_in_project)
+                        : addingUserId === candidate.user_id
+                          ? t(($) => $.members.candidate_adding)
+                          : t(($) => $.members.candidate_add)}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddOpen(false)}
+              disabled={!!addingUserId}
+            >
+              {t(($) => $.members.confirm_cancel)}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

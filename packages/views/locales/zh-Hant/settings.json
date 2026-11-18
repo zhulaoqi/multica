@@ -783,7 +783,21 @@
     "prefix_new_label": "新字首",
     "prefix_rule": "只能使用字母和數字，最多 10 個字元。",
     "prefix_confirm_action": "修改為 {{prefix}}",
-    "prefix_external_warning": "PR 標題、分支名、文件和聊天裡的舊編號（如 {{oldExample}}）不會自動更新，這些連結會失效。"
+    "prefix_external_warning": "PR 標題、分支名、文件和聊天裡的舊編號（如 {{oldExample}}）不會自動更新，這些連結會失效。",
+    "department_label": "所屬部門",
+    "department_hint": "專案成員只能來自該部門及其下級部門。",
+    "department_unassigned": "未指定部門",
+    "change_department": "更換部門",
+    "department_dialog_title": "更換專案所屬部門",
+    "department_dialog_description": "將專案移到本工作區的另一個部門。",
+    "department_select_label": "部門",
+    "department_loading": "正在載入部門…",
+    "department_change_warning": "更換部門會重新計算所有成員的存取權限，並撤銷待處理的邀請、停用分享連結。",
+    "department_confirm_action": "移動專案",
+    "department_saving": "正在移動…",
+    "department_changed": "專案所屬部門已更新",
+    "department_change_failed": "更換專案部門失敗",
+    "leave_department_lead": "你是專案所屬部門的負責人，請先轉移部門負責人再退出專案。"
   },
   "delete_workspace_dialog": {
     "title": "刪除工作區",
@@ -1437,7 +1451,28 @@
     "invitation_meta": "{{sent}} 傳送 · {{expires}} 過期",
     "revoke_invitation_aria": "撤銷發給 {{email}} 的邀請",
     "seats_used": "已用 {{used}} / {{purchased}} 個席位",
-    "manage_seats": "管理席位"
+    "manage_seats": "管理席位",
+    "add_member_title": "新增成員",
+    "add_member_description": "從本專案所屬部門中選擇同事，新增後立即加入。",
+    "remove_action_project": "移出專案",
+    "remove_member_description_project": "將 {{name}} 移出專案？其在組織目錄中的部門會保留，可再次新增。",
+    "department_lead_badge": "部門負責人",
+    "candidate_search_placeholder": "依姓名或電子郵件搜尋",
+    "candidates_loading": "正在載入同事…",
+    "candidates_empty": "此部門下沒有找到同事。",
+    "candidate_add": "新增",
+    "candidate_adding": "正在新增…",
+    "candidate_in_project": "已在專案中",
+    "toast_member_added": "已將 {{name}} 加入專案",
+    "toast_member_add_failed": "新增成員失敗",
+    "errors": {
+      "department_required": "請選擇專案所屬部門。",
+      "department_forbidden": "只能為自己負責的部門建立專案。",
+      "member_outside_department": "此人不在專案所屬部門內。",
+      "direct_add_only": "此專案從所屬部門新增成員，不支援邀請。",
+      "last_owner_required": "專案至少要保留一名 owner。",
+      "org_lead_cannot_be_removed": "部門負責人不能被移除，請先轉移部門負責人。"
+    }
   },
   "integrations": {
     "status_connected": "已連線",

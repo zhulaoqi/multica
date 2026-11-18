@@ -133,9 +133,11 @@ export function TeamPanel() {
   }, [runtimes]);
 
   const mineCount = userId ? agents.filter((agent) => agent.owner_id === userId).length : 0;
-  const myRole = members.find((member) => member.user_id === userId)?.role;
+  const me = members.find((member) => member.user_id === userId);
+  // The owning department's lead manages the team even when their stored role
+  // is still member.
   const canManageMembers =
-    isOperator || myRole === "owner" || myRole === "admin";
+    isOperator || me?.role === "owner" || me?.role === "admin" || !!me?.is_org_lead;
   // A workspace with no organisation should not carry a dead directory entry.
   // Managers always keep it: they need the create and sync actions, including
   // when the tree request itself fails. While the list is still loading we

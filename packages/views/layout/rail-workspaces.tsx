@@ -14,6 +14,7 @@ import { paths, useCurrentWorkspace } from "@multica/core/paths";
 import type { Invitation, Workspace } from "@multica/core/types";
 import {
   myInvitationListOptions,
+  workspaceCreateOptionsQuery,
   workspaceKeys,
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
@@ -184,6 +185,12 @@ export function RailWorkspaces() {
   const workspace = useCurrentWorkspace();
   const wsId = workspace?.id;
   const workspaceCreationDisabled = useConfigStore((s) => s.workspaceCreationDisabled);
+  // Only department leads (and the platform operator) may create a project;
+  // the switcher hides the entry for everyone else instead of offering a form
+  // the server will reject.
+  const { data: createOptions } = useQuery(workspaceCreateOptionsQuery());
+  const canCreateWorkspace =
+    !workspaceCreationDisabled && (createOptions?.can_create ?? false);
   const { data: workspaces = EMPTY_WORKSPACES } = useQuery(workspaceListOptions());
   const { data: invitations = EMPTY_INVITATIONS } = useQuery(myInvitationListOptions());
   // One cross-workspace cache entry; gated on an active workspace since the
@@ -278,7 +285,7 @@ export function RailWorkspaces() {
             </DropdownMenuGroup>
           </>
         )}
-        {!workspaceCreationDisabled && (
+        {canCreateWorkspace && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

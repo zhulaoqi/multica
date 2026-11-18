@@ -788,7 +788,21 @@
     "prefix_new_label": "New prefix",
     "prefix_rule": "Letters and numbers only, up to 10 characters.",
     "prefix_confirm_action": "Change to {{prefix}}",
-    "prefix_external_warning": "Old keys such as {{oldExample}} in PR titles, branch names, docs, and chat are not updated, so those links stop working."
+    "prefix_external_warning": "Old keys such as {{oldExample}} in PR titles, branch names, docs, and chat are not updated, so those links stop working.",
+    "department_label": "Department",
+    "department_hint": "Project members must belong to this department or one of its sub-departments.",
+    "department_unassigned": "No department",
+    "change_department": "Change department",
+    "department_dialog_title": "Change project department",
+    "department_dialog_description": "Move this project to another department of this workspace.",
+    "department_select_label": "Department",
+    "department_loading": "Loading departments…",
+    "department_change_warning": "Access is recalculated for every member. Pending invitations are cancelled and active share links stop working.",
+    "department_confirm_action": "Move project",
+    "department_saving": "Moving…",
+    "department_changed": "Project department updated",
+    "department_change_failed": "Failed to change the project department",
+    "leave_department_lead": "You lead this project's department. Transfer the department lead before leaving."
   },
   "delete_workspace_dialog": {
     "title": "Delete workspace",
@@ -1447,7 +1461,28 @@
     "invitation_meta": "Sent {{sent}} · Expires {{expires}}",
     "revoke_invitation_aria": "Revoke invitation for {{email}}",
     "seats_used": "{{used}} of {{purchased}} seats used",
-    "manage_seats": "Manage seats"
+    "manage_seats": "Manage seats",
+    "add_member_title": "Add member",
+    "add_member_description": "Choose a colleague from this project's department. They join immediately.",
+    "remove_action_project": "Remove from project",
+    "remove_member_description_project": "Remove {{name}} from this project? Their department placement is kept, so they can be added again.",
+    "department_lead_badge": "Department lead",
+    "candidate_search_placeholder": "Search by name or email",
+    "candidates_loading": "Loading colleagues…",
+    "candidates_empty": "No colleagues found in this department.",
+    "candidate_add": "Add",
+    "candidate_adding": "Adding…",
+    "candidate_in_project": "In project",
+    "toast_member_added": "{{name}} added to the project",
+    "toast_member_add_failed": "Failed to add member",
+    "errors": {
+      "department_required": "Choose the department this project belongs to.",
+      "department_forbidden": "You can only create a project for a department you lead.",
+      "member_outside_department": "This person is outside the project's department.",
+      "direct_add_only": "This project adds members from its department; invitations are not available.",
+      "last_owner_required": "A project must keep at least one owner.",
+      "org_lead_cannot_be_removed": "The department lead cannot be removed. Transfer the department lead first."
+    }
   },
   "integrations": {
     "status_connected": "Connected",

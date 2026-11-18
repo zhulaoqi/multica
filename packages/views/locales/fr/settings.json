@@ -788,7 +788,21 @@
     "prefix_new_label": "Nouveau préfixe",
     "prefix_rule": "Lettres et chiffres uniquement, 10 caractères au maximum.",
     "prefix_confirm_action": "Remplacer par {{prefix}}",
-    "prefix_external_warning": "Les anciens identifiants comme {{oldExample}} dans les titres de PR, noms de branche, documents et discussions ne sont pas mis à jour : ces liens cesseront de fonctionner."
+    "prefix_external_warning": "Les anciens identifiants comme {{oldExample}} dans les titres de PR, noms de branche, documents et discussions ne sont pas mis à jour : ces liens cesseront de fonctionner.",
+    "department_label": "Département",
+    "department_hint": "Les membres du projet doivent appartenir à ce département ou à l'un de ses sous-départements.",
+    "department_unassigned": "Aucun département",
+    "change_department": "Changer de département",
+    "department_dialog_title": "Changer le département du projet",
+    "department_dialog_description": "Déplacez ce projet vers un autre département de cet espace de travail.",
+    "department_select_label": "Département",
+    "department_loading": "Chargement des départements…",
+    "department_change_warning": "L'accès de chaque membre est recalculé. Les invitations en attente sont annulées et les liens de partage actifs cessent de fonctionner.",
+    "department_confirm_action": "Déplacer le projet",
+    "department_saving": "Déplacement…",
+    "department_changed": "Département du projet mis à jour",
+    "department_change_failed": "Impossible de changer le département du projet",
+    "leave_department_lead": "Vous dirigez le département de ce projet. Transférez la direction du département avant de quitter."
   },
   "delete_workspace_dialog": {
     "title": "Supprimer l'espace de travail",
@@ -1447,7 +1461,28 @@
     "invitation_meta": "Envoyée le {{sent}} · Expire le {{expires}}",
     "revoke_invitation_aria": "Révoquer l'invitation de {{email}}",
     "seats_used": "{{used}} sièges utilisés sur {{purchased}}",
-    "manage_seats": "Gérer les sièges"
+    "manage_seats": "Gérer les sièges",
+    "add_member_title": "Ajouter un membre",
+    "add_member_description": "Choisissez un collègue du département de ce projet. Il rejoint immédiatement.",
+    "remove_action_project": "Retirer du projet",
+    "remove_member_description_project": "Retirer {{name}} de ce projet ? Son rattachement au département est conservé, il pourra être ajouté de nouveau.",
+    "department_lead_badge": "Responsable du département",
+    "candidate_search_placeholder": "Rechercher par nom ou e-mail",
+    "candidates_loading": "Chargement des collègues…",
+    "candidates_empty": "Aucun collègue trouvé dans ce département.",
+    "candidate_add": "Ajouter",
+    "candidate_adding": "Ajout…",
+    "candidate_in_project": "Déjà dans le projet",
+    "toast_member_added": "{{name}} a rejoint le projet",
+    "toast_member_add_failed": "Impossible d'ajouter le membre",
+    "errors": {
+      "department_required": "Choisissez le département auquel appartient ce projet.",
+      "department_forbidden": "Vous ne pouvez créer un projet que pour un département que vous dirigez.",
+      "member_outside_department": "Cette personne est en dehors du département du projet.",
+      "direct_add_only": "Ce projet ajoute des membres de son département ; les invitations ne sont pas disponibles.",
+      "last_owner_required": "Un projet doit conserver au moins un owner.",
+      "org_lead_cannot_be_removed": "Le responsable du département ne peut pas être retiré. Transférez d'abord la direction du département."
+    }
   },
   "integrations": {
     "status_connected": "Connecté",

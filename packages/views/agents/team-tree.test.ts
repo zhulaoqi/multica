@@ -8,7 +8,7 @@ function unit(id: string, name: string, parentId = "", position = 0, lead = "") 
 }
 
 function member(userId: string, unitId: string) {
-  return { user_id: userId, unit_id: unitId, name: userId, email: "", avatar_url: null };
+  return { user_id: userId, unit_id: unitId, name: userId, email: "", avatar_url: null, in_project: true };
 }
 
 const tree = {

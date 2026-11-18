@@ -63,7 +63,7 @@ const baseSquad: OrgSquad = {
   review_issues: 0,
   blocked_issues: 0,
 };
-const baseOrgMember: OrgMember = { user_id: "", unit_id: "", name: "", email: "", avatar_url: null };
+const baseOrgMember: OrgMember = { user_id: "", unit_id: "", name: "", email: "", avatar_url: null, in_project: true };
 
 function unit(overrides: Partial<OrgUnit> & Pick<OrgUnit, "id" | "name">): OrgUnit {
   return { ...baseUnit, ...overrides };

@@ -252,6 +252,7 @@ describe("TeamPanel member directory", () => {
         name: "Ada",
         email: "ada@example.com",
         avatar_url: null,
+        in_project: true,
       }],
       squads: [],
       can_manage: false,

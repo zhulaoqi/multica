@@ -18,7 +18,7 @@ function unit(id: string, name: string, parentId = "") {
 }
 
 function member(userId: string, unitId: string) {
-  return { user_id: userId, unit_id: unitId, name: userId, email: "", avatar_url: null };
+  return { user_id: userId, unit_id: unitId, name: userId, email: "", avatar_url: null, in_project: true };
 }
 
 const tree: Pick<OrgTree, "units" | "members" | "my_unit_id"> = {

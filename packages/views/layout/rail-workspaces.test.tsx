@@ -15,6 +15,9 @@ const state = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   mutations: [] as Array<Record<string, unknown>>,
   workspaceCreationDisabled: false,
+  createOptions: undefined as
+    | { can_create: boolean; can_create_unassigned: boolean; departments: unknown[] }
+    | undefined,
   openWorkspaceInNewWindow: undefined as undefined | Mock<(slug: string) => void>,
   workspacesInOtherWindows: undefined as undefined | (() => string[]),
 }));
@@ -62,7 +65,8 @@ vi.mock("@multica/core/inbox/queries", () => ({
 vi.mock("@multica/core/workspace/queries", () => ({
   myInvitationListOptions: () => ({ queryKey: ["invitations"] }),
   workspaceKeys: { myInvitations: () => ["invitations"] },
-  workspaceListOptions: () => ({ queryKey: ["workspaces"] }),
+  workspaceListOptions: () => ({ queryKey: ["workspaces", "list"] }),
+  workspaceCreateOptionsQuery: () => ({ queryKey: ["workspaces", "creation-options", ""] }),
 }));
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
@@ -71,6 +75,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => ({
     return { isPending: false, mutate: vi.fn() };
   },
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+    if (queryKey[0] === "workspaces" && queryKey[1] === "creation-options") {
+      return { data: state.createOptions };
+    }
     if (queryKey[0] === "workspaces") return { data: state.workspaces };
     if (queryKey[0] === "invitations") return { data: state.invitations };
     if (queryKey[0] === "inbox") return { data: state.summary };
@@ -96,6 +103,11 @@ beforeEach(() => {
   state.summary = [];
   state.mutations.length = 0;
   state.workspaceCreationDisabled = false;
+  state.createOptions = {
+    can_create: true,
+    can_create_unassigned: false,
+    departments: [{ unit_id: "unit-1", path: "Engineering" }],
+  };
   state.openWorkspaceInNewWindow = undefined;
   state.workspacesInOtherWindows = undefined;
 });
@@ -146,6 +158,14 @@ describe("RailWorkspaces", () => {
     unmount();
 
     state.workspaceCreationDisabled = true;
+    renderWithI18n(<RailWorkspaces />);
+    expect(within(await openMenu()).queryByRole("menuitem", { name: "Create workspace" })).toBeNull();
+  });
+
+  // Only department leads (and the operator) may create a project; everyone
+  // else should not see an entry that leads to a form the server rejects.
+  it("hides workspace creation when the caller leads no department", async () => {
+    state.createOptions = { can_create: false, can_create_unassigned: false, departments: [] };
     renderWithI18n(<RailWorkspaces />);
     expect(within(await openMenu()).queryByRole("menuitem", { name: "Create workspace" })).toBeNull();
   });

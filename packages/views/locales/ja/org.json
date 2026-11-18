@@ -86,5 +86,7 @@
   "squad_limits": "同時 {{wip}} · 1回 {{max}}",
   "dispatch_work": "仕事を割り当て",
   "retry": "再試行",
-  "sync_status_unavailable": "Feishu 同期の状態を取得できませんでした。同期は実行できます。"
+  "sync_status_unavailable": "Feishu 同期の状態を取得できませんでした。同期は実行できます。",
+  "not_in_project": "プロジェクト未参加",
+  "add_to_project": "プロジェクトに追加"
 }

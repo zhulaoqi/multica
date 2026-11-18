@@ -87,5 +87,7 @@
   "squad_limits": "{{wip}} open · {{max}} per dispatch",
   "dispatch_work": "Assign work",
   "retry": "Retry",
-  "sync_status_unavailable": "Couldn’t read the Feishu sync status. You can still try syncing."
+  "sync_status_unavailable": "Couldn’t read the Feishu sync status. You can still try syncing.",
+  "not_in_project": "Not in project",
+  "add_to_project": "Add to project"
 }

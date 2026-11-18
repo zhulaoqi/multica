@@ -81,8 +81,13 @@ interface SettingsPageProps {
 
 type SettingsEntry = ExtraSettingsTab & {
   wide?: boolean;
-  /** Owners and admins manage it; members see a read-only page. */
+  /** Strict admins manage it; everyone else sees it locked. Integrations,
+   * plugins, MCP, runtime and share-link settings stay here even for a
+   * department lead who may manage the project. */
   adminOnly?: boolean;
+  /** Project owners, admins and the department lead manage it; other members
+   * see a read-only page. */
+  managerOnly?: boolean;
 };
 
 interface SettingsSubgroup {
@@ -106,11 +111,11 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
   const { t } = useT("settings");
   const workspace = useCurrentWorkspace();
   const workspaceName = workspace?.name ?? t(($) => $.page.workspace_fallback);
-  const { role } = useCurrentMember(workspace?.id ?? "");
-  const isMember = role === "member";
-  // Membership is managed by owners and admins only; everyone else reads the
-  // roster on the Org page, where it is already scoped to their department.
-  const canManageWorkspace = role === "owner" || role === "admin";
+  const { isAdmin, isManager } = useCurrentMember(workspace?.id ?? "");
+  // A department lead manages project settings and members without owning the
+  // stored admin role, so the project pages follow the manager predicate while
+  // integrations keep the strict role.
+  const canManageWorkspace = isManager;
   const navigation = useNavigation();
   const listCollapsed = useListColumnCollapsed();
   const pluginsEnabled = useFeatureEnabled(PLUGINS_V1_FLAG, false);
@@ -124,7 +129,7 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
     label: string,
     icon: ExtraSettingsTab["icon"],
     content: React.ReactNode,
-    options: { wide?: boolean; adminOnly?: boolean } = {},
+    options: { wide?: boolean; adminOnly?: boolean; managerOnly?: boolean } = {},
   ): SettingsEntry => ({ value, label, icon, content, ...options });
 
   const groups: SettingsScopeGroup[] = [
@@ -171,7 +176,7 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
           key: "workspace",
           entries: [
             entry("workspace", t(($) => $.page.tabs.general), Settings, <WorkspaceTab />, {
-              adminOnly: true,
+              managerOnly: true,
             }),
             ...(canManageWorkspace
               ? [
@@ -372,7 +377,7 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
       >
         <item.icon className="size-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        {isMember && item.adminOnly ? (
+        {(item.adminOnly && !isAdmin) || (item.managerOnly && !isManager) ? (
           <Lock
             className="size-3 shrink-0 text-faint-foreground"
             aria-label={t(($) => $.page.admin_only)}

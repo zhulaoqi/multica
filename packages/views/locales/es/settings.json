@@ -770,7 +770,21 @@
     "prefix_external_warning": "Las claves antiguas como {{oldExample}} en títulos de PR, nombres de rama, documentación y chat no se actualizan, así que esos enlaces dejan de funcionar.",
     "prefix_new_label": "Nuevo prefijo",
     "prefix_rule": "Solo letras y números, hasta 10 caracteres.",
-    "slug_hint": "Forma parte de cada URL del espacio de trabajo. No se puede cambiar."
+    "slug_hint": "Forma parte de cada URL del espacio de trabajo. No se puede cambiar.",
+    "department_label": "Departamento",
+    "department_hint": "Los miembros del proyecto deben pertenecer a este departamento o a uno de sus subdepartamentos.",
+    "department_unassigned": "Sin departamento",
+    "change_department": "Cambiar departamento",
+    "department_dialog_title": "Cambiar el departamento del proyecto",
+    "department_dialog_description": "Mueve este proyecto a otro departamento de este espacio de trabajo.",
+    "department_select_label": "Departamento",
+    "department_loading": "Cargando departamentos…",
+    "department_change_warning": "Se recalculan los accesos de todos los miembros. Las invitaciones pendientes se cancelan y los enlaces compartidos activos dejan de funcionar.",
+    "department_confirm_action": "Mover proyecto",
+    "department_saving": "Moviendo…",
+    "department_changed": "Departamento del proyecto actualizado",
+    "department_change_failed": "No se pudo cambiar el departamento del proyecto",
+    "leave_department_lead": "Diriges el departamento de este proyecto. Transfiere la dirección del departamento antes de salir."
   },
   "delete_workspace_dialog": {
     "title": "Eliminar espacio de trabajo",
@@ -1429,7 +1443,28 @@
     "seats_used": "{{used}} de {{purchased}} puestos usados",
     "share_links_description": "Cualquiera con el enlace puede unirse con el rol elegido hasta que caduque o lo revoques.",
     "share_links_label": "Enlaces de invitación",
-    "you": "Tú"
+    "you": "Tú",
+    "add_member_title": "Añadir miembro",
+    "add_member_description": "Elige a un compañero del departamento de este proyecto. Se une de inmediato.",
+    "remove_action_project": "Quitar del proyecto",
+    "remove_member_description_project": "¿Quitar a {{name}} de este proyecto? Su ubicación en el departamento se mantiene, así que se puede volver a añadir.",
+    "department_lead_badge": "Responsable del departamento",
+    "candidate_search_placeholder": "Buscar por nombre o correo",
+    "candidates_loading": "Cargando compañeros…",
+    "candidates_empty": "No se encontraron compañeros en este departamento.",
+    "candidate_add": "Añadir",
+    "candidate_adding": "Añadiendo…",
+    "candidate_in_project": "Ya en el proyecto",
+    "toast_member_added": "{{name}} se ha añadido al proyecto",
+    "toast_member_add_failed": "No se pudo añadir al miembro",
+    "errors": {
+      "department_required": "Elige el departamento al que pertenece este proyecto.",
+      "department_forbidden": "Solo puedes crear un proyecto para un departamento que dirijas.",
+      "member_outside_department": "Esta persona está fuera del departamento del proyecto.",
+      "direct_add_only": "Este proyecto añade miembros de su departamento; las invitaciones no están disponibles.",
+      "last_owner_required": "Un proyecto debe conservar al menos un owner.",
+      "org_lead_cannot_be_removed": "El responsable del departamento no se puede quitar. Transfiere primero la dirección del departamento."
+    }
   },
   "integrations": {
     "status_connected": "Conectado",

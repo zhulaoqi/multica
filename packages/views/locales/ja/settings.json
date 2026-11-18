@@ -783,7 +783,21 @@
     "prefix_new_label": "新しいプレフィックス",
     "prefix_rule": "英字と数字のみ、最大 10 文字です。",
     "prefix_confirm_action": "{{prefix}} に変更",
-    "prefix_external_warning": "PR タイトル、ブランチ名、ドキュメント、チャット内の古いキー（{{oldExample}} など）は更新されないため、それらのリンクは機能しなくなります。"
+    "prefix_external_warning": "PR タイトル、ブランチ名、ドキュメント、チャット内の古いキー（{{oldExample}} など）は更新されないため、それらのリンクは機能しなくなります。",
+    "department_label": "所属部門",
+    "department_hint": "プロジェクトのメンバーは、この部門またはその下位部門の所属に限られます。",
+    "department_unassigned": "部門未指定",
+    "change_department": "部門を変更",
+    "department_dialog_title": "プロジェクトの所属部門を変更",
+    "department_dialog_description": "このプロジェクトを同じワークスペースの別の部門に移動します。",
+    "department_select_label": "部門",
+    "department_loading": "部門を読み込み中…",
+    "department_change_warning": "部門を変更するとすべてのメンバーのアクセス権が再計算され、保留中の招待は取り消され、共有リンクは無効になります。",
+    "department_confirm_action": "プロジェクトを移動",
+    "department_saving": "移動中…",
+    "department_changed": "プロジェクトの所属部門を更新しました",
+    "department_change_failed": "プロジェクトの部門を変更できませんでした",
+    "leave_department_lead": "あなたはこのプロジェクトの所属部門の責任者です。退出する前に部門の責任者を移してください。"
   },
   "delete_workspace_dialog": {
     "title": "ワークスペースを削除",
@@ -1437,7 +1451,28 @@
     "invitation_meta": "{{sent}} に送信 · {{expires}} に期限切れ",
     "revoke_invitation_aria": "{{email}} への招待を取り消す",
     "seats_used": "{{purchased}} 席中 {{used}} 席を使用",
-    "manage_seats": "席を管理"
+    "manage_seats": "席を管理",
+    "add_member_title": "メンバーを追加",
+    "add_member_description": "このプロジェクトの所属部門から同僚を選ぶと、すぐに参加します。",
+    "remove_action_project": "プロジェクトから外す",
+    "remove_member_description_project": "{{name}} をこのプロジェクトから外しますか？組織ディレクトリ上の部門配置は残るため、再度追加できます。",
+    "department_lead_badge": "部門責任者",
+    "candidate_search_placeholder": "名前またはメールで検索",
+    "candidates_loading": "同僚を読み込み中…",
+    "candidates_empty": "この部門に同僚が見つかりません。",
+    "candidate_add": "追加",
+    "candidate_adding": "追加中…",
+    "candidate_in_project": "参加済み",
+    "toast_member_added": "{{name}} をプロジェクトに追加しました",
+    "toast_member_add_failed": "メンバーを追加できませんでした",
+    "errors": {
+      "department_required": "プロジェクトの所属部門を選択してください。",
+      "department_forbidden": "プロジェクトを作成できるのは、自分が責任者を務める部門のみです。",
+      "member_outside_department": "この人物はプロジェクトの所属部門外です。",
+      "direct_add_only": "このプロジェクトは所属部門からメンバーを追加します。招待は利用できません。",
+      "last_owner_required": "プロジェクトには少なくとも1名の owner が必要です。",
+      "org_lead_cannot_be_removed": "部門責任者は外せません。先に部門責任者を移してください。"
+    }
   },
   "integrations": {
     "status_connected": "接続済み",

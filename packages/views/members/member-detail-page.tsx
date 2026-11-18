@@ -60,11 +60,12 @@ export function MemberDetailPage({ userId }: { userId: string }) {
   const wsId = useWorkspaceId();
   const paths = useWorkspacePaths();
   const { data: members = [], isLoading } = useQuery(memberListOptions(wsId));
-  const { role } = useCurrentMember(wsId);
+  const { isManager } = useCurrentMember(wsId);
   const member = members.find((m) => m.user_id === userId) ?? null;
-  // The members list in settings is managed by owners and admins; for everyone
-  // else the crumb would link to a page they cannot open.
-  const canManageMembers = role === "owner" || role === "admin";
+  // The members list in settings is managed by owners, admins and the owning
+  // department's lead; for everyone else the crumb would link to a page they
+  // cannot open.
+  const canManageMembers = isManager;
   const segments = canManageMembers
     ? [
         {

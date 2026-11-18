@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enCommon from "../../locales/en/common.json";
 import enOnboarding from "../../locales/en/onboarding.json";
 import enWorkspace from "../../locales/en/workspace.json";
-import type { Workspace } from "@multica/core/types";
+import type { Workspace, WorkspaceCreateOptions } from "@multica/core/types";
 
 const TEST_RESOURCES = {
   en: {
@@ -44,6 +45,22 @@ vi.mock("@multica/core/workspace/mutations", () => ({
 
 vi.mock("@multica/core/api", () => ({
   api: { getBaseUrl: () => "http://127.0.0.1:8080" },
+  errorCode: () => undefined,
+}));
+
+// The create screen reads the departments the caller may create a project
+// for. renderStep seeds the query cache so the synchronous assertions below
+// never wait on a fetch.
+const mockCreateOptions = vi.hoisted(() => ({
+  value: undefined as WorkspaceCreateOptions | undefined,
+}));
+
+vi.mock("@multica/core/workspace/queries", () => ({
+  workspaceCreateOptionsQuery: () => ({
+    queryKey: ["workspaces", "creation-options", ""],
+    queryFn: () => Promise.resolve(mockCreateOptions.value),
+    staleTime: 60_000,
+  }),
 }));
 
 import { StepWorkspace } from "./step-workspace";
@@ -56,21 +73,43 @@ function I18nWrapper({ children }: { children: ReactNode }) {
   );
 }
 
+const DEFAULT_OPTIONS: WorkspaceCreateOptions = {
+  can_create: true,
+  can_create_unassigned: false,
+  departments: [
+    {
+      source_workspace_id: "src-1",
+      source_workspace_name: "Company",
+      unit_id: "unit-1",
+      path: "Engineering",
+    },
+  ],
+};
+
 function renderStep({
   existing,
   disabled,
   daemonAppUrl = "",
+  options = DEFAULT_OPTIONS,
 }: {
   existing: Workspace | null;
   disabled: boolean;
   daemonAppUrl?: string;
+  options?: WorkspaceCreateOptions;
 }) {
   mockUseConfigStore.mockImplementation(
     (selector: (state: MockConfigState) => unknown) =>
       selector({ workspaceCreationDisabled: disabled, daemonAppUrl }),
   );
+  mockCreateOptions.value = options;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  queryClient.setQueryData(["workspaces", "creation-options", ""], options);
   return render(
-    <StepWorkspace existing={existing} onCreated={vi.fn()} />,
+    <QueryClientProvider client={queryClient}>
+      <StepWorkspace existing={existing} onCreated={vi.fn()} />
+    </QueryClientProvider>,
     { wrapper: I18nWrapper },
   );
 }
@@ -162,6 +201,79 @@ describe("StepWorkspace — workspace URL prefix", () => {
     });
     expect(screen.getByText("multica.example.com/")).toBeInTheDocument();
     expect(screen.queryByText("multica.ai/")).not.toBeInTheDocument();
+  });
+});
+
+// A project belongs to exactly one department. The server is the authority,
+// but the screen must not offer a form it knows the server will reject.
+describe("StepWorkspace — department gate", () => {
+  it("shows the no-department notice instead of the create form", () => {
+    renderStep({
+      existing: null,
+      disabled: false,
+      options: { can_create: false, can_create_unassigned: false, departments: [] },
+    });
+
+    expect(
+      screen.getByText("You don't lead a department yet.", { exact: false }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Workspace name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("URL")).not.toBeInTheDocument();
+  });
+
+  it("offers the departments the caller leads and submits the choice", () => {
+    mockCreateMutate.mockClear();
+    renderStep({
+      existing: null,
+      disabled: false,
+      options: {
+        can_create: true,
+        can_create_unassigned: false,
+        departments: [
+          {
+            source_workspace_id: "src-1",
+            source_workspace_name: "Company",
+            unit_id: "unit-9",
+            path: "Engineering/Payments",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText("Engineering/Payments")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Workspace name"), {
+      target: { value: "Payments" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Create Payments$/ }));
+
+    expect(mockCreateMutate.mock.calls[0]![0]).toMatchObject({
+      name: "Payments",
+      source_workspace_id: "src-1",
+      org_unit_id: "unit-9",
+    });
+  });
+
+  it("lets the operator create a project without a department", () => {
+    mockCreateMutate.mockClear();
+    renderStep({
+      existing: null,
+      disabled: false,
+      options: { can_create: true, can_create_unassigned: true, departments: [] },
+    });
+
+    fireEvent.change(screen.getByLabelText("Workspace name"), {
+      target: { value: "Sandbox" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Create Sandbox$/ }));
+
+    expect(mockCreateMutate.mock.calls[0]![0]).toEqual({
+      name: "Sandbox",
+      slug: "sandbox",
+      issue_prefix: "SAND",
+      source_workspace_id: undefined,
+      org_unit_id: undefined,
+    });
   });
 });
 
@@ -306,6 +418,10 @@ describe("StepWorkspace — issue prefix", () => {
       name: "前端团队",
       slug: "frontend",
       issue_prefix: "FE",
+      // The first listed department is pre-selected, so a project is always
+      // created inside a department the caller leads.
+      source_workspace_id: "src-1",
+      org_unit_id: "unit-1",
     });
   });
 

@@ -783,7 +783,21 @@
     "prefix_new_label": "新前缀",
     "prefix_rule": "只能使用字母和数字，最多 10 个字符。",
     "prefix_confirm_action": "修改为 {{prefix}}",
-    "prefix_external_warning": "PR 标题、分支名、文档和聊天里的旧编号（如 {{oldExample}}）不会自动更新，这些链接会失效。"
+    "prefix_external_warning": "PR 标题、分支名、文档和聊天里的旧编号（如 {{oldExample}}）不会自动更新，这些链接会失效。",
+    "department_label": "所属部门",
+    "department_hint": "项目成员只能来自该部门及其下级部门。",
+    "department_unassigned": "未指定部门",
+    "change_department": "更换部门",
+    "department_dialog_title": "更换项目所属部门",
+    "department_dialog_description": "将项目移动到本工作区的另一个部门。",
+    "department_select_label": "部门",
+    "department_loading": "正在加载部门…",
+    "department_change_warning": "更换部门会重新计算所有成员的访问权限，并撤销待处理的邀请、停用分享链接。",
+    "department_confirm_action": "移动项目",
+    "department_saving": "正在移动…",
+    "department_changed": "项目所属部门已更新",
+    "department_change_failed": "更换项目部门失败",
+    "leave_department_lead": "你是项目所属部门的负责人，请先转移部门负责人再退出项目。"
   },
   "delete_workspace_dialog": {
     "title": "删除工作区",
@@ -1437,7 +1451,28 @@
     "invitation_meta": "{{sent}} 发送 · {{expires}} 过期",
     "revoke_invitation_aria": "撤销发给 {{email}} 的邀请",
     "seats_used": "已用 {{used}} / {{purchased}} 个席位",
-    "manage_seats": "管理席位"
+    "manage_seats": "管理席位",
+    "add_member_title": "添加成员",
+    "add_member_description": "从本项目所属部门中选择同事，添加后立即加入。",
+    "remove_action_project": "移出项目",
+    "remove_member_description_project": "将 {{name}} 移出项目？其在组织目录中的部门保留，可再次添加。",
+    "department_lead_badge": "部门负责人",
+    "candidate_search_placeholder": "按姓名或邮箱搜索",
+    "candidates_loading": "正在加载同事…",
+    "candidates_empty": "该部门下没有找到同事。",
+    "candidate_add": "添加",
+    "candidate_adding": "正在添加…",
+    "candidate_in_project": "已在项目中",
+    "toast_member_added": "已将 {{name}} 加入项目",
+    "toast_member_add_failed": "添加成员失败",
+    "errors": {
+      "department_required": "请选择项目所属部门。",
+      "department_forbidden": "只能为自己负责的部门创建项目。",
+      "member_outside_department": "此人不在项目所属部门内。",
+      "direct_add_only": "该项目从所属部门添加成员，不支持邀请。",
+      "last_owner_required": "项目至少要保留一名 owner。",
+      "org_lead_cannot_be_removed": "部门负责人不能被移除，请先转移部门负责人。"
+    }
   },
   "integrations": {
     "status_connected": "已连接",
