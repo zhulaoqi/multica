@@ -52,6 +52,28 @@ func TestParseDispatchCommand(t *testing.T) {
 			},
 		},
 		{
+			name: "organization bot project selector",
+			body: "/dispatch 支付组\n回调改造\n项目: 支付台\n目标: 支持新版回调\n验收: 回调成功率 100%",
+			want: &DispatchCommand{
+				Unit:       "支付组",
+				Project:    "支付台",
+				Title:      "回调改造",
+				Goal:       "支持新版回调",
+				Acceptance: "回调成功率 100%",
+			},
+		},
+		{
+			name: "english project alias and number",
+			body: "/dispatch 支付组\nCallback rework\nProject: 2\nGoal: Ship\nAcceptance: Green",
+			want: &DispatchCommand{
+				Unit:       "支付组",
+				Project:    "2",
+				Title:      "Callback rework",
+				Goal:       "Ship",
+				Acceptance: "Green",
+			},
+		},
+		{
 			name: "missing target",
 			body: "/dispatch\n任务\n目标: 做\n验收: 好",
 			want: &DispatchCommand{

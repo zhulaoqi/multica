@@ -44,6 +44,12 @@ const (
 	OutcomeDispatchNoAccess          Outcome = "dispatch_no_access"
 	OutcomeDispatchNoAgents          Outcome = "dispatch_no_agents"
 	OutcomeDispatchLeaderUnavailable Outcome = "dispatch_leader_unavailable"
+	// OutcomeDispatchLeaderOffline — the department has agents, but none is
+	// online, so the request would create work no leader could pick up.
+	OutcomeDispatchLeaderOffline Outcome = "dispatch_leader_offline"
+	// OutcomeDispatchUnbound — the sender may browse and review but has not
+	// bound an Agent yet, so the request would have no twin to answer for it.
+	OutcomeDispatchUnbound Outcome = "dispatch_unbound"
 )
 
 // DropReason enumerates the drop-audit categories. Values match the legacy

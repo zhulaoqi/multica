@@ -74,10 +74,14 @@ func (h *Handler) DispatchToOrgUnit(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "org unit not found")
 		case errors.Is(err, service.ErrDispatchRequesterNotInTeam):
 			writeError(w, http.StatusForbidden, "you cannot dispatch work to this department")
+		case errors.Is(err, service.ErrDispatchRequesterUnbound):
+			writeErrorCode(w, http.StatusForbidden, "agent_binding_required", "bind an agent before dispatching work")
 		case errors.Is(err, service.ErrOrgUnitNoAgents):
 			writeError(w, http.StatusConflict, "this department has no agent to lead the work; ask its lead to register one")
 		case errors.Is(err, service.ErrDispatchLeaderUnavailable):
 			writeError(w, http.StatusForbidden, "you do not have access to the squad leader of this department; ask its lead to share the agent with you")
+		case errors.Is(err, service.ErrDispatchLeaderOffline):
+			writeErrorCode(w, http.StatusConflict, "org_dispatch_leader_offline", "no agent in this department is online to take the work")
 		default:
 			slog.Error("dispatch to org unit failed", append(logger.RequestAttrs(r), "error", err, "unit_id", uuidToString(unitID))...)
 			writeError(w, http.StatusInternalServerError, "failed to dispatch work")

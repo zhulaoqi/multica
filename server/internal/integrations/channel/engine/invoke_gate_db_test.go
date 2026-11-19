@@ -48,7 +48,7 @@ func TestRouter_RealServiceLookupFailure_ReleasesInsteadOfDenying(t *testing.T) 
 		},
 		{
 			name: "the sender's workspace membership cannot be read",
-			sql:  "FROM member",
+			sql:  "LEFT JOIN member",
 			what: "whether the sender is a workspace member",
 		},
 	} {

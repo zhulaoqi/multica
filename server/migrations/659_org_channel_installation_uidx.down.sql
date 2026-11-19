@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS org_channel_installation_type_uidx;

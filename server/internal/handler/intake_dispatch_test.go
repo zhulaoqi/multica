@@ -15,6 +15,7 @@ import (
 func TestIntakeSubmit_PrimaryOnlineEnqueues(t *testing.T) {
 	requireDB(t)
 	lead := createPermissionTestMember(t, "intake-online-lead@example.com")
+	insertIntakeDutyAgent(t, "intake-online-lead-agent", lead)
 	owner := createPermissionTestMember(t, "intake-online-owner@example.com")
 	projectID := insertIntakeProject(t, lead)
 	agentID := insertIntakeDutyAgent(t, "intake-online-primary", owner)
@@ -38,6 +39,7 @@ func TestIntakeSubmit_PrimaryOnlineEnqueues(t *testing.T) {
 func TestIntakeSubmit_OfflinePrimaryUsesOnlineBackup(t *testing.T) {
 	requireDB(t)
 	lead := createPermissionTestMember(t, "intake-backup-lead@example.com")
+	insertIntakeDutyAgent(t, "intake-backup-lead-agent", lead)
 	owner := createPermissionTestMember(t, "intake-backup-owner@example.com")
 	projectID := insertIntakeProject(t, lead)
 	primary := insertIntakeDutyAgent(t, "intake-backup-primary", owner)
@@ -63,6 +65,7 @@ func TestIntakeSubmit_WorkflowProjectHandsOffRelease(t *testing.T) {
 	requireDB(t)
 	seedTestCatalog(t)
 	lead := createPermissionTestMember(t, "intake-workflow-lead@example.com")
+	insertIntakeDutyAgent(t, "intake-workflow-lead-agent", lead)
 	owner := createPermissionTestMember(t, "intake-workflow-owner@example.com")
 	projectID := insertIntakeProject(t, lead)
 	agentID := insertIntakeDutyAgent(t, "intake-workflow-dev", owner)

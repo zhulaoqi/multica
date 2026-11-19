@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/orgsquad"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -278,35 +276,9 @@ func (h *Handler) orgSquadLeaderRef(w http.ResponseWriter, r *http.Request, call
 }
 
 // syncOrgSquadsAfterPlacement re-runs affected department squads after a
-// member or agent changes unit. Failures are logged, not returned: the
-// placement already committed and a stale roster heals on the next sync.
+// member or agent changes unit, rotating a leader that can no longer run.
 func (h *Handler) syncOrgSquadsAfterPlacement(ctx context.Context, wsUUID pgtype.UUID, units []db.ListOrgUnitsRow, unitIDs ...pgtype.UUID) {
-	seen := make(map[pgtype.UUID]bool)
-	for _, unitID := range unitIDs {
-		for _, ancestor := range orgscope.Ancestors(units, unitID) {
-			if seen[ancestor] {
-				continue
-			}
-			seen[ancestor] = true
-			squad, err := h.Queries.GetSquadByOrgUnit(ctx, db.GetSquadByOrgUnitParams{
-				WorkspaceID: wsUUID,
-				OrgUnitID:   ancestor,
-			})
-			if errors.Is(err, pgx.ErrNoRows) {
-				continue
-			}
-			if err != nil {
-				slog.Error("load department squad for sync failed", "workspace_id", uuidToString(wsUUID), "unit_id", uuidToString(ancestor), "error", err)
-				continue
-			}
-			if !squad.OrgManaged {
-				continue
-			}
-			if _, err := orgsquad.SyncMembers(ctx, h.Queries, units, squad, ancestor, pgtype.UUID{}); err != nil {
-				slog.Error("sync department squad failed", "workspace_id", uuidToString(wsUUID), "unit_id", uuidToString(ancestor), "squad_id", uuidToString(squad.ID), "error", err)
-			}
-		}
-	}
+	h.syncOrgSquadLeadership(ctx, wsUUID, units, unitIDs...)
 }
 
 // orgSquadSnapshot reloads one org squad with live issue counts.

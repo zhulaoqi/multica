@@ -43,6 +43,9 @@ type SquadResponse struct {
 	// children.
 	WipLimit    int32 `json:"wip_limit"`
 	MaxChildren int32 `json:"max_children"`
+	// IsPrivate marks the creator's personal squad. It is hidden from every
+	// other member, including workspace owners and admins.
+	IsPrivate bool `json:"is_private"`
 }
 
 type SquadMemberPreviewResponse struct {
@@ -84,6 +87,7 @@ func (h *Handler) squadToResponse(s db.Squad) SquadResponse {
 		MemberPreview: []SquadMemberPreviewResponse{},
 		WipLimit:      s.WipLimit,
 		MaxChildren:   s.MaxChildren,
+		IsPrivate:     s.IsPrivate,
 	}
 }
 
@@ -121,12 +125,16 @@ func applySquadMemberSummary(resp *SquadResponse, summary *squadMemberSummary) {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 // canManageSquad reports whether the member may mutate the squad. Workspace
-// owner/admin manage every squad; a regular member manages only the squads
-// they created. Squads stay creator-scoped for management while remaining
-// visible workspace-wide (ListSquads is unfiltered). Mirrors the front-end
-// per-squad `canManage` gate so the UI and API agree on who can rename / add
-// members / archive (MUL-4223).
+// owner/admin manage every shared squad; a regular member manages only the
+// squads they created. A private (personal) squad is managed by its creator
+// and no one else. Mirrors the front-end per-squad `canManage` gate so the UI
+// and API agree on who can rename / add members / archive (MUL-4223).
 func canManageSquad(member db.Member, squad db.Squad) bool {
+	// A personal squad belongs to its creator alone: workspace admins are
+	// another member here and must not reach into someone's own workspace.
+	if squad.IsPrivate {
+		return uuidToString(squad.CreatorID) == uuidToString(member.UserID)
+	}
 	if roleAllowed(member.Role, "owner", "admin") {
 		return true
 	}
@@ -197,8 +205,16 @@ func (h *Handler) squadToResponseWithPreview(ctx context.Context, squad db.Squad
 
 // ── Handlers ────────────────────────────────────────────────────────────────
 
-// squadsVisibleTo keeps a plain member's own department squads and any squad
-// they were added to. Other squads in the workspace stay hidden.
+// squadPrivateToOther reports whether the squad is someone else's personal
+// squad. Private squads are visible only to their creator — not to workspace
+// admins either.
+func squadPrivateToOther(member db.Member, squad db.Squad) bool {
+	return squad.IsPrivate && uuidToString(squad.CreatorID) != uuidToString(member.UserID)
+}
+
+// squadsVisibleTo keeps a plain member's own department squads, any squad
+// they were added to, and their own personal squad. Other squads in the
+// workspace stay hidden.
 func (h *Handler) squadsVisibleTo(ctx context.Context, member db.Member, squads []db.Squad) ([]db.Squad, error) {
 	joined, err := h.Queries.ListSquadsByMember(ctx, db.ListSquadsByMemberParams{
 		WorkspaceID: member.WorkspaceID,
@@ -217,10 +233,13 @@ func (h *Handler) squadsVisibleTo(ctx context.Context, member db.Member, squads 
 		return nil, err
 	}
 	visibleUnits := orgscope.Visible(units, member.OrgUnitID, member.UserID, false)
-	kept := squads[:0]
+	kept := make([]db.Squad, 0, len(squads))
 	for _, squad := range squads {
+		if squadPrivateToOther(member, squad) {
+			continue
+		}
 		_, memberOf := allowed[squad.ID]
-		if memberOf || (squad.OrgUnitID.Valid && visibleUnits[squad.OrgUnitID]) {
+		if squad.IsPrivate || memberOf || (squad.OrgUnitID.Valid && visibleUnits[squad.OrgUnitID]) {
 			kept = append(kept, squad)
 		}
 	}
@@ -248,6 +267,16 @@ func (h *Handler) ListSquads(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to list squads")
 			return
 		}
+	} else {
+		// Admins see every shared squad, but never someone else's personal
+		// squad.
+		visible := make([]db.Squad, 0, len(squads))
+		for _, squad := range squads {
+			if !squadPrivateToOther(member, squad) {
+				visible = append(visible, squad)
+			}
+		}
+		squads = visible
 	}
 
 	previewRows, err := h.Queries.ListSquadMemberPreviewRows(r.Context(), wsUUID)
@@ -289,6 +318,7 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		Description string  `json:"description"`
 		LeaderID    string  `json:"leader_id"`
 		AvatarURL   *string `json:"avatar_url"`
+		IsPrivate   bool    `json:"is_private"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -344,8 +374,13 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		LeaderID:    leaderUUID,
 		CreatorID:   member.UserID,
 		AvatarUrl:   avatarURL,
+		IsPrivate:   req.IsPrivate,
 	})
 	if err != nil {
+		if req.IsPrivate && isUniqueViolation(err) {
+			writeErrorCode(w, http.StatusConflict, "squad_personal_exists", "you already have a personal squad")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to create squad")
 		return
 	}
@@ -374,11 +409,16 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 }
 
 // squadReadable reports whether this member may open the squad. Owners and
-// admins can open any squad in the workspace; everyone else only opens a
-// squad in their department or one they were added to.
+// admins can open any shared squad in the workspace; everyone else only opens
+// a squad in their department or one they were added to. A personal squad
+// opens only for its creator.
 func (h *Handler) squadReadable(w http.ResponseWriter, r *http.Request, squad db.Squad, workspaceID string) bool {
 	member, ok := h.requireWorkspaceMember(w, r, workspaceID, "squad not found")
 	if !ok {
+		return false
+	}
+	if squadPrivateToOther(member, squad) {
+		writeError(w, http.StatusNotFound, "squad not found")
 		return false
 	}
 	if member.Role == "owner" || member.Role == "admin" {

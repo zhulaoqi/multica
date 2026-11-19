@@ -811,6 +811,12 @@ func main() {
 		go h.LarkTyping.Run(sweepCtx)
 	}
 
+	// Organization Feishu bot: one company-wide long connection on the login
+	// app. It fences itself with the org_channel_installation lease.
+	if h.FeishuOrgBot != nil {
+		go h.FeishuOrgBot.Run(sweepCtx)
+	}
+
 	// Media intent-ledger reconciler (PR #5580): settles uploaded-but-unbound
 	// channel media objects. An independent worker so object-storage latency
 	// spikes cannot starve any other sweeper's cadence.

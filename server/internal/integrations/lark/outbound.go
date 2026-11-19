@@ -741,6 +741,23 @@ func sendWithReplyFallback(log *slog.Logger, op string, target ReplyTarget, send
 	return fmt.Errorf("%s: %w", op, err)
 }
 
+// SendTextWithReplyFallback sends a plain text message through the shared
+// reply/fallback path. Event-driven callers (dispatch notices) run outside the
+// Patcher and the OutcomeReplier, but must keep the same guarantee: a topic
+// reply whose target became unusable is retried at chat level, while an
+// ambiguous send failure is never retried.
+func SendTextWithReplyFallback(ctx context.Context, log *slog.Logger, op string, client APIClient, p SendTextParams) error {
+	if log == nil {
+		log = slog.Default()
+	}
+	return sendWithReplyFallback(log, op, p.ReplyTarget, func(target ReplyTarget) error {
+		params := p
+		params.ReplyTarget = target
+		_, err := client.SendTextMessage(ctx, params)
+		return err
+	})
+}
+
 func (p *Patcher) installationCredentials(inst Installation) (InstallationCredentials, error) {
 	if p.credentials == nil {
 		return InstallationCredentials{}, errors.New("lark patcher: credentials resolver missing")

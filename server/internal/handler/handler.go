@@ -344,6 +344,10 @@ type Handler struct {
 	ChannelMediaReconciler *service.ChannelMediaReconciler
 	// LarkTyping owns the durable reaction cleanup worker, started under sweepCtx.
 	LarkTyping *lark.TypingIndicatorManager
+	// FeishuOrgBot is the deployment-wide organization bot built on the Feishu
+	// login app. It drives its own long connection and lease loop, so main.go
+	// only starts Run under sweepCtx. Nil unless the login app is configured.
+	FeishuOrgBot interface{ Run(ctx context.Context) }
 	// SlackInstall owns the bring-your-own-app Slack install lifecycle (register
 	// pasted tokens / list / revoke) and the at-rest encryption of each app's bot
 	// + app tokens (MUL-3666). Nil unless MULTICA_SLACK_SECRET_KEY is set.

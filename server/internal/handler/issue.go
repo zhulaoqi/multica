@@ -4320,6 +4320,11 @@ func (h *Handler) validateAssigneePair(ctx context.Context, r *http.Request, wor
 		if squad.ArchivedAt.Valid {
 			return http.StatusBadRequest, "cannot assign to an archived squad"
 		}
+		// A personal squad is the creator's alone; answering not-found keeps
+		// it unenumerable for everyone else.
+		if squad.IsPrivate && uuidToString(squad.CreatorID) != requestUserID(r) {
+			return http.StatusBadRequest, "assignee_id does not refer to a squad in this workspace"
+		}
 		leader, err := h.Queries.GetAgent(ctx, squad.LeaderID)
 		if err != nil || leader.ArchivedAt.Valid {
 			return http.StatusBadRequest, "squad leader is archived; cannot assign to this squad"

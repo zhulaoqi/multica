@@ -97,10 +97,13 @@ func SyncMembers(
 	}
 
 	// A synced row that is no longer covered by the department is pruned; a
-	// manual row survives, but an old leader loses the reserved role.
+	// manual row survives, but an old leader loses the reserved role. A
+	// previous leader still inside the department falls back to the role its
+	// placement implies, manual provenance included, so the reserved role is
+	// never left behind on a non-leader.
 	if previousLeader.Valid && previousLeader != squad.LeaderID {
-		if _, wanted := desired[previousLeader]; !wanted {
-			if row, ok := existing[previousLeader]; ok {
+		if row, ok := existing[previousLeader]; ok {
+			if role, wanted := desired[previousLeader]; !wanted {
 				if row.Source == "org_sync" {
 					removed, err := q.RemoveSyncedSquadMember(ctx, db.RemoveSyncedSquadMemberParams{
 						SquadID:    squad.ID,
@@ -123,6 +126,16 @@ func SyncMembers(
 					}
 					result.Updated++
 				}
+			} else if row.Role == "leader" {
+				if _, err := q.UpdateSquadMemberRole(ctx, db.UpdateSquadMemberRoleParams{
+					SquadID:    squad.ID,
+					MemberType: "agent",
+					MemberID:   previousLeader,
+					Role:       role,
+				}); err != nil {
+					return result, err
+				}
+				result.Updated++
 			}
 		}
 	}

@@ -370,6 +370,10 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	wsID := uuidToString(ws.ID)
 
+	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), ws.ID, parseUUID(userID), ws.OrgUnitID); err != nil {
+		slog.Warn("clone primary twin into new workspace failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", wsID)...)
+	}
+
 	// "Is this the user's first workspace?" is derived in PostHog by looking
 	// at whether they have a prior workspace_created event, not stamped at
 	// emit time. Stamping here would race under concurrent creates without
@@ -869,6 +873,7 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Hub.DisconnectMember(uuidToString(target.WorkspaceID), uuidToString(target.UserID), uuidToString(target.ID))
 	h.settleMemberCapacityRelease(r.Context(), uuid.UUID(target.WorkspaceID.Bytes), uuid.UUID(target.ID.Bytes))
+	h.afterMemberDeparture(r.Context(), target.WorkspaceID, target.OrgUnitID)
 
 	h.MembershipCache.Invalidate(r.Context(), uuidToString(target.UserID), workspaceID)
 
@@ -919,6 +924,7 @@ func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Hub.DisconnectMember(uuidToString(member.WorkspaceID), uuidToString(member.UserID), uuidToString(member.ID))
 	h.settleMemberCapacityRelease(r.Context(), uuid.UUID(member.WorkspaceID.Bytes), uuid.UUID(member.ID.Bytes))
+	h.afterMemberDeparture(r.Context(), member.WorkspaceID, member.OrgUnitID)
 
 	h.MembershipCache.Invalidate(r.Context(), uuidToString(member.UserID), workspaceID)
 

@@ -57,7 +57,7 @@ func countDispatchOrigins(t *testing.T) int {
 func TestDispatchWork_RoutesToOnlyDepartmentAndDerivesTitle(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-route-admin@example.com")
-	leader := insertIntakeDutyAgent(t, "workbench-route-leader", admin)
+	leader := insertRunnableDutyAgent(t, "workbench-route-leader", admin)
 	unitID := createOrgUnitAs(t, admin, "自动路由部", "")
 	placeOrgAgent(t, admin, leader, unitID)
 	t.Cleanup(func() { clearDispatchFixtures(t) })
@@ -94,7 +94,7 @@ func TestDispatchWork_RoutesToOnlyDepartmentAndDerivesTitle(t *testing.T) {
 func TestDispatchWork_BindsUploadedAttachmentsToTheRootIssue(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-attach-admin@example.com")
-	leader := insertIntakeDutyAgent(t, "workbench-attach-leader", admin)
+	leader := insertRunnableDutyAgent(t, "workbench-attach-leader", admin)
 	unitID := createOrgUnitAs(t, admin, "附件部", "")
 	placeOrgAgent(t, admin, leader, unitID)
 	t.Cleanup(func() { clearDispatchFixtures(t) })
@@ -151,7 +151,7 @@ func TestDispatchWork_RejectsMalformedAttachmentIDs(t *testing.T) {
 func TestDispatchWork_RetryReturnsTheSameIssue(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-idempotent-admin@example.com")
-	leader := insertIntakeDutyAgent(t, "workbench-idempotent-leader", admin)
+	leader := insertRunnableDutyAgent(t, "workbench-idempotent-leader", admin)
 	unitID := createOrgUnitAs(t, admin, "幂等部", "")
 	placeOrgAgent(t, admin, leader, unitID)
 	t.Cleanup(func() { clearDispatchFixtures(t) })
@@ -180,8 +180,8 @@ func TestDispatchWork_RetryReturnsTheSameIssue(t *testing.T) {
 func TestDispatchWork_OffersCandidatesWhenTextMatchesTwoDepartments(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-ambiguous-admin@example.com")
-	payAgent := insertIntakeDutyAgent(t, "workbench-pay-agent", admin)
-	settleAgent := insertIntakeDutyAgent(t, "workbench-settle-agent", admin)
+	payAgent := insertRunnableDutyAgent(t, "workbench-pay-agent", admin)
+	settleAgent := insertRunnableDutyAgent(t, "workbench-settle-agent", admin)
 	payUnit := createOrgUnitAs(t, admin, "支付组", "")
 	settleUnit := createOrgUnitAs(t, admin, "结算组", "")
 	placeOrgAgent(t, admin, payAgent, payUnit)
@@ -214,8 +214,8 @@ func TestDispatchWork_OffersCandidatesWhenTextMatchesTwoDepartments(t *testing.T
 func TestDispatchWork_UsesModelChoiceWhenDeterministicMatchFails(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-llm-admin@example.com")
-	payAgent := insertIntakeDutyAgent(t, "workbench-llm-pay-agent", admin)
-	settleAgent := insertIntakeDutyAgent(t, "workbench-llm-settle-agent", admin)
+	payAgent := insertRunnableDutyAgent(t, "workbench-llm-pay-agent", admin)
+	settleAgent := insertRunnableDutyAgent(t, "workbench-llm-settle-agent", admin)
 	payUnit := createOrgUnitAs(t, admin, "支付组", "")
 	settleUnit := createOrgUnitAs(t, admin, "结算组", "")
 	placeOrgAgent(t, admin, payAgent, payUnit)
@@ -243,8 +243,8 @@ func TestDispatchWork_UsesModelChoiceWhenDeterministicMatchFails(t *testing.T) {
 func TestDispatchWork_RejectsInvalidModelChoice(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-llm-invalid-admin@example.com")
-	payAgent := insertIntakeDutyAgent(t, "workbench-llm-invalid-pay", admin)
-	settleAgent := insertIntakeDutyAgent(t, "workbench-llm-invalid-settle", admin)
+	payAgent := insertRunnableDutyAgent(t, "workbench-llm-invalid-pay", admin)
+	settleAgent := insertRunnableDutyAgent(t, "workbench-llm-invalid-settle", admin)
 	payUnit := createOrgUnitAs(t, admin, "支付组", "")
 	settleUnit := createOrgUnitAs(t, admin, "结算组", "")
 	placeOrgAgent(t, admin, payAgent, payUnit)
@@ -289,10 +289,10 @@ func TestListMyDispatches_ReturnsOnlyTheRequesterWithPaths(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-list-admin@example.com")
 	otherAdmin := createOrgTestAdmin(t, "workbench-list-other@example.com")
-	leader := insertIntakeDutyAgent(t, "workbench-list-leader", admin)
+	leader := insertRunnableDutyAgent(t, "workbench-list-leader", admin)
 	unitID := createOrgUnitAs(t, admin, "历史部", "")
 	placeOrgAgent(t, admin, leader, unitID)
-	otherAgent := insertIntakeDutyAgent(t, "workbench-list-other-agent", otherAdmin)
+	otherAgent := insertRunnableDutyAgent(t, "workbench-list-other-agent", otherAdmin)
 	otherUnit := createOrgUnitAs(t, admin, "历史二部", "")
 	placeOrgAgent(t, admin, otherAgent, otherUnit)
 	setOrgUnitLead(t, otherUnit, otherAdmin)
@@ -357,11 +357,34 @@ func TestListMyDispatches_ReturnsOnlyTheRequesterWithPaths(t *testing.T) {
 	}
 }
 
+func TestDispatchWork_UnboundMemberCannotDispatch(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "workbench-unbound-admin@example.com")
+	leader := insertRunnableDutyAgent(t, "workbench-unbound-leader", admin)
+	unitID := createOrgUnitAs(t, admin, "未绑定部", "")
+	placeOrgAgent(t, admin, leader, unitID)
+	member := createPermissionTestMember(t, "workbench-unbound-member@example.com")
+	placeOrgMember(t, member, unitID)
+	t.Cleanup(func() { clearDispatchFixtures(t) })
+
+	status, _, body := postDispatchWork(t, member, map[string]any{
+		"text":              "dispatch-test 未绑定派活",
+		"unit_id":           unitID,
+		"client_request_id": testClientRequestID,
+	})
+	if status != http.StatusForbidden || !containsCode(body, "agent_binding_required") {
+		t.Fatalf("status = %d, body = %s, want 403 agent_binding_required", status, body)
+	}
+	if n := countDispatchOrigins(t); n != 0 {
+		t.Fatalf("dispatch origins = %d, want 0", n)
+	}
+}
+
 func TestDispatchWork_ExplicitUnitOutsideScopeIsNotFound(t *testing.T) {
 	startDispatchTest(t)
 	admin := createOrgTestAdmin(t, "workbench-scope-admin@example.com")
 	member := createPermissionTestMember(t, "workbench-scope-member@example.com")
-	adminAgent := insertIntakeDutyAgent(t, "workbench-scope-admin-agent", admin)
+	adminAgent := insertRunnableDutyAgent(t, "workbench-scope-admin-agent", admin)
 	ownUnit := createOrgUnitAs(t, admin, "成员部", "")
 	hiddenUnit := createOrgUnitAs(t, admin, "隐藏部", "")
 	placeOrgMember(t, member, ownUnit)

@@ -138,7 +138,14 @@ func insertIntakeDutyAgent(t *testing.T, name, ownerID string) string {
 	}
 	id := uuidToString(agent.ID)
 	t.Cleanup(func() {
-		testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, id)
+		ctx := context.Background()
+		// A department squad may still point at this agent as its leader, and
+		// squad.leader_id blocks the delete; drop the fixture squad first.
+		testPool.Exec(ctx, `DELETE FROM squad_member WHERE squad_id IN (
+			SELECT id FROM squad WHERE leader_id = $1 AND workspace_id = $2
+		)`, id, testWorkspaceID)
+		testPool.Exec(ctx, `DELETE FROM squad WHERE leader_id = $1 AND workspace_id = $2`, id, testWorkspaceID)
+		testPool.Exec(ctx, `DELETE FROM agent WHERE id = $1`, id)
 	})
 	return id
 }

@@ -16,14 +16,24 @@ func createPermissionTestMember(t *testing.T, email string) string {
 	t.Helper()
 	ctx := context.Background()
 	var userID string
+	// Reusing the row keeps the fixture runnable when an earlier aborted run
+	// left the user behind.
 	if err := testPool.QueryRow(ctx, `
-		INSERT INTO "user" (name, email) VALUES ($1, $2) RETURNING id
+		INSERT INTO "user" (name, email) VALUES ($1, $2)
+		ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
 	`, email, email).Scan(&userID); err != nil {
 		t.Fatalf("create member user %s: %v", email, err)
 	}
-	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, userID) })
+	t.Cleanup(func() {
+		// The member row references the user; deleting it first keeps cleanup
+		// working and the fixture repeatable across runs.
+		testPool.Exec(context.Background(), `DELETE FROM member WHERE workspace_id = $1 AND user_id = $2`, testWorkspaceID, userID)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, userID)
+	})
 	if _, err := testPool.Exec(ctx, `
 		INSERT INTO member (workspace_id, user_id, role) VALUES ($1, $2, 'member')
+		ON CONFLICT DO NOTHING
 	`, testWorkspaceID, userID); err != nil {
 		t.Fatalf("add member %s: %v", email, err)
 	}
@@ -621,11 +631,22 @@ func createPermissionTestAdmin(t *testing.T, email string) string {
 	t.Helper()
 	ctx := context.Background()
 	var userID string
-	if err := testPool.QueryRow(ctx, `INSERT INTO "user" (name, email) VALUES ($1, $2) RETURNING id`, email, email).Scan(&userID); err != nil {
+	// Reusing the row keeps the fixture runnable when an earlier aborted run
+	// left the user behind.
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO "user" (name, email) VALUES ($1, $2)
+		ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
+	`, email, email).Scan(&userID); err != nil {
 		t.Fatalf("create admin user %s: %v", email, err)
 	}
-	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, userID) })
-	if _, err := testPool.Exec(ctx, `INSERT INTO member (workspace_id, user_id, role) VALUES ($1, $2, 'admin')`, testWorkspaceID, userID); err != nil {
+	t.Cleanup(func() {
+		// The member row references the user; deleting it first keeps cleanup
+		// working and the fixture repeatable across runs.
+		testPool.Exec(context.Background(), `DELETE FROM member WHERE workspace_id = $1 AND user_id = $2`, testWorkspaceID, userID)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE id = $1`, userID)
+	})
+	if _, err := testPool.Exec(ctx, `INSERT INTO member (workspace_id, user_id, role) VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING`, testWorkspaceID, userID); err != nil {
 		t.Fatalf("add admin %s: %v", email, err)
 	}
 	return userID

@@ -58,14 +58,22 @@ INSERT INTO agent (
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
     instructions, custom_env, custom_args, mcp_config, model, thinking_level,
     service_tier, conversation_starters,
-    composio_toolkit_allowlist, permission_mode
+    composio_toolkit_allowlist, permission_mode, is_primary
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15, $16,
     $17, COALESCE(sqlc.narg('conversation_starters')::jsonb, '[]'::jsonb),
     sqlc.narg('composio_toolkit_allowlist')::text[],
-    COALESCE(sqlc.narg('permission_mode'), 'private')
+    COALESCE(sqlc.narg('permission_mode'), 'private'),
+    NOT EXISTS (
+        SELECT 1 FROM agent p
+        WHERE p.workspace_id = $1
+          AND p.owner_id = $10
+          AND p.kind = 'user'
+          AND p.archived_at IS NULL
+          AND p.is_primary
+    )
 )
 RETURNING *;
 
@@ -197,7 +205,8 @@ WHERE id = $1
 RETURNING *;
 
 -- name: ArchiveAgent :one
-UPDATE agent SET archived_at = now(), archived_by = $2, updated_at = now()
+UPDATE agent
+SET archived_at = now(), archived_by = $2, is_primary = false, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -214,7 +223,7 @@ RETURNING *;
 -- it needs rebinding — but it stays visible and recoverable instead of
 -- vanishing.
 UPDATE agent
-SET archived_at = now(), archived_by = @archived_by, updated_at = now()
+SET archived_at = now(), archived_by = @archived_by, is_primary = false, updated_at = now()
 WHERE runtime_id = ANY(@runtime_ids::uuid[]) AND archived_at IS NULL
   AND (system_key IS NULL OR system_key = '')
 RETURNING *;
@@ -229,7 +238,7 @@ RETURNING *;
 -- lock. Returns the affected rows so the caller can broadcast
 -- agent:archived per agent.
 UPDATE agent
-SET archived_at = now(), archived_by = @archived_by, updated_at = now()
+SET archived_at = now(), archived_by = @archived_by, is_primary = false, updated_at = now()
 WHERE id = ANY(@agent_ids::uuid[]) AND archived_at IS NULL
 RETURNING *;
 
@@ -2713,3 +2722,99 @@ RETURNING *;
 
 -- name: GetCommentThreadRootID :one
 SELECT comment_thread_root_id(@comment_id::uuid)::uuid AS id;
+
+-- name: GetPrimaryAgentForOwner :one
+-- The member's bound digital twin in one workspace. Used by the dispatch gate:
+-- a member without a primary twin may browse and review, but not dispatch work.
+SELECT * FROM agent
+WHERE workspace_id = @workspace_id
+  AND owner_id = @owner_id
+  AND kind = 'user'
+  AND archived_at IS NULL
+  AND is_primary;
+
+-- name: GetPrimaryTwinForUser :many
+-- The user's most recent primary twin across workspaces, used as the template
+-- when they join a project that has no twin yet. Returned as a list because a
+-- user can have one primary per workspace; callers pick the first row.
+SELECT * FROM agent
+WHERE owner_id = @owner_id
+  AND kind = 'user'
+  AND archived_at IS NULL
+  AND is_primary
+ORDER BY updated_at DESC, created_at DESC;
+
+-- name: ClearPrimaryAgentsForOwner :exec
+UPDATE agent
+SET is_primary = false, updated_at = now()
+WHERE workspace_id = @workspace_id
+  AND owner_id = @owner_id
+  AND kind = 'user'
+  AND is_primary;
+
+-- name: SetPrimaryAgent :one
+UPDATE agent
+SET is_primary = true, updated_at = now()
+WHERE id = @id
+  AND workspace_id = @workspace_id
+  AND owner_id = @owner_id
+  AND kind = 'user'
+  AND archived_at IS NULL
+RETURNING *;
+
+-- name: EnsurePrimaryAgentForOwner :one
+-- Promotes the oldest active agent when the owner has none marked primary.
+-- Returns no rows when a primary already exists. Keeps the invariant after an
+-- archive without making the caller re-read the row.
+WITH candidate AS (
+    SELECT a.id
+    FROM agent a
+    WHERE a.workspace_id = @workspace_id
+      AND a.owner_id = @owner_id
+      AND a.kind = 'user'
+      AND a.archived_at IS NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM agent p
+          WHERE p.workspace_id = @workspace_id
+            AND p.owner_id = @owner_id
+            AND p.kind = 'user'
+            AND p.archived_at IS NULL
+            AND p.is_primary
+      )
+    ORDER BY a.created_at ASC, a.id ASC
+    LIMIT 1
+)
+UPDATE agent
+SET is_primary = true, updated_at = now()
+WHERE id = (SELECT id FROM candidate)
+RETURNING *;
+
+-- name: CloneAgentAsTwin :one
+-- Copies a member's primary twin into a project they just joined. Only portable
+-- identity and instructions travel: runtime_id, custom_env, mcp_config and the
+-- model stay behind because runtimes and secrets are workspace-specific. The
+-- caller checks that the target workspace has no active agent for this owner
+-- first, which keeps the one-primary invariant.
+INSERT INTO agent (
+    workspace_id, name, description, avatar_url, runtime_mode, runtime_config,
+    visibility, permission_mode, max_concurrent_tasks, owner_id, instructions,
+    custom_env, custom_args, conversation_starters, intake_can, intake_cannot,
+    org_unit_id, is_primary
+)
+SELECT
+    @workspace_id, a.name, a.description, a.avatar_url, a.runtime_mode, '{}'::jsonb,
+    'private', 'private', a.max_concurrent_tasks, @owner_id, a.instructions,
+    '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, a.intake_can, a.intake_cannot,
+    CASE
+        WHEN EXISTS (
+            SELECT 1 FROM org_unit u
+            WHERE u.id = sqlc.narg('org_unit_id')::uuid
+              AND u.workspace_id = @workspace_id
+        )
+        THEN sqlc.narg('org_unit_id')::uuid
+        ELSE NULL::uuid
+    END,
+    true
+FROM agent a
+WHERE a.id = @source_id
+RETURNING *;

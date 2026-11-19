@@ -14,6 +14,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/inbox"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
+	"github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/orgsquad"
 	"github.com/multica-ai/multica/server/internal/util"
@@ -31,17 +32,26 @@ const (
 	DispatchChannelFeishu = "feishu"
 
 	inboxTypeDispatchCompleted = "dispatch_completed"
+	inboxTypeDispatchFailed    = "dispatch_failed"
 
 	// dispatchMatchLimit bounds the candidate list a chat reply can render.
 	dispatchMatchLimit = 5
 )
 
 var (
-	ErrOrgUnitNotFound            = errors.New("org unit not found")
-	ErrOrgUnitNoAccess            = errors.New("no access to this org unit")
-	ErrOrgUnitNoAgents            = errors.New("org unit has no agent to lead the dispatch")
-	ErrDispatchLeaderUnavailable  = errors.New("squad leader is not available to this requester")
+	ErrOrgUnitNotFound           = errors.New("org unit not found")
+	ErrOrgUnitNoAccess           = errors.New("no access to this org unit")
+	ErrOrgUnitNoAgents           = errors.New("org unit has no agent to lead the dispatch")
+	ErrDispatchLeaderUnavailable = errors.New("squad leader is not available to this requester")
+	// ErrDispatchLeaderOffline means the department has agents, but none of them
+	// can take work now: their runtimes are missing or offline. Dispatch refuses
+	// instead of creating an issue no leader task will ever pick up.
+	ErrDispatchLeaderOffline      = errors.New("no agent in this department can run work right now")
 	ErrDispatchRequesterNotInTeam = errors.New("requester is not a member of this workspace")
+	ErrDispatchRequesterUnbound   = errors.New("requester has not bound an agent in this workspace")
+	ErrPersonalSquadNotFound      = errors.New("personal squad not found")
+	ErrDispatchNotFound           = errors.New("dispatch not found")
+	ErrDispatchReassignForbidden  = errors.New("only the requester can reassign this dispatch")
 )
 
 // DispatchOriginInfo carries the transport coordinates a dispatch came from.
@@ -52,12 +62,20 @@ type DispatchOriginInfo struct {
 	InstallationID pgtype.UUID
 	ChatID         string
 	ThreadID       string
+	// MessageID is the chat message that asked for the work. Notices reply
+	// inside its topic so the conversation stays in one place.
+	MessageID string
 }
 
 type OrgDispatchParams struct {
 	WorkspaceID pgtype.UUID
 	ActorID     pgtype.UUID
 	UnitID      pgtype.UUID
+	// Personal targets the requester's own private squad instead of a
+	// department. SquadID selects one of the caller's private squads; leaving
+	// it empty with Personal set reuses (or creates) their personal squad.
+	Personal    bool
+	SquadID     pgtype.UUID
 	Title       string
 	Description string
 	// ClientRequestID deduplicates in-app retries; chat callers leave it empty.
@@ -75,6 +93,9 @@ type OrgDispatchResult struct {
 	Issue db.Issue
 	Squad db.Squad
 	Unit  db.ListOrgUnitsRow
+	// Personal marks a dispatch to the requester's own squad; Unit is empty
+	// in that case.
+	Personal bool
 }
 
 // OrgDispatchNotice is everything a chat transport needs to report completion:
@@ -85,6 +106,17 @@ type OrgDispatchNotice struct {
 	Issue      db.Issue
 	UnitName   string
 	Identifier string
+}
+
+// OrgDispatchFailureNotice is what a chat transport needs to report a
+// dispatch that the department could not run: the original conversation plus
+// the failed root issue and why the leader run stopped.
+type OrgDispatchFailureNotice struct {
+	Origin     db.DispatchOrigin
+	Issue      db.Issue
+	UnitName   string
+	Identifier string
+	Reason     string
 }
 
 // UnitMatch is one department a chat command name resolved to.
@@ -115,25 +147,65 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 	if err != nil || !access.Allowed() {
 		return OrgDispatchResult{}, ErrDispatchRequesterNotInTeam
 	}
-	units, err := orgUnitsForUser(ctx, s.Queries, p.WorkspaceID, access)
+	// Unbound members may browse and review, but not hand work to a department:
+	// their requests would have no digital twin to answer for the follow-up.
+	twin, err := s.Queries.GetPrimaryAgentForOwner(ctx, db.GetPrimaryAgentForOwnerParams{
+		WorkspaceID: p.WorkspaceID,
+		OwnerID:     p.ActorID,
+	})
 	if err != nil {
-		return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
-	}
-	unit, ok := findUnit(units, p.UnitID)
-	if !ok {
-		return OrgDispatchResult{}, ErrOrgUnitNotFound
-	}
-	if !canDispatchToUnit(access, units, unit.ID) {
-		return OrgDispatchResult{}, ErrOrgUnitNoAccess
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OrgDispatchResult{}, ErrDispatchRequesterUnbound
+		}
+		return OrgDispatchResult{}, fmt.Errorf("check requester twin: %w", err)
 	}
 
-	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, p.WorkspaceID)
-	if err != nil {
-		return OrgDispatchResult{}, fmt.Errorf("list org agents: %w", err)
-	}
-	squad, err := s.ensureSquad(ctx, p.WorkspaceID, p.ActorID, unit, units, agents)
-	if err != nil {
-		return OrgDispatchResult{}, err
+	var squad db.Squad
+	var unit db.ListOrgUnitsRow
+	personal := p.Personal || p.SquadID.Valid
+	if personal {
+		squad, err = s.resolvePersonalSquad(ctx, p, twin)
+		if err != nil {
+			return OrgDispatchResult{}, err
+		}
+		// The requester's own twin leads a personal squad. If its runtime is
+		// offline the leader task would queue under a machine that is not there,
+		// so say so now instead of leaving the work silent.
+		state, err := s.leaderPickState(ctx, squad.LeaderID, p.ActorID, p.WorkspaceID)
+		if err != nil {
+			return OrgDispatchResult{}, err
+		}
+		if state != pickReady {
+			return OrgDispatchResult{}, ErrDispatchLeaderOffline
+		}
+	} else {
+		units, err := orgUnitsForUser(ctx, s.Queries, p.WorkspaceID, access)
+		if err != nil {
+			return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
+		}
+		found, ok := findUnit(units, p.UnitID)
+		if !ok {
+			return OrgDispatchResult{}, ErrOrgUnitNotFound
+		}
+		if !canDispatchToUnit(access, units, found.ID) {
+			return OrgDispatchResult{}, ErrOrgUnitNoAccess
+		}
+		unit = found
+
+		agents, err := s.Queries.ListAgentsInOrgUnits(ctx, p.WorkspaceID)
+		if err != nil {
+			return OrgDispatchResult{}, fmt.Errorf("list org agents: %w", err)
+		}
+		squad, err = s.ensureSquad(ctx, p.WorkspaceID, p.ActorID, unit, units, agents)
+		if err != nil {
+			return OrgDispatchResult{}, err
+		}
+		// An existing squad may still point at a leader whose runtime went away.
+		// Move the squad to an available agent so this dispatch can actually run.
+		squad, err = s.ensureRunnableLeader(ctx, p.WorkspaceID, p.ActorID, unit, units, agents, squad)
+		if err != nil {
+			return OrgDispatchResult{}, err
+		}
 	}
 	if s.Tasks != nil {
 		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
@@ -161,27 +233,235 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		return OrgDispatchResult{}, err
 	}
 
-	if err := s.recordOrigin(ctx, created.Issue, unit, p); err != nil {
+	if err := s.recordOrigin(ctx, created.Issue, unit.ID, squad.ID, personal, p); err != nil {
 		return OrgDispatchResult{}, err
 	}
-	return OrgDispatchResult{Issue: created.Issue, Squad: squad, Unit: unit}, nil
+	return OrgDispatchResult{Issue: created.Issue, Squad: squad, Unit: unit, Personal: personal}, nil
 }
 
-func (s *OrgDispatchService) recordOrigin(ctx context.Context, issue db.Issue, unit db.ListOrgUnitsRow, p OrgDispatchParams) error {
+type OrgDispatchReassignParams struct {
+	WorkspaceID pgtype.UUID
+	ActorID     pgtype.UUID
+	IssueID     pgtype.UUID
+	UnitID      pgtype.UUID
+}
+
+// Reassign moves a dispatch the caller created to another department. The
+// requester is the only one who can redirect their own request; the target
+// department goes through the same leader-availability and invocation checks
+// as a fresh dispatch, so a reassignment cannot park the issue behind an
+// agent nobody can run.
+func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassignParams) (OrgDispatchResult, error) {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, p.WorkspaceID, p.ActorID, false)
+	if err != nil || !access.Allowed() {
+		return OrgDispatchResult{}, ErrDispatchRequesterNotInTeam
+	}
+	origin, err := s.Queries.GetDispatchOrigin(ctx, p.IssueID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return OrgDispatchResult{}, ErrDispatchNotFound
+	}
+	if err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("load dispatch origin: %w", err)
+	}
+	if origin.WorkspaceID != p.WorkspaceID {
+		return OrgDispatchResult{}, ErrDispatchNotFound
+	}
+	if origin.RequesterID != p.ActorID {
+		return OrgDispatchResult{}, ErrDispatchReassignForbidden
+	}
+	issue, err := s.Queries.GetIssueInWorkspace(ctx, db.GetIssueInWorkspaceParams{
+		ID:          p.IssueID,
+		WorkspaceID: p.WorkspaceID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return OrgDispatchResult{}, ErrDispatchNotFound
+	}
+	if err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("load dispatched issue: %w", err)
+	}
+
+	units, err := orgUnitsForUser(ctx, s.Queries, p.WorkspaceID, access)
+	if err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
+	}
+	unit, ok := findUnit(units, p.UnitID)
+	if !ok {
+		return OrgDispatchResult{}, ErrOrgUnitNotFound
+	}
+	if !canDispatchToUnit(access, units, unit.ID) {
+		return OrgDispatchResult{}, ErrOrgUnitNoAccess
+	}
+	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, p.WorkspaceID)
+	if err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("list org agents: %w", err)
+	}
+	squad, err := s.ensureSquad(ctx, p.WorkspaceID, p.ActorID, unit, units, agents)
+	if err != nil {
+		return OrgDispatchResult{}, err
+	}
+	squad, err = s.ensureRunnableLeader(ctx, p.WorkspaceID, p.ActorID, unit, units, agents, squad)
+	if err != nil {
+		return OrgDispatchResult{}, err
+	}
+	if s.Tasks != nil {
+		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
+		if err != nil {
+			return OrgDispatchResult{}, fmt.Errorf("check leader invocation: %w", err)
+		}
+		if !allowed {
+			return OrgDispatchResult{}, ErrDispatchLeaderUnavailable
+		}
+	}
+
+	updated, err := s.Queries.UpdateIssueAssignee(ctx, db.UpdateIssueAssigneeParams{
+		ID:          issue.ID,
+		AssigneeID:  squad.ID,
+		WorkspaceID: p.WorkspaceID,
+	})
+	if err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("move issue to the new squad: %w", err)
+	}
+	if _, err := s.Queries.ReassignDispatchOrigin(ctx, db.ReassignDispatchOriginParams{
+		IssueID:      issue.ID,
+		TargetUnitID: unit.ID,
+	}); err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("retarget dispatch origin: %w", err)
+	}
+	if s.Tasks != nil {
+		if _, err := s.Tasks.EnqueueTaskForSquadLeaderByActor(ctx, updated, squad.LeaderID, squad.ID, p.ActorID); err != nil {
+			return OrgDispatchResult{}, fmt.Errorf("wake the new squad leader: %w", err)
+		}
+	}
+	s.publishAssigneeChanged(ctx, updated, p.ActorID)
+	return OrgDispatchResult{Issue: updated, Squad: squad, Unit: unit}, nil
+}
+
+func (s *OrgDispatchService) publishAssigneeChanged(ctx context.Context, issue db.Issue, actorID pgtype.UUID) {
+	if s.Bus == nil {
+		return
+	}
+	workspace, err := s.Queries.GetWorkspace(ctx, issue.WorkspaceID)
+	if err != nil {
+		slog.Warn("dispatch reassign: load workspace failed", "issue_id", util.UUIDToString(issue.ID), "error", err)
+		return
+	}
+	s.Bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: util.UUIDToString(issue.WorkspaceID),
+		ActorType:   "member",
+		ActorID:     util.UUIDToString(actorID),
+		Payload: map[string]any{
+			"issue":            IssueToMapResolved(ctx, s.Queries, issue, workspace.IssuePrefix),
+			"assignee_changed": true,
+			"status_changed":   false,
+			"project_changed":  false,
+		},
+	})
+}
+
+// resolvePersonalSquad returns the caller's own squad: the one they named, or
+// the single personal squad created on their first personal dispatch.
+func (s *OrgDispatchService) resolvePersonalSquad(ctx context.Context, p OrgDispatchParams, twin db.Agent) (db.Squad, error) {
+	if !p.SquadID.Valid {
+		return s.ensurePersonalSquad(ctx, p.WorkspaceID, p.ActorID, twin)
+	}
+	squad, err := s.Queries.GetSquadInWorkspace(ctx, db.GetSquadInWorkspaceParams{
+		ID:          p.SquadID,
+		WorkspaceID: p.WorkspaceID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.Squad{}, ErrPersonalSquadNotFound
+	}
+	if err != nil {
+		return db.Squad{}, fmt.Errorf("load personal squad: %w", err)
+	}
+	// Someone else's squad, a shared squad, or an archived one all answer the
+	// same way: a personal target only ever resolves the caller's own.
+	if !squad.IsPrivate || squad.ArchivedAt.Valid || util.UUIDToString(squad.CreatorID) != util.UUIDToString(p.ActorID) {
+		return db.Squad{}, ErrPersonalSquadNotFound
+	}
+	return squad, nil
+}
+
+// ensurePersonalSquad returns the caller's personal squad, creating it on the
+// first personal dispatch. The caller's digital twin leads it, so the leader
+// engine decomposes personal work exactly as it does department work.
+func (s *OrgDispatchService) ensurePersonalSquad(ctx context.Context, wsUUID, actorID pgtype.UUID, twin db.Agent) (db.Squad, error) {
+	squad, err := s.Queries.GetPersonalSquadByCreator(ctx, db.GetPersonalSquadByCreatorParams{
+		WorkspaceID: wsUUID,
+		CreatorID:   actorID,
+	})
+	if err == nil {
+		return squad, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return db.Squad{}, fmt.Errorf("load personal squad: %w", err)
+	}
+
+	name := strings.TrimSpace(twin.Name)
+	if name == "" {
+		if user, err := s.Queries.GetUser(ctx, actorID); err == nil {
+			name = strings.TrimSpace(user.Name)
+		}
+	}
+	if name == "" {
+		name = "Personal squad"
+	}
+	squad, err = s.Queries.CreateSquad(ctx, db.CreateSquadParams{
+		WorkspaceID: wsUUID,
+		Name:        name,
+		LeaderID:    twin.ID,
+		CreatorID:   actorID,
+		IsPrivate:   true,
+	})
+	if err != nil {
+		// A concurrent first dispatch won the one-personal-squad index; use
+		// the row it created.
+		if isUniqueViolation(err) {
+			existing, loadErr := s.Queries.GetPersonalSquadByCreator(ctx, db.GetPersonalSquadByCreatorParams{
+				WorkspaceID: wsUUID,
+				CreatorID:   actorID,
+			})
+			if loadErr == nil {
+				return existing, nil
+			}
+		}
+		return db.Squad{}, fmt.Errorf("create personal squad: %w", err)
+	}
+	if _, err := s.Queries.AddSquadMember(ctx, db.AddSquadMemberParams{
+		SquadID:    squad.ID,
+		MemberType: "agent",
+		MemberID:   twin.ID,
+		Role:       "leader",
+	}); err != nil {
+		return db.Squad{}, fmt.Errorf("add personal squad leader: %w", err)
+	}
+	return squad, nil
+}
+
+func (s *OrgDispatchService) recordOrigin(ctx context.Context, issue db.Issue, unitID, squadID pgtype.UUID, personal bool, p OrgDispatchParams) error {
 	channel := p.Origin.ChannelType
 	if channel == "" {
 		channel = DispatchChannelApp
+	}
+	targetUnit := unitID
+	targetSquad := pgtype.UUID{}
+	if personal {
+		targetUnit = pgtype.UUID{}
+		targetSquad = squadID
 	}
 	_, err := s.Queries.CreateDispatchOrigin(ctx, db.CreateDispatchOriginParams{
 		IssueID:         issue.ID,
 		WorkspaceID:     p.WorkspaceID,
 		RequesterID:     p.ActorID,
-		TargetUnitID:    unit.ID,
+		TargetUnitID:    targetUnit,
 		ChannelType:     channel,
 		InstallationID:  p.Origin.InstallationID,
 		ChatID:          pgtype.Text{String: p.Origin.ChatID, Valid: p.Origin.ChatID != ""},
 		ThreadID:        pgtype.Text{String: p.Origin.ThreadID, Valid: p.Origin.ThreadID != ""},
+		OriginMessageID: pgtype.Text{String: p.Origin.MessageID, Valid: p.Origin.MessageID != ""},
 		ClientRequestID: p.ClientRequestID,
+		TargetSquadID:   targetSquad,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -212,9 +492,9 @@ func (s *OrgDispatchService) ensureSquad(
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return db.Squad{}, fmt.Errorf("load department squad: %w", err)
 	}
-	leaderID, ok := pickDispatchLeader(agents, units, unit)
-	if !ok {
-		return db.Squad{}, ErrOrgUnitNoAgents
+	leaderID, err := s.pickRunnableLeader(ctx, wsUUID, agents, units, unit, actorID)
+	if err != nil {
+		return db.Squad{}, err
 	}
 
 	tx, err := s.TxStarter.Begin(ctx)
@@ -330,6 +610,37 @@ func (s *OrgDispatchService) CompleteDispatch(ctx context.Context, issue db.Issu
 	return nil, nil
 }
 
+// FailDispatch tells the requester once that the dispatch's squad-leader run
+// failed for good. The claim is keyed to the leader task itself, so a child
+// task failing on its own does not report the whole dispatch as failed, and a
+// repeated failure event finds no row.
+func (s *OrgDispatchService) FailDispatch(ctx context.Context, issue db.Issue, taskID pgtype.UUID, reason string) (*OrgDispatchFailureNotice, error) {
+	origin, err := s.Queries.ClaimDispatchFailure(ctx, db.ClaimDispatchFailureParams{
+		IssueID: issue.ID,
+		ID:      taskID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("claim dispatch failure: %w", err)
+	}
+	notice := &OrgDispatchFailureNotice{
+		Origin:     origin,
+		Issue:      issue,
+		UnitName:   s.unitName(ctx, origin.WorkspaceID, origin.TargetUnitID),
+		Identifier: s.issueIdentifier(ctx, issue),
+		Reason:     reason,
+	}
+	if origin.ChannelType == DispatchChannelFeishu {
+		return notice, nil
+	}
+	if err := s.notifyFailureInbox(ctx, notice); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
 // IsDispatchCompleted reports whether a status means the department delivered:
 // review, done or closed. In review counts because a human decision is the next
 // step and the requester should see the result now.
@@ -371,33 +682,81 @@ func (s *OrgDispatchService) notifyInbox(ctx context.Context, notice *OrgDispatc
 	if err != nil {
 		return fmt.Errorf("write dispatch inbox item: %w", err)
 	}
-	if !inserted || s.Bus == nil {
+	if !inserted {
 		return nil
+	}
+	s.publishInboxNew(item, map[string]any{"issue_status": notice.Issue.Status})
+	return nil
+}
+
+func (s *OrgDispatchService) notifyFailureInbox(ctx context.Context, notice *OrgDispatchFailureNotice) error {
+	details, _ := json.Marshal(map[string]any{
+		"dispatch_unit_id":   util.UUIDToString(notice.Origin.TargetUnitID),
+		"dispatch_unit_name": notice.UnitName,
+		"identifier":         notice.Identifier,
+		"status":             notice.Issue.Status,
+		"failure_reason":     notice.Reason,
+	})
+	body := fmt.Sprintf("%s failed in %s.", notice.Identifier, notice.UnitName)
+	if notice.UnitName == "" {
+		body = fmt.Sprintf("%s failed.", notice.Identifier)
+	}
+	if notice.Reason != "" {
+		body += " " + notice.Reason
+	}
+	item, inserted, err := inbox.CreateIfEligible(ctx, s.Queries, db.CreateInboxItemParams{
+		ID:            dbid.NewV7(),
+		WorkspaceID:   notice.Origin.WorkspaceID,
+		RecipientType: "member",
+		RecipientID:   notice.Origin.RequesterID,
+		Type:          inboxTypeDispatchFailed,
+		Severity:      "action_required",
+		IssueID:       notice.Issue.ID,
+		Title:         notice.Issue.Title,
+		Body:          pgtype.Text{String: body, Valid: true},
+		ActorType:     pgtype.Text{String: "system", Valid: true},
+		Details:       details,
+	})
+	if err != nil {
+		return fmt.Errorf("write dispatch failure inbox item: %w", err)
+	}
+	if !inserted {
+		return nil
+	}
+	s.publishInboxNew(item, map[string]any{"issue_status": notice.Issue.Status})
+	return nil
+}
+
+func (s *OrgDispatchService) publishInboxNew(item db.InboxItem, extra map[string]any) {
+	if s.Bus == nil {
+		return
+	}
+	payload := map[string]any{
+		"id":             util.UUIDToString(item.ID),
+		"workspace_id":   util.UUIDToString(item.WorkspaceID),
+		"recipient_type": item.RecipientType,
+		"recipient_id":   util.UUIDToString(item.RecipientID),
+		"type":           item.Type,
+		"severity":       item.Severity,
+		"issue_id":       util.UUIDToPtr(item.IssueID),
+		"title":          item.Title,
+		"body":           util.TextToPtr(item.Body),
+		"read":           item.Read,
+		"archived":       item.Archived,
+		"created_at":     util.TimestampToString(item.CreatedAt),
+		"actor_type":     util.TextToPtr(item.ActorType),
+		"actor_id":       util.UUIDToPtr(item.ActorID),
+		"details":        json.RawMessage(item.Details),
+	}
+	for key, value := range extra {
+		payload[key] = value
 	}
 	s.Bus.Publish(events.Event{
 		Type:        protocol.EventInboxNew,
 		WorkspaceID: util.UUIDToString(item.WorkspaceID),
 		ActorType:   "system",
-		Payload: map[string]any{"item": map[string]any{
-			"id":             util.UUIDToString(item.ID),
-			"workspace_id":   util.UUIDToString(item.WorkspaceID),
-			"recipient_type": item.RecipientType,
-			"recipient_id":   util.UUIDToString(item.RecipientID),
-			"type":           item.Type,
-			"severity":       item.Severity,
-			"issue_id":       util.UUIDToPtr(item.IssueID),
-			"title":          item.Title,
-			"body":           util.TextToPtr(item.Body),
-			"read":           item.Read,
-			"archived":       item.Archived,
-			"created_at":     util.TimestampToString(item.CreatedAt),
-			"actor_type":     util.TextToPtr(item.ActorType),
-			"actor_id":       util.UUIDToPtr(item.ActorID),
-			"details":        json.RawMessage(item.Details),
-			"issue_status":   notice.Issue.Status,
-		}},
+		Payload:     map[string]any{"item": payload},
 	})
-	return nil
 }
 
 func (s *OrgDispatchService) unitName(ctx context.Context, wsUUID, unitID pgtype.UUID) string {
@@ -454,21 +813,162 @@ func isWorkspaceAdmin(role string) bool {
 	return role == "owner" || role == "admin"
 }
 
-// pickDispatchLeader prefers the agent owned by the unit lead, then any agent
-// covered by the department subtree. Archived agents never lead.
-func pickDispatchLeader(agents []db.ListAgentsInOrgUnitsRow, units []db.ListOrgUnitsRow, unit db.ListOrgUnitsRow) (pgtype.UUID, bool) {
+// ensureRunnableLeader keeps the department squad pointed at an agent that can
+// take work right now. The leader's runtime is what picks up the root issue, so
+// a leader whose machine is gone would leave every dispatch queued with nobody
+// to answer. When the current leader cannot run, the squad moves to the first
+// available agent in the department and the old leader stays a squad member.
+func (s *OrgDispatchService) ensureRunnableLeader(
+	ctx context.Context,
+	wsUUID, actorID pgtype.UUID,
+	unit db.ListOrgUnitsRow,
+	units []db.ListOrgUnitsRow,
+	agents []db.ListAgentsInOrgUnitsRow,
+	squad db.Squad,
+) (db.Squad, error) {
+	state, err := s.leaderPickState(ctx, squad.LeaderID, actorID, wsUUID)
+	if err != nil {
+		return db.Squad{}, err
+	}
+	if state == pickReady {
+		return squad, nil
+	}
+
+	replacement, err := s.pickRunnableLeader(ctx, wsUUID, agents, units, unit, actorID)
+	if err != nil {
+		return db.Squad{}, err
+	}
+	if replacement == squad.LeaderID {
+		return squad, nil
+	}
+	previous := squad.LeaderID
+	updated, err := s.Queries.UpdateSquad(ctx, db.UpdateSquadParams{
+		ID:       squad.ID,
+		LeaderID: replacement,
+	})
+	if err != nil {
+		return db.Squad{}, fmt.Errorf("switch department squad leader: %w", err)
+	}
+	// The previous leader keeps working as an ordinary member; the roster sync
+	// drops the reserved leader role and adds the new leader.
+	if _, err := orgsquad.SyncMembers(ctx, s.Queries, units, updated, unit.ID, previous); err != nil {
+		return db.Squad{}, fmt.Errorf("sync department squad after leader switch: %w", err)
+	}
+	slog.Info("dispatch moved the squad to an available leader",
+		"workspace_id", util.UUIDToString(wsUUID),
+		"unit_id", util.UUIDToString(unit.ID),
+		"squad_id", util.UUIDToString(squad.ID),
+		"previous_leader_id", util.UUIDToString(previous),
+		"leader_id", util.UUIDToString(replacement))
+	return updated, nil
+}
+
+// leaderPickState is why an agent can or cannot lead the requester's dispatch.
+// Not-invokable is kept apart from not-ready so the caller can answer "share the
+// agent with me" instead of "nothing is online".
+type leaderPickState int
+
+const (
+	pickReady leaderPickState = iota
+	pickNotInvokable
+	pickNotReady
+)
+
+// leaderPickState reports whether one agent can take work for the requester:
+// online with a usable runtime, and invokable by them. Unlike direct assignment,
+// dispatch cannot queue behind an offline machine: the requester is waiting on a
+// department, not on a laptop.
+func (s *OrgDispatchService) leaderPickState(ctx context.Context, agentID, actorID, wsUUID pgtype.UUID) (leaderPickState, error) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return pickNotReady, nil
+	}
+	if err != nil {
+		return pickNotReady, fmt.Errorf("load dispatch leader: %w", err)
+	}
+	verdict, err := AgentReadiness(ctx, RuntimeLookup{
+		Queries: s.Queries,
+		Source:  metrics.RuntimeLookupSourceOther,
+	}, agent)
+	if err != nil {
+		return pickNotReady, fmt.Errorf("check dispatch leader runtime: %w", err)
+	}
+	if !verdict.Ready() {
+		return pickNotReady, nil
+	}
+	if s.Tasks == nil {
+		return pickReady, nil
+	}
+	allowed, err := memberMayInvokeAgent(ctx, s.Queries, agent, actorID, wsUUID)
+	if err != nil {
+		return pickNotReady, fmt.Errorf("check leader invocation: %w", err)
+	}
+	if !allowed {
+		return pickNotInvokable, nil
+	}
+	return pickReady, nil
+}
+
+// pickRunnableLeader returns the first leader candidate that is online and
+// invokable by the requester. No candidates means the department has no agent;
+// candidates that all fail readiness mean the department cannot run work now.
+func (s *OrgDispatchService) pickRunnableLeader(
+	ctx context.Context,
+	wsUUID pgtype.UUID,
+	agents []db.ListAgentsInOrgUnitsRow,
+	units []db.ListOrgUnitsRow,
+	unit db.ListOrgUnitsRow,
+	actorID pgtype.UUID,
+) (pgtype.UUID, error) {
+	candidates := leaderCandidates(agents, units, unit)
+	if len(candidates) == 0 {
+		return pgtype.UUID{}, ErrOrgUnitNoAgents
+	}
+	sawNotInvokable := false
+	for _, id := range candidates {
+		state, err := s.leaderPickState(ctx, id, actorID, wsUUID)
+		if err != nil {
+			return pgtype.UUID{}, err
+		}
+		switch state {
+		case pickReady:
+			return id, nil
+		case pickNotInvokable:
+			sawNotInvokable = true
+		}
+	}
+	// At least one agent is running but this requester cannot call it; that is a
+	// permissions answer, not an offline department.
+	if sawNotInvokable {
+		return pgtype.UUID{}, ErrDispatchLeaderUnavailable
+	}
+	return pgtype.UUID{}, ErrDispatchLeaderOffline
+}
+
+// leaderCandidates orders the agents that could lead a department: the unit
+// lead's own agents first, then every agent placed in the subtree.
+func leaderCandidates(agents []db.ListAgentsInOrgUnitsRow, units []db.ListOrgUnitsRow, unit db.ListOrgUnitsRow) []pgtype.UUID {
 	subtree := orgscope.Subtree(units, unit.ID)
+	seen := make(map[pgtype.UUID]bool, len(agents))
+	candidates := make([]pgtype.UUID, 0, len(agents))
+	add := func(agent db.ListAgentsInOrgUnitsRow) {
+		if seen[agent.ID] {
+			return
+		}
+		seen[agent.ID] = true
+		candidates = append(candidates, agent.ID)
+	}
 	if unit.LeadUserID.Valid {
 		for _, agent := range agents {
 			if agent.OwnerID.Valid && agent.OwnerID == unit.LeadUserID {
-				return agent.ID, true
+				add(agent)
 			}
 		}
 	}
 	for _, agent := range agents {
 		if subtree[agent.OrgUnitID] {
-			return agent.ID, true
+			add(agent)
 		}
 	}
-	return pgtype.UUID{}, false
+	return candidates
 }

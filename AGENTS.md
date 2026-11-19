@@ -116,6 +116,15 @@ A workspace is a project owned by one department (`workspace.org_unit_id`, NULL 
 - New member/organization queries must follow content access: explicit member rows without a subtree filter, plus ancestor leads through the recursive `ancestors` CTE. The owning department's lead always has a real member row and owns the project; a lead is removed only after transferring the department lead.
 - Existing workspaces are converted with `server/cmd/reset_project_members`, never by deleting member rows in SQL.
 
+## Digital Twin
+
+A member's agent is their digital twin: it represents them when they dispatch work and receives the department's follow-ups.
+
+- Each member has at most one primary agent per workspace (`agent.is_primary`, unique partial index `agent_primary_twin_uidx`). Creating the first active owned agent promotes it; archiving or restoring the primary promotes the owner's next active agent through `EnsurePrimaryAgentForOwner`. `PUT /api/agents/{id}/primary` switches it.
+- Dispatching and submitting intake require a primary agent. Unbound members may browse and review but get `agent_binding_required` (403). Apply the gate after unit visibility checks so a hidden unit still returns 404.
+- Joining a workspace (create, direct add, invitation, share link) clones the member's primary twin from another project via `ensurePrimaryTwinInWorkspace`; org sync mass-adds do not.
+- Frontend resolves the twin with `findPrimaryTwin` / `ownedTwins` from `@multica/core/agents`; do not re-implement the primary-first ordering.
+
 ## Desktop Rules
 
 - Workspace session routes are tab destinations. Pre-workspace one-shot flows (create workspace, accept invite) use `WindowOverlay` in `apps/desktop/src/renderer/src/stores/window-overlay-store.ts`, not new routes. Stale workspace tabs heal by dropping stale tab groups.

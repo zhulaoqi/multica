@@ -835,6 +835,15 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	}
 	registerFeishuInboxMirror(bus, queries, h)
 	registerDispatchCompletionListener(bus, queries, h.OrgDispatchService, dispatchLarkClient, dispatchLarkInstalls, appURLFromEnv())
+	registerDispatchFailureListener(bus, queries, h.OrgDispatchService, dispatchLarkClient, dispatchLarkInstalls, appURLFromEnv())
+	registerDispatchStartListener(bus, queries, h.OrgDispatchService, dispatchLarkClient, dispatchLarkInstalls, appURLFromEnv())
+
+	// The organization bot reuses the Feishu login app as one company-wide
+	// entry point. It runs on the login app's env credentials, so it is
+	// independent of MULTICA_LARK_SECRET_KEY (which gates per-agent bots).
+	if bot := registerFeishuOrgBot(h, queries, appURLFromEnv()); bot != nil {
+		h.FeishuOrgBot = bot
+	}
 
 	// Slack integration. Multi-tenant B2 model (MUL-3666): Multica hosts ONE
 	// Slack app, workspaces self-install via OAuth, and inbound runs on a single
@@ -2464,6 +2473,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Put("/", h.UpdateAgent)
 					r.Post("/archive", h.ArchiveAgent)
 					r.Post("/restore", h.RestoreAgent)
+					// Promotes one of the owner's agents to their primary
+					// digital twin; the org tree renders that one on the
+					// member row.
+					r.Put("/primary", h.SetPrimaryAgent)
 					r.Post("/cancel-tasks", h.CancelAgentTasks)
 					r.Get("/tasks", h.ListAgentTasks)
 					r.Get("/dingtalk/groups", h.ListDingTalkGroupsForAgent)
@@ -2622,6 +2635,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Route("/api/org", func(r chi.Router) {
 				r.Post("/dispatch", h.DispatchWork)
 				r.Get("/dispatches", h.ListMyDispatches)
+				r.Get("/dispatch-queue", h.ListDepartmentDispatches)
+				r.Post("/dispatches/{issueId}/reassign", h.ReassignDispatch)
 				r.Get("/units", h.ListOrgUnits)
 				r.Post("/units", h.CreateOrgUnit)
 				r.Post("/units/import", h.ImportOrgUnits)

@@ -319,7 +319,7 @@ func (q *Queries) InsertOrgSyncRun(ctx context.Context, arg InsertOrgSyncRunPara
 }
 
 const listAgentsInOrgUnits = `-- name: ListAgentsInOrgUnits :many
-SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode, is_primary
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
@@ -335,12 +335,14 @@ type ListAgentsInOrgUnitsRow struct {
 	IntakeCannot pgtype.Text `json:"intake_cannot"`
 	Status       string      `json:"status"`
 	RuntimeMode  string      `json:"runtime_mode"`
+	IsPrimary    bool        `json:"is_primary"`
 }
 
 // Includes agents with an empty unit so the org page can place them. Status is
 // the agent's own availability, which the org view surfaces as whether the
 // agent is waiting for collaborative scheduling. OwnerID lets the client match
-// an agent to its member (the "digital twin" binding).
+// an agent to its member (the "digital twin" binding); is_primary picks which
+// of several owned agents is the twin the org view shows on the member row.
 func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentsInOrgUnitsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsInOrgUnits, workspaceID)
 	if err != nil {
@@ -359,6 +361,7 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.IntakeCannot,
 			&i.Status,
 			&i.RuntimeMode,
+			&i.IsPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -542,6 +545,52 @@ func (q *Queries) ListOrgUnitsForCopy(ctx context.Context, workspaceID pgtype.UU
 	return items, nil
 }
 
+const listRunnableLeaderAgents = `-- name: ListRunnableLeaderAgents :many
+SELECT a.id, a.owner_id, a.org_unit_id, a.is_primary
+FROM agent a
+JOIN agent_runtime r ON r.id = a.runtime_id
+WHERE a.workspace_id = $1
+  AND a.archived_at IS NULL
+  AND a.runtime_id IS NOT NULL
+  AND r.status = 'online'
+ORDER BY a.is_primary DESC, a.created_at ASC
+`
+
+type ListRunnableLeaderAgentsRow struct {
+	ID        pgtype.UUID `json:"id"`
+	OwnerID   pgtype.UUID `json:"owner_id"`
+	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+	IsPrimary bool        `json:"is_primary"`
+}
+
+// Active agents whose runtime is online right now, the pool a department
+// squad can lead with after a lead change or a departure. Preference (the
+// lead's primary twin first) is resolved in Go so the query stays stable.
+func (q *Queries) ListRunnableLeaderAgents(ctx context.Context, workspaceID pgtype.UUID) ([]ListRunnableLeaderAgentsRow, error) {
+	rows, err := q.db.Query(ctx, listRunnableLeaderAgents, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunnableLeaderAgentsRow{}
+	for rows.Next() {
+		var i ListRunnableLeaderAgentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.OrgUnitID,
+			&i.IsPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSquadsInOrgUnits = `-- name: ListSquadsInOrgUnits :many
 SELECT
     s.id,
@@ -577,6 +626,9 @@ LEFT JOIN squad_member sm ON sm.squad_id = s.id
 LEFT JOIN agent a ON a.id = sm.member_id
 WHERE s.workspace_id = $1
   AND s.archived_at IS NULL
+  -- Personal squads belong to one member and are not part of the department
+  -- structure, so the org tree never lists them.
+  AND NOT s.is_private
 GROUP BY s.id
 ORDER BY s.name ASC
 `
@@ -738,6 +790,33 @@ func (q *Queries) ListWorkspaceFeishuIdentities(ctx context.Context, workspaceID
 		return nil, err
 	}
 	return items, nil
+}
+
+const movePrimaryTwinToOwnerUnit = `-- name: MovePrimaryTwinToOwnerUnit :execrows
+UPDATE agent a
+SET org_unit_id = m.org_unit_id, updated_at = now()
+FROM member m
+WHERE a.workspace_id = $1
+  AND a.owner_id = $2
+  AND a.is_primary
+  AND m.workspace_id = a.workspace_id
+  AND m.user_id = a.owner_id
+  AND a.org_unit_id IS DISTINCT FROM m.org_unit_id
+`
+
+type MovePrimaryTwinToOwnerUnitParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OwnerID     pgtype.UUID `json:"owner_id"`
+}
+
+// The member's primary twin represents them in the organization, so it follows
+// them when their department placement changes.
+func (q *Queries) MovePrimaryTwinToOwnerUnit(ctx context.Context, arg MovePrimaryTwinToOwnerUnitParams) (int64, error) {
+	result, err := q.db.Exec(ctx, movePrimaryTwinToOwnerUnit, arg.WorkspaceID, arg.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const renameOrgUnit = `-- name: RenameOrgUnit :exec

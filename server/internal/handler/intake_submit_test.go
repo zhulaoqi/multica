@@ -17,6 +17,7 @@ import (
 func TestIntakeSubmit_NoProjectDoesNotCreateIssue(t *testing.T) {
 	requireDB(t)
 	member := createPermissionTestMember(t, "intake-submit-none@example.com")
+	insertIntakeDutyAgent(t, "intake-submit-none-agent", member)
 	var before int
 	if err := testPool.QueryRow(context.Background(), `SELECT count(*) FROM issue WHERE workspace_id = $1 AND creator_id = $2`, testWorkspaceID, member).Scan(&before); err != nil {
 		t.Fatal(err)
@@ -42,6 +43,7 @@ func TestIntakeSubmit_NoProjectDoesNotCreateIssue(t *testing.T) {
 func TestIntakeSubmit_OneIssueAndIdempotentClient(t *testing.T) {
 	requireDB(t)
 	lead := createPermissionTestMember(t, "intake-submit-lead@example.com")
+	insertIntakeDutyAgent(t, "intake-submit-lead-agent", lead)
 	owner := createPermissionTestMember(t, "intake-submit-owner@example.com")
 	projectID := insertIntakeProject(t, lead)
 	agentID := insertIntakeDutyAgent(t, "intake-submit-agent", owner)
@@ -112,6 +114,26 @@ func TestIntakeSubmit_OneIssueAndIdempotentClient(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("model calls = %d, want 1", calls.Load())
+	}
+}
+
+func TestIntakeSubmit_UnboundRequesterIsBlocked(t *testing.T) {
+	requireDB(t)
+	lead := createPermissionTestMember(t, "intake-unbound-lead@example.com")
+	insertIntakeDutyAgent(t, "intake-unbound-lead-agent", lead)
+	owner := createPermissionTestMember(t, "intake-unbound-owner@example.com")
+	projectID := insertIntakeProject(t, lead)
+	agentID := insertIntakeDutyAgent(t, "intake-unbound-agent", owner)
+	moduleID := insertPlainModule(t, projectID, agentID, "")
+	h := intakeHandlerWithModel(t, moduleID)
+
+	requester := createPermissionTestMember(t, "intake-unbound-requester@example.com")
+	code, raw, issueID := postIntake(t, h, requester, "未绑定不能提需求")
+	if code != http.StatusForbidden || !containsCode(raw, "agent_binding_required") {
+		t.Fatalf("status = %d body = %s, want 403 agent_binding_required", code, raw)
+	}
+	if issueID != "" {
+		t.Fatalf("issue = %s, want none", issueID)
 	}
 }
 

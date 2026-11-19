@@ -15,7 +15,7 @@ const claimDispatchCompletion = `-- name: ClaimDispatchCompletion :one
 UPDATE dispatch_origin
 SET notified_at = now()
 WHERE issue_id = $1 AND notified_at IS NULL
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
 `
 
 // Marks the completion notice as sent. The conditional update is the
@@ -35,6 +35,85 @@ func (q *Queries) ClaimDispatchCompletion(ctx context.Context, issueID pgtype.UU
 		&i.CreatedAt,
 		&i.NotifiedAt,
 		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
+	)
+	return i, err
+}
+
+const claimDispatchFailure = `-- name: ClaimDispatchFailure :one
+UPDATE dispatch_origin d
+SET failure_notified_at = now()
+WHERE d.issue_id = $1 AND d.failure_notified_at IS NULL
+  AND EXISTS (
+    SELECT 1 FROM agent_task_queue t
+    WHERE t.id = $2 AND t.issue_id = d.issue_id AND t.is_leader_task
+  )
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+`
+
+type ClaimDispatchFailureParams struct {
+	IssueID pgtype.UUID `json:"issue_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+// Marks the failure notice as sent, but only for the squad-leader task of this
+// dispatch: a child task failing is ordinary work, not the department giving
+// up. Like the completion claim, the conditional update is the idempotency
+// guard; retries that are still pending never reach here.
+func (q *Queries) ClaimDispatchFailure(ctx context.Context, arg ClaimDispatchFailureParams) (DispatchOrigin, error) {
+	row := q.db.QueryRow(ctx, claimDispatchFailure, arg.IssueID, arg.ID)
+	var i DispatchOrigin
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.RequesterID,
+		&i.TargetUnitID,
+		&i.ChannelType,
+		&i.InstallationID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.NotifiedAt,
+		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
+	)
+	return i, err
+}
+
+const claimDispatchStart = `-- name: ClaimDispatchStart :one
+UPDATE dispatch_origin
+SET started_notified_at = now()
+WHERE issue_id = $1 AND started_notified_at IS NULL AND channel_type = 'feishu'
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+`
+
+// The requester hears once that the department began working. Retries and
+// replayed task events find the claim already taken.
+func (q *Queries) ClaimDispatchStart(ctx context.Context, issueID pgtype.UUID) (DispatchOrigin, error) {
+	row := q.db.QueryRow(ctx, claimDispatchStart, issueID)
+	var i DispatchOrigin
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.RequesterID,
+		&i.TargetUnitID,
+		&i.ChannelType,
+		&i.InstallationID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.NotifiedAt,
+		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
 	)
 	return i, err
 }
@@ -42,11 +121,12 @@ func (q *Queries) ClaimDispatchCompletion(ctx context.Context, issueID pgtype.UU
 const createDispatchOrigin = `-- name: CreateDispatchOrigin :one
 INSERT INTO dispatch_origin (
     issue_id, workspace_id, requester_id, target_unit_id,
-    channel_type, installation_id, chat_id, thread_id, client_request_id
+    channel_type, installation_id, chat_id, thread_id, origin_message_id,
+    client_request_id, target_squad_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (issue_id) DO NOTHING
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
 `
 
 type CreateDispatchOriginParams struct {
@@ -58,7 +138,9 @@ type CreateDispatchOriginParams struct {
 	InstallationID  pgtype.UUID `json:"installation_id"`
 	ChatID          pgtype.Text `json:"chat_id"`
 	ThreadID        pgtype.Text `json:"thread_id"`
+	OriginMessageID pgtype.Text `json:"origin_message_id"`
 	ClientRequestID pgtype.Text `json:"client_request_id"`
+	TargetSquadID   pgtype.UUID `json:"target_squad_id"`
 }
 
 // Records where a dispatch came from so the requester can be told when the
@@ -74,7 +156,9 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		arg.InstallationID,
 		arg.ChatID,
 		arg.ThreadID,
+		arg.OriginMessageID,
 		arg.ClientRequestID,
+		arg.TargetSquadID,
 	)
 	var i DispatchOrigin
 	err := row.Scan(
@@ -89,12 +173,16 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		&i.CreatedAt,
 		&i.NotifiedAt,
 		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
 	)
 	return i, err
 }
 
 const getDispatchByClient = `-- name: GetDispatchByClient :one
-SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id FROM dispatch_origin
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id FROM dispatch_origin
 WHERE workspace_id = $1 AND requester_id = $2 AND client_request_id = $3
 `
 
@@ -120,12 +208,16 @@ func (q *Queries) GetDispatchByClient(ctx context.Context, arg GetDispatchByClie
 		&i.CreatedAt,
 		&i.NotifiedAt,
 		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
 	)
 	return i, err
 }
 
 const getDispatchOrigin = `-- name: GetDispatchOrigin :one
-SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id FROM dispatch_origin WHERE issue_id = $1
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id FROM dispatch_origin WHERE issue_id = $1
 `
 
 func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (DispatchOrigin, error) {
@@ -143,6 +235,96 @@ func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (D
 		&i.CreatedAt,
 		&i.NotifiedAt,
 		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
+	)
+	return i, err
+}
+
+const getOpenChatDispatchByThread = `-- name: GetOpenChatDispatchByThread :one
+SELECT
+    d.issue_id,
+    d.workspace_id,
+    d.target_unit_id,
+    d.target_squad_id,
+    d.chat_id,
+    d.thread_id,
+    d.created_at,
+    i.number,
+    i.title,
+    i.status,
+    w.slug,
+    w.name AS workspace_name,
+    w.issue_prefix,
+    COALESCE(u.name, s.name, '')::text AS unit_name,
+    (d.target_squad_id IS NOT NULL)::boolean AS personal,
+    COALESCE(st.category, 'started')::text AS status_category,
+    'none'::text AS leader_state
+FROM dispatch_origin d
+JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
+JOIN workspace w ON w.id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
+LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+WHERE d.requester_id = $1
+  AND d.chat_id = $2
+  AND d.thread_id = $3
+  AND COALESCE(st.category, 'started') IN ('unstarted', 'started')
+ORDER BY d.created_at DESC
+LIMIT 1
+`
+
+type GetOpenChatDispatchByThreadParams struct {
+	RequesterID pgtype.UUID `json:"requester_id"`
+	ChatID      pgtype.Text `json:"chat_id"`
+	ThreadID    pgtype.Text `json:"thread_id"`
+}
+
+type GetOpenChatDispatchByThreadRow struct {
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	TargetUnitID   pgtype.UUID        `json:"target_unit_id"`
+	TargetSquadID  pgtype.UUID        `json:"target_squad_id"`
+	ChatID         pgtype.Text        `json:"chat_id"`
+	ThreadID       pgtype.Text        `json:"thread_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Number         int32              `json:"number"`
+	Title          string             `json:"title"`
+	Status         string             `json:"status"`
+	Slug           string             `json:"slug"`
+	WorkspaceName  string             `json:"workspace_name"`
+	IssuePrefix    string             `json:"issue_prefix"`
+	UnitName       string             `json:"unit_name"`
+	Personal       bool               `json:"personal"`
+	StatusCategory string             `json:"status_category"`
+	LeaderState    string             `json:"leader_state"`
+}
+
+// An in-thread message belongs to the most recent dispatch the requester
+// started in that same Lark topic.
+func (q *Queries) GetOpenChatDispatchByThread(ctx context.Context, arg GetOpenChatDispatchByThreadParams) (GetOpenChatDispatchByThreadRow, error) {
+	row := q.db.QueryRow(ctx, getOpenChatDispatchByThread, arg.RequesterID, arg.ChatID, arg.ThreadID)
+	var i GetOpenChatDispatchByThreadRow
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.TargetUnitID,
+		&i.TargetSquadID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.Number,
+		&i.Title,
+		&i.Status,
+		&i.Slug,
+		&i.WorkspaceName,
+		&i.IssuePrefix,
+		&i.UnitName,
+		&i.Personal,
+		&i.StatusCategory,
+		&i.LeaderState,
 	)
 	return i, err
 }
@@ -151,6 +333,7 @@ const listDispatchesByRequester = `-- name: ListDispatchesByRequester :many
 SELECT
     d.issue_id,
     d.target_unit_id,
+    d.target_squad_id,
     d.created_at,
     d.notified_at,
     CASE
@@ -179,11 +362,12 @@ type ListDispatchesByRequesterParams struct {
 }
 
 type ListDispatchesByRequesterRow struct {
-	IssueID      pgtype.UUID        `json:"issue_id"`
-	TargetUnitID pgtype.UUID        `json:"target_unit_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	NotifiedAt   pgtype.Timestamptz `json:"notified_at"`
-	LeaderState  string             `json:"leader_state"`
+	IssueID       pgtype.UUID        `json:"issue_id"`
+	TargetUnitID  pgtype.UUID        `json:"target_unit_id"`
+	TargetSquadID pgtype.UUID        `json:"target_squad_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt    pgtype.Timestamptz `json:"notified_at"`
+	LeaderState   string             `json:"leader_state"`
 }
 
 // Workbench history. leader_state summarizes the latest squad-leader run:
@@ -201,6 +385,7 @@ func (q *Queries) ListDispatchesByRequester(ctx context.Context, arg ListDispatc
 		if err := rows.Scan(
 			&i.IssueID,
 			&i.TargetUnitID,
+			&i.TargetSquadID,
 			&i.CreatedAt,
 			&i.NotifiedAt,
 			&i.LeaderState,
@@ -213,4 +398,367 @@ func (q *Queries) ListDispatchesByRequester(ctx context.Context, arg ListDispatc
 		return nil, err
 	}
 	return items, nil
+}
+
+const listDispatchesForUnits = `-- name: ListDispatchesForUnits :many
+SELECT issue_id, requester_id, target_unit_id, target_squad_id, created_at, notified_at, status_category, leader_state FROM (
+    SELECT
+        d.issue_id,
+        d.requester_id,
+        d.target_unit_id,
+        d.target_squad_id,
+        d.created_at,
+        d.notified_at,
+        COALESCE(st.category, CASE i.status
+            WHEN 'backlog' THEN 'unstarted'
+            WHEN 'todo' THEN 'unstarted'
+            WHEN 'in_progress' THEN 'started'
+            WHEN 'in_review' THEN 'started'
+            WHEN 'blocked' THEN 'started'
+            WHEN 'done' THEN 'done'
+            WHEN 'cancelled' THEN 'closed'
+            ELSE 'started'
+        END)::text AS status_category,
+        CASE
+            WHEN lt.id IS NULL THEN 'none'
+            WHEN lt.status = 'failed' AND lt.attempt >= lt.max_attempts THEN 'failed'
+            WHEN lt.status IN ('queued', 'claimed', 'running', 'deferred') THEN 'running'
+            ELSE lt.status
+        END::text AS leader_state
+    FROM dispatch_origin d
+    JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
+    LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+    LEFT JOIN LATERAL (
+        SELECT id, status, attempt, max_attempts
+        FROM agent_task_queue
+        WHERE issue_id = d.issue_id AND is_leader_task
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    ) lt ON TRUE
+    WHERE d.workspace_id = $1 AND d.target_unit_id = ANY($2::uuid[])
+) queue
+WHERE status_category IN ('unstarted', 'started')
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListDispatchesForUnitsParams struct {
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	Column2     []pgtype.UUID `json:"column_2"`
+	Limit       int32         `json:"limit"`
+}
+
+type ListDispatchesForUnitsRow struct {
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	RequesterID    pgtype.UUID        `json:"requester_id"`
+	TargetUnitID   pgtype.UUID        `json:"target_unit_id"`
+	TargetSquadID  pgtype.UUID        `json:"target_squad_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt     pgtype.Timestamptz `json:"notified_at"`
+	StatusCategory string             `json:"status_category"`
+	LeaderState    string             `json:"leader_state"`
+}
+
+// The department queue: dispatches aimed at one of the given units that are
+// still open, newest first. The stage is the issue's lifecycle category, read
+// from the workspace catalog so custom statuses land in the right bucket; the
+// built-in fallback keeps issues whose catalog row is missing visible instead
+// of dropping them out of the queue.
+func (q *Queries) ListDispatchesForUnits(ctx context.Context, arg ListDispatchesForUnitsParams) ([]ListDispatchesForUnitsRow, error) {
+	rows, err := q.db.Query(ctx, listDispatchesForUnits, arg.WorkspaceID, arg.Column2, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDispatchesForUnitsRow{}
+	for rows.Next() {
+		var i ListDispatchesForUnitsRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.RequesterID,
+			&i.TargetUnitID,
+			&i.TargetSquadID,
+			&i.CreatedAt,
+			&i.NotifiedAt,
+			&i.StatusCategory,
+			&i.LeaderState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenChatDispatches = `-- name: ListOpenChatDispatches :many
+SELECT
+    d.issue_id,
+    d.workspace_id,
+    d.target_unit_id,
+    d.target_squad_id,
+    d.chat_id,
+    d.thread_id,
+    d.created_at,
+    i.number,
+    i.title,
+    i.status,
+    w.slug,
+    w.name AS workspace_name,
+    w.issue_prefix,
+    COALESCE(u.name, s.name, '')::text AS unit_name,
+    (d.target_squad_id IS NOT NULL)::boolean AS personal,
+    COALESCE(st.category, CASE i.status
+        WHEN 'backlog' THEN 'unstarted'
+        WHEN 'todo' THEN 'unstarted'
+        WHEN 'in_progress' THEN 'started'
+        WHEN 'in_review' THEN 'started'
+        WHEN 'blocked' THEN 'started'
+        WHEN 'done' THEN 'done'
+        WHEN 'cancelled' THEN 'closed'
+        ELSE 'started'
+    END)::text AS status_category,
+    CASE
+        WHEN lt.id IS NULL THEN 'none'
+        WHEN lt.status = 'failed' AND lt.attempt >= lt.max_attempts THEN 'failed'
+        WHEN lt.status IN ('queued', 'claimed', 'running', 'deferred') THEN 'running'
+        ELSE lt.status
+    END::text AS leader_state
+FROM dispatch_origin d
+JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
+JOIN workspace w ON w.id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
+LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+LEFT JOIN LATERAL (
+    SELECT id, status, attempt, max_attempts
+    FROM agent_task_queue
+    WHERE issue_id = d.issue_id AND is_leader_task
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+) lt ON TRUE
+WHERE d.requester_id = $1
+  AND COALESCE(st.category, CASE i.status
+        WHEN 'backlog' THEN 'unstarted'
+        WHEN 'todo' THEN 'unstarted'
+        WHEN 'in_progress' THEN 'started'
+        WHEN 'in_review' THEN 'started'
+        WHEN 'blocked' THEN 'started'
+        WHEN 'done' THEN 'done'
+        WHEN 'cancelled' THEN 'closed'
+        ELSE 'started'
+    END) IN ('unstarted', 'started')
+ORDER BY d.created_at DESC
+LIMIT $2
+`
+
+type ListOpenChatDispatchesParams struct {
+	RequesterID pgtype.UUID `json:"requester_id"`
+	Limit       int32       `json:"limit"`
+}
+
+type ListOpenChatDispatchesRow struct {
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	TargetUnitID   pgtype.UUID        `json:"target_unit_id"`
+	TargetSquadID  pgtype.UUID        `json:"target_squad_id"`
+	ChatID         pgtype.Text        `json:"chat_id"`
+	ThreadID       pgtype.Text        `json:"thread_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Number         int32              `json:"number"`
+	Title          string             `json:"title"`
+	Status         string             `json:"status"`
+	Slug           string             `json:"slug"`
+	WorkspaceName  string             `json:"workspace_name"`
+	IssuePrefix    string             `json:"issue_prefix"`
+	UnitName       string             `json:"unit_name"`
+	Personal       bool               `json:"personal"`
+	StatusCategory string             `json:"status_category"`
+	LeaderState    string             `json:"leader_state"`
+}
+
+// Chat control surface: a requester's still-open dispatches across every
+// project they can see, in the order the conversation lists them. Personal
+// dispatches carry the private squad name instead of a department.
+func (q *Queries) ListOpenChatDispatches(ctx context.Context, arg ListOpenChatDispatchesParams) ([]ListOpenChatDispatchesRow, error) {
+	rows, err := q.db.Query(ctx, listOpenChatDispatches, arg.RequesterID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenChatDispatchesRow{}
+	for rows.Next() {
+		var i ListOpenChatDispatchesRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.WorkspaceID,
+			&i.TargetUnitID,
+			&i.TargetSquadID,
+			&i.ChatID,
+			&i.ThreadID,
+			&i.CreatedAt,
+			&i.Number,
+			&i.Title,
+			&i.Status,
+			&i.Slug,
+			&i.WorkspaceName,
+			&i.IssuePrefix,
+			&i.UnitName,
+			&i.Personal,
+			&i.StatusCategory,
+			&i.LeaderState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenIntakeBlockersByIssue = `-- name: ListOpenIntakeBlockersByIssue :many
+SELECT issue_id, done_text, missing_text, consequence_text
+FROM intake_blocker
+WHERE workspace_id = $1 AND issue_id = ANY($2::uuid[]) AND state = 'open'
+`
+
+type ListOpenIntakeBlockersByIssueParams struct {
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	IssueIds    []pgtype.UUID `json:"issue_ids"`
+}
+
+type ListOpenIntakeBlockersByIssueRow struct {
+	IssueID         pgtype.UUID `json:"issue_id"`
+	DoneText        string      `json:"done_text"`
+	MissingText     string      `json:"missing_text"`
+	ConsequenceText string      `json:"consequence_text"`
+}
+
+// Open blockers for a set of issues, so a queue can show why work is waiting
+// instead of leaving it parked with no explanation.
+func (q *Queries) ListOpenIntakeBlockersByIssue(ctx context.Context, arg ListOpenIntakeBlockersByIssueParams) ([]ListOpenIntakeBlockersByIssueRow, error) {
+	rows, err := q.db.Query(ctx, listOpenIntakeBlockersByIssue, arg.WorkspaceID, arg.IssueIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenIntakeBlockersByIssueRow{}
+	for rows.Next() {
+		var i ListOpenIntakeBlockersByIssueRow
+		if err := rows.Scan(
+			&i.IssueID,
+			&i.DoneText,
+			&i.MissingText,
+			&i.ConsequenceText,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reassignDispatchOrigin = `-- name: ReassignDispatchOrigin :one
+UPDATE dispatch_origin
+SET target_unit_id = $2,
+    target_squad_id = NULL,
+    notified_at = NULL,
+    failure_notified_at = NULL,
+    started_notified_at = NULL
+WHERE issue_id = $1
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+`
+
+type ReassignDispatchOriginParams struct {
+	IssueID      pgtype.UUID `json:"issue_id"`
+	TargetUnitID pgtype.UUID `json:"target_unit_id"`
+}
+
+// A reassignment starts a fresh delivery: the previous completion and failure
+// notices no longer describe where the work is, so both claims are cleared.
+func (q *Queries) ReassignDispatchOrigin(ctx context.Context, arg ReassignDispatchOriginParams) (DispatchOrigin, error) {
+	row := q.db.QueryRow(ctx, reassignDispatchOrigin, arg.IssueID, arg.TargetUnitID)
+	var i DispatchOrigin
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.RequesterID,
+		&i.TargetUnitID,
+		&i.ChannelType,
+		&i.InstallationID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.NotifiedAt,
+		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
+	)
+	return i, err
+}
+
+const updateIssueAssignee = `-- name: UpdateIssueAssignee :one
+UPDATE issue
+SET assignee_type = 'squad',
+    assignee_id = $2,
+    revision = revision + 1,
+    updated_at = now()
+WHERE id = $1 AND workspace_id = $3
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, stage, properties, revision, last_activity_at, triage_state, duplicate_of_issue_id
+`
+
+type UpdateIssueAssigneeParams struct {
+	ID          pgtype.UUID `json:"id"`
+	AssigneeID  pgtype.UUID `json:"assignee_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Reassignment moves the root issue to the new department's squad. The
+// revision bump is what makes clients treat the pushed issue snapshot as
+// newer than the one they hold.
+func (q *Queries) UpdateIssueAssignee(ctx context.Context, arg UpdateIssueAssigneeParams) (Issue, error) {
+	row := q.db.QueryRow(ctx, updateIssueAssignee, arg.ID, arg.AssigneeID, arg.WorkspaceID)
+	var i Issue
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.AssigneeType,
+		&i.AssigneeID,
+		&i.CreatorType,
+		&i.CreatorID,
+		&i.ParentIssueID,
+		&i.AcceptanceCriteria,
+		&i.ContextRefs,
+		&i.Position,
+		&i.DueDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Number,
+		&i.ProjectID,
+		&i.OriginType,
+		&i.OriginID,
+		&i.FirstExecutedAt,
+		&i.StartDate,
+		&i.Metadata,
+		&i.Stage,
+		&i.Properties,
+		&i.Revision,
+		&i.LastActivityAt,
+		&i.TriageState,
+		&i.DuplicateOfIssueID,
+	)
+	return i, err
 }

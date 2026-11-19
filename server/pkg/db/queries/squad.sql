@@ -1,6 +1,6 @@
 -- name: CreateSquad :one
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, is_private)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetSquad :one
@@ -28,6 +28,13 @@ FOR UPDATE;
 
 -- name: ListSquads :many
 SELECT * FROM squad WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY created_at ASC;
+
+-- name: GetPersonalSquadByCreator :one
+-- The workbench's personal target reuses one live private squad per creator.
+SELECT * FROM squad
+WHERE workspace_id = $1 AND creator_id = $2 AND is_private AND archived_at IS NULL
+ORDER BY created_at ASC
+LIMIT 1;
 
 -- name: GetSquadByOrgUnit :one
 -- The department's squad, if one has been generated. Org pages keep one
@@ -88,6 +95,14 @@ UPDATE squad SET
     updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: ListOrgManagedSquads :many
+-- Department squads whose leader and roster follow the organization tree.
+SELECT * FROM squad
+WHERE workspace_id = $1
+  AND org_managed
+  AND archived_at IS NULL
+ORDER BY created_at ASC;
 
 -- name: ArchiveSquad :one
 UPDATE squad SET archived_at = now(), archived_by = $2, updated_at = now()

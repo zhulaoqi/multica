@@ -7,6 +7,7 @@ package memberrevoke
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -299,6 +300,15 @@ func (s Service) Revoke(ctx context.Context, p Params) (Result, error) {
 		result.SharedTeardown.CancelledTasks = append(result.SharedTeardown.CancelledTasks, teardown.CancelledTasks...)
 		result.SharedTeardown.PausedAutopilots = append(result.SharedTeardown.PausedAutopilots, teardown.PausedAutopilots...)
 		result.ReadyChats = append(result.ReadyChats, readyChats...)
+	}
+
+	// Agents that survived the cleanup (for example one unbound from a shared
+	// runtime) must still have a primary twin representing the member.
+	if _, err := qtx.EnsurePrimaryAgentForOwner(ctx, db.EnsurePrimaryAgentForOwnerParams{
+		WorkspaceID: p.WorkspaceID,
+		OwnerID:     p.UserID,
+	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return empty, err
 	}
 
 	if err := qtx.DeleteMember(ctx, p.MemberID); err != nil {

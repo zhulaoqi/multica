@@ -151,6 +151,10 @@ type fakeAPIClient struct {
 	// *APIError (to exercise the chat-level fallback) or an ambiguous
 	// transport error (to assert no fallback happens).
 	threadReplyErr error
+	// resource, when set, is returned by DownloadMessageResource; resourceErr
+	// exercises the media-ingestion failure path.
+	resource    DownloadedResource
+	resourceErr error
 }
 
 // errThreadReplyClassified is a Lark business error the fallback path
@@ -213,7 +217,12 @@ func (f *fakeAPIClient) ListChatMessages(ctx context.Context, creds Installation
 	return nil, nil
 }
 func (f *fakeAPIClient) DownloadMessageResource(ctx context.Context, creds InstallationCredentials, p DownloadResourceParams) (DownloadedResource, error) {
-	return DownloadedResource{}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.resourceErr != nil {
+		return DownloadedResource{}, f.resourceErr
+	}
+	return f.resource, nil
 }
 func (f *fakeAPIClient) BatchGetUsers(ctx context.Context, creds InstallationCredentials, openIDs []string) (map[string]string, error) {
 	return nil, nil

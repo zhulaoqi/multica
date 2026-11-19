@@ -794,11 +794,17 @@ func (r *Router) dispatchOrganization(ctx context.Context, inst ResolvedInstalla
 		errors.Is(err, service.ErrDispatchRequesterNotInTeam):
 		res.Outcome = OutcomeDispatchNoAccess
 		return res, nil
+	case errors.Is(err, service.ErrDispatchRequesterUnbound):
+		res.Outcome = OutcomeDispatchUnbound
+		return res, nil
 	case errors.Is(err, service.ErrOrgUnitNoAgents):
 		res.Outcome = OutcomeDispatchNoAgents
 		return res, nil
 	case errors.Is(err, service.ErrDispatchLeaderUnavailable):
 		res.Outcome = OutcomeDispatchLeaderUnavailable
+		return res, nil
+	case errors.Is(err, service.ErrDispatchLeaderOffline):
+		res.Outcome = OutcomeDispatchLeaderOffline
 		return res, nil
 	case err != nil:
 		return Result{}, fmt.Errorf("dispatch to org unit: %w", err)

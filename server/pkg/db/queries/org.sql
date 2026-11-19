@@ -46,12 +46,39 @@ WHERE lower(u.email) = lower($2);
 -- Includes agents with an empty unit so the org page can place them. Status is
 -- the agent's own availability, which the org view surfaces as whether the
 -- agent is waiting for collaborative scheduling. OwnerID lets the client match
--- an agent to its member (the "digital twin" binding).
-SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode
+-- an agent to its member (the "digital twin" binding); is_primary picks which
+-- of several owned agents is the twin the org view shows on the member row.
+SELECT id, name, owner_id, org_unit_id, intake_can, intake_cannot, status, runtime_mode, is_primary
 FROM agent
 WHERE workspace_id = $1
   AND archived_at IS NULL
 ORDER BY name ASC;
+-- name: ListRunnableLeaderAgents :many
+-- Active agents whose runtime is online right now, the pool a department
+-- squad can lead with after a lead change or a departure. Preference (the
+-- lead's primary twin first) is resolved in Go so the query stays stable.
+SELECT a.id, a.owner_id, a.org_unit_id, a.is_primary
+FROM agent a
+JOIN agent_runtime r ON r.id = a.runtime_id
+WHERE a.workspace_id = $1
+  AND a.archived_at IS NULL
+  AND a.runtime_id IS NOT NULL
+  AND r.status = 'online'
+ORDER BY a.is_primary DESC, a.created_at ASC;
+
+-- name: MovePrimaryTwinToOwnerUnit :execrows
+-- The member's primary twin represents them in the organization, so it follows
+-- them when their department placement changes.
+UPDATE agent a
+SET org_unit_id = m.org_unit_id, updated_at = now()
+FROM member m
+WHERE a.workspace_id = $1
+  AND a.owner_id = $2
+  AND a.is_primary
+  AND m.workspace_id = a.workspace_id
+  AND m.user_id = a.owner_id
+  AND a.org_unit_id IS DISTINCT FROM m.org_unit_id;
+
 -- name: RenameOrgUnit :exec
 UPDATE org_unit
 SET name = $3, updated_at = now()
@@ -105,6 +132,9 @@ LEFT JOIN squad_member sm ON sm.squad_id = s.id
 LEFT JOIN agent a ON a.id = sm.member_id
 WHERE s.workspace_id = $1
   AND s.archived_at IS NULL
+  -- Personal squads belong to one member and are not part of the department
+  -- structure, so the org tree never lists them.
+  AND NOT s.is_private
 GROUP BY s.id
 ORDER BY s.name ASC;
 

@@ -201,6 +201,9 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 		removed := h.disconnectMembersOutsideProject(ctx, wsUUID)
 		h.publishAccessRevocations(wsUUID, "", removed)
 	}
+	// Directory moves and newly assigned leads invalidate department squads;
+	// one pass re-points any leader that can no longer run and re-rosters.
+	h.syncAllOrgSquadLeadership(ctx, wsUUID)
 	return report, nil
 }
 
@@ -406,6 +409,7 @@ func (h *Handler) upsertDirectoryUsers(
 		}
 
 		member, isMember := memberByUser[user.ID]
+		moved := false
 		switch {
 		case owned:
 			// Only update an existing project member; never create one.
@@ -419,6 +423,7 @@ func (h *Handler) upsertDirectoryUsers(
 				}
 				member.OrgUnitID = unit
 				memberByUser[user.ID] = member
+				moved = true
 			}
 		case !isMember:
 			createdMember, err := qtx.CreateMember(ctx, db.CreateMemberParams{
@@ -441,6 +446,17 @@ func (h *Handler) upsertDirectoryUsers(
 			}
 			member.OrgUnitID = unit
 			memberByUser[user.ID] = member
+			moved = true
+		}
+		if moved {
+			// The member's twin represents them in the organization, so a
+			// directory move moves it too.
+			if _, err := qtx.MovePrimaryTwinToOwnerUnit(ctx, db.MovePrimaryTwinToOwnerUnitParams{
+				WorkspaceID: wsUUID,
+				OwnerID:     user.ID,
+			}); err != nil {
+				return nil, fmt.Errorf("move primary twin of %q: %w", email, err)
+			}
 		}
 
 		if err := qtx.SaveFeishuIdentity(ctx, db.SaveFeishuIdentityParams{

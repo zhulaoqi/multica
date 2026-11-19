@@ -142,7 +142,12 @@ type AgentResponse struct {
 	// mirroring the existing mcp_config redaction contract.
 	ComposioToolkitAllowlist         []string               `json:"composio_toolkit_allowlist,omitempty"`
 	ComposioToolkitAllowlistRedacted bool                   `json:"composio_toolkit_allowlist_redacted,omitempty"`
-	OwnerID                          *string                `json:"owner_id"`
+	OwnerID *string `json:"owner_id"`
+	// IsPrimary marks the owner's digital twin in this workspace. A member may
+	// own several agents; exactly one active one is primary, and the org tree
+	// shows it on the member row. Older servers omit it, so clients treat the
+	// field as false and fall back to the first owned agent.
+	IsPrimary                        bool                   `json:"is_primary"`
 	Skills                           []AgentSkillSummary    `json:"skills"`
 	DisabledRuntimeSkills            []DisabledRuntimeSkill `json:"disabled_runtime_skills"`
 	CreatedAt                        string                 `json:"created_at"`
@@ -246,6 +251,7 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		ServiceTier:              a.ServiceTier.String,
 		ComposioToolkitAllowlist: composioAllowlist,
 		OwnerID:                  uuidToPtr(a.OwnerID),
+		IsPrimary:                a.IsPrimary,
 		Skills:                   []AgentSkillSummary{},
 		DisabledRuntimeSkills:    decodeDisabledRuntimeSkills(a.DisabledRuntimeSkills),
 		CreatedAt:                timestampToString(a.CreatedAt),
@@ -2851,6 +2857,20 @@ func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	actorType, actorID := h.resolveActor(r, userID, wsID)
 	h.publish(protocol.EventAgentArchived, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	// Archiving the primary twin leaves the owner without one; promote their
+	// oldest remaining agent so the dispatch gate does not silently lock a
+	// member out of work they can still take.
+	if archived.OwnerID.Valid {
+		if promoted, err := h.Queries.EnsurePrimaryAgentForOwner(r.Context(), db.EnsurePrimaryAgentForOwnerParams{
+			WorkspaceID: archived.WorkspaceID,
+			OwnerID:     archived.OwnerID,
+		}); err == nil {
+			promotedResp := h.agentToResponse(promoted)
+			h.publish(protocol.EventAgentUpdated, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(promotedResp)})
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Warn("promote next primary agent failed", append(logger.RequestAttrs(r), "error", err, "owner_id", uuidToString(archived.OwnerID))...)
+		}
+	}
 	redactAgentResponseForActor(&resp, actorType)
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -2876,6 +2896,14 @@ func (h *Handler) RestoreAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if restored.OwnerID.Valid {
+		if promoted, err := h.Queries.EnsurePrimaryAgentForOwner(r.Context(), db.EnsurePrimaryAgentForOwnerParams{
+			WorkspaceID: restored.WorkspaceID,
+			OwnerID:     restored.OwnerID,
+		}); err == nil && promoted.ID == restored.ID {
+			restored = promoted
+		}
+	}
 	wsID := uuidToString(restored.WorkspaceID)
 	slog.Info("agent restored", append(logger.RequestAttrs(r), "agent_id", id, "workspace_id", wsID)...)
 	resp := h.agentToResponse(restored)

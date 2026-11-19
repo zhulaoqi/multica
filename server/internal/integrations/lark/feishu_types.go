@@ -111,6 +111,8 @@ const (
 	OutcomeDispatchNoAccess          Outcome = "dispatch_no_access"
 	OutcomeDispatchNoAgents          Outcome = "dispatch_no_agents"
 	OutcomeDispatchLeaderUnavailable Outcome = "dispatch_leader_unavailable"
+	OutcomeDispatchLeaderOffline     Outcome = "dispatch_leader_offline"
+	OutcomeDispatchUnbound           Outcome = "dispatch_unbound"
 )
 
 // DispatchResult is the Feishu-side verdict the OutcomeReplier consumes to

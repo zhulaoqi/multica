@@ -57,6 +57,7 @@ type Agent struct {
 	IntakeCan             pgtype.Text `json:"intake_can"`
 	IntakeCannot          pgtype.Text `json:"intake_cannot"`
 	OrgUnitID             pgtype.UUID `json:"org_unit_id"`
+	IsPrimary             bool        `json:"is_primary"`
 }
 
 type AgentBuilderDraft struct {
@@ -712,17 +713,21 @@ type DingtalkGroupRoute struct {
 }
 
 type DispatchOrigin struct {
-	IssueID         pgtype.UUID        `json:"issue_id"`
-	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
-	RequesterID     pgtype.UUID        `json:"requester_id"`
-	TargetUnitID    pgtype.UUID        `json:"target_unit_id"`
-	ChannelType     string             `json:"channel_type"`
-	InstallationID  pgtype.UUID        `json:"installation_id"`
-	ChatID          pgtype.Text        `json:"chat_id"`
-	ThreadID        pgtype.Text        `json:"thread_id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	NotifiedAt      pgtype.Timestamptz `json:"notified_at"`
-	ClientRequestID pgtype.Text        `json:"client_request_id"`
+	IssueID           pgtype.UUID        `json:"issue_id"`
+	WorkspaceID       pgtype.UUID        `json:"workspace_id"`
+	RequesterID       pgtype.UUID        `json:"requester_id"`
+	TargetUnitID      pgtype.UUID        `json:"target_unit_id"`
+	ChannelType       string             `json:"channel_type"`
+	InstallationID    pgtype.UUID        `json:"installation_id"`
+	ChatID            pgtype.Text        `json:"chat_id"`
+	ThreadID          pgtype.Text        `json:"thread_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt        pgtype.Timestamptz `json:"notified_at"`
+	ClientRequestID   pgtype.Text        `json:"client_request_id"`
+	TargetSquadID     pgtype.UUID        `json:"target_squad_id"`
+	FailureNotifiedAt pgtype.Timestamptz `json:"failure_notified_at"`
+	StartedNotifiedAt pgtype.Timestamptz `json:"started_notified_at"`
+	OriginMessageID   pgtype.Text        `json:"origin_message_id"`
 }
 
 type Feedback struct {
@@ -1333,6 +1338,17 @@ type NotificationPreference struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OrgChannelInstallation struct {
+	ID               pgtype.UUID        `json:"id"`
+	ChannelType      string             `json:"channel_type"`
+	Config           []byte             `json:"config"`
+	Status           string             `json:"status"`
+	WsLeaseToken     pgtype.Text        `json:"ws_lease_token"`
+	WsLeaseExpiresAt pgtype.Timestamptz `json:"ws_lease_expires_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OrgSyncRun struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
@@ -1633,6 +1649,7 @@ type Squad struct {
 	WipLimit     int32              `json:"wip_limit"`
 	MaxChildren  int32              `json:"max_children"`
 	OrgManaged   bool               `json:"org_managed"`
+	IsPrivate    bool               `json:"is_private"`
 }
 
 type SquadMember struct {

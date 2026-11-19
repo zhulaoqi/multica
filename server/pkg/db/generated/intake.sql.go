@@ -112,11 +112,19 @@ func (q *Queries) CountIntakeLeadProjects(ctx context.Context, arg CountIntakeLe
 
 const createIntakeAgent = `-- name: CreateIntakeAgent :one
 INSERT INTO agent (
-    workspace_id, name, runtime_mode, owner_id, intake_can, intake_cannot
+    workspace_id, name, runtime_mode, owner_id, intake_can, intake_cannot, is_primary
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6,
+    NOT EXISTS (
+        SELECT 1 FROM agent p
+        WHERE p.workspace_id = $1
+          AND p.owner_id = $4
+          AND p.kind = 'user'
+          AND p.archived_at IS NULL
+          AND p.is_primary
+    )
 )
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary
 `
 
 type CreateIntakeAgentParams struct {
@@ -171,6 +179,7 @@ func (q *Queries) CreateIntakeAgent(ctx context.Context, arg CreateIntakeAgentPa
 		&i.IntakeCan,
 		&i.IntakeCannot,
 		&i.OrgUnitID,
+		&i.IsPrimary,
 	)
 	return i, err
 }
@@ -1682,7 +1691,7 @@ WHERE id = $1
   AND owner_id = $7
   AND archived_at IS NULL
   AND kind = 'user'
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary
 `
 
 type UpdateIntakeAgentIdentityParams struct {
@@ -1739,6 +1748,7 @@ func (q *Queries) UpdateIntakeAgentIdentity(ctx context.Context, arg UpdateIntak
 		&i.IntakeCan,
 		&i.IntakeCannot,
 		&i.OrgUnitID,
+		&i.IsPrimary,
 	)
 	return i, err
 }

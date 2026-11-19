@@ -55,7 +55,8 @@ func (n *noopReplier) Reply(ctx context.Context, inst Installation, msg InboundM
 	switch res.Outcome {
 	case OutcomeNeedsBinding, OutcomeAgentOffline, OutcomeAgentArchived, OutcomeFreshPending, OutcomeChatStarted, OutcomeIssueUsage,
 		OutcomeDispatchUsage, OutcomeDispatchCreated, OutcomeDispatchAmbiguous,
-		OutcomeDispatchNoAccess, OutcomeDispatchNoAgents, OutcomeDispatchLeaderUnavailable:
+		OutcomeDispatchNoAccess, OutcomeDispatchNoAgents, OutcomeDispatchLeaderUnavailable,
+		OutcomeDispatchLeaderOffline, OutcomeDispatchUnbound:
 		n.log.Warn("lark outcome replier: outbound reply skipped (replier not wired)",
 			"outcome", string(res.Outcome),
 			"installation_id", uuidString(inst.ID),
@@ -250,6 +251,22 @@ func (r *LarkOutcomeReplier) Reply(ctx context.Context, inst Installation, msg I
 	case OutcomeDispatchLeaderUnavailable:
 		if err := r.sendChatNotice(ctx, inst, msg, dispatchLeaderUnavailableCopy); err != nil {
 			r.log.Warn("lark outcome replier: dispatch leader-unavailable reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchLeaderOffline:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchLeaderOfflineCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch leader-offline reply failed",
+				"installation_id", uuidString(inst.ID),
+				"chat_id", string(msg.ChatID),
+				"err", err.Error(),
+			)
+		}
+	case OutcomeDispatchUnbound:
+		if err := r.sendChatNotice(ctx, inst, msg, dispatchUnboundCopy); err != nil {
+			r.log.Warn("lark outcome replier: dispatch unbound reply failed",
 				"installation_id", uuidString(inst.ID),
 				"chat_id", string(msg.ChatID),
 				"err", err.Error(),
@@ -520,6 +537,8 @@ const (
 	dispatchNoAccessCopy          = "你没有向这个部门派活的权限。只能派给自己所在的部门，或自己负责的部门。"
 	dispatchNoAgentsCopy          = "这个部门还没有可用的 Agent，暂时无法派活。请联系部门负责人添加 Agent 后再试。"
 	dispatchLeaderUnavailableCopy = "这个部门的队长 Agent 暂时不能由你调用。请联系部门负责人开放该 Agent 的权限。"
+	dispatchLeaderOfflineCopy     = "这个部门现在没有在线的 Agent，暂时无法承接。请让部门负责人启动 Runtime 后再派活。"
+	dispatchUnboundCopy           = "你还没有绑定自己的 Agent，暂时不能派活。请先在 Multica 里绑定 Agent 后再试。"
 )
 
 // dispatchCreatedText confirms the department dispatch. identifier always wins

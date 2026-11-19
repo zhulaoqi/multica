@@ -580,6 +580,15 @@ func (h *Handler) UpdateOrgUnit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		// The department's squad follows its lead: the new lead's primary twin
+		// takes over when it can run, and the roster is re-synced either way.
+		units := access.units
+		for i := range units {
+			if units[i].ID == unitID {
+				units[i].LeadUserID = lead
+			}
+		}
+		h.syncOrgSquadLeadership(r.Context(), wsUUID, units, unitID)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -897,6 +906,9 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 				return
 			}
 		}
+		// The member's primary twin moves with them so their representative
+		// stays visible in the target department.
+		h.applyMemberUnitMove(r.Context(), access.wsUUID, entityUUID)
 	case "squad":
 		if err := h.Queries.SetSquadOrgUnit(r.Context(), db.SetSquadOrgUnitParams{
 			ID:          entityUUID,

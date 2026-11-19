@@ -1,8 +1,16 @@
 -- name: CreateIntakeAgent :one
 INSERT INTO agent (
-    workspace_id, name, runtime_mode, owner_id, intake_can, intake_cannot
+    workspace_id, name, runtime_mode, owner_id, intake_can, intake_cannot, is_primary
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6,
+    NOT EXISTS (
+        SELECT 1 FROM agent p
+        WHERE p.workspace_id = $1
+          AND p.owner_id = $4
+          AND p.kind = 'user'
+          AND p.archived_at IS NULL
+          AND p.is_primary
+    )
 )
 RETURNING *;
 

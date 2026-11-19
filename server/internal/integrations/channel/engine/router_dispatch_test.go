@@ -139,6 +139,7 @@ func TestRouter_DispatchCommand_MapsServiceRefusals(t *testing.T) {
 		outcome Outcome
 	}{
 		{"no agent", service.ErrOrgUnitNoAgents, OutcomeDispatchNoAgents},
+		{"requester unbound", service.ErrDispatchRequesterUnbound, OutcomeDispatchUnbound},
 		{"leader unavailable", service.ErrDispatchLeaderUnavailable, OutcomeDispatchLeaderUnavailable},
 		{"no access", service.ErrOrgUnitNoAccess, OutcomeDispatchNoAccess},
 		{"not a member", service.ErrDispatchRequesterNotInTeam, OutcomeDispatchNoAccess},

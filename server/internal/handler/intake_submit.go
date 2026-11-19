@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/issueworkflow"
@@ -62,6 +64,17 @@ func (h *Handler) CreateIntakeRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isNotFound(err) {
 		writeError(w, http.StatusInternalServerError, "could not load request")
+		return
+	}
+	if _, err := h.Queries.GetPrimaryAgentForOwner(r.Context(), db.GetPrimaryAgentForOwnerParams{
+		WorkspaceID: wsUUID,
+		OwnerID:     userUUID,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErrorCode(w, http.StatusForbidden, "agent_binding_required", "bind an agent before sending requests")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not check agent binding")
 		return
 	}
 

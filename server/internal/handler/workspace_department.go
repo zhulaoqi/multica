@@ -467,6 +467,9 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusInternalServerError, "failed to load member")
 			return
 		}
+		if err := h.ensurePrimaryTwinInWorkspace(r.Context(), wsUUID, userUUID, directoryRow.OrgUnitID); err != nil {
+			slog.Warn("clone primary twin for restored member failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
+		}
 		memberResp := h.memberWithUserResponse(updated, user)
 		h.publish(protocol.EventMemberAdded, workspaceID, "member", actorUserID, map[string]any{
 			"member":         memberResp,
@@ -535,6 +538,10 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.MembershipCache.Invalidate(r.Context(), uuidToString(userUUID), workspaceID)
+
+	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), wsUUID, userUUID, directoryRow.OrgUnitID); err != nil {
+		slog.Warn("clone primary twin for new member failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID)...)
+	}
 
 	memberResp := h.memberWithUserResponse(member, user)
 	h.publish(protocol.EventMemberAdded, workspaceID, "member", actorUserID, map[string]any{
