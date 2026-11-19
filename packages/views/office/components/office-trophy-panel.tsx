@@ -130,7 +130,7 @@ export function OfficeTrophyPanel({
                         "size-2.5",
                         index < department.stars
                           ? "text-warning"
-                          : "text-muted-foreground/40",
+                          : "text-faint-foreground",
                       )}
                     />
                   ))}
