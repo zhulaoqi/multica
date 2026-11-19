@@ -9,6 +9,7 @@
   "children": "子部門",
   "my_department": "自分の部署",
   "twin": "デジタルツイン",
+  "primary_twin": "メイン分身",
   "edit_twin": "編集",
   "twin_title": "自分の分身",
   "twin_title_for": "{{name}}の分身",

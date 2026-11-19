@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enCommon from "../locales/en/common.json";
@@ -44,6 +45,26 @@ vi.mock("@multica/core/workspace", () => {
   };
 });
 
+// A department lead with somewhere to put the project: without options the
+// step hides the create form and these assertions would test the wrong state.
+vi.mock("@multica/core/workspace/queries", () => ({
+  workspaceCreateOptionsQuery: () => ({
+    queryKey: ["workspace-create-options"],
+    queryFn: async () => ({
+      can_create: true,
+      can_create_unassigned: false,
+      departments: [
+        {
+          source_workspace_id: "ws-source",
+          source_workspace_name: "Acme",
+          unit_id: "unit-1",
+          path: "Engineering",
+        },
+      ],
+    }),
+  }),
+}));
+
 vi.mock("@multica/core/onboarding", async () => {
   const actual = await vi.importActual<Record<string, unknown>>(
     "@multica/core/onboarding",
@@ -54,31 +75,36 @@ vi.mock("@multica/core/onboarding", async () => {
 import { OnboardingFlow } from "./onboarding-flow";
 
 function renderFlow(props: Record<string, unknown>) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <I18nProvider locale="en" resources={TEST_RESOURCES}>
-      <OnboardingFlow onComplete={vi.fn()} {...props} />
-    </I18nProvider>,
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <OnboardingFlow onComplete={vi.fn()} {...props} />
+      </I18nProvider>
+    </QueryClientProvider>,
   );
 }
 
 describe("OnboardingFlow — new-workspace mode", () => {
-  it("starts at the workspace step instead of the product intro", () => {
+  it("starts at the workspace step instead of the product intro", async () => {
     renderFlow({ mode: "new_workspace", onCancel: vi.fn() });
 
     // The welcome screen teaches what Multica is; someone creating a second
     // workspace already knows, so the flow opens on naming it.
     expect(
-      screen.getByRole("heading", { name: /Name your workspace/i }),
+      await screen.findByRole("heading", { name: /Name your workspace/i }),
     ).toBeInTheDocument();
   });
 
-  it("always creates a workspace rather than offering the existing one", () => {
+  it("always creates a workspace rather than offering the existing one", async () => {
     renderFlow({ mode: "new_workspace", onCancel: vi.fn() });
 
     // First-run onboarding offers "Continue with {name}" when an abandoned
     // workspace exists. Doing that here would defeat the whole intent.
     expect(screen.queryByText(/Continue with/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Workspace name")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Workspace name")).toBeInTheDocument();
   });
 
   it("still opens on the product intro in first-run mode", () => {

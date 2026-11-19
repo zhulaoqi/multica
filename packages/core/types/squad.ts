@@ -23,6 +23,8 @@ export interface Squad {
   archived_by: string | null;
   member_count?: number;
   member_preview?: SquadMemberPreview[];
+  /** The creator's personal squad; hidden from every other member. */
+  is_private?: boolean;
 }
 
 export interface SquadMember {
@@ -50,6 +52,7 @@ export interface CreateSquadRequest {
   description?: string;
   leader_id: string;
   avatar_url?: string;
+  is_private?: boolean;
 }
 
 export interface UpdateSquadRequest {

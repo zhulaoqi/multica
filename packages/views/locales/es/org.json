@@ -9,6 +9,7 @@
   "children": "Subdepartamentos",
   "my_department": "Mi departamento",
   "twin": "Gemelo digital",
+  "primary_twin": "Gemelo principal",
   "edit_twin": "Editar",
   "twin_title": "Mi gemelo",
   "twin_title_for": "Gemelo digital de {{name}}",

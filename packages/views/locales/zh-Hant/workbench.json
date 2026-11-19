@@ -15,6 +15,9 @@
     "back": "返回",
     "unknown_department": "部門",
     "load_error": "載入最近派工失敗。",
+    "binding_required_title": "先綁定你的智慧體",
+    "binding_required_description": "智慧體代表你接收部門的回覆。綁定後即可派活；瀏覽和評審仍然可用。",
+    "binding_required_action": "去綁定",
     "examples_label": "可以這樣說",
     "empty_history": "派出的工作會出現在這裡。",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "進行中",
       "completed": "已完成",
       "empty": "這裡還沒有內容。"
-    }
+    },
+    "target_label": "發給",
+    "target_department": "部門",
+    "target_personal": "我的小隊",
+    "personal_squad": "我的小隊",
+    "blocked": "阻塞：{{missing}}"
   },
   "status": {
     "queued": "已交給部門，負責人稍後接手。",
@@ -49,7 +57,10 @@
     "completed": "已完成。",
     "failed": "部門負責人未能啟動這項工作，已通知該部門。",
     "cancelled": "這項工作已取消。",
-    "dispatched_at": "{{time}}送出"
+    "dispatched_at": "{{time}}送出",
+    "queued_personal": "已發給你的小隊，隊長很快會接手。",
+    "decomposing_personal": "小隊隊長正在拆分任務…",
+    "failed_personal": "小隊隊長沒能開始處理這件事。"
   },
   "card": {
     "department": "部門",
@@ -66,19 +77,35 @@
     "title": "交給哪個部門？",
     "agents_other": "{{count}} 個 Agent"
   },
+  "reassign": {
+    "action": "改派部門",
+    "title": "改派部門",
+    "description": "任務會轉給另一個部門的小隊，並重新喚醒該部門負責人。",
+    "target_label": "部門",
+    "empty": "目前沒有其他部門可以承接。",
+    "no_agents": "暫無 agent",
+    "confirm": "轉交",
+    "cancel": "取消"
+  },
   "errors": {
     "ambiguous": "有多個部門可以承接，請選擇一個。",
     "dispatch_text_required": "先寫清楚要做什麼。",
     "dispatch_text_too_long": "內容太長了，請控制在 4000 字以內。",
     "org_dispatch_unit_not_found": "該部門已不存在，請另選一個或交給系統判斷。",
     "org_dispatch_forbidden": "你沒有該部門的權限。",
+    "agent_binding_required": "請先綁定智慧體，再把工作發給部門。",
     "org_dispatch_no_agents": "該部門還沒有 Agent，請先到組織頁新增。",
     "org_dispatch_leader_unavailable": "暫時聯絡不上部門負責人，請稍後再試。",
+    "org_dispatch_leader_offline": "該部門的 Agent 都不在線，請讓部門負責人啟動 Runtime 後再派活。",
     "org_dispatch_unroutable": "無法判斷該交給哪個部門，請點名部門或補充說明。",
     "org_dispatch_failed": "沒能把這項工作交給部門。",
     "generic": "出了點問題，請重試。",
     "followup_failed": "追問沒有送出，請重試。",
-    "upload_failed": "有檔案沒有上傳成功，請重試。"
+    "upload_failed": "有檔案沒有上傳成功，請重試。",
+    "personal_squad_not_found": "這個個人小隊已不存在，重新傳送即可新建。",
+    "org_dispatch_target_conflict": "部門和我的小隊只能選一個。",
+    "org_dispatch_reassign_forbidden": "只有發起人可以改派這項工作。",
+    "dispatch_not_found": "這項工作已不在你的派活紀錄中。"
   },
   "plan": {
     "title": "計畫"
@@ -96,5 +123,17 @@
     "cancel": "取消",
     "accept_failed": "驗收沒有成功，請重試。",
     "reject_failed": "退回沒有成功，請重試。"
+  },
+  "queue": {
+    "title": "部門佇列",
+    "load_error": "無法載入部門佇列。",
+    "stages": {
+      "pending": "待承接",
+      "in_progress": "進行中",
+      "review": "待驗收"
+    },
+    "requested_by": "來自 {{name}}",
+    "unknown_requester": "來自同事",
+    "blocked": "阻塞：{{missing}}"
   }
 }

@@ -15,6 +15,9 @@
     "back": "Retour",
     "unknown_department": "Département",
     "load_error": "Impossible de charger le travail récent.",
+    "binding_required_title": "Liez d'abord votre agent",
+    "binding_required_description": "Votre agent vous représente lorsque vous confiez du travail à un service. Liez-en un pour commencer ; la consultation et la relecture restent disponibles.",
+    "binding_required_action": "Lier un agent",
     "examples_label": "Essayez de demander",
     "empty_history": "Le travail envoyé apparaîtra ici.",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "En cours",
       "completed": "Terminé",
       "empty": "Rien ici pour l'instant."
-    }
+    },
+    "target_label": "Envoyer à",
+    "target_department": "Département",
+    "target_personal": "Mon équipe",
+    "personal_squad": "Mon équipe",
+    "blocked": "Bloqué : {{missing}}"
   },
   "status": {
     "queued": "Envoyé au département. Son responsable s'en saisit bientôt.",
@@ -49,7 +57,10 @@
     "completed": "Terminé.",
     "failed": "Le responsable du département n'a pas pu démarrer. Le département a été prévenu.",
     "cancelled": "Ce travail a été annulé.",
-    "dispatched_at": "Envoyé {{time}}"
+    "dispatched_at": "Envoyé {{time}}",
+    "queued_personal": "Envoyé à votre équipe. Son responsable va le prendre en charge.",
+    "decomposing_personal": "Le responsable de votre équipe découpe ce travail en tâches…",
+    "failed_personal": "Le responsable de votre équipe n'a pas pu démarrer."
   },
   "card": {
     "department": "Département",
@@ -67,19 +78,35 @@
     "agents_one": "{{count}} agent",
     "agents_other": "{{count}} agents"
   },
+  "reassign": {
+    "action": "Réattribuer le département",
+    "title": "Réattribuer le département",
+    "description": "L'issue passe à l'équipe d'un autre département, dont le responsable est de nouveau sollicité.",
+    "target_label": "Département",
+    "empty": "Aucun autre département ne peut le prendre pour l'instant.",
+    "no_agents": "Aucun agent",
+    "confirm": "Déplacer",
+    "cancel": "Annuler"
+  },
   "errors": {
     "ambiguous": "Plusieurs départements peuvent s'en charger. Choisissez-en un.",
     "dispatch_text_required": "Indiquez d'abord ce qu'il faut faire.",
     "dispatch_text_too_long": "C'est trop long. Restez sous 4 000 caractères.",
     "org_dispatch_unit_not_found": "Ce département n'existe plus. Choisissez-en un autre ou laissez Multica l'acheminer.",
     "org_dispatch_forbidden": "Vous n'avez pas accès à ce département.",
+    "agent_binding_required": "Liez un agent avant d'envoyer du travail à un service.",
     "org_dispatch_no_agents": "Ce département n'a pas encore d'agents. Ajoutez-en un depuis la page organisation.",
     "org_dispatch_leader_unavailable": "Le responsable du département est injoignable pour le moment. Réessayez plus tard.",
+    "org_dispatch_leader_offline": "Aucun agent de ce département n'est en ligne. Demandez à son responsable de démarrer un runtime, puis renvoyez la demande.",
     "org_dispatch_unroutable": "Impossible de déterminer quel département doit s'en charger. Nommez-en un ou ajoutez des détails.",
     "org_dispatch_failed": "Le travail n'a pas pu être envoyé au département.",
     "generic": "Une erreur est survenue. Réessayez.",
     "followup_failed": "Impossible d'ajouter à ce travail. Réessayez.",
-    "upload_failed": "Un fichier n'a pas été envoyé. Réessayez."
+    "upload_failed": "Un fichier n'a pas été envoyé. Réessayez.",
+    "personal_squad_not_found": "Cette équipe personnelle n'existe plus. Renvoyez pour en créer une nouvelle.",
+    "org_dispatch_target_conflict": "Choisissez un département ou votre équipe, pas les deux.",
+    "org_dispatch_reassign_forbidden": "Seul le demandeur peut réattribuer ce travail.",
+    "dispatch_not_found": "Ce travail ne figure plus dans votre historique d'envois."
   },
   "plan": {
     "title": "Plan"
@@ -97,5 +124,17 @@
     "cancel": "Annuler",
     "accept_failed": "Impossible d'accepter le résultat. Réessayez.",
     "reject_failed": "Impossible de le renvoyer. Réessayez."
+  },
+  "queue": {
+    "title": "File du département",
+    "load_error": "Impossible de charger la file du département.",
+    "stages": {
+      "pending": "En attente",
+      "in_progress": "En cours",
+      "review": "En revue"
+    },
+    "requested_by": "De {{name}}",
+    "unknown_requester": "D'un collègue",
+    "blocked": "Bloqué : {{missing}}"
   }
 }

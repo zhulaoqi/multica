@@ -84,7 +84,8 @@
     "children_done": "Sub-issues finished",
     "dispatch_completed": "Department work finished",
     "autopilot_quota_exceeded": "Autopilot run limit reached",
-    "squad_leader_failed": "Squad leader failed"
+    "squad_leader_failed": "Squad leader failed",
+    "dispatch_failed": "Department work failed"
   },
   "labels": {
     "set_status_to": "Set status to",

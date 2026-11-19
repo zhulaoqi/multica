@@ -187,7 +187,7 @@ describe("useTabPresentation — live from cache", () => {
   it("chat container: no session stays Chat", () => {
     expect(presentationOf("/acme/chat")).toEqual({
       visual: { kind: "icon", icon: "MessageSquare" },
-      title: "Chat",
+      title: "Private chat",
     });
   });
 

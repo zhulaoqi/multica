@@ -30,6 +30,9 @@ export const OrgAgentSchema = z.object({
   // The member this agent belongs to when it is their registered digital
   // twin; empty for shared or unowned agents. Older servers omit it.
   owner_id: z.string().optional().default(""),
+  // The owner's chosen primary twin. Older servers omit it, so the org view
+  // falls back to their first owned agent.
+  is_primary: z.boolean().optional().default(false),
   // Runtime backing the twin; the editor keeps it as configured.
   runtime_mode: z.string().optional().default(""),
   can: z.string().optional().default(""),

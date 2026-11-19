@@ -39,6 +39,7 @@ export function useTypeLabels(): Record<InboxItemType, string> {
     autopilot_quota_exceeded: t(($) => $.types.autopilot_quota_exceeded),
     children_done: t(($) => $.types.children_done),
     dispatch_completed: t(($) => $.types.dispatch_completed),
+    dispatch_failed: t(($) => $.types.dispatch_failed),
     squad_leader_failed: t(($) => $.types.squad_leader_failed),
   };
 }

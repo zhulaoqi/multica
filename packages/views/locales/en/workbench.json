@@ -15,6 +15,9 @@
     "back": "Back",
     "unknown_department": "Department",
     "load_error": "Couldn't load recent work.",
+    "binding_required_title": "Bind your agent first",
+    "binding_required_description": "Your agent represents you when you send work to a department. Bind one to start dispatching; browsing and reviewing stay available.",
+    "binding_required_action": "Bind an agent",
     "examples_label": "Try asking for",
     "empty_history": "Work you send will appear here.",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "In progress",
       "completed": "Done",
       "empty": "Nothing here yet."
-    }
+    },
+    "target_label": "Send to",
+    "target_department": "Department",
+    "target_personal": "My squad",
+    "personal_squad": "My squad",
+    "blocked": "Blocked: {{missing}}"
   },
   "status": {
     "queued": "Sent to the department. Its lead will pick it up shortly.",
@@ -49,7 +57,10 @@
     "completed": "Completed.",
     "failed": "The department lead couldn't start this. The department owner has been notified.",
     "cancelled": "This work was cancelled.",
-    "dispatched_at": "Sent {{time}}"
+    "dispatched_at": "Sent {{time}}",
+    "queued_personal": "Sent to your squad. Its lead will pick it up shortly.",
+    "decomposing_personal": "Your squad lead is breaking this into tasks…",
+    "failed_personal": "Your squad lead couldn't start this."
   },
   "card": {
     "department": "Department",
@@ -67,19 +78,35 @@
     "agents_one": "{{count}} agent",
     "agents_other": "{{count}} agents"
   },
+  "reassign": {
+    "action": "Reassign department",
+    "title": "Reassign department",
+    "description": "The issue moves to another department's squad and wakes its lead again.",
+    "target_label": "Department",
+    "empty": "No other department can take this right now.",
+    "no_agents": "No agents",
+    "confirm": "Move",
+    "cancel": "Cancel"
+  },
   "errors": {
     "ambiguous": "Several departments could take this. Pick one below.",
     "dispatch_text_required": "Write what needs doing first.",
     "dispatch_text_too_long": "That's too long. Keep it under 4,000 characters.",
     "org_dispatch_unit_not_found": "That department no longer exists. Choose another or let Multica route it.",
     "org_dispatch_forbidden": "You don't have access to that department.",
+    "agent_binding_required": "Bind an agent before sending work to a department.",
     "org_dispatch_no_agents": "That department has no agents yet. Add one on the organization page.",
     "org_dispatch_leader_unavailable": "The department lead can't be reached right now. Try again later.",
+    "org_dispatch_leader_offline": "No agent in that department is online. Ask its lead to start a runtime, then send this again.",
     "org_dispatch_unroutable": "Couldn't tell which department should take this. Name a department or add more detail.",
     "org_dispatch_failed": "The work couldn't be sent to the department.",
     "generic": "Something went wrong. Try again.",
     "followup_failed": "Couldn't add to this work. Try again.",
-    "upload_failed": "A file didn't upload. Try again."
+    "upload_failed": "A file didn't upload. Try again.",
+    "personal_squad_not_found": "That personal squad no longer exists. Send again to start a new one.",
+    "org_dispatch_target_conflict": "Choose either a department or your squad.",
+    "org_dispatch_reassign_forbidden": "Only the requester can reassign this work.",
+    "dispatch_not_found": "This work is no longer in your dispatch history."
   },
   "plan": {
     "title": "Plan"
@@ -97,5 +124,17 @@
     "cancel": "Cancel",
     "accept_failed": "Couldn't accept the result. Try again.",
     "reject_failed": "Couldn't send it back. Try again."
+  },
+  "queue": {
+    "title": "Department queue",
+    "load_error": "Couldn't load the department queue.",
+    "stages": {
+      "pending": "Waiting",
+      "in_progress": "In progress",
+      "review": "In review"
+    },
+    "requested_by": "From {{name}}",
+    "unknown_requester": "From a teammate",
+    "blocked": "Blocked: {{missing}}"
   }
 }

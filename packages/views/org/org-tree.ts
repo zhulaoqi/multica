@@ -1,3 +1,4 @@
+import { findPrimaryTwin } from "@multica/core/agents";
 import type { OrgAgent, OrgMember, OrgSquad, OrgTree, OrgUnit } from "@multica/core/api";
 
 export interface OrgNode {
@@ -15,10 +16,9 @@ export interface OrgForest {
   unassignedSquads: OrgSquad[];
 }
 
-/** The agent a member registered as their own digital twin, if any. */
+/** The agent a member registered as their primary digital twin, if any. */
 export function memberTwin(agents: OrgAgent[], userID: string): OrgAgent | null {
-  if (!userID) return null;
-  return agents.find((agent) => agent.owner_id === userID) ?? null;
+  return findPrimaryTwin(agents, userID);
 }
 
 /** Resolves the full path (研发中心/支付组) for every unit. */

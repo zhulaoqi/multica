@@ -48,6 +48,8 @@ vi.mock("@multica/core/platform", () => ({
 vi.mock("@multica/core/workspace/queries", () => ({
   memberListOptions: () => ({ queryKey: ["members"], queryFn: vi.fn() }),
   workspaceListOptions: () => ({ queryKey: ["workspaces"], queryFn: vi.fn() }),
+  orgTreeOptions: () => ({ queryKey: ["org"], queryFn: vi.fn() }),
+  workspaceCreateOptionsQuery: () => ({ queryKey: ["workspace-options"], queryFn: vi.fn() }),
   workspaceKeys: { list: () => ["workspaces"] },
 }));
 
@@ -58,6 +60,7 @@ vi.mock("@multica/core/issues/queries", () => ({
 vi.mock("@multica/core/workspace/mutations", () => ({
   useLeaveWorkspace: () => ({ mutateAsync: vi.fn() }),
   useDeleteWorkspace: () => ({ mutateAsync: vi.fn() }),
+  useSetWorkspaceDepartment: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@multica/core/api", () => ({

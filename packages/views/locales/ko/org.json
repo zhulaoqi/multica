@@ -9,6 +9,7 @@
   "children": "하위 부서",
   "my_department": "내 부서",
   "twin": "디지털 트윈",
+  "primary_twin": "기본 디지털 트윈",
   "edit_twin": "편집",
   "twin_title": "내 트윈",
   "twin_title_for": "{{name}}의 디지털 트윈",

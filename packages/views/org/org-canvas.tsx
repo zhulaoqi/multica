@@ -3,6 +3,7 @@
 import { Children, Fragment, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
+import { ownedTwins } from "@multica/core/agents";
 import { api, type OrgAgent, type OrgMember, type OrgSquad, type OrgUnit } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { workspaceKeys } from "@multica/core/workspace/queries";
@@ -118,6 +119,7 @@ export function MemberRow({
   choices,
   onMove,
   twin = null,
+  ownedAgents = [],
   placeUnitId = "",
   canAddToProject = false,
   onAddToProject,
@@ -129,7 +131,11 @@ export function MemberRow({
   canConfigureTwin?: boolean;
   choices: Array<{ id: string; path: string }>;
   onMove: (unitId: string) => void;
+  /** The member's primary twin, rendered on their own row. */
   twin?: OrgAgent | null;
+  /** Every active agent the member owns, primary first, so a member with more
+   * than one agent can choose which one represents them. */
+  ownedAgents?: OrgAgent[];
   placeUnitId?: string;
   /** The caller manages project members, so a department colleague outside
    * the project can be pulled in from here. */
@@ -137,10 +143,30 @@ export function MemberRow({
   onAddToProject?: (userId: string) => void | Promise<void>;
 }) {
   const { t } = useT("org");
+  const wsId = useWorkspaceId();
+  const queryClient = useQueryClient();
   const myUserId = useAuthStore((state) => state.user?.id ?? "");
   const isSelf = member.user_id === myUserId;
   const canEditTwin = isSelf || canConfigureTwin;
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [settingPrimary, setSettingPrimary] = useState(false);
+  const [primaryError, setPrimaryError] = useState("");
+  const changePrimary = async (agentId: string) => {
+    if (!agentId || agentId === twin?.id) return;
+    setSettingPrimary(true);
+    setPrimaryError("");
+    try {
+      await api.setPrimaryAgent(agentId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workspaceKeys.org(wsId) }),
+        queryClient.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) }),
+      ]);
+    } catch (error) {
+      setPrimaryError(error instanceof Error && error.message ? error.message : t(($) => $.action_failed));
+    } finally {
+      setSettingPrimary(false);
+    }
+  };
   return (
     <div className="flex items-center gap-3 py-1.5">
       <ActorAvatar
@@ -174,6 +200,11 @@ export function MemberRow({
             <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="shrink-0 text-caption font-medium text-muted-foreground">{t(($) => $.twin)}</span>
             <span className="shrink-0 truncate text-caption">{twin.name}</span>
+            {twin.is_primary ? (
+              <span className="shrink-0 rounded-full border border-border/60 px-1.5 py-0.5 text-caption text-muted-foreground">
+                {t(($) => $.primary_twin)}
+              </span>
+            ) : null}
             <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">{twin.can}</span>
             <StatusChip tone={agentAvailability(twin.status)} />
             {canEditTwin ? (
@@ -193,6 +224,31 @@ export function MemberRow({
             </Button>
           </div>
         ) : null}
+        {ownedAgents.length > 1 && canEditTwin ? (
+          <div className="mt-1 flex items-center gap-2">
+            <span className="shrink-0 text-caption text-muted-foreground">{t(($) => $.primary_twin)}</span>
+            <Select
+              items={ownedAgents.map((agent) => ({ value: agent.id, label: agent.name }))}
+              value={twin?.id ?? ""}
+              onValueChange={(agentId) => {
+                if (agentId) void changePrimary(agentId);
+              }}
+              disabled={settingPrimary}
+            >
+              <SelectTrigger className="h-7 w-44 text-caption" aria-label={t(($) => $.primary_twin)}>
+                <SelectValue>{() => twin?.name ?? ""}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {ownedAgents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    <span className="truncate">{agent.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+        {primaryError ? <p className="mt-1 text-caption text-destructive">{primaryError}</p> : null}
       </div>
       {canMove ? <UnitPicker value={member.unit_id} choices={choices} onChange={onMove} /> : null}
       {dialogOpen ? (
@@ -647,7 +703,7 @@ export function OrgCanvas({
   // on the member row instead of duplicating in the shared agents grid.
   const twins = new Map<string, OrgAgent>();
   for (const member of members) {
-    const twin = memberTwin(agents, member.user_id);
+    const twin = memberTwin(allAgents, member.user_id);
     if (twin) twins.set(member.user_id, twin);
   }
   const twinIds = new Set([...twins.values()].map((twin) => twin.id));
@@ -727,6 +783,7 @@ export function OrgCanvas({
                 canConfigureTwin={unit.can_manage}
                 choices={manageableChoices}
                 twin={twins.get(member.user_id) ?? null}
+                ownedAgents={ownedTwins(allAgents, member.user_id)}
                 placeUnitId={member.unit_id}
                 canAddToProject={canAddToProject}
                 onAddToProject={onAddToProject}

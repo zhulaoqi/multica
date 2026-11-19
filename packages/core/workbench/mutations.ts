@@ -12,6 +12,7 @@ import type {
 export interface DispatchWorkVariables {
   text: string;
   unitId?: string;
+  personal?: boolean;
   clientRequestId?: string;
   attachmentIds?: string[];
 }
@@ -25,6 +26,7 @@ export function useDispatchWork(wsId: string) {
         client_request_id: variables.clientRequestId ?? createSafeId(),
       };
       if (variables.unitId) input.unit_id = variables.unitId;
+      if (variables.personal) input.personal = true;
       if (variables.attachmentIds?.length) input.attachment_ids = variables.attachmentIds;
       return api.dispatchWork(input);
     },
@@ -35,6 +37,8 @@ export function useDispatchWork(wsId: string) {
         issue: data.issue,
         unit_id: data.dispatch.unit_id,
         unit_path: data.dispatch.unit_path,
+        squad_id: data.dispatch.squad_id,
+        personal: data.dispatch.personal,
         dispatched_at: data.issue.created_at,
         completed: false,
         leader_state: "queued",
@@ -50,6 +54,48 @@ export function useDispatchWork(wsId: string) {
         },
       );
       qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
+    },
+  });
+}
+
+export interface ReassignDispatchVariables {
+  issueId: string;
+  unitId: string;
+}
+
+/**
+ * Moves a dispatch the caller requested to another department. The server
+ * clears the previous delivery notices and wakes the new leader, so the
+ * cached row is reset to a queued state until the refetch confirms it.
+ */
+export function useReassignDispatch(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation<DispatchWorkResponse, unknown, ReassignDispatchVariables>({
+    mutationFn: ({ issueId, unitId }) => api.reassignDispatch(issueId, unitId),
+    onSuccess: (data) => {
+      qc.setQueryData<DispatchListItem[]>(
+        workbenchKeys.dispatches(wsId),
+        (previous) =>
+          previous?.map((item) =>
+            item.issue.id === data.issue.id
+              ? {
+                  ...item,
+                  issue: data.issue,
+                  unit_id: data.dispatch.unit_id,
+                  unit_path: data.dispatch.unit_path,
+                  squad_id: data.dispatch.squad_id,
+                  personal: data.dispatch.personal,
+                  completed: false,
+                  notified_at: null,
+                  leader_state: "queued",
+                  blocker: null,
+                }
+              : item,
+          ),
+      );
+      qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
+      qc.invalidateQueries({ queryKey: issueKeys.detail(wsId, data.issue.id) });
       qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
     },
   });

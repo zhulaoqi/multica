@@ -35,6 +35,9 @@ export type InboxItemType =
   // A dispatch to a department reached review or done; the requester gets one
   // item per dispatch, linked to the root issue.
   | "dispatch_completed"
+  // The department's squad leader failed for good before delivering; the
+  // requester gets one action-required item so a stall is not silent.
+  | "dispatch_failed"
   // A squad leader exhausted its runs without delivering; the department lead
   // gets an action-required item so the stall is visible without reading runs.
   | "squad_leader_failed";

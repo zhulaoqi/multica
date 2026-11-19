@@ -15,6 +15,9 @@
     "back": "戻る",
     "unknown_department": "部署",
     "load_error": "最近の依頼を読み込めませんでした。",
+    "binding_required_title": "先にエージェントを連携してください",
+    "binding_required_description": "エージェントは部門からの返信を受け取るあなたの代理です。連携すると仕事を依頼できます。閲覧とレビューは引き続き利用できます。",
+    "binding_required_action": "エージェントを連携",
     "examples_label": "こんなふうに依頼できます",
     "empty_history": "依頼した仕事がここに表示されます。",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "進行中",
       "completed": "完了",
       "empty": "まだ何もありません。"
-    }
+    },
+    "target_label": "送信先",
+    "target_department": "部署",
+    "target_personal": "マイチーム",
+    "personal_squad": "マイチーム",
+    "blocked": "ブロック中: {{missing}}"
   },
   "status": {
     "queued": "部署に送りました。責任者がまもなく着手します。",
@@ -49,7 +57,10 @@
     "completed": "完了しました。",
     "failed": "部署の責任者がこの作業を開始できませんでした。部署に通知済みです。",
     "cancelled": "この作業はキャンセルされました。",
-    "dispatched_at": "{{time}}に送信"
+    "dispatched_at": "{{time}}に送信",
+    "queued_personal": "マイチームに送信しました。リーダーがまもなく着手します。",
+    "decomposing_personal": "マイチームのリーダーがタスクに分解しています…",
+    "failed_personal": "マイチームのリーダーが開始できませんでした。"
   },
   "card": {
     "department": "部署",
@@ -66,19 +77,35 @@
     "title": "どの部署が担当しますか？",
     "agents_other": "エージェント {{count}} 体"
   },
+  "reassign": {
+    "action": "部門を変更",
+    "title": "部門を変更",
+    "description": "issue は別部門のチームに移り、そのリーダーが再び呼び出されます。",
+    "target_label": "部門",
+    "empty": "現在、他の部門が引き受けられる状態ではありません。",
+    "no_agents": "エージェントなし",
+    "confirm": "移動",
+    "cancel": "キャンセル"
+  },
   "errors": {
     "ambiguous": "複数の部署が担当できます。1 つ選んでください。",
     "dispatch_text_required": "まずやることを書いてください。",
     "dispatch_text_too_long": "長すぎます。4,000 文字以内にしてください。",
     "org_dispatch_unit_not_found": "その部署は存在しません。別の部署を選ぶか自動振り分けにしてください。",
     "org_dispatch_forbidden": "その部署へのアクセス権がありません。",
+    "agent_binding_required": "部門に仕事を依頼する前にエージェントを連携してください。",
     "org_dispatch_no_agents": "その部署にはまだエージェントがいません。組織ページで追加してください。",
     "org_dispatch_leader_unavailable": "部署の責任者に現在連絡できません。しばらくしてから再試行してください。",
+    "org_dispatch_leader_offline": "その部署にオンラインのエージェントがありません。責任者にランタイムの起動を依頼してから、もう一度送信してください。",
     "org_dispatch_unroutable": "どの部署に渡すか判断できませんでした。部署名を指定するか、詳細を追加してください。",
     "org_dispatch_failed": "部署に作業を渡せませんでした。",
     "generic": "問題が発生しました。再試行してください。",
     "followup_failed": "この仕事に追記できませんでした。もう一度お試しください。",
-    "upload_failed": "ファイルをアップロードできませんでした。もう一度お試しください。"
+    "upload_failed": "ファイルをアップロードできませんでした。もう一度お試しください。",
+    "personal_squad_not_found": "この個人チームは存在しません。もう一度送信すると新しく作成されます。",
+    "org_dispatch_target_conflict": "部署かマイチームのどちらかを選んでください。",
+    "org_dispatch_reassign_forbidden": "この作業を割り当て直せるのは依頼者だけです。",
+    "dispatch_not_found": "この作業は依頼履歴にありません。"
   },
   "plan": {
     "title": "計画"
@@ -96,5 +123,17 @@
     "cancel": "キャンセル",
     "accept_failed": "結果を承認できませんでした。もう一度お試しください。",
     "reject_failed": "差し戻せませんでした。もう一度お試しください。"
+  },
+  "queue": {
+    "title": "部門キュー",
+    "load_error": "部門キューを読み込めませんでした。",
+    "stages": {
+      "pending": "未着手",
+      "in_progress": "進行中",
+      "review": "レビュー待ち"
+    },
+    "requested_by": "{{name}} より",
+    "unknown_requester": "チームメンバーより",
+    "blocked": "ブロック中: {{missing}}"
   }
 }

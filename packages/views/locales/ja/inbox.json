@@ -82,7 +82,8 @@
     "children_done": "サブタスクがすべて終わりました",
     "dispatch_completed": "部門の仕事が完了しました",
     "autopilot_quota_exceeded": "自動化の実行上限に達しました",
-    "squad_leader_failed": "チームリーダーが失敗"
+    "squad_leader_failed": "チームリーダーが失敗",
+    "dispatch_failed": "部門の仕事が失敗しました"
   },
   "labels": {
     "set_status_to": "ステータスを変更:",

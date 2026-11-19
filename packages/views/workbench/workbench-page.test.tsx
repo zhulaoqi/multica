@@ -3,10 +3,12 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@multica/core/api";
+import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { issueTimelineOptions } from "@multica/core/issues/queries";
 import type { MemberWithUser, TimelineEntry } from "@multica/core/types";
 import type { DispatchListItem, DispatchWorkResponse } from "@multica/core/workbench";
 import {
+  agentListOptions,
   orgTreeOptions,
   workspaceKeys,
   workspaceListOptions,
@@ -60,6 +62,8 @@ vi.mock("@multica/core/workbench", async (importOriginal) => {
       isLoading: state.isLoading,
       error: state.error,
     }),
+    // The department queue has its own suite; this page only mounts it.
+    useDepartmentDispatches: () => ({ dispatches: [], isLoading: false, error: null }),
     useDispatchWork: () => ({ mutateAsync: state.mutateAsync }),
   };
 });
@@ -130,6 +134,32 @@ beforeEach(() => {
   state.error = null;
   state.searchParams = new URLSearchParams();
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const auth = createAuthStore({
+    api: apiState as never,
+    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  });
+  auth.setState({
+    user: {
+      id: "user-1",
+      name: "Ada",
+      email: "ada@example.com",
+      avatar_url: null,
+      onboarded_at: null,
+      onboarding_questionnaire: {},
+      language: null,
+      profile_description: "",
+      timezone: null,
+      is_operator: false,
+      created_at: NOW,
+      updated_at: NOW,
+    },
+  });
+  registerAuthStore(auth);
+  // The signed-in member owns a terminal twin, so the binding gate stays open
+  // unless a test removes it on purpose.
+  qc.setQueryData(agentListOptions(WS).queryKey, [
+    { id: "agent-twin", name: "Ada's twin", owner_id: "user-1", is_primary: true, archived_at: null },
+  ] as never);
   qc.setQueryData(workspaceListOptions().queryKey, [
     {
       id: WS,
@@ -193,6 +223,17 @@ async function submitText(text: string) {
 }
 
 describe("WorkbenchPage", () => {
+  it("asks an unbound member to bind an agent before dispatching", async () => {
+    qc.setQueryData(agentListOptions(WS).queryKey, []);
+    renderPage();
+
+    expect(await screen.findByText("Bind your agent first")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "What needs doing?" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Bind an agent" }));
+    expect(state.push).toHaveBeenCalledWith("/acme/org");
+  });
+
   it("invites a first request with examples that fill the composer", async () => {
     renderPage();
 
@@ -224,6 +265,49 @@ describe("WorkbenchPage", () => {
       expect(state.replace).toHaveBeenCalledWith("/acme/workbench?dispatch=issue-2"),
     );
     expect(screen.getByRole("textbox", { name: "What needs doing?" })).toHaveValue("");
+  });
+
+  it("sends to the requester's personal squad instead of a department", async () => {
+    state.mutateAsync.mockResolvedValue({
+      ...dispatchResponse(),
+      dispatch: { unit_id: "", unit_path: "", squad_id: "squad-1", personal: true },
+    });
+    renderPage();
+
+    const target = screen.getByRole("group", { name: "Send to" });
+    await userEvent.click(within(target).getByRole("button", { name: "My squad" }));
+    await submitText("Plan my week");
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Plan my week",
+          unitId: undefined,
+          personal: true,
+        }),
+      ),
+    );
+  });
+
+  it("labels a personal dispatch as the requester's squad", () => {
+    state.dispatches = [
+      dispatchItem({
+        unit_id: "",
+        unit_path: "",
+        squad_id: "squad-1",
+        personal: true,
+        leader_state: "none",
+        issue: { ...dispatchItem().issue, status: "todo", status_category: "unstarted" },
+      }),
+    ];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    expect(
+      screen.getByText("Sent to your squad. Its lead will pick it up shortly."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("My squad").length).toBeGreaterThan(0);
   });
 
   it("keeps Shift+Enter as a newline instead of sending", async () => {

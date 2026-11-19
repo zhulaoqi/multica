@@ -536,8 +536,10 @@ import {
 } from "./schemas";
 import {
   DispatchListResponseSchema,
+  DispatchQueueResponseSchema,
   DispatchWorkResponseSchema,
   type DispatchListItem,
+  type DispatchQueueItem,
   type DispatchWorkInput,
   type DispatchWorkResponse,
 } from "../workbench/schemas";
@@ -1935,6 +1937,12 @@ export class ApiClient {
 
   async getAgent(id: string): Promise<Agent> {
     return this.fetch(`/api/agents/${id}`);
+  }
+
+  /** Promotes one of the owner's agents to their digital twin in this
+   * workspace. The server clears the previous primary in the same write. */
+  async setPrimaryAgent(id: string): Promise<Agent> {
+    return this.fetch(`/api/agents/${id}/primary`, { method: "PUT" });
   }
 
   async createAgent(data: CreateAgentRequest): Promise<Agent> {
@@ -4966,7 +4974,7 @@ export class ApiClient {
     }) as Squad;
   }
 
-  async createSquad(data: { name: string; description?: string; leader_id: string; avatar_url?: string }): Promise<Squad> {
+  async createSquad(data: { name: string; description?: string; leader_id: string; avatar_url?: string; is_private?: boolean }): Promise<Squad> {
     const raw = await this.fetch<unknown>("/api/squads", { method: "POST", body: JSON.stringify(data) });
     return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
       endpoint: "POST /api/squads",
@@ -5935,10 +5943,41 @@ export class ApiClient {
     return parsed;
   }
 
+  /**
+   * Moves a dispatch the caller requested to another department. The server
+   * re-checks the target's leader and wakes it once the issue follows.
+   */
+  async reassignDispatch(issueId: string, unitId: string): Promise<DispatchWorkResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/org/dispatches/${encodeURIComponent(issueId)}/reassign`,
+      {
+        method: "POST",
+        body: JSON.stringify({ unit_id: unitId }),
+      },
+    );
+    const parsed = parseWithFallback<DispatchWorkResponse | null>(raw, DispatchWorkResponseSchema, null, {
+      endpoint: "POST /api/org/dispatches/{issueId}/reassign",
+    });
+    if (!parsed) throw new Error("could not read the dispatch");
+    return parsed;
+  }
+
   async listMyDispatches(limit = 30): Promise<DispatchListItem[]> {
     const raw = await this.fetch<unknown>(`/api/org/dispatches?limit=${encodeURIComponent(String(limit))}`);
     const parsed = parseWithFallback(raw, DispatchListResponseSchema, { dispatches: [] }, {
       endpoint: "GET /api/org/dispatches",
+    });
+    return parsed.dispatches;
+  }
+
+  /**
+   * Open dispatches aimed at the departments the caller leads, split into
+   * waiting / in progress / review. Workspace managers receive every unit.
+   */
+  async listDepartmentDispatches(limit = 30): Promise<DispatchQueueItem[]> {
+    const raw = await this.fetch<unknown>(`/api/org/dispatch-queue?limit=${encodeURIComponent(String(limit))}`);
+    const parsed = parseWithFallback(raw, DispatchQueueResponseSchema, { dispatches: [] }, {
+      endpoint: "GET /api/org/dispatch-queue",
     });
     return parsed.dispatches;
   }

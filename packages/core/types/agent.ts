@@ -645,6 +645,12 @@ export interface Agent {
    */
   service_tier?: string;
   owner_id: string | null;
+  /**
+   * Marks the owner's digital twin in this workspace. A member owns at most
+   * one active primary agent; the server keeps the invariant. Older backends
+   * omit it, so callers fall back to the first owned agent.
+   */
+  is_primary?: boolean;
   skills: AgentSkillSummary[];
   /** Runtime-local skills this agent must not inherit. Older servers omit it. */
   disabled_runtime_skills?: DisabledRuntimeSkill[];

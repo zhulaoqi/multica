@@ -9,6 +9,7 @@
   "children": "Sub-departments",
   "my_department": "My department",
   "twin": "Digital twin",
+  "primary_twin": "Primary twin",
   "edit_twin": "Edit",
   "twin_title": "My digital twin",
   "twin_title_for": "{{name}}'s digital twin",

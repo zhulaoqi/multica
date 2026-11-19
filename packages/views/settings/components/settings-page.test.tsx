@@ -77,7 +77,12 @@ vi.mock("@multica/core/workspace/avatar-url", () => ({
   resolvePublicFileUrl: (url: string | null | undefined) => url ?? null,
 }));
 vi.mock("@multica/core/permissions", () => ({
-  useCurrentMember: () => ({ role: shell.role, isLoading: false }),
+  useCurrentMember: () => ({
+    role: shell.role,
+    isAdmin: shell.role === "owner" || shell.role === "admin",
+    isManager: shell.role === "owner" || shell.role === "admin",
+    isLoading: false,
+  }),
 }));
 vi.mock("@multica/core/auth", () => {
   const state = { user: { id: "user-1", name: "Ada Lovelace", avatar_url: null } };

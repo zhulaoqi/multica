@@ -15,6 +15,9 @@
     "back": "Atrás",
     "unknown_department": "Departamento",
     "load_error": "No se pudo cargar el trabajo reciente.",
+    "binding_required_title": "Vincula tu agente primero",
+    "binding_required_description": "Tu agente te representa cuando envías trabajo a un departamento. Vincúlalo para empezar a enviar; explorar y revisar siguen disponibles.",
+    "binding_required_action": "Vincular un agente",
     "examples_label": "Prueba a pedir",
     "empty_history": "El trabajo que envíes aparecerá aquí.",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "En curso",
       "completed": "Hecho",
       "empty": "Aún no hay nada aquí."
-    }
+    },
+    "target_label": "Enviar a",
+    "target_department": "Departamento",
+    "target_personal": "Mi equipo",
+    "personal_squad": "Mi equipo",
+    "blocked": "Bloqueado: {{missing}}"
   },
   "status": {
     "queued": "Enviado al departamento. Su responsable lo retomará en breve.",
@@ -49,7 +57,10 @@
     "completed": "Completado.",
     "failed": "El responsable del departamento no pudo empezar. Se ha avisado al departamento.",
     "cancelled": "Este trabajo se canceló.",
-    "dispatched_at": "Enviado {{time}}"
+    "dispatched_at": "Enviado {{time}}",
+    "queued_personal": "Enviado a tu equipo. Su líder lo tomará en breve.",
+    "decomposing_personal": "El líder de tu equipo está dividiendo esto en tareas…",
+    "failed_personal": "El líder de tu equipo no pudo empezar."
   },
   "card": {
     "department": "Departamento",
@@ -67,19 +78,35 @@
     "agents_one": "{{count}} agente",
     "agents_other": "{{count}} agentes"
   },
+  "reassign": {
+    "action": "Reasignar departamento",
+    "title": "Reasignar departamento",
+    "description": "El issue pasa al equipo de otro departamento y vuelve a activar a su responsable.",
+    "target_label": "Departamento",
+    "empty": "Ningún otro departamento puede asumirlo ahora.",
+    "no_agents": "Sin agentes",
+    "confirm": "Mover",
+    "cancel": "Cancelar"
+  },
   "errors": {
     "ambiguous": "Varios departamentos podrían encargarse. Elige uno.",
     "dispatch_text_required": "Primero escribe qué hay que hacer.",
     "dispatch_text_too_long": "Es demasiado largo. Usa menos de 4000 caracteres.",
     "org_dispatch_unit_not_found": "Ese departamento ya no existe. Elige otro o deja que Multica lo enrute.",
     "org_dispatch_forbidden": "No tienes acceso a ese departamento.",
+    "agent_binding_required": "Vincula un agente antes de enviar trabajo a un departamento.",
     "org_dispatch_no_agents": "Ese departamento aún no tiene agentes. Añade uno en la página de organización.",
     "org_dispatch_leader_unavailable": "No se puede contactar con el responsable del departamento ahora mismo. Inténtalo más tarde.",
+    "org_dispatch_leader_offline": "Ningún agente de ese departamento está en línea. Pide a su responsable que inicie un runtime y vuelve a enviarlo.",
     "org_dispatch_unroutable": "No se pudo determinar qué departamento debe encargarse. Nombra uno o añade más detalles.",
     "org_dispatch_failed": "No se pudo enviar el trabajo al departamento.",
     "generic": "Algo salió mal. Inténtalo de nuevo.",
     "followup_failed": "No se pudo añadir a este trabajo. Inténtalo de nuevo.",
-    "upload_failed": "No se pudo subir un archivo. Inténtalo de nuevo."
+    "upload_failed": "No se pudo subir un archivo. Inténtalo de nuevo.",
+    "personal_squad_not_found": "Ese equipo personal ya no existe. Vuelve a enviar para crear uno nuevo.",
+    "org_dispatch_target_conflict": "Elige un departamento o tu equipo, no ambos.",
+    "org_dispatch_reassign_forbidden": "Solo quien solicitó el trabajo puede reasignarlo.",
+    "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos."
   },
   "plan": {
     "title": "Plan"
@@ -97,5 +124,17 @@
     "cancel": "Cancelar",
     "accept_failed": "No se pudo aceptar el resultado. Inténtalo de nuevo.",
     "reject_failed": "No se pudo devolver. Inténtalo de nuevo."
+  },
+  "queue": {
+    "title": "Cola del departamento",
+    "load_error": "No se pudo cargar la cola del departamento.",
+    "stages": {
+      "pending": "En espera",
+      "in_progress": "En curso",
+      "review": "En revisión"
+    },
+    "requested_by": "De {{name}}",
+    "unknown_requester": "De un compañero",
+    "blocked": "Bloqueado: {{missing}}"
   }
 }

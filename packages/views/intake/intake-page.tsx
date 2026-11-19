@@ -212,6 +212,10 @@ export function IntakePage({
         setStatus("没对上，请再补一句");
         return;
       }
+      if (code === "agent_binding_required") {
+        setStatus("请先在组织页绑定你的智能体");
+        return;
+      }
       setStatus("没发出去");
     } finally {
       setSending(false);

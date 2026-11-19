@@ -19,7 +19,10 @@ const permissions = vi.hoisted(() => ({
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-test" }));
 vi.mock("@multica/core/permissions", () => ({
-  useCurrentMember: () => ({ role: permissions.role }),
+  useCurrentMember: () => ({
+    role: permissions.role,
+    isManager: permissions.role === "owner" || permissions.role === "admin",
+  }),
 }));
 vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({

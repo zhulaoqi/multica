@@ -84,7 +84,8 @@
     "children_done": "Sub-tareas finalizadas",
     "dispatch_completed": "Trabajo del departamento terminado",
     "autopilot_quota_exceeded": "Límite de ejecuciones de automatizaciones alcanzado",
-    "squad_leader_failed": "Falló el líder del escuadrón"
+    "squad_leader_failed": "Falló el líder del escuadrón",
+    "dispatch_failed": "El trabajo del departamento falló"
   },
   "labels": {
     "set_status_to": "Establecer estado en",

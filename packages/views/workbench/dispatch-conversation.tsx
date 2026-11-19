@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import {
+  ArrowLeftRight,
   Building2,
   CircleAlert,
   CircleCheck,
   CircleDot,
   RotateCcw,
+  UserRound,
   XCircle,
 } from "@multica/ui/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -23,6 +26,7 @@ import { canReview } from "./dispatch-actions";
 import { dispatchResult } from "./dispatch-result";
 import { DispatchDeliverables } from "./dispatch-deliverables";
 import { DispatchPlan } from "./dispatch-plan";
+import { ReassignDispatchDialog } from "./reassign-dispatch";
 import { DispatchReview } from "./dispatch-review";
 import type { ChildProgress, DispatchPhase } from "./use-workbench-conversation";
 
@@ -35,6 +39,8 @@ export interface WorkbenchAttempt {
   candidates: DispatchCandidate[];
   /** Uploaded files to send again with a retry or a picked department. */
   attachmentIds: string[];
+  /** The attempt targeted the requester's personal squad, not a department. */
+  personal?: boolean;
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -45,7 +51,7 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
-function DispatchErrorText({ error }: { error: unknown }) {
+export function DispatchErrorText({ error }: { error: unknown }) {
   const { t } = useT("workbench");
   switch (errorCode(error)) {
     case "dispatch_text_required":
@@ -56,14 +62,26 @@ function DispatchErrorText({ error }: { error: unknown }) {
       return <>{t(($) => $.errors.org_dispatch_unit_not_found)}</>;
     case "org_dispatch_forbidden":
       return <>{t(($) => $.errors.org_dispatch_forbidden)}</>;
+    case "agent_binding_required":
+      return <>{t(($) => $.errors.agent_binding_required)}</>;
     case "org_dispatch_no_agents":
       return <>{t(($) => $.errors.org_dispatch_no_agents)}</>;
     case "org_dispatch_leader_unavailable":
       return <>{t(($) => $.errors.org_dispatch_leader_unavailable)}</>;
+    case "org_dispatch_leader_offline":
+      return <>{t(($) => $.errors.org_dispatch_leader_offline)}</>;
     case "org_dispatch_unroutable":
       return <>{t(($) => $.errors.org_dispatch_unroutable)}</>;
     case "org_dispatch_failed":
       return <>{t(($) => $.errors.org_dispatch_failed)}</>;
+    case "personal_squad_not_found":
+      return <>{t(($) => $.errors.personal_squad_not_found)}</>;
+    case "org_dispatch_target_conflict":
+      return <>{t(($) => $.errors.org_dispatch_target_conflict)}</>;
+    case "org_dispatch_reassign_forbidden":
+      return <>{t(($) => $.errors.org_dispatch_reassign_forbidden)}</>;
+    case "dispatch_not_found":
+      return <>{t(($) => $.errors.dispatch_not_found)}</>;
     default:
       // Unknown codes include a 422 whose body carried candidates but no
       // recognizable code; the candidates paragraph explains it better.
@@ -88,21 +106,29 @@ function phaseIcon(phase: DispatchPhase) {
   }
 }
 
-function PhaseMessage({ phase }: { phase: DispatchPhase }) {
+function PhaseMessage({
+  phase,
+  personal,
+}: {
+  phase: DispatchPhase;
+  personal?: boolean;
+}) {
   const { t } = useT("workbench");
   switch (phase) {
     case "progress":
       return null;
     case "queued":
-      return <>{t(($) => $.status.queued)}</>;
+      return <>{personal ? t(($) => $.status.queued_personal) : t(($) => $.status.queued)}</>;
     case "decomposing":
-      return <>{t(($) => $.status.decomposing)}</>;
+      return (
+        <>{personal ? t(($) => $.status.decomposing_personal) : t(($) => $.status.decomposing)}</>
+      );
     case "in_review":
       return <>{t(($) => $.status.in_review)}</>;
     case "completed":
       return <>{t(($) => $.status.completed)}</>;
     case "failed":
-      return <>{t(($) => $.status.failed)}</>;
+      return <>{personal ? t(($) => $.status.failed_personal) : t(($) => $.status.failed)}</>;
     case "cancelled":
       return <>{t(($) => $.status.cancelled)}</>;
   }
@@ -164,6 +190,7 @@ export function DispatchConversation({
   const { t } = useT("workbench");
   const p = useWorkspacePaths();
   const timeAgo = useTimeAgo();
+  const [reassignOpen, setReassignOpen] = useState(false);
   const issueHref = p.issueDetail(item.issue.id);
   const percent =
     progress && progress.total > 0
@@ -185,7 +212,7 @@ export function DispatchConversation({
             </p>
           ) : (
             <p className="text-body">
-              <PhaseMessage phase={phase} />
+              <PhaseMessage phase={phase} personal={item.personal} />
             </p>
           )}
           {phase === "progress" && progress ? (
@@ -215,6 +242,11 @@ export function DispatchConversation({
                 <Building2 className="size-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{item.unit_path}</span>
               </span>
+            ) : item.personal ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <UserRound className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{t(($) => $.page.personal_squad)}</span>
+              </span>
             ) : null}
             <span>{t(($) => $.status.dispatched_at, { time: timeAgo(item.dispatched_at) })}</span>
             <AppLink
@@ -239,7 +271,25 @@ export function DispatchConversation({
                 {t(($) => $.card.retry)}
               </Button>
             ) : null}
+            {!item.personal && phase !== "completed" && phase !== "cancelled" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReassignOpen(true)}
+              >
+                <ArrowLeftRight />
+                {t(($) => $.reassign.action)}
+              </Button>
+            ) : null}
           </div>
+          {!item.personal && phase !== "completed" && phase !== "cancelled" ? (
+            <ReassignDispatchDialog
+              wsId={wsId}
+              item={item}
+              open={reassignOpen}
+              onOpenChange={setReassignOpen}
+            />
+          ) : null}
         </div>
       </article>
     </div>

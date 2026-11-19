@@ -15,6 +15,9 @@
     "back": "返回",
     "unknown_department": "部门",
     "load_error": "加载最近派活失败。",
+    "binding_required_title": "先绑定你的智能体",
+    "binding_required_description": "智能体代表你接收部门的回复。绑定后即可派活；浏览和评审仍然可用。",
+    "binding_required_action": "去绑定",
     "examples_label": "可以这样说",
     "empty_history": "派出的活会出现在这里。",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "进行中",
       "completed": "已完成",
       "empty": "这里还没有内容。"
-    }
+    },
+    "target_label": "发给",
+    "target_department": "部门",
+    "target_personal": "我的小队",
+    "personal_squad": "我的小队",
+    "blocked": "阻塞：{{missing}}"
   },
   "status": {
     "queued": "已交给部门，负责人稍后接手。",
@@ -49,7 +57,10 @@
     "completed": "已完成。",
     "failed": "部门负责人未能启动这项工作，已通知该部门。",
     "cancelled": "这项工作已取消。",
-    "dispatched_at": "{{time}}发送"
+    "dispatched_at": "{{time}}发送",
+    "queued_personal": "已发给你的小队，队长很快会接手。",
+    "decomposing_personal": "小队队长正在拆分任务…",
+    "failed_personal": "小队队长没能开始处理这件事。"
   },
   "card": {
     "department": "部门",
@@ -66,19 +77,35 @@
     "title": "交给哪个部门？",
     "agents_other": "{{count}} 个 Agent"
   },
+  "reassign": {
+    "action": "改派部门",
+    "title": "改派部门",
+    "description": "任务会转给另一个部门的小队，并重新唤醒该部门负责人。",
+    "target_label": "部门",
+    "empty": "目前没有其他部门可以承接。",
+    "no_agents": "暂无 agent",
+    "confirm": "转交",
+    "cancel": "取消"
+  },
   "errors": {
     "ambiguous": "有多个部门可以承接，请选择一个。",
     "dispatch_text_required": "先写清楚要做什么。",
     "dispatch_text_too_long": "内容太长了，请控制在 4000 字以内。",
     "org_dispatch_unit_not_found": "该部门已不存在，请另选一个或交给系统判断。",
     "org_dispatch_forbidden": "你没有该部门的权限。",
+    "agent_binding_required": "请先绑定智能体，再把工作发给部门。",
     "org_dispatch_no_agents": "该部门还没有 Agent，请先到组织页添加。",
     "org_dispatch_leader_unavailable": "暂时联系不上部门负责人，请稍后再试。",
+    "org_dispatch_leader_offline": "该部门的 Agent 都不在线，请让部门负责人启动 Runtime 后再派活。",
     "org_dispatch_unroutable": "无法判断该交给哪个部门，请点名部门或补充说明。",
     "org_dispatch_failed": "没能把这项工作交给部门。",
     "generic": "出了点问题，请重试。",
     "followup_failed": "追问没有发出去，请重试。",
-    "upload_failed": "有文件没有上传成功，请重试。"
+    "upload_failed": "有文件没有上传成功，请重试。",
+    "personal_squad_not_found": "这个个人小队已不存在，重新发送即可新建。",
+    "org_dispatch_target_conflict": "部门和我的小队只能选一个。",
+    "org_dispatch_reassign_forbidden": "只有发起人可以改派这项工作。",
+    "dispatch_not_found": "这项工作已不在你的派活记录中。"
   },
   "plan": {
     "title": "计划"
@@ -96,5 +123,17 @@
     "cancel": "取消",
     "accept_failed": "验收没有成功，请重试。",
     "reject_failed": "打回没有成功，请重试。"
+  },
+  "queue": {
+    "title": "部门队列",
+    "load_error": "无法加载部门队列。",
+    "stages": {
+      "pending": "待承接",
+      "in_progress": "进行中",
+      "review": "待验收"
+    },
+    "requested_by": "来自 {{name}}",
+    "unknown_requester": "来自同事",
+    "blocked": "阻塞：{{missing}}"
   }
 }

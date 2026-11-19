@@ -13,7 +13,9 @@ import {
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
+import { findPrimaryTwin } from "@multica/core/agents";
 import { api } from "@multica/core/api";
+import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   useFileUpload,
@@ -40,6 +42,7 @@ import { useT, useTimeAgo } from "../i18n";
 import { useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
 import { followUpComment, subjectMention } from "./dispatch-actions";
+import { DepartmentQueue } from "./department-queue";
 import { DispatchComposer, type ComposerMention } from "./dispatch-composer";
 import {
   DispatchAttemptConversation,
@@ -199,10 +202,17 @@ function HistoryList({
                   </span>
                 </span>
                 <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
-                  {item.unit_path || t(($) => $.page.unknown_department)}
+                  {item.personal
+                    ? t(($) => $.page.personal_squad)
+                    : item.unit_path || t(($) => $.page.unknown_department)}
                   {" · "}
                   {timeAgo(item.dispatched_at)}
                 </span>
+                {item.blocker?.missing ? (
+                  <span className="min-w-0 truncate pl-3.5 text-caption text-warning">
+                    {t(($) => $.page.blocked, { missing: item.blocker.missing })}
+                  </span>
+                ) : null}
               </button>
             </li>
           );
@@ -252,6 +262,8 @@ export function WorkbenchPage() {
   }, [orgTree.data, presetUnitId]);
 
   const [text, setText] = useState("");
+  // Sends to the requester's own personal squad instead of a department.
+  const [personal, setPersonal] = useState(false);
   const [focusToken, setFocusToken] = useState(0);
   const [attempts, setAttempts] = useState<WorkbenchAttempt[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -263,8 +275,17 @@ export function WorkbenchPage() {
   const { upload, uploading } = useFileUpload(api);
   const followUp = useCreateComment(selected?.issue.id ?? "");
   const { getActorName } = useActorName();
-  const { data: agents = [] } = useQuery(agentListOptions(wsId));
+  const userId = useAuthStore((state) => state.user?.id ?? "");
+  const {
+    data: agents = [],
+    isSuccess: agentsLoaded,
+  } = useQuery(agentListOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
+  // Dispatching needs an accountable twin: the request history is tied to the
+  // member, and the department's follow-ups come back to this agent. Browsing
+  // recent work stays available without one.
+  const bindingRequired =
+    agentsLoaded && !!userId && !findPrimaryTwin(agents.filter((agent) => !agent.archived_at), userId);
 
   const mentions = useMemo<ComposerMention[]>(
     () => [
@@ -356,6 +377,7 @@ export function WorkbenchPage() {
     unitId?: string,
     attemptId?: string,
     files: string[] = [],
+    personalTarget = false,
   ) => {
     const trimmed = raw.trim();
     if (!trimmed || pending) return;
@@ -371,6 +393,7 @@ export function WorkbenchPage() {
         status: "pending",
         candidates: [],
         attachmentIds: files,
+        personal: personalTarget,
       };
       const existing = prev.findIndex((attempt) => attempt.id === id);
       if (existing === -1) return [...prev, next];
@@ -381,6 +404,7 @@ export function WorkbenchPage() {
       const result = await dispatch.mutateAsync({
         text: trimmed,
         unitId,
+        personal: personalTarget,
         clientRequestId: id,
         attachmentIds: files.length > 0 ? files : undefined,
       });
@@ -404,14 +428,26 @@ export function WorkbenchPage() {
     }
   };
 
+  // Threads stay writable while unbound: a follow-up is part of reviewing
+  // delivered work, not a new dispatch.
+  const dispatchBlocked = bindingRequired && !selected;
+
   const submit = (raw: string) => {
     const trimmed = raw.trim();
-    if (!trimmed || pending) return;
+    if (!trimmed || pending || dispatchBlocked) return;
     if (selected) {
       void sendFollowUp(trimmed);
       return;
     }
-    void submitDispatch(trimmed, presetUnitId ?? undefined, undefined, attachmentIds);
+    // A preset department from the org page wins over the personal toggle.
+    const targetPersonal = personal && !presetUnitId;
+    void submitDispatch(
+      trimmed,
+      targetPersonal ? undefined : (presetUnitId ?? undefined),
+      undefined,
+      attachmentIds,
+      targetPersonal,
+    );
   };
 
   const selectDispatch = (item: DispatchListItem) => {
@@ -440,6 +476,7 @@ export function WorkbenchPage() {
           <Plus />
         </Button>
       </div>
+      <DepartmentQueue wsId={wsId} />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <HistoryList
           dispatches={dispatches}
@@ -464,7 +501,10 @@ export function WorkbenchPage() {
       onRetry={() =>
         void submitDispatch(
           selected.issue.description ?? selected.issue.title,
-          selected.unit_id,
+          selected.personal ? undefined : selected.unit_id,
+          undefined,
+          [],
+          selected.personal,
         )
       }
     />
@@ -475,7 +515,13 @@ export function WorkbenchPage() {
           key={attempt.id}
           attempt={attempt}
           onRetry={() =>
-            void submitDispatch(attempt.text, undefined, attempt.id, attempt.attachmentIds)
+            void submitDispatch(
+              attempt.text,
+              undefined,
+              attempt.id,
+              attempt.attachmentIds,
+              attempt.personal,
+            )
           }
           onPickCandidate={(candidate: DispatchCandidate) =>
             void submitDispatch(
@@ -499,6 +545,7 @@ export function WorkbenchPage() {
           {t(($) => $.page.empty_description)}
         </p>
       </div>
+      {bindingRequired ? null : (
       <div className="flex flex-col items-center gap-2">
         <p className="text-caption text-muted-foreground">
           {t(($) => $.page.examples_label)}
@@ -524,6 +571,7 @@ export function WorkbenchPage() {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 
@@ -546,38 +594,76 @@ export function WorkbenchPage() {
               {t(($) => $.errors.upload_failed)}
             </p>
           ) : null}
-          <DispatchComposer
-            value={text}
-            onChange={setText}
-            onSubmit={submit}
-            pending={pending}
-            unitPath={presetUnitId && !selected ? (presetUnitPath ?? "") : null}
-            onClearUnit={
-              presetUnitId && !selected
-                ? () => replace(workbenchPath)
-                : undefined
-            }
-            threadTitle={selected ? selected.issue.title : null}
-            onExitThread={
-              selected
-                ? () => {
-                    setText("");
-                    setFollowUpError(null);
-                    setAttachments([]);
-                    push(workbenchPath);
-                  }
-                : undefined
-            }
-            attachments={attachments.map((entry) => ({
-              id: entry.id,
-              filename: entry.filename,
-            }))}
-            onAttachFiles={attachFiles}
-            onRemoveAttachment={removeAttachment}
-            uploading={uploading}
-            mentions={mentions}
-            focusToken={focusToken}
-          />
+          {!selected && !presetUnitId && !dispatchBlocked ? (
+            <div
+              role="group"
+              aria-label={t(($) => $.page.target_label)}
+              className="flex items-center gap-1"
+            >
+              <Button
+                variant={personal ? "ghost" : "secondary"}
+                size="sm"
+                aria-pressed={!personal}
+                className="h-6 rounded-full px-2 text-caption"
+                onClick={() => setPersonal(false)}
+              >
+                {t(($) => $.page.target_department)}
+              </Button>
+              <Button
+                variant={personal ? "secondary" : "ghost"}
+                size="sm"
+                aria-pressed={personal}
+                className="h-6 rounded-full px-2 text-caption"
+                onClick={() => setPersonal(true)}
+              >
+                {t(($) => $.page.target_personal)}
+              </Button>
+            </div>
+          ) : null}
+          {dispatchBlocked ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
+              <p className="text-body font-medium">{t(($) => $.page.binding_required_title)}</p>
+              <p className="text-caption text-muted-foreground">
+                {t(($) => $.page.binding_required_description)}
+              </p>
+              <Button size="sm" className="self-start" onClick={() => push(p.org())}>
+                {t(($) => $.page.binding_required_action)}
+              </Button>
+            </div>
+          ) : (
+            <DispatchComposer
+              value={text}
+              onChange={setText}
+              onSubmit={submit}
+              pending={pending}
+              unitPath={presetUnitId && !selected ? (presetUnitPath ?? "") : null}
+              onClearUnit={
+                presetUnitId && !selected
+                  ? () => replace(workbenchPath)
+                  : undefined
+              }
+              threadTitle={selected ? selected.issue.title : null}
+              onExitThread={
+                selected
+                  ? () => {
+                      setText("");
+                      setFollowUpError(null);
+                      setAttachments([]);
+                      push(workbenchPath);
+                    }
+                  : undefined
+              }
+              attachments={attachments.map((entry) => ({
+                id: entry.id,
+                filename: entry.filename,
+              }))}
+              onAttachFiles={attachFiles}
+              onRemoveAttachment={removeAttachment}
+              uploading={uploading}
+              mentions={mentions}
+              focusToken={focusToken}
+            />
+          )}
         </div>
       </div>
     </div>

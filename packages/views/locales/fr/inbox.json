@@ -84,7 +84,8 @@
     "children_done": "Sous-tâches terminées",
     "dispatch_completed": "Travail du service terminé",
     "autopilot_quota_exceeded": "Limite d'exécutions d'automatisation atteinte",
-    "squad_leader_failed": "Échec du leader d'escouade"
+    "squad_leader_failed": "Échec du leader d'escouade",
+    "dispatch_failed": "Le travail du service a échoué"
   },
   "labels": {
     "set_status_to": "Statut défini sur",

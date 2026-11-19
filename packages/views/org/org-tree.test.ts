@@ -48,8 +48,8 @@ describe("buildOrgForest", () => {
     const forest = buildOrgForest({
       units: UNITS,
       agents: [
-        { id: "ag1", name: "Mika", unit_id: "b", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "idle" },
-        { id: "ag2", name: "Loose", unit_id: "", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "offline" },
+        { id: "ag1", name: "Mika", unit_id: "b", owner_id: "", is_primary: false, runtime_mode: "local", can: "", cannot: "", status: "idle" },
+        { id: "ag2", name: "Loose", unit_id: "", owner_id: "", is_primary: false, runtime_mode: "local", can: "", cannot: "", status: "offline" },
       ],
       members: [
         { user_id: "u1", unit_id: "b", name: "Ann", email: "ann@example.com", avatar_url: null, in_project: true },
@@ -84,8 +84,8 @@ describe("squads in the forest", () => {
 
 describe("memberTwin", () => {
   const agents = [
-    { id: "ag1", name: "Mika", unit_id: "b", owner_id: "u1", runtime_mode: "local", can: "", cannot: "", status: "idle" },
-    { id: "ag2", name: "Loose", unit_id: "", owner_id: "", runtime_mode: "local", can: "", cannot: "", status: "offline" },
+    { id: "ag1", name: "Mika", unit_id: "b", owner_id: "u1", is_primary: true, runtime_mode: "local", can: "", cannot: "", status: "idle" },
+    { id: "ag2", name: "Loose", unit_id: "", owner_id: "", is_primary: false, runtime_mode: "local", can: "", cannot: "", status: "offline" },
   ];
 
   it("binds an agent to the member that registered it", () => {

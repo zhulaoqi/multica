@@ -9,6 +9,7 @@
   "children": "Sous-départements",
   "my_department": "Mon département",
   "twin": "Jumeau numérique",
+  "primary_twin": "Jumeau principal",
   "edit_twin": "Modifier",
   "twin_title": "Mon jumeau",
   "twin_title_for": "Jumeau numérique de {{name}}",

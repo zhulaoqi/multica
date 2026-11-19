@@ -2436,6 +2436,7 @@ export const SquadSchema = z.object({
   archived_by: z.string().nullable().optional().transform((v) => v ?? null),
   member_count: z.number().default(0),
   member_preview: z.array(SquadMemberPreviewSchema).default([]),
+  is_private: z.boolean().default(false),
 }).loose();
 
 export const SquadListSchema = z.array(SquadSchema);
@@ -2455,6 +2456,7 @@ export const EMPTY_SQUAD: Squad = {
   archived_by: null,
   member_count: 0,
   member_preview: [],
+  is_private: false,
 };
 
 // Squad member status — backs the Squad detail page's Members tab. status

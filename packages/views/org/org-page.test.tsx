@@ -49,7 +49,7 @@ const baseUnit: OrgUnit = {
   description: "",
   position: 0,
 };
-const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", owner_id: "", runtime_mode: "", can: "", cannot: "", status: "" };
+const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", owner_id: "", is_primary: false, runtime_mode: "", can: "", cannot: "", status: "" };
 const baseSquad: OrgSquad = {
   id: "",
   name: "",

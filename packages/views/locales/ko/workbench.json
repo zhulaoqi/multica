@@ -15,6 +15,9 @@
     "back": "뒤로",
     "unknown_department": "부서",
     "load_error": "최근 요청을 불러오지 못했습니다.",
+    "binding_required_title": "먼저 에이전트를 연결하세요",
+    "binding_required_description": "에이전트는 부서의 답변을 받는 당신의 대표입니다. 연결하면 업무를 보낼 수 있으며, 둘러보기와 검토는 계속 사용할 수 있습니다.",
+    "binding_required_action": "에이전트 연결",
     "examples_label": "이렇게 요청할 수 있어요",
     "empty_history": "보낸 작업이 여기에 표시됩니다.",
     "examples": {
@@ -39,7 +42,12 @@
       "active": "진행 중",
       "completed": "완료",
       "empty": "아직 아무것도 없습니다."
-    }
+    },
+    "target_label": "보내기 대상",
+    "target_department": "부서",
+    "target_personal": "내 팀",
+    "personal_squad": "내 팀",
+    "blocked": "차단됨: {{missing}}"
   },
   "status": {
     "queued": "부서로 보냈습니다. 책임자가 곧 시작합니다.",
@@ -49,7 +57,10 @@
     "completed": "완료되었습니다.",
     "failed": "부서 책임자가 작업을 시작하지 못했습니다. 부서에 알렸습니다.",
     "cancelled": "이 작업은 취소되었습니다.",
-    "dispatched_at": "{{time}}에 보냄"
+    "dispatched_at": "{{time}}에 보냄",
+    "queued_personal": "내 팀으로 보냈습니다. 팀장이 곧 시작합니다.",
+    "decomposing_personal": "내 팀 팀장이 작업을 나누는 중입니다…",
+    "failed_personal": "내 팀 팀장이 시작하지 못했습니다."
   },
   "card": {
     "department": "부서",
@@ -66,19 +77,35 @@
     "title": "어느 부서가 맡아야 하나요?",
     "agents_other": "에이전트 {{count}}개"
   },
+  "reassign": {
+    "action": "부서 변경",
+    "title": "부서 변경",
+    "description": "이슈가 다른 부서의 팀으로 이동하고 해당 부서 리더가 다시 호출됩니다.",
+    "target_label": "부서",
+    "empty": "지금은 다른 부서가 맡을 수 없습니다.",
+    "no_agents": "에이전트 없음",
+    "confirm": "이동",
+    "cancel": "취소"
+  },
   "errors": {
     "ambiguous": "여러 부서가 맡을 수 있습니다. 하나를 선택하세요.",
     "dispatch_text_required": "먼저 무엇을 해야 하는지 적어주세요.",
     "dispatch_text_too_long": "너무 깁니다. 4,000자 이내로 작성하세요.",
     "org_dispatch_unit_not_found": "해당 부서가 더 이상 없습니다. 다른 부서를 고르거나 자동 배정을 사용하세요.",
     "org_dispatch_forbidden": "해당 부서에 대한 접근 권한이 없습니다.",
+    "agent_binding_required": "부서에 업무를 보내기 전에 에이전트를 연결하세요.",
     "org_dispatch_no_agents": "해당 부서에는 아직 에이전트가 없습니다. 조직 페이지에서 추가하세요.",
     "org_dispatch_leader_unavailable": "지금은 부서 책임자에게 연락할 수 없습니다. 잠시 후 다시 시도하세요.",
+    "org_dispatch_leader_offline": "해당 부서에 온라인 상태인 에이전트가 없습니다. 책임자에게 런타임 실행을 요청한 뒤 다시 보내세요.",
     "org_dispatch_unroutable": "어느 부서로 보낼지 판단하지 못했습니다. 부서를 지정하거나 설명을 보강하세요.",
     "org_dispatch_failed": "부서로 작업을 보내지 못했습니다.",
     "generic": "문제가 발생했습니다. 다시 시도하세요.",
     "followup_failed": "이 작업에 덧붙이지 못했습니다. 다시 시도하세요.",
-    "upload_failed": "파일을 업로드하지 못했습니다. 다시 시도하세요."
+    "upload_failed": "파일을 업로드하지 못했습니다. 다시 시도하세요.",
+    "personal_squad_not_found": "이 개인 팀은 더 이상 존재하지 않습니다. 다시 보내면 새로 만들어집니다.",
+    "org_dispatch_target_conflict": "부서와 내 팀 중 하나만 선택하세요.",
+    "org_dispatch_reassign_forbidden": "이 작업을 다시 배정할 수 있는 사람은 요청자뿐입니다.",
+    "dispatch_not_found": "이 작업은 더 이상 내 요청 기록에 없습니다."
   },
   "plan": {
     "title": "계획"
@@ -96,5 +123,17 @@
     "cancel": "취소",
     "accept_failed": "결과를 승인하지 못했습니다. 다시 시도하세요.",
     "reject_failed": "반려하지 못했습니다. 다시 시도하세요."
+  },
+  "queue": {
+    "title": "부서 대기열",
+    "load_error": "부서 대기열을 불러오지 못했습니다.",
+    "stages": {
+      "pending": "대기 중",
+      "in_progress": "진행 중",
+      "review": "검토 대기"
+    },
+    "requested_by": "{{name}} 님 요청",
+    "unknown_requester": "동료 요청",
+    "blocked": "차단됨: {{missing}}"
   }
 }

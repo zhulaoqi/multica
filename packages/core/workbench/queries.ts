@@ -1,10 +1,16 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
-import { DispatchCandidateSchema, type DispatchCandidate, type DispatchListItem } from "./schemas";
+import {
+  DispatchCandidateSchema,
+  type DispatchCandidate,
+  type DispatchListItem,
+  type DispatchQueueItem,
+} from "./schemas";
 
 export const workbenchKeys = {
   all: (wsId: string) => ["workbench", wsId] as const,
   dispatches: (wsId: string) => [...workbenchKeys.all(wsId), "dispatches"] as const,
+  departmentQueue: (wsId: string) => [...workbenchKeys.all(wsId), "department-queue"] as const,
 };
 
 export const DISPATCH_HISTORY_LIMIT = 30;
@@ -25,6 +31,29 @@ export function useMyDispatches(wsId: string): {
   error: Error | null;
 } {
   const query = useQuery(myDispatchesOptions(wsId));
+  return {
+    dispatches: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error instanceof Error ? query.error : null,
+  };
+}
+
+export function departmentDispatchesOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workbenchKeys.departmentQueue(wsId),
+    queryFn: () => api.listDepartmentDispatches(DISPATCH_HISTORY_LIMIT),
+    enabled: wsId.length > 0,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useDepartmentDispatches(wsId: string): {
+  dispatches: DispatchQueueItem[];
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const query = useQuery(departmentDispatchesOptions(wsId));
   return {
     dispatches: query.data ?? [],
     isLoading: query.isLoading,
