@@ -1077,7 +1077,7 @@ func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 	}
 
 	access, err := h.getWorkspaceAccess(r.Context(), userID, workspaceID)
-	if err != nil || !access.HasMember {
+	if err != nil || (!access.HasMember && !access.AncestorLead) {
 		writeError(w, http.StatusNotFound, notFoundMsg)
 		return db.Member{}, false
 	}
@@ -1086,14 +1086,7 @@ func (h *Handler) requireWorkspaceMember(w http.ResponseWriter, r *http.Request,
 		return db.Member{}, false
 	}
 
-	return db.Member{
-		ID:          access.MemberID,
-		WorkspaceID: access.WorkspaceID,
-		UserID:      access.UserID,
-		Role:        access.Role,
-		CreatedAt:   access.MemberSince,
-		OrgUnitID:   access.MemberUnit,
-	}, true
+	return access.EffectiveMember(), true
 }
 
 // requireWorkspaceManager admits the owning department lead in addition to the

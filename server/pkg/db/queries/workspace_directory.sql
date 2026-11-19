@@ -26,9 +26,9 @@ WHERE d.workspace_id = $1
 ORDER BY u.name ASC;
 
 -- name: SearchDirectoryMembers :many
--- Candidate picker: the project's department subtree, optionally narrowed by
--- name or email. Server-side search keeps a company-sized directory off the
--- wire.
+-- Candidate picker for the whole company directory: a project manager may
+-- pull in colleagues from other departments, not just the owning subtree.
+-- Server-side search keeps a company-sized directory off the wire.
 SELECT d.user_id, d.org_unit_id, u.name, u.email, u.avatar_url,
        EXISTS (
            SELECT 1 FROM member m
@@ -37,7 +37,6 @@ SELECT d.user_id, d.org_unit_id, u.name, u.email, u.avatar_url,
 FROM workspace_directory_member d
 JOIN "user" u ON u.id = d.user_id
 WHERE d.workspace_id = $1
-  AND d.org_unit_id = ANY(sqlc.arg(unit_ids)::uuid[])
   AND (
       sqlc.arg(query)::text = ''
       OR u.name ILIKE '%' || sqlc.arg(query)::text || '%'

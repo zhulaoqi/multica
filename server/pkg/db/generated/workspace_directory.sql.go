@@ -216,20 +216,18 @@ SELECT d.user_id, d.org_unit_id, u.name, u.email, u.avatar_url,
 FROM workspace_directory_member d
 JOIN "user" u ON u.id = d.user_id
 WHERE d.workspace_id = $1
-  AND d.org_unit_id = ANY($2::uuid[])
   AND (
-      $3::text = ''
-      OR u.name ILIKE '%' || $3::text || '%'
-      OR u.email ILIKE '%' || $3::text || '%'
+      $2::text = ''
+      OR u.name ILIKE '%' || $2::text || '%'
+      OR u.email ILIKE '%' || $2::text || '%'
   )
 ORDER BY u.name ASC
 LIMIT 50
 `
 
 type SearchDirectoryMembersParams struct {
-	WorkspaceID pgtype.UUID   `json:"workspace_id"`
-	UnitIds     []pgtype.UUID `json:"unit_ids"`
-	Query       string        `json:"query"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Query       string      `json:"query"`
 }
 
 type SearchDirectoryMembersRow struct {
@@ -241,11 +239,11 @@ type SearchDirectoryMembersRow struct {
 	InProject bool        `json:"in_project"`
 }
 
-// Candidate picker: the project's department subtree, optionally narrowed by
-// name or email. Server-side search keeps a company-sized directory off the
-// wire.
+// Candidate picker for the whole company directory: a project manager may
+// pull in colleagues from other departments, not just the owning subtree.
+// Server-side search keeps a company-sized directory off the wire.
 func (q *Queries) SearchDirectoryMembers(ctx context.Context, arg SearchDirectoryMembersParams) ([]SearchDirectoryMembersRow, error) {
-	rows, err := q.db.Query(ctx, searchDirectoryMembers, arg.WorkspaceID, arg.UnitIds, arg.Query)
+	rows, err := q.db.Query(ctx, searchDirectoryMembers, arg.WorkspaceID, arg.Query)
 	if err != nil {
 		return nil, err
 	}

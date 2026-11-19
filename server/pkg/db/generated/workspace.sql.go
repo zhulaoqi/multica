@@ -317,28 +317,29 @@ func (q *Queries) IncrementIssueCounter(ctx context.Context, id pgtype.UUID) (in
 }
 
 const listDaemonWorkspaces = `-- name: ListDaemonWorkspaces :many
-WITH RECURSIVE project_scope AS (
+WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT w.id, w.name
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-WHERE m.user_id = $1
-  AND (
-      w.org_unit_id IS NULL
-      OR m.role IN ('owner', 'admin')
-      OR EXISTS (
-          SELECT 1 FROM project_scope scope
-          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
-      )
-  )
+FROM workspace w
+WHERE EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = w.id AND m.user_id = $1
+    )
+   OR EXISTS (
+        SELECT 1
+        FROM ancestors a
+        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
+    )
 ORDER BY w.id ASC
 `
 
@@ -351,7 +352,7 @@ type ListDaemonWorkspacesRow struct {
 // workspaces should have local runtimes. Keep this projection intentionally
 // narrow so the periodic consistency check never reads UI-only JSON/text
 // columns such as settings, repos, or context. The access predicate matches
-// ListWorkspaces: an out-of-department member row must not boot a runtime.
+// ListWorkspaces.
 func (q *Queries) ListDaemonWorkspaces(ctx context.Context, userID pgtype.UUID) ([]ListDaemonWorkspacesRow, error) {
 	rows, err := q.db.Query(ctx, listDaemonWorkspaces, userID)
 	if err != nil {
@@ -424,34 +425,35 @@ func (q *Queries) ListOrgUnitsForWorkspaces(ctx context.Context, userID pgtype.U
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-WITH RECURSIVE project_scope AS (
+WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed, w.org_unit_id
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-WHERE m.user_id = $1
-  AND (
-      w.org_unit_id IS NULL
-      OR m.role IN ('owner', 'admin')
-      OR EXISTS (
-          SELECT 1 FROM project_scope scope
-          WHERE scope.workspace_id = w.id AND scope.unit_id = m.org_unit_id
-      )
-  )
+FROM workspace w
+WHERE EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = w.id AND m.user_id = $1
+    )
+   OR EXISTS (
+        SELECT 1
+        FROM ancestors a
+        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
+    )
 ORDER BY w.created_at ASC
 `
 
-// A member-row is access unless the workspace is department-owned; then only
-// owners/admins or members placed in the owning department's subtree keep it.
-// The recursive scope is computed once for every owned workspace.
+// A member row is access wherever the person is placed, so a project manager
+// can pull in colleagues from other departments. Department leads above the
+// owning department also inherit access upward without a member row.
 func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Workspace, error) {
 	rows, err := q.db.Query(ctx, listWorkspaces, userID)
 	if err != nil {

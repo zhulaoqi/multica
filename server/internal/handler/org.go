@@ -144,7 +144,7 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		Agents:    make([]orgAgentResponse, 0, len(agents)),
 		Members:   make([]orgMemberResponse, 0, len(members)),
 		Squads:    make([]orgSquadResponse, 0, len(squads)),
-		CanManage: access.admin,
+		CanManage: access.admin || access.implicitLead,
 	}
 	var ownUnitID pgtype.UUID
 	for _, member := range members {
@@ -158,7 +158,7 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 	}
 	var visible map[pgtype.UUID]bool
 	invitedSquads := map[string]struct{}{}
-	if !access.admin {
+	if !access.admin && !access.implicitLead {
 		visible = orgscope.Visible(access.units, ownUnitID, access.userID, false)
 		// A member always sees squads they were added to, even when that squad
 		// sits outside the department they belong to.
@@ -945,6 +945,10 @@ type orgAccess struct {
 	units      []db.ListOrgUnitsRow
 	// ownUnitID is the caller's own department, if they are placed in one.
 	ownUnitID pgtype.UUID
+	// implicitLead marks a lead of a department above the owning department.
+	// They read and manage the whole project subtree, the units their own
+	// lead position covers, without a member row.
+	implicitLead bool
 }
 
 func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, bool) {
@@ -973,25 +977,27 @@ func (h *Handler) orgAccess(w http.ResponseWriter, r *http.Request) (orgAccess, 
 		writeError(w, http.StatusInternalServerError, "could not list organisation units")
 		return orgAccess{}, false
 	}
+	access, accessErr := h.workspaceAccess(r, uuidToString(member.UserID), workspaceID)
 	return orgAccess{
 		wsUUID: wsUUID,
 		userID: member.UserID,
 		// Directory editing stays with the platform operator and department
 		// leads. A project owner who does not lead a unit manages members, not
 		// the company tree.
-		admin:      requestIsOperator(r),
-		owned:      ws.OrgUnitID.Valid,
-		rootUnitID: ws.OrgUnitID,
-		unitIDs:    workspaceaccess.UnitIDs(units),
-		units:      units,
-		ownUnitID:  member.OrgUnitID,
+		admin:        requestIsOperator(r),
+		owned:        ws.OrgUnitID.Valid,
+		rootUnitID:   ws.OrgUnitID,
+		unitIDs:      workspaceaccess.UnitIDs(units),
+		units:        units,
+		ownUnitID:    member.OrgUnitID,
+		implicitLead: accessErr == nil && access.Implicit(),
 	}, true
 }
 
 // manages reports that the caller may administer the unit: the platform
 // operator may, and so may the lead of the unit itself or one of its ancestors.
 func (a orgAccess) manages(unitID pgtype.UUID) bool {
-	if a.admin {
+	if a.admin || a.implicitLead {
 		return true
 	}
 	return orgscope.Leads(a.units, a.userID, unitID)
@@ -1001,7 +1007,7 @@ func (a orgAccess) manages(unitID pgtype.UUID) bool {
 // Handlers gate on it before resolving a unit so callers without any rights get
 // a stable 403 instead of a 404 that leaks whether the unit exists.
 func (a orgAccess) managesAny() bool {
-	if a.admin {
+	if a.admin || a.implicitLead {
 		return true
 	}
 	return orgscope.LeadsAny(a.units, a.userID)

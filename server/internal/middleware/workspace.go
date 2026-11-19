@@ -294,7 +294,11 @@ func buildMiddleware(queries *db.Queries, resolve workspaceResolver, mode access
 				writeError(w, http.StatusInternalServerError, "failed to resolve workspace access")
 				return
 			}
-			if !isOperator && !access.HasMember {
+			// A caller with neither a member row nor inherited department
+			// access has no relationship to this workspace; keep the 404 so
+			// the ID does not become an existence oracle. Ancestor leads get
+			// a synthetic member context below.
+			if !isOperator && !access.HasMember && !access.AncestorLead {
 				writeError(w, http.StatusNotFound, "workspace not found")
 				return
 			}
@@ -330,14 +334,7 @@ func buildMiddleware(queries *db.Queries, resolve workspaceResolver, mode access
 				}
 			}
 
-			member := db.Member{
-				ID:          access.MemberID,
-				WorkspaceID: wsUUID,
-				UserID:      userUUID,
-				Role:        access.Role,
-				CreatedAt:   access.MemberSince,
-				OrgUnitID:   access.MemberUnit,
-			}
+			member := access.EffectiveMember()
 			if isOperator {
 				member = db.Member{ID: userUUID, WorkspaceID: wsUUID, UserID: userUUID, Role: "owner"}
 			}

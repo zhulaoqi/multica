@@ -31,6 +31,7 @@ const (
 	codeDepartmentRequired    = "department_required"
 	codeDepartmentForbidden   = "department_forbidden"
 	codeMemberOutsideDept     = "member_outside_department"
+	codeMemberNotInDirectory  = "member_not_in_directory"
 	codeDirectAddOnly         = "direct_add_only"
 	codeLastOwnerRequired     = "last_owner_required"
 	codeOrgLeadCannotBeRemove = "org_lead_cannot_be_removed"
@@ -422,23 +423,12 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeErrorCode(w, http.StatusNotFound, codeMemberOutsideDept, "user is not in the department directory")
+			writeErrorCode(w, http.StatusNotFound, codeMemberNotInDirectory, "user is not in the workspace directory")
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to load directory member")
 		return
 	}
-	subtree, err := workspaceaccess.SubtreeUnits(r.Context(), h.Queries, wsUUID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load project departments")
-		return
-	}
-	subtreeIDs := workspaceaccess.UnitIDs(subtree)
-	if !subtreeIDs[directoryRow.OrgUnitID] {
-		writeErrorCode(w, http.StatusForbidden, codeMemberOutsideDept, "user is outside this project's department")
-		return
-	}
-
 	actorUserID := requestUserID(r)
 
 	existing, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
@@ -570,7 +560,9 @@ type ProjectMemberCandidate struct {
 	InProject bool    `json:"in_project"`
 }
 
-// ListProjectMemberCandidates searches the owning department's directory.
+// ListProjectMemberCandidates searches the company directory. A project
+// manager may pull in a colleague from another department; the person becomes
+// an explicit member with access wherever they are placed.
 func (h *Handler) ListProjectMemberCandidates(w http.ResponseWriter, r *http.Request) {
 	workspaceID := workspaceIDFromURL(r, "id")
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
@@ -586,30 +578,21 @@ func (h *Handler) ListProjectMemberCandidates(w http.ResponseWriter, r *http.Req
 		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "this workspace adds members by invitation")
 		return
 	}
-	subtree, err := workspaceaccess.SubtreeUnits(r.Context(), h.Queries, wsUUID)
+	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load project departments")
+		writeError(w, http.StatusInternalServerError, "failed to load departments")
 		return
 	}
-	resp := []ProjectMemberCandidate{}
-	if len(subtree) == 0 {
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-	unitIDs := make([]pgtype.UUID, 0, len(subtree))
-	for _, unit := range subtree {
-		unitIDs = append(unitIDs, unit.ID)
-	}
-	paths := orgscope.Paths(subtree)
+	paths := orgscope.Paths(units)
 	rows, err := h.Queries.SearchDirectoryMembers(r.Context(), db.SearchDirectoryMembersParams{
 		WorkspaceID: wsUUID,
-		UnitIds:     unitIDs,
 		Query:       strings.TrimSpace(r.URL.Query().Get("q")),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to search the department directory")
+		writeError(w, http.StatusInternalServerError, "failed to search the employee directory")
 		return
 	}
+	resp := make([]ProjectMemberCandidate, 0, len(rows))
 	for _, row := range rows {
 		resp = append(resp, ProjectMemberCandidate{
 			UserID:    uuidToString(row.UserID),

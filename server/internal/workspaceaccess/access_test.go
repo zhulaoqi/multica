@@ -53,10 +53,33 @@ func TestAllowed(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "owned out-of-subtree member",
+			name: "owned out-of-subtree explicit member",
 			a: Access{
 				RootUnitID: id(t, rootID), RootExists: true,
 				HasMember: true, Role: "member",
+			},
+			want: true,
+		},
+		{
+			name: "ancestor department lead without a member row",
+			a: Access{
+				RootUnitID: id(t, rootID), RootExists: true,
+				UserID: id(t, leadID), AncestorLead: true,
+			},
+			want: true,
+		},
+		{
+			name: "descendant without a member row is rejected",
+			a: Access{
+				RootUnitID: id(t, rootID), RootExists: true,
+				UserID: id(t, otherID),
+			},
+			want: false,
+		},
+		{
+			name: "ancestor flag does not widen a legacy workspace",
+			a: Access{
+				UserID: id(t, leadID), AncestorLead: true,
 			},
 			want: false,
 		},
@@ -102,11 +125,22 @@ func TestManagerAndViewer(t *testing.T) {
 	if !lead.IsOrgLead() || !lead.IsManager() {
 		t.Fatal("owning department lead should manage the project")
 	}
-	if !lead.Viewer() {
-		t.Fatal("manager should open settings even outside the subtree")
+	if !lead.Viewer() || !lead.Allowed() {
+		t.Fatal("the owning department lead with a member row keeps content and settings access")
 	}
-	if lead.Allowed() {
-		t.Fatal("lead outside the subtree should not read content")
+
+	implicit := Access{
+		RootUnitID: id(t, rootID), RootExists: true, RootLeadUserID: id(t, leadID),
+		UserID: id(t, otherID), AncestorLead: true,
+	}
+	if !implicit.Implicit() || !implicit.Allowed() {
+		t.Fatal("an ancestor lead without a member row should inherit content access")
+	}
+	if implicit.IsManager() || implicit.IsOrgLead() {
+		t.Fatal("implicit ancestor access must not grant project management")
+	}
+	if got := implicit.EffectiveMember(); got.ID != implicit.UserID || got.Role != "member" {
+		t.Fatalf("synthetic member = %+v, want user-keyed member role", got)
 	}
 
 	plain := Access{

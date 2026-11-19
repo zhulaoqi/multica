@@ -371,25 +371,9 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 }
 
 const listOrgUnitMemberIDs = `-- name: ListOrgUnitMemberIDs :many
-WITH RECURSIVE project_scope AS (
-    SELECT w.id AS workspace_id, u.id AS unit_id
-    FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
-    WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
-    UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
-)
 SELECT m.user_id, m.org_unit_id
 FROM member m
-JOIN workspace w ON w.id = m.workspace_id
 WHERE m.workspace_id = $1
-  AND (
-      w.org_unit_id IS NULL
-      OR m.role IN ('owner', 'admin')
-      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
-  )
 ORDER BY m.user_id
 `
 
@@ -401,8 +385,8 @@ type ListOrgUnitMemberIDsRow struct {
 // Every project member's unit assignment, ids only. Manager surfaces (team
 // runtime visibility) walk the unit tree in Go and do not want the full
 // roster's names/emails — the org page's ListOrgUnitMembers is far too heavy
-// for a list endpoint that runs on every Runtimes page load. Department-owned
-// workspaces exclude member rows outside the owning subtree.
+// for a list endpoint that runs on every Runtimes page load. Every member row
+// is an explicit collaborator, including people from other departments.
 func (q *Queries) ListOrgUnitMemberIDs(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitMemberIDsRow, error) {
 	rows, err := q.db.Query(ctx, listOrgUnitMemberIDs, workspaceID)
 	if err != nil {

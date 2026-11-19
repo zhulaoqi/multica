@@ -3933,6 +3933,7 @@ export const MemberWithUserSchema = z.object({
   avatar_url: z.string().nullable().optional().default(null),
   org_unit_id: z.string().nullable().optional().default(null),
   is_org_lead: z.boolean().optional().default(false),
+  implicit_access: z.boolean().optional().default(false),
 }).loose();
 
 export const MemberWithUserListSchema = z.array(MemberWithUserSchema).default([]);

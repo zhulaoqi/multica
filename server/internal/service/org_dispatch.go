@@ -280,7 +280,7 @@ func (s *OrgDispatchService) ResolveUnits(ctx context.Context, wsUUID, actorID p
 	if err != nil {
 		return nil, fmt.Errorf("list org units: %w", err)
 	}
-	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin())
+	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin() || access.Implicit())
 	paths := orgscope.Paths(units)
 
 	var exact, partial []UnitMatch
@@ -439,11 +439,11 @@ func orgUnitsForUser(ctx context.Context, q *db.Queries, workspaceID pgtype.UUID
 	return q.ListOrgUnits(ctx, workspaceID)
 }
 
-// canDispatchToUnit mirrors the org page's visibility: managers dispatch
-// anywhere, everyone else only to their own department subtree and to the
-// departments they lead.
+// canDispatchToUnit mirrors the org page's visibility: managers and the
+// project's parent-department leads dispatch anywhere in the project, everyone
+// else only to their own department subtree and to the departments they lead.
 func canDispatchToUnit(access workspaceaccess.Access, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
-	if access.IsAdmin() {
+	if access.IsAdmin() || access.Implicit() {
 		return true
 	}
 	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, false)

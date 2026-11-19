@@ -143,6 +143,11 @@ export interface MemberWithUser {
    * owner, so this only matters if their stored role drifted. Defaults false.
    */
   is_org_lead?: boolean;
+  /**
+   * True on the synthetic row returned to a lead above the project owner.
+   * They may use the project without holding a member row; `id` is empty.
+   */
+  implicit_access?: boolean;
 }
 
 export interface Invitation {

@@ -96,35 +96,39 @@ func (q *Queries) GetMemberByUserAndWorkspace(ctx context.Context, arg GetMember
 }
 
 const getRealtimeMemberships = `-- name: GetRealtimeMemberships :many
-WITH RECURSIVE project_scope AS (
+WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.org_unit_id IS NOT NULL
+      AND w.id = ANY($1::uuid[])
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT m.user_id, m.workspace_id
 FROM member m
-JOIN workspace w ON w.id = m.workspace_id
 JOIN (
-    SELECT unnest($1::uuid[]) AS user_id,
-           unnest($2::uuid[]) AS workspace_id
+    SELECT unnest($2::uuid[]) AS user_id,
+           unnest($1::uuid[]) AS workspace_id
 ) AS requested
     ON m.user_id = requested.user_id AND m.workspace_id = requested.workspace_id
-WHERE w.org_unit_id IS NULL
-   OR m.role IN ('owner', 'admin')
-   OR EXISTS (
-       SELECT 1 FROM project_scope scope
-       WHERE scope.workspace_id = m.workspace_id AND scope.unit_id = m.org_unit_id
-   )
+UNION
+SELECT requested.user_id, requested.workspace_id
+FROM (
+    SELECT unnest($2::uuid[]) AS user_id,
+           unnest($1::uuid[]) AS workspace_id
+) AS requested
+JOIN ancestors a ON a.workspace_id = requested.workspace_id
+JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+WHERE unit.lead_user_id = requested.user_id
 `
 
 type GetRealtimeMembershipsParams struct {
-	UserIds      []pgtype.UUID `json:"user_ids"`
 	WorkspaceIds []pgtype.UUID `json:"workspace_ids"`
+	UserIds      []pgtype.UUID `json:"user_ids"`
 }
 
 type GetRealtimeMembershipsRow struct {
@@ -132,10 +136,10 @@ type GetRealtimeMembershipsRow struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-// Realtime fanout follows the same department scope as content access: a
-// member row outside the owning department's subtree no longer receives events.
+// Realtime fanout follows content access: every explicit member row, plus
+// department leads above the owning department, who inherit access upward.
 func (q *Queries) GetRealtimeMemberships(ctx context.Context, arg GetRealtimeMembershipsParams) ([]GetRealtimeMembershipsRow, error) {
-	rows, err := q.db.Query(ctx, getRealtimeMemberships, arg.UserIds, arg.WorkspaceIds)
+	rows, err := q.db.Query(ctx, getRealtimeMemberships, arg.WorkspaceIds, arg.UserIds)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +163,22 @@ WITH RECURSIVE scope AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
-    WHERE w.id = $1
+    WHERE w.id = $2
     UNION ALL
     SELECT scope.workspace_id, child.id
     FROM scope
     JOIN org_unit child ON child.parent_id = scope.unit_id
+),
+ancestors AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = $2
+    UNION ALL
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT
     w.id AS workspace_id,
@@ -177,16 +192,22 @@ SELECT
     (
         m.org_unit_id IS NOT NULL
         AND m.org_unit_id IN (SELECT unit_id FROM scope)
-    )::bool AS in_subtree
+    )::bool AS in_subtree,
+    EXISTS (
+        SELECT 1
+        FROM ancestors a
+        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
+    )::bool AS ancestor_lead
 FROM workspace w
 LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
-LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = $2
-WHERE w.id = $1
+LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = $1
+WHERE w.id = $2
 `
 
 type GetWorkspaceAccessParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
 type GetWorkspaceAccessRow struct {
@@ -199,14 +220,15 @@ type GetWorkspaceAccessRow struct {
 	MemberOrgUnitID pgtype.UUID        `json:"member_org_unit_id"`
 	MemberCreatedAt pgtype.Timestamptz `json:"member_created_at"`
 	InSubtree       bool               `json:"in_subtree"`
+	AncestorLead    bool               `json:"ancestor_lead"`
 }
 
 // One row with everything the access policy needs: the owning department,
-// whether it still exists, the caller's member row and whether it sits in the
-// department subtree. Scalar subqueries avoid LEFT JOIN nullability on every
-// column.
+// whether it still exists, the caller's member row, whether it sits in the
+// department subtree, and whether the caller leads the owning department or an
+// ancestor. Scalar subqueries avoid LEFT JOIN nullability on every column.
 func (q *Queries) GetWorkspaceAccess(ctx context.Context, arg GetWorkspaceAccessParams) (GetWorkspaceAccessRow, error) {
-	row := q.db.QueryRow(ctx, getWorkspaceAccess, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getWorkspaceAccess, arg.UserID, arg.WorkspaceID)
 	var i GetWorkspaceAccessRow
 	err := row.Scan(
 		&i.WorkspaceID,
@@ -218,6 +240,7 @@ func (q *Queries) GetWorkspaceAccess(ctx context.Context, arg GetWorkspaceAccess
 		&i.MemberOrgUnitID,
 		&i.MemberCreatedAt,
 		&i.InSubtree,
+		&i.AncestorLead,
 	)
 	return i, err
 }
@@ -392,30 +415,32 @@ func (q *Queries) ListOwnedWorkspaceMemberRows(ctx context.Context) ([]ListOwned
 }
 
 const listProjectMemberUserIDs = `-- name: ListProjectMemberUserIDs :many
-WITH RECURSIVE project_scope AS (
-    SELECT w.id AS workspace_id, u.id AS unit_id
+WITH RECURSIVE ancestors AS (
+    SELECT u.id AS unit_id, u.workspace_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT parent.id, parent.workspace_id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
-SELECT m.user_id
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-WHERE m.workspace_id = $1
-  AND (
-      w.org_unit_id IS NULL
-      OR m.role IN ('owner', 'admin')
-      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
-  )
-ORDER BY m.created_at ASC
+SELECT DISTINCT user_id FROM (
+    SELECT m.user_id
+    FROM member m
+    WHERE m.workspace_id = $1
+    UNION ALL
+    SELECT unit.lead_user_id
+    FROM ancestors a
+    JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+    WHERE unit.lead_user_id IS NOT NULL
+) members
 `
 
-// Everyone who may act in the project: every member row for a legacy
-// workspace, owners/admins and subtree members otherwise.
+// Everyone who may act in the project: every explicit member row (wherever
+// that person is placed) plus department leads above the owning department,
+// who inherit access upward.
 func (q *Queries) ListProjectMemberUserIDs(ctx context.Context, workspaceID pgtype.UUID) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, listProjectMemberUserIDs, workspaceID)
 	if err != nil {

@@ -43,6 +43,7 @@ vi.mock("@tanstack/react-query", () => ({
     invalidateQueries: vi.fn(),
     fetchQuery: vi.fn(),
   }),
+  useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock("@multica/core/billing", () => ({
   usePreviewWorkspaceSeatPurchase: () => ({ mutateAsync: vi.fn() }),
@@ -140,6 +141,21 @@ describe("MembersTab", () => {
     expect(screen.getByRole("button", { name: "Actions for Grace Hopper" })).toBeInTheDocument();
     // Nobody manages their own membership from this list.
     expect(screen.queryByRole("button", { name: "Actions for Ada Lovelace" })).toBeNull();
+  });
+
+  it("labels inherited ancestor access without a join date", () => {
+    data.members = [
+      member("user-1", "Ada Lovelace", "owner"),
+      {
+        ...member("user-9", "Parent Lead", "member"),
+        implicit_access: true,
+        created_at: "",
+      },
+    ];
+    renderWithI18n(<MembersTab />);
+
+    expect(screen.getByText("Inherited access")).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid Date/)).toBeNull();
   });
 
   it("filters members by name or email", () => {

@@ -89,7 +89,7 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		return RouteResult{}, fmt.Errorf("list org units: %w", err)
 	}
 	paths := orgscope.Paths(units)
-	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin())
+	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin() || access.Implicit())
 
 	if explicitUnitID.Valid {
 		unit, ok := findUnit(units, explicitUnitID)

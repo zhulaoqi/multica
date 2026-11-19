@@ -22,47 +22,62 @@ SELECT * FROM member
 WHERE user_id = $1 AND workspace_id = $2;
 
 -- name: GetRealtimeMemberships :many
--- Realtime fanout follows the same department scope as content access: a
--- member row outside the owning department's subtree no longer receives events.
-WITH RECURSIVE project_scope AS (
+-- Realtime fanout follows content access: every explicit member row, plus
+-- department leads above the owning department, who inherit access upward.
+WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.org_unit_id IS NOT NULL
+      AND w.id = ANY(sqlc.arg(workspace_ids)::uuid[])
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT m.user_id, m.workspace_id
 FROM member m
-JOIN workspace w ON w.id = m.workspace_id
 JOIN (
     SELECT unnest(sqlc.arg(user_ids)::uuid[]) AS user_id,
            unnest(sqlc.arg(workspace_ids)::uuid[]) AS workspace_id
 ) AS requested
     ON m.user_id = requested.user_id AND m.workspace_id = requested.workspace_id
-WHERE w.org_unit_id IS NULL
-   OR m.role IN ('owner', 'admin')
-   OR EXISTS (
-       SELECT 1 FROM project_scope scope
-       WHERE scope.workspace_id = m.workspace_id AND scope.unit_id = m.org_unit_id
-   );
+UNION
+SELECT requested.user_id, requested.workspace_id
+FROM (
+    SELECT unnest(sqlc.arg(user_ids)::uuid[]) AS user_id,
+           unnest(sqlc.arg(workspace_ids)::uuid[]) AS workspace_id
+) AS requested
+JOIN ancestors a ON a.workspace_id = requested.workspace_id
+JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+WHERE unit.lead_user_id = requested.user_id;
 
 -- name: GetWorkspaceAccess :one
 -- One row with everything the access policy needs: the owning department,
--- whether it still exists, the caller's member row and whether it sits in the
--- department subtree. Scalar subqueries avoid LEFT JOIN nullability on every
--- column.
+-- whether it still exists, the caller's member row, whether it sits in the
+-- department subtree, and whether the caller leads the owning department or an
+-- ancestor. Scalar subqueries avoid LEFT JOIN nullability on every column.
 WITH RECURSIVE scope AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
-    WHERE w.id = $1
+    WHERE w.id = sqlc.arg(workspace_id)
     UNION ALL
     SELECT scope.workspace_id, child.id
     FROM scope
     JOIN org_unit child ON child.parent_id = scope.unit_id
+),
+ancestors AS (
+    SELECT w.id AS workspace_id, u.id AS unit_id
+    FROM workspace w
+    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    WHERE w.id = sqlc.arg(workspace_id)
+    UNION ALL
+    SELECT a.workspace_id, parent.id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
 SELECT
     w.id AS workspace_id,
@@ -76,11 +91,17 @@ SELECT
     (
         m.org_unit_id IS NOT NULL
         AND m.org_unit_id IN (SELECT unit_id FROM scope)
-    )::bool AS in_subtree
+    )::bool AS in_subtree,
+    EXISTS (
+        SELECT 1
+        FROM ancestors a
+        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        WHERE a.workspace_id = w.id AND unit.lead_user_id = sqlc.arg(user_id)
+    )::bool AS ancestor_lead
 FROM workspace w
 LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
-LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = $2
-WHERE w.id = $1;
+LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = sqlc.arg(user_id)
+WHERE w.id = sqlc.arg(workspace_id);
 
 -- name: ListWorkspaceSubtreeUnits :many
 -- The project's department subtree. Empty for a legacy workspace, which still
@@ -101,28 +122,30 @@ FROM scope
 ORDER BY position ASC, name ASC;
 
 -- name: ListProjectMemberUserIDs :many
--- Everyone who may act in the project: every member row for a legacy
--- workspace, owners/admins and subtree members otherwise.
-WITH RECURSIVE project_scope AS (
-    SELECT w.id AS workspace_id, u.id AS unit_id
+-- Everyone who may act in the project: every explicit member row (wherever
+-- that person is placed) plus department leads above the owning department,
+-- who inherit access upward.
+WITH RECURSIVE ancestors AS (
+    SELECT u.id AS unit_id, u.workspace_id
     FROM workspace w
     JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
     WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
     UNION ALL
-    SELECT scope.workspace_id, child.id
-    FROM project_scope scope
-    JOIN org_unit child ON child.parent_id = scope.unit_id
+    SELECT parent.id, parent.workspace_id
+    FROM ancestors a
+    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
+    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
 )
-SELECT m.user_id
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-WHERE m.workspace_id = $1
-  AND (
-      w.org_unit_id IS NULL
-      OR m.role IN ('owner', 'admin')
-      OR m.org_unit_id IN (SELECT unit_id FROM project_scope)
-  )
-ORDER BY m.created_at ASC;
+SELECT DISTINCT user_id FROM (
+    SELECT m.user_id
+    FROM member m
+    WHERE m.workspace_id = $1
+    UNION ALL
+    SELECT unit.lead_user_id
+    FROM ancestors a
+    JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+    WHERE unit.lead_user_id IS NOT NULL
+) members;
 
 -- name: CreateMember :one
 INSERT INTO member (workspace_id, user_id, role, org_unit_id)

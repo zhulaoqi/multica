@@ -207,6 +207,7 @@ function MemberRow({
   // The owning department's lead stays in the project; transfer the lead
   // first. The server enforces the same rule.
   const isProjectLead = member.is_org_lead ?? false;
+  const isInherited = member.implicit_access ?? false;
   const canEditRole = canManage && !isSelf && (member.role !== "owner" || canManageOwners);
   const canRemove =
     canManage &&
@@ -232,13 +233,20 @@ function MemberRow({
               {t(($) => $.members.department_lead_badge)}
             </Badge>
           ) : null}
+          {isInherited ? (
+            <Badge variant="secondary" className="shrink-0">
+              {t(($) => $.members.inherited_access_badge)}
+            </Badge>
+          ) : null}
         </div>
         <div className="truncate text-caption text-muted-foreground">{member.email}</div>
       </div>
       <span className="hidden w-32 shrink-0 text-caption tabular-nums text-muted-foreground md:block">
-        {t(($) => $.members.joined, {
-          date: new Date(member.created_at).toLocaleDateString(locale),
-        })}
+        {isInherited
+          ? "—"
+          : t(($) => $.members.joined, {
+              date: new Date(member.created_at).toLocaleDateString(locale),
+            })}
       </span>
       <span className="flex w-24 shrink-0 items-center gap-1.5 text-body">
         <RoleIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -847,6 +855,8 @@ export function MembersTab() {
     switch (errorCode(error)) {
       case "member_outside_department":
         return t(($) => $.members.errors.member_outside_department);
+      case "member_not_in_directory":
+        return t(($) => $.members.errors.member_not_in_directory);
       case "direct_add_only":
         return t(($) => $.members.errors.direct_add_only);
       case "last_owner_required":

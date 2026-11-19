@@ -44,8 +44,9 @@ type orgSyncReport struct {
 	// left the project subtree. They keep access by role; sync never demotes
 	// them.
 	OwnersOutsideDepartment []string `json:"owners_outside_department"`
-	// AccessRevoked names ordinary members the sync moved out of the subtree;
-	// their sessions are cut after the run commits.
+	// AccessRevoked is retained for wire compatibility and stays empty: an
+	// explicit member row keeps access wherever the directory places the
+	// person, so a department change no longer revokes it.
 	AccessRevoked []string `json:"access_revoked"`
 	SyncedAt      string   `json:"synced_at"`
 }
@@ -461,9 +462,9 @@ func (h *Handler) upsertDirectoryUsers(
 	return userIDs, nil
 }
 
-// reportProjectScopeChanges separates members who left the department subtree
-// into ordinary members (their access is revoked) and owners/admins, who keep
-// access by role and are only reported.
+// reportProjectScopeChanges lists owners/admins the directory moved outside
+// the project subtree. Ordinary members need no report: their explicit member
+// row keeps access wherever the directory places them.
 func reportProjectScopeChanges(
 	ctx context.Context,
 	qtx *db.Queries,
@@ -480,25 +481,21 @@ func reportProjectScopeChanges(
 	for _, unit := range units {
 		subtree[unit.ID] = true
 	}
-	revoked := make([]string, 0)
 	owners := make([]string, 0)
 	for userID, member := range members {
 		if subtree[member.OrgUnitID] {
+			continue
+		}
+		if member.Role != "owner" && member.Role != "admin" {
 			continue
 		}
 		name := nameByUser[userID]
 		if name == "" {
 			name = util.UUIDToString(userID)
 		}
-		if member.Role == "owner" || member.Role == "admin" {
-			owners = append(owners, name)
-			continue
-		}
-		revoked = append(revoked, name)
+		owners = append(owners, name)
 	}
-	sort.Strings(revoked)
 	sort.Strings(owners)
-	report.AccessRevoked = append(report.AccessRevoked, revoked...)
 	report.OwnersOutsideDepartment = append(report.OwnersOutsideDepartment, owners...)
 	return nil
 }

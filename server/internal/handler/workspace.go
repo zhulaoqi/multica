@@ -571,6 +571,9 @@ type MemberWithUserResponse struct {
 	// IsOrgLead marks the owning department's lead, who manages the project
 	// even when their stored role has not been promoted to owner.
 	IsOrgLead bool `json:"is_org_lead"`
+	// ImplicitAccess marks the synthetic row returned to a department lead
+	// above the project owner: they may use the project but hold no member row.
+	ImplicitAccess bool `json:"implicit_access"`
 }
 
 func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
@@ -586,7 +589,7 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visible, userUUID, manager, subtree, ok := h.visibleMemberScope(w, r, wsUUID)
+	visible, userUUID, manager, subtree, access, ok := h.visibleMemberScope(w, r, wsUUID)
 	if !ok {
 		return
 	}
@@ -617,56 +620,69 @@ func (h *Handler) ListMembersWithUser(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Implicit ancestor access has no member row. Return a synthetic row for
+	// the caller so useCurrentMember and other role lookups can resolve them
+	// as a plain member; the empty member id keeps it out of member mutations.
+	if access.Implicit() {
+		user, err := h.Queries.GetUser(r.Context(), userUUID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load member")
+			return
+		}
+		resp = append(resp, MemberWithUserResponse{
+			WorkspaceID:    uuidToString(wsUUID),
+			UserID:         uuidToString(userUUID),
+			Role:           "member",
+			Name:           user.Name,
+			Email:          user.Email,
+			AvatarURL:      h.resolveAvatarURLPtr(textToPtr(user.AvatarUrl)),
+			ImplicitAccess: true,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // visibleMemberScope narrows the workspace roster to the caller's department
-// scope. Managers (operator, stored owner/admin, owning department lead) see
-// every member row. For a department-owned project, non-managers additionally
-// only see rows that pass the project access predicate. Everyone else then
-// sees the departments the organisation page shows; a caller without a
-// department sees only themselves.
-//
-// subtree is non-nil only for an owned workspace; nil means the legacy
-// flat-member rule applies.
-func (h *Handler) visibleMemberScope(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) (visible map[pgtype.UUID]bool, userUUID pgtype.UUID, manager bool, subtree map[pgtype.UUID]bool, ok bool) {
+// scope. A department-owned project returns every row: each member row is an
+// explicit collaborator, wherever their department sits, and the inherited
+// ancestor lead reads the same roster. A legacy flat workspace keeps the
+// organisation tree rules: managers see every row, everyone else sees the
+// departments the organisation page shows, and a caller without a department
+// sees only themselves.
+func (h *Handler) visibleMemberScope(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) (visible map[pgtype.UUID]bool, userUUID pgtype.UUID, manager bool, subtree map[pgtype.UUID]bool, access workspaceaccess.Access, ok bool) {
 	if requestIsOperator(r) {
-		return nil, pgtype.UUID{}, true, nil, true
+		return nil, pgtype.UUID{}, true, nil, workspaceaccess.Access{WorkspaceID: wsUUID, IsOperator: true}, true
 	}
 	userUUID, ok = parseUUIDOrBadRequest(w, requestUserID(r), "user id")
 	if !ok {
-		return nil, pgtype.UUID{}, false, nil, false
+		return nil, pgtype.UUID{}, false, nil, workspaceaccess.Access{}, false
 	}
 	access, err := h.workspaceAccess(r, uuidToString(userUUID), uuidToString(wsUUID))
-	if err != nil || !access.HasMember {
+	if err != nil || !access.Allowed() {
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			slog.Error("read member scope failed", append(logger.RequestAttrs(r), "error", err)...)
 			writeError(w, http.StatusInternalServerError, "failed to list members")
-			return nil, pgtype.UUID{}, false, nil, false
+			return nil, pgtype.UUID{}, false, nil, workspaceaccess.Access{}, false
 		}
 		writeError(w, http.StatusForbidden, "not a workspace member")
-		return nil, pgtype.UUID{}, false, nil, false
+		return nil, pgtype.UUID{}, false, nil, workspaceaccess.Access{}, false
 	}
 	// A legacy workspace keeps the flat-member roster rules: its owner is not
-	// an operator, so only the operator reads every member row. Department
-	// projects stay inside their department, where a manager may see all rows.
-	if !access.Legacy() && access.IsManager() {
-		return nil, userUUID, true, nil, true
+	// an operator, so only the operator reads every member row. In a
+	// department project every member row is an explicit collaborator (the
+	// organisation sync no longer creates rows), including people pulled in
+	// from other departments, so any member reads the project roster.
+	if !access.Legacy() {
+		return nil, userUUID, true, nil, access, true
 	}
 	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
 	if err != nil {
 		slog.Error("list org units failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "failed to list members")
-		return nil, pgtype.UUID{}, false, nil, false
+		return nil, pgtype.UUID{}, false, nil, workspaceaccess.Access{}, false
 	}
-	if !access.Legacy() {
-		if len(units) > 0 {
-			subtree = orgscope.Subtree(units, access.RootUnitID)
-		} else {
-			subtree = map[pgtype.UUID]bool{}
-		}
-	}
-	return orgscope.Visible(units, access.MemberUnit, userUUID, false), userUUID, false, subtree, true
+	return orgscope.Visible(units, access.MemberUnit, userUUID, false), userUUID, false, nil, access, true
 }
 
 type CreateMemberRequest struct {
