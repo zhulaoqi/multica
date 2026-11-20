@@ -255,6 +255,8 @@ func TestChildDone_SquadPrivateLeader_PlainMemberWakesLeader(t *testing.T) {
 	testPool.Exec(ctx, `DELETE FROM agent_task_queue WHERE issue_id = $1`, parent.ID)
 
 	// Create a child issue via API (as workspace owner, with member assignee).
+	// Work assigned to a person is carried by their twin, so bind one first.
+	insertIntakeDutyAgent(t, "private-leader-child-twin", memberID)
 	w = httptest.NewRecorder()
 	r = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
 		"title":           "child task",

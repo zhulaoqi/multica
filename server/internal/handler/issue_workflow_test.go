@@ -1021,6 +1021,9 @@ func TestPreviewIssueWorkflowBriefRejectsMemberOutsideWorkspace(t *testing.T) {
 	const memberName = "Workflow Brief Member"
 	memberID := dbfx.User(t, memberName, fmt.Sprintf("brief-member-%d@example.com", time.Now().UnixNano()))
 	dbfx.Member(t, testWorkspaceID, memberID, "member")
+	preview(memberID).Want(http.StatusForbidden)
+
+	insertIntakeDutyAgent(t, "workflow-brief-member-twin", memberID)
 	var got struct {
 		Brief string `json:"brief"`
 	}

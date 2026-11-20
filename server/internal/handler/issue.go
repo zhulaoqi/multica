@@ -4283,6 +4283,17 @@ func (h *Handler) validateAssigneePair(ctx context.Context, r *http.Request, wor
 		if err != nil || !access.Allowed() {
 			return http.StatusBadRequest, "assignee_id does not refer to a member of this workspace"
 		}
+		// Work assigned to a person is carried by their digital twin, so an
+		// unbound member may browse and review but cannot take on work.
+		if _, err := h.Queries.GetPrimaryAgentForOwner(ctx, db.GetPrimaryAgentForOwnerParams{
+			WorkspaceID: wsUUID,
+			OwnerID:     assigneeID,
+		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return http.StatusForbidden, "this member has not bound an agent yet; ask them to bind one before assigning work"
+			}
+			return http.StatusInternalServerError, "failed to check the assignee's agent binding"
+		}
 		return 0, ""
 	case "agent":
 		agent, err := h.Queries.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{

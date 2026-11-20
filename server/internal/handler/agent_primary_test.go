@@ -136,3 +136,34 @@ func TestEnsurePrimaryTwinInWorkspace_ClonesAcrossProjects(t *testing.T) {
 		t.Fatal("cloned twin must be the primary agent in the new project")
 	}
 }
+
+func TestCreateIssue_AssigningMemberRequiresPrimaryTwin(t *testing.T) {
+	requireDB(t)
+	assignee := createPermissionTestMember(t, "primary-assignee@example.com")
+	create := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.CreateIssue(rec, newRequest(http.MethodPost, "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+			"title":         "assigned to a person",
+			"assignee_type": "member",
+			"assignee_id":   assignee,
+		}))
+		return rec
+	}
+
+	if rec := create(); rec.Code != http.StatusForbidden {
+		t.Fatalf("unbound assignee: status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+
+	insertIntakeDutyAgent(t, "primary-assignee-twin", assignee)
+	rec := create()
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("bound assignee: status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	var issue IssueResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &issue); err != nil {
+		t.Fatalf("decode issue: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issue.ID)
+	})
+}
