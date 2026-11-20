@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SidebarProvider } from "@multica/ui/components/ui/sidebar";
 import { ModalRegistry } from "../modals/registry";
 import { SourceBackfillModal } from "../onboarding";
+import { AgentBindingReminder } from "./agent-binding-reminder";
 import { AppRail } from "./app-rail";
 import { AppShellProvider } from "./app-shell-context";
 import { CompactNavSheet } from "./compact-nav-sheet";
@@ -54,6 +55,7 @@ export function DashboardLayout({
           <ShellRouteDataPrefetch>
             <GlobalShortcuts />
             <WorkspacePresencePrefetch />
+            <AgentBindingReminder />
             <AppRail className="hidden md:flex" />
             <CompactNavSheet />
             <AppShellCard>

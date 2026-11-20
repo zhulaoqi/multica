@@ -122,6 +122,7 @@ A member's agent is their digital twin: it represents them when they dispatch wo
 
 - Each member has at most one primary agent per workspace (`agent.is_primary`, unique partial index `agent_primary_twin_uidx`). Creating the first active owned agent promotes it; archiving or restoring the primary promotes the owner's next active agent through `EnsurePrimaryAgentForOwner`. `PUT /api/agents/{id}/primary` switches it.
 - Dispatching and submitting intake require a primary agent. Unbound members may browse and review but get `agent_binding_required` (403). Apply the gate after unit visibility checks so a hidden unit still returns 404.
+- Assigning an issue (or a workflow step) to a member also requires their primary agent; `validateAssigneePair` returns 403 otherwise. The web/desktop shell reminds unbound members once per workspace per session (`AgentBindingReminder`).
 - Joining a workspace (create, direct add, invitation, share link) clones the member's primary twin from another project via `ensurePrimaryTwinInWorkspace`; org sync mass-adds do not.
 - Frontend resolves the twin with `findPrimaryTwin` / `ownedTwins` from `@multica/core/agents`; do not re-implement the primary-first ordering.
 

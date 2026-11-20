@@ -91,6 +91,7 @@ vi.mock("@multica/views/workspace/use-workspace-seen", () => ({
 
 vi.mock("@multica/views/layout", () => ({
   WorkspacePresencePrefetch: () => null,
+  AgentBindingReminder: () => null,
 }));
 
 // The point of this whole test: assert the desktop layout mounts the

@@ -36,6 +36,7 @@ export { AppShellCard, DashboardLayout } from "./dashboard-layout";
 export { useDashboardGuard } from "./use-dashboard-guard";
 export { WorkspaceLoader } from "./workspace-loader";
 export { WorkspacePresencePrefetch } from "./workspace-presence-prefetch";
+export { AgentBindingReminder } from "./agent-binding-reminder";
 export { GlobalShortcuts } from "./global-shortcuts";
 export { NewIssueButton, SearchButton } from "./global-actions";
 export { NavigationProgress } from "./navigation-progress";
