@@ -220,7 +220,7 @@ func (w *feishuOrgBotWorker) ensure(ctx context.Context) error {
 		Connector:      w.connector,
 		Client:         w.client,
 		Identity:       w.queries,
-		Projects:       w.queries,
+		Organization:   w.queries,
 		Dedup:          w.queries,
 		Dispatcher:     w.dispatcher,
 		Chat:           w.chat,

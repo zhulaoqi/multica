@@ -34,6 +34,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/integrations/telegram"
 	"github.com/multica-ai/multica/server/internal/integrations/wecom"
 	"github.com/multica-ai/multica/server/internal/issuestatus"
+	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/middleware"
 	"github.com/multica-ai/multica/server/internal/realtime"
@@ -1233,7 +1234,7 @@ func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issue
 	// silently returns false for non-identifier strings, falling through to
 	// the UUID path below.
 	if issue, ok := h.resolveIssueByIdentifier(r.Context(), issueID, workspaceID); ok {
-		return issue, true
+		return h.requireIssueVisible(w, r, issue)
 	}
 
 	issueUUID, err := util.ParseUUID(issueID)
@@ -1256,7 +1257,28 @@ func (h *Handler) loadIssueForUser(w http.ResponseWriter, r *http.Request, issue
 		writeError(w, http.StatusNotFound, "issue not found")
 		return db.Issue{}, false
 	}
-	return issue, true
+	return h.requireIssueVisible(w, r, issue)
+}
+
+// requireIssueVisible answers 404 for an organization issue outside the
+// caller's department scope, the same answer as a missing issue.
+func (h *Handler) requireIssueVisible(w http.ResponseWriter, r *http.Request, issue db.Issue) (db.Issue, bool) {
+	if !issue.OrgUnitID.Valid {
+		return issue, true
+	}
+	scope, err := h.requestIssueScope(r)
+	if err == nil {
+		var visible bool
+		visible, err = h.issueVisible(r.Context(), scope, issue)
+		if err == nil && visible {
+			return issue, true
+		}
+	}
+	if err != nil {
+		slog.Warn("issue visibility check failed", append(logger.RequestAttrs(r), "error", err)...)
+	}
+	writeError(w, http.StatusNotFound, "issue not found")
+	return db.Issue{}, false
 }
 
 // resolveIssueByIdentifier tries to look up an issue by "PREFIX-NUMBER" format.

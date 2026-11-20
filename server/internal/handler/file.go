@@ -18,8 +18,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/storage"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -779,6 +781,9 @@ func (h *Handler) loadAttachmentForRequest(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusNotFound, "attachment not found")
 		return db.Attachment{}, false
 	}
+	if !h.requireIssueIDVisible(w, r, att.IssueID, "attachment not found") {
+		return db.Attachment{}, false
+	}
 
 	return att, true
 }
@@ -830,6 +835,26 @@ func (h *Handler) loadAttachmentForDownload(w http.ResponseWriter, r *http.Reque
 	if err != nil || !access.Allowed() {
 		writeError(w, http.StatusNotFound, "attachment not found")
 		return db.Attachment{}, false
+	}
+	if att.IssueID.Valid {
+		issue, err := h.Queries.GetIssue(r.Context(), att.IssueID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "attachment not found")
+			return db.Attachment{}, false
+		}
+		scope, err := workspaceaccess.ResolveIssueScope(r.Context(), h.Queries, access)
+		if err == nil {
+			var visible bool
+			if visible, err = h.issueVisible(r.Context(), scope, issue); err == nil && !visible {
+				writeError(w, http.StatusNotFound, "attachment not found")
+				return db.Attachment{}, false
+			}
+		}
+		if err != nil {
+			slog.Warn("attachment visibility check failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusNotFound, "attachment not found")
+			return db.Attachment{}, false
+		}
 	}
 	return att, true
 }

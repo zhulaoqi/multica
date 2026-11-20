@@ -250,3 +250,17 @@ SET target_unit_id = $2,
     started_notified_at = NULL
 WHERE issue_id = $1
 RETURNING *;
+
+-- name: SetIssueTreeOrgUnit :exec
+-- A reassigned dispatch moves its whole issue tree to the new department, so
+-- sub-issues the old squad already created follow the root's visibility.
+WITH RECURSIVE tree AS (
+    SELECT i.id FROM issue i
+    WHERE i.id = @issue_id AND i.workspace_id = @workspace_id
+    UNION
+    SELECT c.id FROM issue c
+    JOIN tree t ON c.parent_issue_id = t.id
+)
+UPDATE issue
+SET org_unit_id = @org_unit_id
+WHERE id IN (SELECT id FROM tree);

@@ -52,6 +52,10 @@ var (
 	ErrPersonalSquadNotFound      = errors.New("personal squad not found")
 	ErrDispatchNotFound           = errors.New("dispatch not found")
 	ErrDispatchReassignForbidden  = errors.New("only the requester can reassign this dispatch")
+	// ErrDispatchOrganizationOnly means the caller dispatched inside a project
+	// while an organization workspace exists. Departments and their agents
+	// work in the organization workspace only.
+	ErrDispatchOrganizationOnly = errors.New("dispatch work from the organization workspace")
 )
 
 // DispatchOriginInfo carries the transport coordinates a dispatch came from.
@@ -143,6 +147,9 @@ type OrgDispatchService struct {
 // Dispatch creates the root issue for one department. The squad leader is the
 // only agent woken: it decomposes the request and assigns the children.
 func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) (OrgDispatchResult, error) {
+	if err := s.requireOrganizationWorkspace(ctx, p.WorkspaceID); err != nil {
+		return OrgDispatchResult{}, err
+	}
 	access, err := workspaceaccess.Resolve(ctx, s.Queries, p.WorkspaceID, p.ActorID, false)
 	if err != nil || !access.Allowed() {
 		return OrgDispatchResult{}, ErrDispatchRequesterNotInTeam
@@ -228,6 +235,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		CreatorType:   "member",
 		CreatorID:     p.ActorID,
 		AttachmentIDs: p.AttachmentIDs,
+		OrgUnitID:     unit.ID,
 	}, IssueCreateOpts{Platform: p.Platform})
 	if err != nil {
 		return OrgDispatchResult{}, err
@@ -252,6 +260,9 @@ type OrgDispatchReassignParams struct {
 // as a fresh dispatch, so a reassignment cannot park the issue behind an
 // agent nobody can run.
 func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassignParams) (OrgDispatchResult, error) {
+	if err := s.requireOrganizationWorkspace(ctx, p.WorkspaceID); err != nil {
+		return OrgDispatchResult{}, err
+	}
 	access, err := workspaceaccess.Resolve(ctx, s.Queries, p.WorkspaceID, p.ActorID, false)
 	if err != nil || !access.Allowed() {
 		return OrgDispatchResult{}, ErrDispatchRequesterNotInTeam
@@ -327,6 +338,14 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 	}); err != nil {
 		return OrgDispatchResult{}, fmt.Errorf("retarget dispatch origin: %w", err)
 	}
+	if err := s.Queries.SetIssueTreeOrgUnit(ctx, db.SetIssueTreeOrgUnitParams{
+		IssueID:     issue.ID,
+		WorkspaceID: p.WorkspaceID,
+		OrgUnitID:   unit.ID,
+	}); err != nil {
+		return OrgDispatchResult{}, fmt.Errorf("move dispatch to the new department: %w", err)
+	}
+	updated.OrgUnitID = unit.ID
 	if s.Tasks != nil {
 		if _, err := s.Tasks.EnqueueTaskForSquadLeaderByActor(ctx, updated, squad.LeaderID, squad.ID, p.ActorID); err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("wake the new squad leader: %w", err)
@@ -334,6 +353,23 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 	}
 	s.publishAssigneeChanged(ctx, updated, p.ActorID)
 	return OrgDispatchResult{Issue: updated, Squad: squad, Unit: unit}, nil
+}
+
+// requireOrganizationWorkspace refuses dispatch outside the organization
+// workspace once one exists. Before the organization is set up, each project
+// keeps dispatching to its own departments.
+func (s *OrgDispatchService) requireOrganizationWorkspace(ctx context.Context, workspaceID pgtype.UUID) error {
+	org, err := s.Queries.GetOrganizationWorkspace(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load organization workspace: %w", err)
+	}
+	if org.ID != workspaceID {
+		return ErrDispatchOrganizationOnly
+	}
+	return nil
 }
 
 func (s *OrgDispatchService) publishAssigneeChanged(ctx context.Context, issue db.Issue, actorID pgtype.UUID) {

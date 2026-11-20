@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -22,15 +21,11 @@ import (
 // that table requires one agent per row, while this bot serves every project.
 const OrgBotChannelType = "feishu_org"
 
-// orgProjectsCommandPrefix lists the projects the sender can dispatch into.
-const orgProjectsCommandPrefix = "/projects"
-
 // OrgBot turns the deployment's Feishu login app into one organization-wide
-// bot. It owns a single long connection and, unlike a per-agent bot, is not
-// bound to a workspace: each /dispatch names (or defaults to) one of the
-// sender's projects and then goes through the same OrgDispatchService as the
-// in-app dialog, so department visibility, squad leadership and the requester's
-// twin gate stay identical.
+// bot. It owns a single long connection and dispatches into the organization
+// workspace, where departments and their agents work. Each /dispatch goes
+// through the same OrgDispatchService as the in-app dialog, so department
+// visibility, squad leadership and the requester's twin gate stay identical.
 type OrgBot struct {
 	cfg OrgBotConfig
 }
@@ -43,9 +38,9 @@ type OrgBotIdentityStore interface {
 	GetFeishuIdentityByOpenID(ctx context.Context, openID string) (db.FeishuIdentity, error)
 }
 
-// OrgBotProjectStore lists the projects a sender can dispatch into.
-type OrgBotProjectStore interface {
-	ListDispatchProjectsForUser(ctx context.Context, userID pgtype.UUID) ([]db.ListDispatchProjectsForUserRow, error)
+// OrgBotOrganizationStore finds the organization workspace dispatches land in.
+type OrgBotOrganizationStore interface {
+	GetOrganizationWorkspace(ctx context.Context) (db.Workspace, error)
 }
 
 // OrgBotDedupStore drops replayed events after a reconnect. It reuses the
@@ -64,14 +59,14 @@ type OrgBotConfig struct {
 	BotOpenID      string
 	Credentials    InstallationCredentials
 
-	Connector   EventConnector
-	Client      APIClient
-	Identity    OrgBotIdentityStore
-	Projects    OrgBotProjectStore
-	Dedup       OrgBotDedupStore
-	Dispatcher  engine.OrgDispatcher
-	Chat        OrgBotChatStore
-	Attachments OrgBotAttachmentStore
+	Connector    EventConnector
+	Client       APIClient
+	Identity     OrgBotIdentityStore
+	Organization OrgBotOrganizationStore
+	Dedup        OrgBotDedupStore
+	Dispatcher   engine.OrgDispatcher
+	Chat         OrgBotChatStore
+	Attachments  OrgBotAttachmentStore
 
 	AppURL string
 	Logger *slog.Logger
@@ -85,7 +80,7 @@ func NewOrgBot(cfg OrgBotConfig) (*OrgBot, error) {
 	if cfg.Connector == nil || cfg.Client == nil {
 		return nil, errors.New("lark org bot: missing transport")
 	}
-	if cfg.Identity == nil || cfg.Projects == nil || cfg.Dedup == nil {
+	if cfg.Identity == nil || cfg.Organization == nil || cfg.Dedup == nil {
 		return nil, errors.New("lark org bot: missing store")
 	}
 	if cfg.Dispatcher == nil || cfg.Chat == nil {
@@ -181,9 +176,6 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 	if command == "" {
 		return "", DispatchResult{Outcome: OutcomeDropped, DropReason: DropReasonInvalidEvent}, nil
 	}
-	if isOrgProjectsCommand(command) {
-		return b.projectsReply(ctx, msg)
-	}
 	if chatCommand, ok := parseOrgChatCommand(command); ok {
 		return b.chatCommandReply(ctx, msg, chatCommand)
 	}
@@ -209,29 +201,15 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 		return b.loginPromptReply(), DispatchResult{Outcome: OutcomeNeedsBinding}, nil
 	}
 
-	projects, err := b.cfg.Projects.ListDispatchProjectsForUser(ctx, userID)
+	org, err := b.cfg.Organization.GetOrganizationWorkspace(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return orgBotNoOrganizationCopy, DispatchResult{Outcome: OutcomeDispatchNoAccess}, nil
+	}
 	if err != nil {
-		return "", DispatchResult{}, fmt.Errorf("list dispatch projects: %w", err)
-	}
-	if len(projects) == 0 {
-		return orgBotNoProjectsCopy, DispatchResult{Outcome: OutcomeDispatchNoAccess}, nil
-	}
-	project, candidates, found := selectOrgProject(projects, cmd.Project)
-	if !found {
-		switch {
-		case cmd.Project == "":
-			return orgBotChooseProjectCopy + formatOrgProjects(projects),
-				DispatchResult{Outcome: OutcomeDispatchAmbiguous}, nil
-		case candidates == nil:
-			return fmt.Sprintf("没有找到项目「%s」。\n\n你可用的项目：%s", cmd.Project, formatOrgProjects(projects)),
-				DispatchResult{Outcome: OutcomeDispatchNoAccess}, nil
-		default:
-			return fmt.Sprintf("项目「%s」匹配到多个结果，请填编号或完整名称：%s", cmd.Project, formatOrgProjects(candidates)),
-				DispatchResult{Outcome: OutcomeDispatchAmbiguous}, nil
-		}
+		return "", DispatchResult{}, fmt.Errorf("load organization workspace: %w", err)
 	}
 
-	matches, err := b.cfg.Dispatcher.ResolveUnits(ctx, project.ID, userID, cmd.Unit)
+	matches, err := b.cfg.Dispatcher.ResolveUnits(ctx, org.ID, userID, cmd.Unit)
 	if err != nil {
 		if errors.Is(err, service.ErrDispatchRequesterNotInTeam) {
 			return dispatchNoAccessCopy, DispatchResult{Outcome: OutcomeDispatchNoAccess}, nil
@@ -250,7 +228,7 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 	}
 
 	result, err := b.cfg.Dispatcher.Dispatch(ctx, service.OrgDispatchParams{
-		WorkspaceID: project.ID,
+		WorkspaceID: org.ID,
 		ActorID:     userID,
 		UnitID:      matches[0].Unit.ID,
 		Title:       cmd.Title,
@@ -281,14 +259,14 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 		return "", DispatchResult{}, fmt.Errorf("dispatch to org unit: %w", err)
 	}
 
-	identifier := service.IssueIdentifier(project.IssuePrefix, result.Issue.Number)
-	return orgDispatchCreatedText(project, matches[0].Path, identifier, result.Issue.Title, b.cfg.AppURL),
+	identifier := service.IssueIdentifier(org.IssuePrefix, result.Issue.Number)
+	return orgDispatchCreatedText(org.Slug, matches[0].Path, identifier, result.Issue.Title, b.cfg.AppURL),
 		DispatchResult{
 			Outcome:            OutcomeDispatchCreated,
 			IssueID:            result.Issue.ID,
 			IssueNumber:        result.Issue.Number,
 			IssueIdentifier:    identifier,
-			IssueWorkspaceSlug: project.Slug,
+			IssueWorkspaceSlug: org.Slug,
 			IssueTitle:         result.Issue.Title,
 			DispatchUnitName:   result.Unit.Name,
 		}, nil
@@ -306,25 +284,6 @@ func (b *OrgBot) senderUser(ctx context.Context, msg InboundMessage) (pgtype.UUI
 		return pgtype.UUID{}, false, fmt.Errorf("resolve sender identity: %w", err)
 	}
 	return identity.UserID, false, nil
-}
-
-func (b *OrgBot) projectsReply(ctx context.Context, msg InboundMessage) (string, DispatchResult, error) {
-	userID, unbound, err := b.senderUser(ctx, msg)
-	if err != nil {
-		return "", DispatchResult{}, err
-	}
-	if unbound {
-		return b.loginPromptReply(), DispatchResult{Outcome: OutcomeNeedsBinding}, nil
-	}
-	projects, err := b.cfg.Projects.ListDispatchProjectsForUser(ctx, userID)
-	if err != nil {
-		return "", DispatchResult{}, fmt.Errorf("list dispatch projects: %w", err)
-	}
-	if len(projects) == 0 {
-		return orgBotNoProjectsCopy, DispatchResult{Outcome: OutcomeDispatchNoAccess}, nil
-	}
-	return "你可以派活的项目：" + formatOrgProjects(projects) + orgBotProjectsHintCopy,
-		DispatchResult{Outcome: OutcomeIngested}, nil
 }
 
 func (b *OrgBot) loginPromptReply() string {
@@ -347,104 +306,31 @@ func (b *OrgBot) sendText(ctx context.Context, msg InboundMessage, text string) 
 	})
 }
 
-// selectOrgProject picks one project by number, exact name/slug, or unique
-// substring. found=false carries the distinguishing candidates: nil means no
-// match at all; the full list means the selector was empty or ambiguous.
-func selectOrgProject(projects []db.ListDispatchProjectsForUserRow, selector string) (db.ListDispatchProjectsForUserRow, []db.ListDispatchProjectsForUserRow, bool) {
-	selector = strings.TrimSpace(selector)
-	if selector == "" {
-		if len(projects) == 1 {
-			return projects[0], nil, true
-		}
-		return db.ListDispatchProjectsForUserRow{}, projects, false
-	}
-
-	if n, err := strconv.Atoi(strings.TrimPrefix(selector, "#")); err == nil {
-		if n >= 1 && n <= len(projects) {
-			return projects[n-1], nil, true
-		}
-		return db.ListDispatchProjectsForUserRow{}, nil, false
-	}
-
-	needle := strings.ToLower(selector)
-	var exact, partial []db.ListDispatchProjectsForUserRow
-	for _, project := range projects {
-		name := strings.ToLower(strings.TrimSpace(project.Name))
-		slug := strings.ToLower(strings.TrimSpace(project.Slug))
-		switch {
-		case name == needle || slug == needle:
-			exact = append(exact, project)
-		case strings.Contains(name, needle) ||
-			strings.Contains(slug, needle) ||
-			strings.Contains(strings.ToLower(project.DepartmentName), needle):
-			partial = append(partial, project)
-		}
-	}
-	if len(exact) == 1 {
-		return exact[0], nil, true
-	}
-	if len(exact) > 1 {
-		return db.ListDispatchProjectsForUserRow{}, exact, false
-	}
-	if len(partial) == 1 {
-		return partial[0], nil, true
-	}
-	if len(partial) > 1 {
-		return db.ListDispatchProjectsForUserRow{}, partial, false
-	}
-	return db.ListDispatchProjectsForUserRow{}, nil, false
-}
-
-func formatOrgProjects(projects []db.ListDispatchProjectsForUserRow) string {
-	var b strings.Builder
-	for i, project := range projects {
-		fmt.Fprintf(&b, "\n%d. %s", i+1, project.Name)
-		if project.DepartmentName != "" {
-			fmt.Fprintf(&b, "（%s）", project.DepartmentName)
-		}
-	}
-	return b.String()
-}
-
-func isOrgProjectsCommand(command string) bool {
-	line := strings.TrimSpace(strings.SplitN(command, "\n", 2)[0])
-	if line == orgProjectsCommandPrefix || line == "/项目" {
-		return true
-	}
-	// A mention renders ahead of the command in group chats.
-	return strings.HasSuffix(line, " "+orgProjectsCommandPrefix) || strings.HasSuffix(line, " /项目")
-}
-
 const (
 	// The title must precede the first section header: the parser treats every
 	// unstructured line after a header as that section's body.
-	orgBotUsageCopy = "我是 Multica 组织 Bot，可以帮你在项目里派活。\n\n" +
+	orgBotUsageCopy = "我是 Multica 组织 Bot，可以帮你给部门派活。\n\n" +
 		"`/dispatch <部门名或完整路径>`\n" +
 		"`<标题>`\n" +
-		"`项目: <项目名或编号>`（你属于多个项目时必填）\n" +
 		"`目标: ...`\n" +
 		"`验收: ...`\n\n" +
 		"`输入: ...` 和 `边界: ...` 为可选项。\n\n" +
 		"在派活的话题里直接回复可以追问或附文件。\n" +
 		"`/status` 查看进行中的派活；`/cancel 编号` 取消；`/reassign 编号 <部门>` 改派；" +
-		"`/accept 编号` 验收通过；`/reject 编号 <原因>` 驳回返工。\n" +
-		"发送 `/projects` 查看可派活的项目。"
-	orgBotLoginRequiredCopy = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
-	orgBotNoProjectsCopy    = "你还没有可以派活的项目。请确认自己在 Multica 里已经加入项目，并绑定了自己的 Agent。"
-	orgBotChooseProjectCopy = "你在多个项目中，请用 `项目: 编号` 指定："
-	orgBotProjectsHintCopy  = "\n\n派活时请带上 `项目: <编号>`。"
+		"`/accept 编号` 验收通过；`/reject 编号 <原因>` 驳回返工。"
+	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
+	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
 )
 
-// orgDispatchCreatedText names the project as well as the department: the
-// organization bot spans several projects, so "已派给 支付组" alone would hide
-// where the work landed.
-func orgDispatchCreatedText(project db.ListDispatchProjectsForUserRow, unitPath, identifier, title, appURL string) string {
-	line := fmt.Sprintf("已派给 %s / %s：%s", project.Name, strings.TrimSpace(unitPath), identifier)
+// orgDispatchCreatedText links into the organization workspace, where every
+// dispatch lands.
+func orgDispatchCreatedText(orgSlug, unitPath, identifier, title, appURL string) string {
+	line := fmt.Sprintf("已派给 %s：%s", strings.TrimSpace(unitPath), identifier)
 	if t := strings.TrimSpace(title); t != "" {
 		line += " — " + t
 	}
 	line += "\n队长会拆解并派给组内 Agent，完成后我会在这里汇报。"
-	if link := channel.IssueWebLink(appURL, project.Slug, identifier); link != "" {
+	if link := channel.IssueWebLink(appURL, orgSlug, identifier); link != "" {
 		line += "\n" + link
 	}
 	return line

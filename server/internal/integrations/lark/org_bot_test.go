@@ -24,13 +24,17 @@ func (f orgBotIdentityFake) GetFeishuIdentityByOpenID(context.Context, string) (
 	return f.identity, f.err
 }
 
-type orgBotProjectsFake struct {
-	rows []db.ListDispatchProjectsForUserRow
-	err  error
+type orgBotOrganizationFake struct {
+	org db.Workspace
+	err error
 }
 
-func (f orgBotProjectsFake) ListDispatchProjectsForUser(ctx context.Context, userID pgtype.UUID) ([]db.ListDispatchProjectsForUserRow, error) {
-	return f.rows, f.err
+func (f orgBotOrganizationFake) GetOrganizationWorkspace(context.Context) (db.Workspace, error) {
+	return f.org, f.err
+}
+
+func testOrganization() orgBotOrganizationFake {
+	return orgBotOrganizationFake{org: db.Workspace{ID: testUUID(0x01), Name: "公司", Slug: "org", IssuePrefix: "ORG"}}
 }
 
 type orgBotDedupFake struct {
@@ -91,33 +95,23 @@ func testUUID(b byte) pgtype.UUID {
 	return u
 }
 
-func testProject(id byte, name, slug, department string) db.ListDispatchProjectsForUserRow {
-	return db.ListDispatchProjectsForUserRow{
-		ID:             testUUID(id),
-		Name:           name,
-		Slug:           slug,
-		IssuePrefix:    strings.ToUpper(name),
-		DepartmentName: department,
-	}
-}
-
 type orgBotHarness struct {
 	bot         *OrgBot
 	client      *fakeAPIClient
 	identity    orgBotIdentityFake
-	projects    orgBotProjectsFake
+	org         orgBotOrganizationFake
 	dedup       *orgBotDedupFake
 	dispatcher  *orgBotDispatcherFake
 	chat        *orgBotChatFake
 	attachments *orgBotAttachmentFake
 }
 
-func newOrgBotHarness(t *testing.T, identity orgBotIdentityFake, projects orgBotProjectsFake, dispatcher *orgBotDispatcherFake) *orgBotHarness {
+func newOrgBotHarness(t *testing.T, identity orgBotIdentityFake, org orgBotOrganizationFake, dispatcher *orgBotDispatcherFake) *orgBotHarness {
 	t.Helper()
 	h := &orgBotHarness{
 		client:      &fakeAPIClient{},
 		identity:    identity,
-		projects:    projects,
+		org:         org,
 		dedup:       &orgBotDedupFake{},
 		dispatcher:  dispatcher,
 		chat:        &orgBotChatFake{},
@@ -130,7 +124,7 @@ func newOrgBotHarness(t *testing.T, identity orgBotIdentityFake, projects orgBot
 		Connector:      NewNoopConnector(slog.New(slog.DiscardHandler)),
 		Client:         h.client,
 		Identity:       h.identity,
-		Projects:       h.projects,
+		Organization:   h.org,
 		Dedup:          h.dedup,
 		Dispatcher:     h.dispatcher,
 		Chat:           h.chat,
@@ -161,7 +155,7 @@ func boundIdentity() orgBotIdentityFake {
 }
 
 func TestOrgBot_DropsUnaddressedGroupMessage(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	msg := groupDispatchMessage("/dispatch 支付组")
 	msg.AddressedToBot = false
 
@@ -178,7 +172,7 @@ func TestOrgBot_DropsUnaddressedGroupMessage(t *testing.T) {
 }
 
 func TestOrgBot_DuplicateClaimIsDropped(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: []db.ListDispatchProjectsForUserRow{testProject(1, "支付台", "pay", "研发部")}}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.dedup.duplicate = true
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组"))
@@ -196,7 +190,7 @@ func TestOrgBot_DuplicateClaimIsDropped(t *testing.T) {
 func TestOrgBot_UnboundSenderGetsLoginPrompt(t *testing.T) {
 	h := newOrgBotHarness(t,
 		orgBotIdentityFake{err: pgx.ErrNoRows},
-		orgBotProjectsFake{},
+		testOrganization(),
 		&orgBotDispatcherFake{})
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n目标: 对账\n验收: 一致"))
@@ -220,7 +214,7 @@ func TestOrgBot_UnboundSenderGetsLoginPrompt(t *testing.T) {
 func TestOrgBot_IdentityLookupFailureRetriesInsteadOfPrompting(t *testing.T) {
 	h := newOrgBotHarness(t,
 		orgBotIdentityFake{err: errors.New("db down")},
-		orgBotProjectsFake{},
+		testOrganization(),
 		&orgBotDispatcherFake{})
 
 	if _, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n目标: 对账\n验收: 一致")); err == nil {
@@ -234,33 +228,7 @@ func TestOrgBot_IdentityLookupFailureRetriesInsteadOfPrompting(t *testing.T) {
 	}
 }
 
-func TestOrgBot_MultipleProjectsRequireSelector(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{
-		testProject(1, "支付台", "pay", "研发部"),
-		testProject(2, "风控台", "risk", "研发部"),
-	}
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: projects}, &orgBotDispatcherFake{})
-
-	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n目标: 对账\n验收: 一致"))
-	if err != nil {
-		t.Fatalf("Handle: %v", err)
-	}
-	if res.Outcome != OutcomeDispatchAmbiguous {
-		t.Fatalf("outcome = %q, want dispatch_ambiguous", res.Outcome)
-	}
-	text := h.client.textSent[0].Text
-	for _, want := range []string{"支付台", "风控台", "项目"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("choose-project reply missing %q: %q", want, text)
-		}
-	}
-}
-
-func TestOrgBot_ProjectSelectorAndDispatch(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{
-		testProject(1, "支付台", "pay", "研发部"),
-		testProject(2, "风控台", "risk", "研发部"),
-	}
+func TestOrgBot_DispatchesIntoOrganization(t *testing.T) {
 	d := &orgBotDispatcherFake{
 		matches: []service.UnitMatch{{Unit: db.ListOrgUnitsRow{ID: testUUID(0x31), Name: "支付组"}, Path: "研发部 / 支付组"}},
 		dispatch: service.OrgDispatchResult{
@@ -268,9 +236,10 @@ func TestOrgBot_ProjectSelectorAndDispatch(t *testing.T) {
 			Unit:  db.ListOrgUnitsRow{Name: "支付组"},
 		},
 	}
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: projects}, d)
+	org := testOrganization()
+	h := newOrgBotHarness(t, boundIdentity(), org, d)
 
-	msg := groupDispatchMessage("/dispatch 支付组\n核对账单\n项目: 2\n目标: 对账\n验收: 一致")
+	msg := groupDispatchMessage("/dispatch 支付组\n核对账单\n目标: 对账\n验收: 一致")
 	res, err := h.bot.Handle(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -282,8 +251,8 @@ func TestOrgBot_ProjectSelectorAndDispatch(t *testing.T) {
 		t.Fatalf("dispatch calls = %d, want 1", len(d.calls))
 	}
 	call := d.calls[0]
-	if call.WorkspaceID != projects[1].ID {
-		t.Fatalf("workspace = %v, want %v", call.WorkspaceID, projects[1].ID)
+	if call.WorkspaceID != org.org.ID {
+		t.Fatalf("workspace = %v, want the organization %v", call.WorkspaceID, org.org.ID)
 	}
 	if call.Origin.InstallationID != testUUID(0xEE) || call.Origin.ChatID != "oc_chat" {
 		t.Fatalf("origin not recorded: %+v", call.Origin)
@@ -295,49 +264,33 @@ func TestOrgBot_ProjectSelectorAndDispatch(t *testing.T) {
 		t.Fatalf("description not sectioned: %q", call.Description)
 	}
 	text := h.client.textSent[0].Text
-	if !strings.Contains(text, "风控台") || !strings.Contains(text, "研发部 / 支付组") {
-		t.Fatalf("confirmation missing project or unit: %q", text)
+	if !strings.Contains(text, "研发部 / 支付组") || !strings.Contains(text, "ORG-7") {
+		t.Fatalf("confirmation missing unit or identifier: %q", text)
 	}
-	if !strings.Contains(text, "/risk/") {
-		t.Fatalf("confirmation missing project deep link: %q", text)
+	if !strings.Contains(text, "/org/") {
+		t.Fatalf("confirmation missing organization deep link: %q", text)
 	}
-	if h.dedup.processed != 1 {
-		t.Fatalf("processed = %d, want 1", h.dedup.processed)
+	if res.IssueWorkspaceSlug != "org" {
+		t.Fatalf("issue workspace slug = %q, want org", res.IssueWorkspaceSlug)
 	}
-	if h.dedup.released != 0 {
-		t.Fatalf("released = %d, want 0", h.dedup.released)
+	if h.dedup.processed != 1 || h.dedup.released != 0 {
+		t.Fatalf("processed = %d released = %d, want 1/0", h.dedup.processed, h.dedup.released)
 	}
 }
 
-func TestOrgBot_UnknownProjectSelector(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{testProject(1, "支付台", "pay", "研发部")}
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: projects}, &orgBotDispatcherFake{})
+func TestOrgBot_NoOrganizationRefusesDispatch(t *testing.T) {
+	d := &orgBotDispatcherFake{}
+	h := newOrgBotHarness(t, boundIdentity(), orgBotOrganizationFake{err: pgx.ErrNoRows}, d)
 
-	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n项目: 物流台\n目标: 对账\n验收: 一致"))
+	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n目标: 对账\n验收: 一致"))
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-	if res.Outcome != OutcomeDispatchNoAccess {
-		t.Fatalf("outcome = %q, want dispatch_no_access", res.Outcome)
+	if res.Outcome != OutcomeDispatchNoAccess || h.client.textSent[0].Text != orgBotNoOrganizationCopy {
+		t.Fatalf("outcome = %q reply = %q", res.Outcome, h.client.textSent[0].Text)
 	}
-	if !strings.Contains(h.client.textSent[0].Text, "没有找到项目") {
-		t.Fatalf("unexpected reply: %q", h.client.textSent[0].Text)
-	}
-}
-
-func TestOrgBot_ProjectsCommandListsSenderProjects(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{
-		testProject(1, "支付台", "pay", "研发部"),
-		testProject(2, "风控台", "risk", "研发部"),
-	}
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: projects}, &orgBotDispatcherFake{})
-
-	if _, err := h.bot.Handle(context.Background(), groupDispatchMessage("/projects")); err != nil {
-		t.Fatalf("Handle: %v", err)
-	}
-	text := h.client.textSent[0].Text
-	if !strings.Contains(text, "1. 支付台") || !strings.Contains(text, "2. 风控台") {
-		t.Fatalf("project list: %q", text)
+	if len(d.calls) != 0 {
+		t.Fatalf("dispatched %d times without an organization", len(d.calls))
 	}
 }
 
@@ -346,7 +299,7 @@ func TestOrgBot_UnboundDispatchOutcome(t *testing.T) {
 		matches:     []service.UnitMatch{{Unit: db.ListOrgUnitsRow{ID: testUUID(0x31)}, Path: "研发部 / 支付组"}},
 		dispatchErr: service.ErrDispatchRequesterUnbound,
 	}
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{rows: []db.ListDispatchProjectsForUserRow{testProject(1, "支付台", "pay", "研发部")}}, d)
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), d)
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n标题\n目标: 对账\n验收: 一致"))
 	if err != nil {
@@ -361,7 +314,7 @@ func TestOrgBot_UnboundDispatchOutcome(t *testing.T) {
 }
 
 func TestOrgBot_UsageCopyOnMalformedCommand(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/dispatch 支付组\n只有标题"))
 	if err != nil {
@@ -372,49 +325,6 @@ func TestOrgBot_UsageCopyOnMalformedCommand(t *testing.T) {
 	}
 	if h.client.textSent[0].Text != orgBotUsageCopy {
 		t.Fatalf("reply = %q", h.client.textSent[0].Text)
-	}
-}
-
-func TestSelectOrgProject(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{
-		testProject(1, "支付台", "pay", "研发部"),
-		testProject(2, "支付网关", "pay-gw", "研发部"),
-		testProject(3, "风控台", "risk", "风控部"),
-	}
-	cases := []struct {
-		name     string
-		selector string
-		wantID   byte
-		found    bool
-	}{
-		{name: "empty ambiguous", selector: "", found: false},
-		{name: "number", selector: "2", wantID: 2, found: true},
-		{name: "hash number", selector: "#3", wantID: 3, found: true},
-		{name: "out of range", selector: "9", found: false},
-		{name: "exact name", selector: "支付台", wantID: 1, found: true},
-		{name: "exact slug", selector: "risk", wantID: 3, found: true},
-		{name: "substring", selector: "风控", wantID: 3, found: true},
-		{name: "ambiguous substring", selector: "支付", found: false},
-		{name: "miss", selector: "物流", found: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, _, found := selectOrgProject(projects, tc.selector)
-			if found != tc.found {
-				t.Fatalf("found = %v, want %v", found, tc.found)
-			}
-			if found && got.ID.Bytes[0] != tc.wantID {
-				t.Fatalf("selected %v, want %v", got.ID, tc.wantID)
-			}
-		})
-	}
-}
-
-func TestSelectOrgProject_SingleProjectNeedsNoSelector(t *testing.T) {
-	projects := []db.ListDispatchProjectsForUserRow{testProject(1, "支付台", "pay", "研发部")}
-	got, _, found := selectOrgProject(projects, "")
-	if !found || got.Name != "支付台" {
-		t.Fatalf("selected %+v found=%v", got, found)
 	}
 }
 

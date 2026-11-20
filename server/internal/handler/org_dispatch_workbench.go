@@ -279,6 +279,8 @@ func (h *Handler) writeDispatchError(w http.ResponseWriter, r *http.Request, err
 	// departments outside their scope.
 	case errors.Is(err, service.ErrOrgUnitNotFound), errors.Is(err, service.ErrOrgUnitNoAccess):
 		writeErrorCode(w, http.StatusNotFound, "org_dispatch_unit_not_found", "org unit not found")
+	case errors.Is(err, service.ErrDispatchOrganizationOnly):
+		writeErrorCode(w, http.StatusConflict, "dispatch_organization_only", "dispatch work from the organization workspace")
 	case errors.Is(err, service.ErrPersonalSquadNotFound):
 		writeErrorCode(w, http.StatusNotFound, "personal_squad_not_found", "personal squad not found")
 	case errors.Is(err, service.ErrDispatchRequesterNotInTeam):

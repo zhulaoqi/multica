@@ -611,12 +611,12 @@ func main() {
 			channelLeaseRedis = newNamedRedisClient(opts, "channel-lease")
 		}
 	}
-	registerListeners(bus, broadcaster)
 
 	analyticsClient := analytics.NewFromEnv()
 	defer analyticsClient.Close()
 
 	queries := db.New(pool)
+	registerListenersWithAudience(bus, broadcaster, newIssueAudience(queries))
 	hub.SetAuthorizer(newScopeAuthorizer(queries))
 	// Order matters: subscriber listeners must register BEFORE notification listeners.
 	// The notification listener queries the subscriber table to determine recipients,

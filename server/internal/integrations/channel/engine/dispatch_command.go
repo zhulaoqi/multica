@@ -15,23 +15,17 @@ const dispatchCommandPrefix = "/dispatch"
 // decomposes.
 //
 //	/dispatch <department name or path>
-//	项目: <project name or number>
 //	<title>
 //	目标: ...
 //	输入: ...
 //	验收: ...
 //	边界: ...
 //
-// English headers (Goal/Input/Acceptance/Boundary/Project) are accepted as
+// English headers (Goal/Input/Acceptance/Boundary) are accepted as
 // aliases. Lines after the title and before the first header feed the goal,
 // because a sender usually continues the title with a sentence of context.
-//
-// Project is only meaningful on the organization bot, where one conversation
-// spans several projects; a per-agent bot already knows its workspace and
-// ignores it.
 type DispatchCommand struct {
 	Unit       string
-	Project    string
 	Title      string
 	Goal       string
 	Input      string
@@ -134,8 +128,6 @@ func ParseDispatchCommand(body string) (*DispatchCommand, bool) {
 
 func (c *DispatchCommand) appendSection(section, line string) {
 	switch section {
-	case "project":
-		c.Project = joinLine(c.Project, line)
 	case "goal":
 		c.Goal = joinLine(c.Goal, line)
 	case "input":
@@ -148,7 +140,6 @@ func (c *DispatchCommand) appendSection(section, line string) {
 }
 
 func (c *DispatchCommand) trimSections() {
-	c.Project = strings.TrimSpace(c.Project)
 	c.Goal = strings.TrimSpace(c.Goal)
 	c.Input = strings.TrimSpace(c.Input)
 	c.Acceptance = strings.TrimSpace(c.Acceptance)
@@ -177,8 +168,6 @@ func dispatchSectionKey(line string) string {
 		return ""
 	}
 	switch strings.ToLower(strings.TrimSpace(trimmed[:colon])) {
-	case "project", "项目":
-		return "project"
 	case "goal", "目标":
 		return "goal"
 	case "input", "输入":

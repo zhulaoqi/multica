@@ -99,6 +99,13 @@ var memberPrivateEvents = map[string]bool{
 // without touching any of the event listeners below. This is Phase 0 of the
 // horizontal-scaling plan tracked in MUL-1138.
 func registerListeners(bus *events.Bus, b realtime.Broadcaster) {
+	registerListenersWithAudience(bus, b, nil)
+}
+
+// registerListenersWithAudience is registerListeners with organization issue
+// routing: events about a department issue in the organization workspace reach
+// only the members who may read it. A nil audience keeps workspace fanout.
+func registerListenersWithAudience(bus *events.Bus, b realtime.Broadcaster, audience *issueAudience) {
 	// Personal events should NOT be broadcast to the whole workspace.
 	personalEvents := map[string]bool{
 		protocol.EventInboxNew:           true,
@@ -321,6 +328,12 @@ func registerListeners(bus *events.Bus, b realtime.Broadcaster) {
 		// `Event.ChatSessionID` hints are still populated by producers so
 		// that flipping the switch later is a one-line change here. See
 		// review on PR #1429 for context.
+
+		if users, ok := audience.recipients(e, data); ok {
+			realtime.M.RecordEvent(e.Type)
+			deliverToAudience(b, e.WorkspaceID, users, data)
+			return
+		}
 
 		if e.WorkspaceID != "" {
 			realtime.M.RecordEvent(e.Type)

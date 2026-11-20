@@ -73,6 +73,9 @@ type IssueCreateParams struct {
 	CreatorID     pgtype.UUID
 	ParentIssueID pgtype.UUID
 	ProjectID     pgtype.UUID
+	// OrgUnitID is the organization department a dispatched root issue belongs
+	// to. Sub-issues inherit their parent's department.
+	OrgUnitID     pgtype.UUID
 	StartDate     pgtype.Date
 	DueDate       pgtype.Date
 	OriginType    pgtype.Text
@@ -312,6 +315,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 	// WorkspaceID — there is no path from this service to a row in a
 	// foreign workspace.
 	projectID := p.ProjectID
+	orgUnitID := p.OrgUnitID
 	if p.ParentIssueID.Valid {
 		parent, err := qtx.GetIssueInWorkspace(ctx, db.GetIssueInWorkspaceParams{
 			ID:          p.ParentIssueID,
@@ -325,6 +329,9 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		// sub-issue inherits its parent's project unless overridden.
 		if !projectID.Valid {
 			projectID = parent.ProjectID
+		}
+		if !orgUnitID.Valid {
+			orgUnitID = parent.OrgUnitID
 		}
 	}
 	if projectID.Valid {
@@ -397,6 +404,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			OriginID:      p.OriginID,
 			Stage:         p.Stage,
 			Properties:    properties,
+			OrgUnitID:     orgUnitID,
 		})
 	} else {
 		issue, err = qtx.CreateIssue(ctx, db.CreateIssueParams{
@@ -418,6 +426,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			ProjectID:     projectID,
 			Stage:         p.Stage,
 			Properties:    properties,
+			OrgUnitID:     orgUnitID,
 		})
 	}
 	if err != nil {

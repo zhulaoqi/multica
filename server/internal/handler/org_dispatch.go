@@ -72,6 +72,8 @@ func (h *Handler) DispatchToOrgUnit(w http.ResponseWriter, r *http.Request) {
 		// not be able to enumerate departments outside their scope.
 		case errors.Is(err, service.ErrOrgUnitNotFound), errors.Is(err, service.ErrOrgUnitNoAccess):
 			writeError(w, http.StatusNotFound, "org unit not found")
+		case errors.Is(err, service.ErrDispatchOrganizationOnly):
+			writeErrorCode(w, http.StatusConflict, "dispatch_organization_only", "dispatch work from the organization workspace")
 		case errors.Is(err, service.ErrDispatchRequesterNotInTeam):
 			writeError(w, http.StatusForbidden, "you cannot dispatch work to this department")
 		case errors.Is(err, service.ErrDispatchRequesterUnbound):

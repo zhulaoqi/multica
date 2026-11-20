@@ -706,6 +706,32 @@ func (q *Queries) ReassignDispatchOrigin(ctx context.Context, arg ReassignDispat
 	return i, err
 }
 
+const setIssueTreeOrgUnit = `-- name: SetIssueTreeOrgUnit :exec
+WITH RECURSIVE tree AS (
+    SELECT i.id FROM issue i
+    WHERE i.id = $2 AND i.workspace_id = $3
+    UNION
+    SELECT c.id FROM issue c
+    JOIN tree t ON c.parent_issue_id = t.id
+)
+UPDATE issue
+SET org_unit_id = $1
+WHERE id IN (SELECT id FROM tree)
+`
+
+type SetIssueTreeOrgUnitParams struct {
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+	IssueID     pgtype.UUID `json:"issue_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// A reassigned dispatch moves its whole issue tree to the new department, so
+// sub-issues the old squad already created follow the root's visibility.
+func (q *Queries) SetIssueTreeOrgUnit(ctx context.Context, arg SetIssueTreeOrgUnitParams) error {
+	_, err := q.db.Exec(ctx, setIssueTreeOrgUnit, arg.OrgUnitID, arg.IssueID, arg.WorkspaceID)
+	return err
+}
+
 const updateIssueAssignee = `-- name: UpdateIssueAssignee :one
 UPDATE issue
 SET assignee_type = 'squad',

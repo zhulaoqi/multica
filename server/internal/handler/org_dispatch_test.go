@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/testutil"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -625,5 +626,80 @@ func TestIsDispatchCompleted(t *testing.T) {
 		if got := service.IsDispatchCompleted(context.Background(), testHandler.Queries, wsUUID, tc.status); got != tc.want {
 			t.Errorf("IsDispatchCompleted(%q) = %v, want %v", tc.status, got, tc.want)
 		}
+	}
+}
+
+// TestDispatch_OnlyInOrganizationWorkspace covers the organization model: once
+// an organization workspace exists, a project cannot dispatch or reassign, and
+// a dispatch there records its department on the whole issue tree.
+func TestDispatch_OnlyInOrganizationWorkspace(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "dispatch-org-admin@example.com")
+	leaderA := insertRunnableDutyAgent(t, "dispatch-org-leader-a", admin)
+	leaderB := insertRunnableDutyAgent(t, "dispatch-org-leader-b", admin)
+	unitA := createOrgUnitAs(t, admin, "组织派活甲部", "")
+	unitB := createOrgUnitAs(t, admin, "组织派活乙部", "")
+	placeOrgAgent(t, admin, leaderA, unitA)
+	placeOrgAgent(t, admin, leaderB, unitB)
+	t.Cleanup(func() { clearDispatchFixtures(t) })
+
+	status, res, body := dispatchToOrgUnit(t, admin, unitA, map[string]any{
+		"title": "dispatch-test 组织派活", "description": "x",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("dispatch status = %d, want 201: %s", status, body)
+	}
+
+	// Another workspace becomes the organization: this one is now a project.
+	var orgID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO workspace (name, slug, issue_prefix, is_organization)
+		VALUES ('dispatch-org', 'dispatch-org', 'DOR', true) RETURNING id::text
+	`).Scan(&orgID); err != nil {
+		t.Fatalf("create organization workspace: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM workspace WHERE id = $1`, orgID)
+	})
+	status, _, body = dispatchToOrgUnit(t, admin, unitA, map[string]any{
+		"title": "dispatch-test 项目派活", "description": "x",
+	})
+	if status != http.StatusConflict || !strings.Contains(body, "dispatch_organization_only") {
+		t.Fatalf("project dispatch = %d %s, want 409 dispatch_organization_only", status, body)
+	}
+	if status, body = reassignDispatch(t, admin, res.Issue.ID, unitB); status != http.StatusConflict {
+		t.Fatalf("project reassign = %d %s, want 409", status, body)
+	}
+	testPool.Exec(context.Background(), `DELETE FROM workspace WHERE id = $1`, orgID)
+
+	// This workspace is the organization again.
+	markOrganizationWorkspace(t)
+	issueUnit := func(id string) string {
+		t.Helper()
+		var unit string
+		if err := testPool.QueryRow(context.Background(), `
+			SELECT COALESCE(org_unit_id::text, '') FROM issue WHERE id = $1
+		`, parseUUID(id)).Scan(&unit); err != nil {
+			t.Fatalf("load issue department: %v", err)
+		}
+		return unit
+	}
+	if got := issueUnit(res.Issue.ID); got != unitA {
+		t.Fatalf("root department = %q, want %s", got, unitA)
+	}
+	var child IssueResponse
+	testutil.Call(t, testHandler.CreateIssue, newRequestAs(admin, http.MethodPost, "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":           "dispatch-test 子任务",
+		"parent_issue_id": res.Issue.ID,
+	})).Want(http.StatusCreated).JSON(&child)
+	if got := issueUnit(child.ID); got != unitA {
+		t.Fatalf("child department = %q, want inherited %s", got, unitA)
+	}
+
+	if status, body = reassignDispatch(t, admin, res.Issue.ID, unitB); status != http.StatusOK {
+		t.Fatalf("reassign status = %d, want 200: %s", status, body)
+	}
+	if root, sub := issueUnit(res.Issue.ID), issueUnit(child.ID); root != unitB || sub != unitB {
+		t.Fatalf("after reassign root/child = %s/%s, want %s", root, sub, unitB)
 	}
 }

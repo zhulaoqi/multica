@@ -114,7 +114,7 @@ func chatDispatchFixture() service.ChatDispatch {
 }
 
 func TestOrgBot_StatusListsOpenDispatches(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.dispatches = []service.ChatDispatch{chatDispatchFixture()}
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/status"))
@@ -133,7 +133,7 @@ func TestOrgBot_StatusListsOpenDispatches(t *testing.T) {
 }
 
 func TestOrgBot_StatusWithoutOpenDispatches(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 
 	if _, err := h.bot.Handle(context.Background(), groupDispatchMessage("/状态")); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -144,7 +144,7 @@ func TestOrgBot_StatusWithoutOpenDispatches(t *testing.T) {
 }
 
 func TestOrgBot_CancelByNumber(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 
 	if _, err := h.bot.Handle(context.Background(), groupDispatchMessage("/cancel 1")); err != nil {
@@ -162,7 +162,7 @@ func TestOrgBot_CancelByNumber(t *testing.T) {
 }
 
 func TestOrgBot_CancelClosedDispatchExplains(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 	h.chat.cancelErr = service.ErrChatDispatchClosed
 
@@ -175,7 +175,7 @@ func TestOrgBot_CancelClosedDispatchExplains(t *testing.T) {
 }
 
 func TestOrgBot_RejectPassesReasonAndReportsDelivery(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 	h.chat.delivered = false
 
@@ -192,7 +192,7 @@ func TestOrgBot_RejectPassesReasonAndReportsDelivery(t *testing.T) {
 }
 
 func TestOrgBot_AcceptByIdentifier(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 
 	if _, err := h.bot.Handle(context.Background(), groupDispatchMessage("/accept PAY-7")); err != nil {
@@ -207,7 +207,7 @@ func TestOrgBot_AcceptByIdentifier(t *testing.T) {
 }
 
 func TestOrgBot_ReassignToResolvedDepartment(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 	h.chat.units = []service.UnitMatch{{Unit: db.ListOrgUnitsRow{ID: testUUID(0x71), Name: "风控组"}, Path: "研发部 / 风控组"}}
 	h.chat.reassign = service.OrgDispatchResult{
@@ -235,7 +235,7 @@ func TestOrgBot_ReassignToResolvedDepartment(t *testing.T) {
 }
 
 func TestOrgBot_ReassignRequiresDepartment(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/reassign 1"))
@@ -251,7 +251,7 @@ func TestOrgBot_ReassignRequiresDepartment(t *testing.T) {
 }
 
 func TestOrgBot_ReassignAmbiguousDepartmentListsPaths(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findDispatch = chatDispatchFixture()
 	h.chat.units = []service.UnitMatch{
 		{Unit: db.ListOrgUnitsRow{ID: testUUID(0x71)}, Path: "研发部 / 支付组"},
@@ -268,7 +268,7 @@ func TestOrgBot_ReassignAmbiguousDepartmentListsPaths(t *testing.T) {
 }
 
 func TestOrgBot_UnknownReferenceExplainsOpenDispatches(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.findErr = service.ErrChatDispatchNotFound
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/cancel 9"))
@@ -284,7 +284,7 @@ func TestOrgBot_UnknownReferenceExplainsOpenDispatches(t *testing.T) {
 }
 
 func TestOrgBot_ThreadFollowUpPostsComment(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.threadDispatch = chatDispatchFixture()
 	h.chat.delivered = true
 
@@ -308,7 +308,7 @@ func TestOrgBot_ThreadFollowUpPostsComment(t *testing.T) {
 }
 
 func TestOrgBot_ThreadFollowUpWithoutDispatchUsesGuidance(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.threadErr = service.ErrChatDispatchNotFound
 
 	msg := groupDispatchMessage("随便说一句")
@@ -326,7 +326,7 @@ func TestOrgBot_ThreadFollowUpWithoutDispatchUsesGuidance(t *testing.T) {
 }
 
 func TestOrgBot_PlainGroupMessageWithoutThreadShowsUsage(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("你好"))
 	if err != nil {
@@ -341,7 +341,7 @@ func TestOrgBot_PlainGroupMessageWithoutThreadShowsUsage(t *testing.T) {
 }
 
 func TestOrgBot_MediaAttachesToThreadDispatch(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.threadDispatch = chatDispatchFixture()
 	h.client.resource = DownloadedResource{Data: []byte("png-bytes"), ContentType: "image/png"}
 
@@ -370,7 +370,7 @@ func TestOrgBot_MediaAttachesToThreadDispatch(t *testing.T) {
 }
 
 func TestOrgBot_MediaTooLargeIsRejected(t *testing.T) {
-	h := newOrgBotHarness(t, boundIdentity(), orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 	h.chat.threadDispatch = chatDispatchFixture()
 	h.client.resource = DownloadedResource{Data: make([]byte, orgBotAttachmentMaxBytes+1)}
 
@@ -391,7 +391,7 @@ func TestOrgBot_MediaTooLargeIsRejected(t *testing.T) {
 }
 
 func TestOrgBot_ControlCommandRequiresBoundIdentity(t *testing.T) {
-	h := newOrgBotHarness(t, orgBotIdentityFake{err: pgx.ErrNoRows}, orgBotProjectsFake{}, &orgBotDispatcherFake{})
+	h := newOrgBotHarness(t, orgBotIdentityFake{err: pgx.ErrNoRows}, testOrganization(), &orgBotDispatcherFake{})
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("/status"))
 	if err != nil {

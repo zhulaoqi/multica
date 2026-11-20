@@ -20,6 +20,9 @@ import (
 // Access is the resolved answer for one (workspace, user) pair.
 type Access struct {
 	WorkspaceID pgtype.UUID
+	// IsOrganization marks the organization workspace, whose issues are scoped
+	// by department (see IssueScope).
+	IsOrganization bool
 
 	// Root is the owning department's root unit. RootUnitID is invalid for a
 	// legacy workspace; RootExists is false when a configured root no longer
@@ -67,6 +70,7 @@ func ResolveWith(ctx context.Context, q Queries, workspaceID, userID pgtype.UUID
 	}
 	return Access{
 		WorkspaceID:    row.WorkspaceID,
+		IsOrganization: row.IsOrganization,
 		RootUnitID:     row.RootUnitID,
 		RootExists:     row.RootExists,
 		RootLeadUserID: row.RootLeadUserID,

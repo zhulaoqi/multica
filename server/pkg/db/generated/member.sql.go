@@ -182,6 +182,7 @@ ancestors AS (
 )
 SELECT
     w.id AS workspace_id,
+    w.is_organization,
     w.org_unit_id AS root_unit_id,
     (root.id IS NOT NULL)::bool AS root_exists,
     COALESCE(root.lead_user_id, '00000000-0000-0000-0000-000000000000'::uuid) AS root_lead_user_id,
@@ -212,6 +213,7 @@ type GetWorkspaceAccessParams struct {
 
 type GetWorkspaceAccessRow struct {
 	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	IsOrganization  bool               `json:"is_organization"`
 	RootUnitID      pgtype.UUID        `json:"root_unit_id"`
 	RootExists      bool               `json:"root_exists"`
 	RootLeadUserID  pgtype.UUID        `json:"root_lead_user_id"`
@@ -232,6 +234,7 @@ func (q *Queries) GetWorkspaceAccess(ctx context.Context, arg GetWorkspaceAccess
 	var i GetWorkspaceAccessRow
 	err := row.Scan(
 		&i.WorkspaceID,
+		&i.IsOrganization,
 		&i.RootUnitID,
 		&i.RootExists,
 		&i.RootLeadUserID,

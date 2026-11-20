@@ -4049,6 +4049,9 @@ func (h *Handler) loadCommentForActor(w http.ResponseWriter, r *http.Request) (d
 		writeError(w, http.StatusNotFound, "comment not found")
 		return db.Comment{}, "", "", "", false
 	}
+	if !h.requireIssueIDVisible(w, r, comment.IssueID, "comment not found") {
+		return db.Comment{}, "", "", "", false
+	}
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 	return comment, workspaceID, actorType, actorID, true
 }

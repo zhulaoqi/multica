@@ -802,6 +802,13 @@ type searchResult struct {
 // trades the title, description, and comment content GIN fast paths for one
 // predictable pass over each relation within the selected workspace.
 func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, includeClosed bool, terminalStatusKeys []string) (string, []any) {
+	return buildScopedSearchQuery(phrase, terms, queryNum, hasNum, includeClosed, terminalStatusKeys, nil)
+}
+
+// buildScopedSearchQuery is buildSearchQuery narrowed to the issues scope
+// admits. The argument layout is unchanged: $4 is the workspace and the last two
+// are limit and offset.
+func buildScopedSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, includeClosed bool, terminalStatusKeys []string, scope *workspaceaccess.IssueScope) (string, []any) {
 	// Lowercase in Go so SQL only needs LOWER() on the column side.
 	phrase = strings.ToLower(phrase)
 	for i, term := range terms {
@@ -837,6 +844,11 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 		// Negate only known terminal keys so an unknown legacy key remains
 		// searchable instead of disappearing from the default result set.
 		terminalStatusesParam = nextArg(terminalStatusKeys)
+	}
+
+	scopePredicate := ""
+	if scope != nil {
+		scopePredicate = scope.Predicate("i", nextArg)
 	}
 
 	limitParam := nextArg(nil)
@@ -883,6 +895,9 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 	issueWhere := "i.workspace_id = " + wsParam
 	if terminalStatusesParam != "" {
 		issueWhere += fmt.Sprintf(" AND NOT (i.status = ANY(%s::text[]))", terminalStatusesParam)
+	}
+	if scopePredicate != "" {
+		issueWhere += " AND " + scopePredicate
 	}
 	// PostgreSQL otherwise inlines scalar LATERAL subqueries and recomputes the
 	// LOWER expressions for every flag. The OFFSET 0 fences cache the normalized
@@ -1161,14 +1176,23 @@ func (h *Handler) SearchIssues(w http.ResponseWriter, r *http.Request) {
 		terminalStatusKeys = resolvedKeys
 	}
 
-	sqlQuery, args := buildSearchQuery(q, terms, queryNum, hasNum, includeClosed, terminalStatusKeys)
+	issueScope, err := h.requestIssueScope(r)
+	if err != nil {
+		if writeSearchCancellation(w, r, err) {
+			return
+		}
+		slog.Warn("resolve issue scope failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to resolve issue visibility")
+		return
+	}
+	sqlQuery, args := buildScopedSearchQuery(q, terms, queryNum, hasNum, includeClosed, terminalStatusKeys, issueScope)
 	// Fill placeholder args: $4 = workspace_id, last two = limit, offset
 	args[3] = wsUUID
 	args[len(args)-2] = limit
 	args[len(args)-1] = offset
 
 	var results []searchResult
-	err := runSearchQuery(ctx, h.TxStarter, sqlQuery, args, func(rows pgx.Rows) error {
+	err = runSearchQuery(ctx, h.TxStarter, sqlQuery, args, func(rows pgx.Rows) error {
 		for rows.Next() {
 			var sr searchResult
 			if err := rows.Scan(
@@ -1297,6 +1321,10 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	issueScope, ok := h.requireIssueScope(w, r)
+	if !ok {
+		return
+	}
 
 	// Parse optional filter params. Malformed UUIDs in filters return 400 —
 	// silently coercing them to a zero UUID would mask a client bug and let
@@ -1398,6 +1426,11 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 			MetadataFilter:     metadataFilter,
 			PropertiesFilter:   openPropertiesFilter,
 		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list issues")
+			return
+		}
+		issues, err = filterVisible(ctx, h, issueScope, issues, func(i db.ListOpenIssuesRow) pgtype.UUID { return i.ID })
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list issues")
 			return
@@ -1715,6 +1748,10 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
           AND a.owner_id     = %[1]s::uuid
     ))
 )`, ref))
+	}
+
+	if issueScope != nil {
+		where = append(where, issueScope.Predicate("i", addArg))
 	}
 
 	whereSql := strings.Join(where, " AND ")
@@ -2349,6 +2386,14 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 		intraGroupOrder += ", i.created_at DESC, i.id DESC"
 	}
 
+	issueScope, ok := h.requireIssueScope(w, r)
+	if !ok {
+		return
+	}
+	if issueScope != nil {
+		where = append(where, issueScope.Predicate("i", addArg))
+	}
+
 	offsetRef := addArg(int64(offset))
 	limitRef := addArg(int64(limit))
 	query := fmt.Sprintf(`
@@ -2538,6 +2583,9 @@ func (h *Handler) ListChildIssues(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list child issues")
 		return
 	}
+	if children, ok = h.visibleChildIssues(w, r, children); !ok {
+		return
+	}
 	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
 	ids := make([]pgtype.UUID, len(children))
 	for i, child := range children {
@@ -2622,6 +2670,9 @@ func (h *Handler) ListChildrenByParents(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list child issues")
+		return
+	}
+	if children, ok = h.visibleChildIssues(w, r, children); !ok {
 		return
 	}
 	prefix := h.getIssuePrefix(r.Context(), wsUUID)

@@ -868,6 +868,14 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 	}
 	where = appendIssueTableSearchFilter(where, addArg, spec.Search)
 
+	issueScope, ok := h.requireIssueScope(w, r)
+	if !ok {
+		return issueTableSQL{}, false
+	}
+	if issueScope != nil {
+		where = append(where, issueScope.Predicate("i", addArg))
+	}
+
 	return issueTableSQL{
 		where:       strings.Join(where, " AND "),
 		args:        args,

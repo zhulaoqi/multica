@@ -81,6 +81,7 @@ ancestors AS (
 )
 SELECT
     w.id AS workspace_id,
+    w.is_organization,
     w.org_unit_id AS root_unit_id,
     (root.id IS NOT NULL)::bool AS root_exists,
     COALESCE(root.lead_user_id, '00000000-0000-0000-0000-000000000000'::uuid) AS root_lead_user_id,
