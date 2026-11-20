@@ -136,5 +136,10 @@
     "requested_by": "來自 {{name}}",
     "unknown_requester": "來自同事",
     "blocked": "阻塞：{{missing}}"
+  },
+  "home": {
+    "label": "首頁導覽",
+    "conversation": "對話",
+    "tasks": "我的任務"
   }
 }

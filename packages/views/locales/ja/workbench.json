@@ -136,5 +136,10 @@
     "requested_by": "{{name}} より",
     "unknown_requester": "チームメンバーより",
     "blocked": "ブロック中: {{missing}}"
+  },
+  "home": {
+    "label": "ホームナビゲーション",
+    "conversation": "会話",
+    "tasks": "自分のタスク"
   }
 }

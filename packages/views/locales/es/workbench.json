@@ -137,5 +137,10 @@
     "requested_by": "De {{name}}",
     "unknown_requester": "De un compañero",
     "blocked": "Bloqueado: {{missing}}"
+  },
+  "home": {
+    "label": "Navegación de inicio",
+    "conversation": "Conversación",
+    "tasks": "Mis tareas"
   }
 }

@@ -3,11 +3,8 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@multica/core/auth";
-import {
-  paths,
-  resolvePostAuthDestination,
-  useHasOnboarded,
-} from "@multica/core/paths";
+import { paths, useHasOnboarded } from "@multica/core/paths";
+import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 import { useWorkspaceList } from "@multica/core/workspace";
 import { CliInstallInstructions, OnboardingFlow } from "@multica/views/onboarding";
 
@@ -57,7 +54,7 @@ export default function OnboardingPage() {
     // judgment in callback / login handles "where should this user go on
     // login" so OnboardingPage no longer needs to second-guess it.
     if (hasOnboarded) {
-      router.replace(resolvePostAuthDestination(workspaces, hasOnboarded));
+      router.replace(resolveWebPostAuthDestination(workspaces, hasOnboarded));
     }
   }, [isLoading, user, hasOnboarded, workspacesReady, workspaces, router]);
 
@@ -81,7 +78,7 @@ export default function OnboardingPage() {
               paths.workspace(ws.slug).issueDetail(destination.issueId),
             );
           } else if (ws) {
-            router.push(paths.workspace(ws.slug).workbench());
+            router.push(paths.home());
           } else {
             router.push(paths.root());
           }

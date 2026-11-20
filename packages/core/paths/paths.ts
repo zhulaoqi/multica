@@ -112,6 +112,8 @@ export const paths = {
   invitations: () => "/invitations",
   onboarding: () => "/onboarding",
   authCallback: () => "/auth/callback",
+  /** The C-end: everyone's workspace-less front door, in the organization. */
+  home: () => "/home",
   root: () => "/",
 };
 
@@ -121,7 +123,7 @@ export type WorkspacePaths = ReturnType<typeof workspaceScoped>;
 // A path is global if it equals or begins with any of these.
 // Note: `/workspaces/` (trailing slash) is the prefix — `workspaces` is reserved,
 // so any path starting with `/workspaces/...` is system-owned, not user-owned.
-const GLOBAL_PREFIXES = ["/login", "/workspaces/", "/invite/", "/invitations", "/onboarding", "/auth/", "/logout", "/signup"];
+const GLOBAL_PREFIXES = ["/login", "/workspaces/", "/invite/", "/invitations", "/onboarding", "/auth/", "/logout", "/signup", "/home"];
 
 export function isGlobalPath(path: string): boolean {
   return GLOBAL_PREFIXES.some((p) => path === p || path.startsWith(p));

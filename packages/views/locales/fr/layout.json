@@ -157,6 +157,7 @@
   "account": {
     "trigger": "Compte",
     "profile": "Profil",
+    "admin": "Administration",
     "console": "Console plateforme",
     "theme": "Thème",
     "themes": {

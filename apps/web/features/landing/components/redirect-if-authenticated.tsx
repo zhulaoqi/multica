@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceList } from "@multica/core/workspace";
-import { resolvePostAuthDestination, useHasOnboarded } from "@multica/core/paths";
+import { useHasOnboarded } from "@multica/core/paths";
+import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 import { isOfficialMarketingHost } from "@/lib/public-host";
 
 /**
@@ -34,7 +35,7 @@ export function RedirectIfAuthenticated() {
   useEffect(() => {
     if (isLoading || !user || !ready) return;
     if (isOfficialMarketingHost(window.location.hostname)) return;
-    router.replace(resolvePostAuthDestination(workspaces, hasOnboarded));
+    router.replace(resolveWebPostAuthDestination(workspaces, hasOnboarded));
   }, [isLoading, user, ready, workspaces, hasOnboarded, router]);
 
   return null;

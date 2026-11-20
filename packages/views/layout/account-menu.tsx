@@ -3,6 +3,7 @@
 import {
   Keyboard,
   Globe,
+  LayoutDashboard,
   LogOut,
   Monitor,
   Moon,
@@ -98,6 +99,10 @@ export function AccountMenu() {
           <DropdownMenuItem render={<AppLink href={`${p.settings()}?tab=profile`} />}>
             <User />
             {t(($) => $.account.profile)}
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<AppLink href={p.issues()} />}>
+            <LayoutDashboard />
+            {t(($) => $.account.admin)}
           </DropdownMenuItem>
           {user?.is_operator && !isDesktopShell() ? (
             <DropdownMenuItem render={<AppLink href="/admin" />}>

@@ -38,6 +38,7 @@
     "./members": "./members/index.ts",
     "./org": "./org/index.ts",
     "./workbench": "./workbench/index.ts",
+    "./home": "./home/index.ts",
     "./office": "./office/index.ts",
     "./operator": "./operator/index.ts",
     "./inbox": "./inbox/index.ts",

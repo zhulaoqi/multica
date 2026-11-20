@@ -136,5 +136,10 @@
     "requested_by": "{{name}} 님 요청",
     "unknown_requester": "동료 요청",
     "blocked": "차단됨: {{missing}}"
+  },
+  "home": {
+    "label": "홈 내비게이션",
+    "conversation": "대화",
+    "tasks": "내 작업"
   }
 }

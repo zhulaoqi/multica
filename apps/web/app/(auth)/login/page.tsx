@@ -9,15 +9,12 @@ import {
   workspaceKeys,
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
-import {
-  paths,
-  resolvePostAuthDestination,
-  useHasOnboarded,
-} from "@multica/core/paths";
+import { paths, useHasOnboarded } from "@multica/core/paths";
 import { api } from "@multica/core/api";
 import type { Workspace } from "@multica/core/types";
 import { BRAND } from "@multica/ui/lib/multica-brand";
 import { CliCallbackError } from "@/features/auth/cli-callback-error";
+import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 import { LoginBackdrop } from "@/features/auth/login-backdrop";
 import { redirectToCliCallback, validateCliCallback } from "@multica/views/auth";
 
@@ -44,7 +41,7 @@ async function resolveLoggedInDestination(
       // fall through
     }
   }
-  return resolvePostAuthDestination(workspaces, hasOnboarded);
+  return resolveWebPostAuthDestination(workspaces, hasOnboarded);
 }
 
 function LoginPageContent() {

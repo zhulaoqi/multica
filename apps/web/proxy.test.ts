@@ -114,17 +114,17 @@ describe("proxy legacy workspace route redirects", () => {
     expect(redirectLocation("/acme/squads", sessionCookies)).toBeNull();
   });
 
-  it("redirects app-host root URLs to the last workspace", () => {
+  it("sends an app-host root visit with a session to the C-end", () => {
     expect(redirectLocation("/", sessionCookies)).toBe(
-      "https://app.multica.test/acme/intake",
+      "https://app.multica.test/home",
     );
   });
 
   it.each(["multica.ai", "www.multica.ai"])(
-    "redirects the former marketing root on %s into the last workspace",
+    "sends the former marketing root on %s with a session to the C-end",
     (host) => {
       expect(redirectLocation("/", sessionCookies, host)).toBe(
-        `https://${host}/acme/intake`,
+        `https://${host}/home`,
       );
     },
   );
@@ -271,7 +271,7 @@ describe("proxy runtime upstream rewrites", () => {
 });
 
 describe("proxy root and locale handling", () => {
-  it("redirects logged-in root visits to the last workspace", () => {
+  it("redirects logged-in root visits to the C-end", () => {
     const res = proxy(
       makeRequest("/", {
         multica_logged_in: "1",
@@ -281,7 +281,7 @@ describe("proxy root and locale handling", () => {
 
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe(
-      "https://app.multica.test/acme/intake",
+      "https://app.multica.test/home",
     );
   });
 

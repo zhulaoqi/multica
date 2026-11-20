@@ -137,5 +137,10 @@
     "requested_by": "From {{name}}",
     "unknown_requester": "From a teammate",
     "blocked": "Blocked: {{missing}}"
+  },
+  "home": {
+    "label": "Home navigation",
+    "conversation": "Conversation",
+    "tasks": "My tasks"
   }
 }

@@ -27,6 +27,7 @@ vi.mock("@multica/core/workspace", () => ({
 }));
 
 vi.mock("@multica/core/paths", () => ({
+  paths: { home: () => "/home" },
   useHasOnboarded: () => true,
   resolvePostAuthDestination: (workspaces: { slug: string }[]) =>
     workspaces[0] ? `/${workspaces[0].slug}/workbench` : "/workspaces/new",
@@ -60,7 +61,17 @@ describe("RedirectIfAuthenticated", () => {
     render(<RedirectIfAuthenticated />);
 
     await waitFor(() => {
-      expect(state.replace).toHaveBeenCalledWith("/acme/workbench");
+      expect(state.replace).toHaveBeenCalledWith("/home");
+    });
+  });
+
+  it("falls back to workspace creation for a member without one", async () => {
+    state.ready = true;
+
+    render(<RedirectIfAuthenticated />);
+
+    await waitFor(() => {
+      expect(state.replace).toHaveBeenCalledWith("/workspaces/new");
     });
   });
 });

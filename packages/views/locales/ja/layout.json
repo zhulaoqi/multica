@@ -152,6 +152,7 @@
   "account": {
     "trigger": "アカウント",
     "profile": "プロフィール",
+    "admin": "管理画面",
     "console": "プラットフォーム管理",
     "theme": "テーマ",
     "themes": {

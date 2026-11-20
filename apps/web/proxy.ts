@@ -89,8 +89,11 @@ export function proxy(req: NextRequest) {
   // unless the visitor already has a workspace to reopen.
   if (pathname === "/") {
     const url = req.nextUrl.clone();
-    if (hasSession && lastSlug) {
-      url.pathname = `/${lastSlug}/intake`;
+    // Signed-in visitors land in the C-end; the layout resolves their
+    // workspace and bounces a stale session to /login.
+    if (hasSession) {
+      url.pathname = "/home";
+      url.search = "";
       return NextResponse.redirect(url);
     }
     url.pathname = "/login";
