@@ -1080,6 +1080,9 @@ func (h *Handler) DaemonRegister(w http.ResponseWriter, r *http.Request) {
 	for _, fn := range afterCommit {
 		fn()
 	}
+	// Projections in this project map onto the runtimes this daemon just
+	// registered.
+	h.syncProjectionsForDaemon(r.Context(), wsUUID, req.DaemonID)
 
 	slog.Info("daemon registered", "workspace_id", req.WorkspaceID, "daemon_id", req.DaemonID, "runtimes_count", len(resp))
 

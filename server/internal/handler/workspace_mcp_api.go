@@ -366,7 +366,7 @@ func (h *Handler) ListAgentMcpServers(w http.ResponseWriter, r *http.Request) {
 // workspace owner/admin, never an agent actor.
 func (h *Handler) requireAgentMcpWriter(w http.ResponseWriter, r *http.Request) (db.Agent, bool) {
 	agent, ok := h.loadAgentForUser(w, r, chi.URLParam(r, "id"))
-	if !ok {
+	if !ok || rejectProjectionWrite(w, agent) {
 		return db.Agent{}, false
 	}
 	workspaceID := uuidToString(agent.WorkspaceID)

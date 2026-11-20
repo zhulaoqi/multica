@@ -148,6 +148,9 @@ type AgentResponse struct {
 	// shows it on the member row. Older servers omit it, so clients treat the
 	// field as false and fall back to the first owned agent.
 	IsPrimary                        bool                   `json:"is_primary"`
+	// SourceAgentID is set on a project's read-only projection of an
+	// organization agent; edits go to the source in the organization.
+	SourceAgentID                    *string                `json:"source_agent_id"`
 	Skills                           []AgentSkillSummary    `json:"skills"`
 	DisabledRuntimeSkills            []DisabledRuntimeSkill `json:"disabled_runtime_skills"`
 	CreatedAt                        string                 `json:"created_at"`
@@ -252,6 +255,7 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		ComposioToolkitAllowlist: composioAllowlist,
 		OwnerID:                  uuidToPtr(a.OwnerID),
 		IsPrimary:                a.IsPrimary,
+		SourceAgentID:            uuidToPtr(a.SourceAgentID),
 		Skills:                   []AgentSkillSummary{},
 		DisabledRuntimeSkills:    decodeDisabledRuntimeSkills(a.DisabledRuntimeSkills),
 		CreatedAt:                timestampToString(a.CreatedAt),
@@ -1553,6 +1557,9 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if h.rejectProjectAgentCreate(w, r, wsUUID) {
+		return
+	}
 	if !canUseRuntimeForAgent(member, runtime) {
 		writeError(w, http.StatusForbidden, "this runtime is private; ask its owner to grant you access before creating agents")
 		return
@@ -1772,6 +1779,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	actorType, actorID := h.resolveActor(r, ownerID, workspaceID)
 	h.publish(protocol.EventAgentCreated, workspaceID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	h.projectPrimaryTwin(r.Context(), created)
 
 	obsmetrics.RecordEvent(h.Analytics, h.Metrics, analytics.AgentCreated(
 		ownerID,
@@ -2020,6 +2028,9 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	existing, ok := h.loadAgentForUser(w, r, id)
 	if !ok {
+		return
+	}
+	if rejectProjectionWrite(w, existing) {
 		return
 	}
 	if !h.canManageAgent(w, r, existing) {
@@ -2582,6 +2593,7 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
 	actorType, actorID := h.resolveActor(r, userID, uuidToString(updated.WorkspaceID))
 	h.publish(protocol.EventAgentStatus, uuidToString(updated.WorkspaceID), actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	h.syncProjectionsForSource(r.Context(), updated)
 	redactAgentResponseForActor(&resp, actorType)
 	// Workspace admins / non-owner members pass canManageAgent for legitimate
 	// admin actions (e.g. bulk reassigning agents off a leaving member's
@@ -2857,6 +2869,7 @@ func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	actorType, actorID := h.resolveActor(r, userID, wsID)
 	h.publish(protocol.EventAgentArchived, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	h.archiveProjectionsForSource(r.Context(), archived)
 	// Archiving the primary twin leaves the owner without one; promote their
 	// oldest remaining agent so the dispatch gate does not silently lock a
 	// member out of work they can still take.
@@ -2867,6 +2880,7 @@ func (h *Handler) ArchiveAgent(w http.ResponseWriter, r *http.Request) {
 		}); err == nil {
 			promotedResp := h.agentToResponse(promoted)
 			h.publish(protocol.EventAgentUpdated, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(promotedResp)})
+			h.projectPrimaryTwin(r.Context(), promoted)
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			slog.Warn("promote next primary agent failed", append(logger.RequestAttrs(r), "error", err, "owner_id", uuidToString(archived.OwnerID))...)
 		}
@@ -2888,12 +2902,26 @@ func (h *Handler) RestoreAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "agent is not archived")
 		return
 	}
+	if agent.SourceAgentID.Valid {
+		source, err := h.Queries.GetAgent(r.Context(), agent.SourceAgentID)
+		if err != nil || source.ArchivedAt.Valid {
+			writeErrorCode(w, http.StatusConflict, codeAgentManagedByOrganization, "restore this agent in the organization first")
+			return
+		}
+	}
 
 	restored, err := h.Queries.RestoreAgent(r.Context(), agent.ID)
 	if err != nil {
 		slog.Warn("restore agent failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
 		writeError(w, http.StatusInternalServerError, "failed to restore agent")
 		return
+	}
+	if restored.SourceAgentID.Valid {
+		if synced, err := h.Queries.SyncAgentProjection(r.Context(), restored.ID); err == nil {
+			restored = synced
+		} else {
+			slog.Warn("sync restored projection failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+		}
 	}
 
 	if restored.OwnerID.Valid {
@@ -2915,6 +2943,12 @@ func (h *Handler) RestoreAgent(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
 	actorType, actorID := h.resolveActor(r, userID, wsID)
 	h.publish(protocol.EventAgentRestored, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	h.restoreProjectionsForSource(r.Context(), restored, agent.ArchivedAt)
+	if restored.IsPrimary {
+		h.projectPrimaryTwin(r.Context(), restored)
+	} else {
+		h.syncProjectionsForSource(r.Context(), restored)
+	}
 	redactAgentResponseForActor(&resp, actorType)
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -1999,91 +1999,6 @@ func (q *Queries) ClearPrimaryAgentsForOwner(ctx context.Context, arg ClearPrima
 	return err
 }
 
-const cloneAgentAsTwin = `-- name: CloneAgentAsTwin :one
-INSERT INTO agent (
-    workspace_id, name, description, avatar_url, runtime_mode, runtime_config,
-    visibility, permission_mode, max_concurrent_tasks, owner_id, instructions,
-    custom_env, custom_args, conversation_starters, intake_can, intake_cannot,
-    org_unit_id, is_primary
-)
-SELECT
-    $1, a.name, a.description, a.avatar_url, a.runtime_mode, '{}'::jsonb,
-    'private', 'private', a.max_concurrent_tasks, $2, a.instructions,
-    '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, a.intake_can, a.intake_cannot,
-    CASE
-        WHEN EXISTS (
-            SELECT 1 FROM org_unit u
-            WHERE u.id = $3::uuid
-              AND u.workspace_id = $1
-        )
-        THEN $3::uuid
-        ELSE NULL::uuid
-    END,
-    true
-FROM agent a
-WHERE a.id = $4
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary, source_agent_id
-`
-
-type CloneAgentAsTwinParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	OwnerID     pgtype.UUID `json:"owner_id"`
-	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
-	SourceID    pgtype.UUID `json:"source_id"`
-}
-
-// Copies a member's primary twin into a project they just joined. Only portable
-// identity and instructions travel: runtime_id, custom_env, mcp_config and the
-// model stay behind because runtimes and secrets are workspace-specific. The
-// caller checks that the target workspace has no active agent for this owner
-// first, which keeps the one-primary invariant.
-func (q *Queries) CloneAgentAsTwin(ctx context.Context, arg CloneAgentAsTwinParams) (Agent, error) {
-	row := q.db.QueryRow(ctx, cloneAgentAsTwin,
-		arg.WorkspaceID,
-		arg.OwnerID,
-		arg.OrgUnitID,
-		arg.SourceID,
-	)
-	var i Agent
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.AvatarUrl,
-		&i.RuntimeMode,
-		&i.RuntimeConfig,
-		&i.Visibility,
-		&i.Status,
-		&i.MaxConcurrentTasks,
-		&i.OwnerID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Description,
-		&i.RuntimeID,
-		&i.Instructions,
-		&i.ArchivedAt,
-		&i.ArchivedBy,
-		&i.CustomEnv,
-		&i.CustomArgs,
-		&i.McpConfig,
-		&i.Model,
-		&i.ThinkingLevel,
-		&i.ComposioToolkitAllowlist,
-		&i.PermissionMode,
-		&i.Kind,
-		&i.SystemKey,
-		&i.DisabledRuntimeSkills,
-		&i.ServiceTier,
-		&i.ConversationStarters,
-		&i.IntakeCan,
-		&i.IntakeCannot,
-		&i.OrgUnitID,
-		&i.IsPrimary,
-		&i.SourceAgentID,
-	)
-	return i, err
-}
-
 const completeAgentTask = `-- name: CompleteAgentTask :one
 UPDATE agent_task_queue
 SET status = 'completed', completed_at = now(), result = $2,
@@ -3295,6 +3210,8 @@ WITH candidate AS (
       AND a.owner_id = $2
       AND a.kind = 'user'
       AND a.archived_at IS NULL
+      -- A projection's primary flag follows its organization source.
+      AND a.source_agent_id IS NULL
       AND NOT EXISTS (
           SELECT 1 FROM agent p
           WHERE p.workspace_id = $1
@@ -4843,73 +4760,6 @@ func (q *Queries) GetPrimaryAgentForOwner(ctx context.Context, arg GetPrimaryAge
 		&i.SourceAgentID,
 	)
 	return i, err
-}
-
-const getPrimaryTwinForUser = `-- name: GetPrimaryTwinForUser :many
-SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary, source_agent_id FROM agent
-WHERE owner_id = $1
-  AND kind = 'user'
-  AND archived_at IS NULL
-  AND is_primary
-ORDER BY updated_at DESC, created_at DESC
-`
-
-// The user's most recent primary twin across workspaces, used as the template
-// when they join a project that has no twin yet. Returned as a list because a
-// user can have one primary per workspace; callers pick the first row.
-func (q *Queries) GetPrimaryTwinForUser(ctx context.Context, ownerID pgtype.UUID) ([]Agent, error) {
-	rows, err := q.db.Query(ctx, getPrimaryTwinForUser, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Agent{}
-	for rows.Next() {
-		var i Agent
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.Name,
-			&i.AvatarUrl,
-			&i.RuntimeMode,
-			&i.RuntimeConfig,
-			&i.Visibility,
-			&i.Status,
-			&i.MaxConcurrentTasks,
-			&i.OwnerID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Description,
-			&i.RuntimeID,
-			&i.Instructions,
-			&i.ArchivedAt,
-			&i.ArchivedBy,
-			&i.CustomEnv,
-			&i.CustomArgs,
-			&i.McpConfig,
-			&i.Model,
-			&i.ThinkingLevel,
-			&i.ComposioToolkitAllowlist,
-			&i.PermissionMode,
-			&i.Kind,
-			&i.SystemKey,
-			&i.DisabledRuntimeSkills,
-			&i.ServiceTier,
-			&i.ConversationStarters,
-			&i.IntakeCan,
-			&i.IntakeCannot,
-			&i.OrgUnitID,
-			&i.IsPrimary,
-			&i.SourceAgentID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getWorkspaceAgentActivity30d = `-- name: GetWorkspaceAgentActivity30d :many

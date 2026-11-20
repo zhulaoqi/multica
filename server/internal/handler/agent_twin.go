@@ -1,14 +1,12 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -44,6 +42,9 @@ func (h *Handler) SetPrimaryAgent(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil || agent.ArchivedAt.Valid || !agent.OwnerID.Valid {
 		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if rejectProjectionWrite(w, agent) {
 		return
 	}
 	if !requestIsOperator(r) && !h.mayConfigureIntakeAgentOwnedBy(r, wsUUID, member, agent.OwnerID) {
@@ -89,57 +90,7 @@ func (h *Handler) SetPrimaryAgent(w http.ResponseWriter, r *http.Request) {
 	resp := h.agentToResponse(updated)
 	actorType, actorID := h.resolveActor(r, userID, wsID)
 	h.publish(protocol.EventAgentUpdated, wsID, actorType, actorID, map[string]any{"agent": broadcastAgentResponse(resp)})
+	h.projectPrimaryTwin(r.Context(), updated)
 	redactAgentResponseForActor(&resp, actorType)
 	writeJSON(w, http.StatusOK, resp)
-}
-
-// ensurePrimaryTwinInWorkspace gives a member their digital twin in a newly
-// joined project. If they already own an active agent there, the oldest one is
-// promoted; otherwise the most recent primary twin from another workspace is
-// cloned. The function is best-effort: callers log failures and still complete
-// the join, because binding is a separate step the member can finish manually.
-func (h *Handler) ensurePrimaryTwinInWorkspace(
-	ctx context.Context,
-	workspaceID, userID, orgUnitID pgtype.UUID,
-) error {
-	if !workspaceID.Valid || !userID.Valid {
-		return nil
-	}
-	_, err := h.Queries.GetPrimaryAgentForOwner(ctx, db.GetPrimaryAgentForOwnerParams{
-		WorkspaceID: workspaceID,
-		OwnerID:     userID,
-	})
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-
-	if _, err := h.Queries.EnsurePrimaryAgentForOwner(ctx, db.EnsurePrimaryAgentForOwnerParams{
-		WorkspaceID: workspaceID,
-		OwnerID:     userID,
-	}); err == nil {
-		return nil
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-
-	sources, err := h.Queries.GetPrimaryTwinForUser(ctx, userID)
-	if err != nil {
-		return err
-	}
-	for _, source := range sources {
-		if source.WorkspaceID == workspaceID {
-			continue
-		}
-		_, err := h.Queries.CloneAgentAsTwin(ctx, db.CloneAgentAsTwinParams{
-			WorkspaceID: workspaceID,
-			OwnerID:     userID,
-			OrgUnitID:   orgUnitID,
-			SourceID:    source.ID,
-		})
-		return err
-	}
-	return nil
 }

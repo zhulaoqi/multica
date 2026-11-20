@@ -17,6 +17,7 @@ SET org_unit_id = m.org_unit_id, updated_at = now()
 FROM member m
 WHERE a.workspace_id <> $1
   AND a.is_primary
+  AND a.source_agent_id IS NULL
   AND m.workspace_id = a.workspace_id
   AND m.user_id = a.owner_id
   AND m.org_unit_id IS NOT NULL
@@ -24,9 +25,27 @@ WHERE a.workspace_id <> $1
 `
 
 // Primary twins outside the organization workspace follow their owner's
-// project placement after PropagateOrganizationPlacements.
+// project placement after PropagateOrganizationPlacements. Projections take
+// their unit from their source instead (AlignProjectionUnits).
 func (q *Queries) AlignProjectTwinUnits(ctx context.Context, organizationID pgtype.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, alignProjectTwinUnits, organizationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const alignProjectionUnits = `-- name: AlignProjectionUnits :execrows
+UPDATE agent p
+SET org_unit_id = s.org_unit_id, updated_at = now()
+FROM agent s
+WHERE p.source_agent_id = s.id
+  AND p.org_unit_id IS DISTINCT FROM s.org_unit_id
+`
+
+// Projections carry their organization source's department.
+func (q *Queries) AlignProjectionUnits(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, alignProjectionUnits)
 	if err != nil {
 		return 0, err
 	}

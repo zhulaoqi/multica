@@ -825,6 +825,9 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			writeError(w, http.StatusNotFound, "agent not found")
 			return
 		}
+		if rejectProjectionWrite(w, agent) {
+			return
+		}
 		currentUnit = agent.OrgUnitID
 		ownerID = agent.OwnerID
 	case "member":
@@ -891,17 +894,18 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 			h.importOrgFailed(w, r, err)
 			return
 		}
+		// The member's primary twin moves with them so their representative
+		// stays visible in the target department.
+		h.applyMemberUnitMove(r.Context(), access.wsUUID, entityUUID)
 		// A placement in the organization workspace is the person's
-		// department everywhere: their project rows and twins follow it.
+		// department everywhere: their project rows, twins and the twins'
+		// projections follow it.
 		if access.organization {
 			if err := h.followOrganization(r.Context(), h.Queries, access.wsUUID, pgtype.UUID{}); err != nil {
 				h.importOrgFailed(w, r, err)
 				return
 			}
 		}
-		// The member's primary twin moves with them so their representative
-		// stays visible in the target department.
-		h.applyMemberUnitMove(r.Context(), access.wsUUID, entityUUID)
 	case "squad":
 		if err := h.Queries.SetSquadOrgUnit(r.Context(), db.SetSquadOrgUnitParams{
 			ID:          entityUUID,
@@ -919,6 +923,9 @@ func (h *Handler) setOrgEntityUnit(w http.ResponseWriter, r *http.Request, entit
 		}); err != nil {
 			h.importOrgFailed(w, r, err)
 			return
+		}
+		if moved, err := h.Queries.GetAgent(r.Context(), entityUUID); err == nil {
+			h.syncProjectionsForSource(r.Context(), moved)
 		}
 	}
 	// Department squads mirror who their unit subtree covers; a member or

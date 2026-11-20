@@ -2726,6 +2726,9 @@ func (h *Handler) SetAgentSkills(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if rejectProjectionWrite(w, agent) {
+		return
+	}
 	if !h.canManageAgent(w, r, agent) {
 		return
 	}
@@ -2785,6 +2788,9 @@ func (h *Handler) AddAgentSkills(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if rejectProjectionWrite(w, agent) {
+		return
+	}
 	if !h.canManageAgent(w, r, agent) {
 		return
 	}
@@ -2838,6 +2844,9 @@ func (h *Handler) SetAgentSkillEnabled(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if rejectProjectionWrite(w, agent) {
+		return
+	}
 	if !h.canManageAgent(w, r, agent) {
 		return
 	}
@@ -2874,6 +2883,9 @@ func (h *Handler) RemoveAgentSkill(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	agent, ok := h.loadAgentForUser(w, r, id)
 	if !ok {
+		return
+	}
+	if rejectProjectionWrite(w, agent) {
 		return
 	}
 	if !h.canManageAgent(w, r, agent) {

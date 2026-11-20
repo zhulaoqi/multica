@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func primaryFlag(t *testing.T, agentID string) bool {
@@ -96,44 +94,6 @@ func TestArchivePrimaryAgent_PromotesAnotherOwnedAgent(t *testing.T) {
 	}
 	if !primaryFlag(t, second) {
 		t.Fatal("next owned agent should be promoted so the member stays bound")
-	}
-}
-
-func TestEnsurePrimaryTwinInWorkspace_ClonesAcrossProjects(t *testing.T) {
-	requireDB(t)
-	owner := createPermissionTestMember(t, "primary-clone@example.com")
-	source := insertIntakeDutyAgent(t, "primary-clone-source", owner)
-
-	var target string
-	if err := testPool.QueryRow(context.Background(), `
-		INSERT INTO workspace (name, slug, issue_prefix, org_unit_id)
-		VALUES ('Primary clone target', 'primary-clone-target', 'PCT', NULL)
-		RETURNING id::text
-	`).Scan(&target); err != nil {
-		t.Fatalf("create target workspace: %v", err)
-	}
-	t.Cleanup(func() {
-		testPool.Exec(context.Background(), `DELETE FROM agent WHERE workspace_id = $1`, target)
-		testPool.Exec(context.Background(), `DELETE FROM workspace WHERE id = $1`, target)
-	})
-
-	if err := testHandler.ensurePrimaryTwinInWorkspace(context.Background(), parseUUID(target), parseUUID(owner), pgtype.UUID{}); err != nil {
-		t.Fatalf("ensure primary twin: %v", err)
-	}
-
-	var clonedID string
-	var primary bool
-	if err := testPool.QueryRow(context.Background(), `
-		SELECT id::text, is_primary FROM agent
-		WHERE workspace_id = $1 AND owner_id = $2 AND archived_at IS NULL
-	`, target, owner).Scan(&clonedID, &primary); err != nil {
-		t.Fatalf("load cloned twin: %v", err)
-	}
-	if clonedID == source {
-		t.Fatal("clone must be a distinct row in the target workspace")
-	}
-	if !primary {
-		t.Fatal("cloned twin must be the primary agent in the new project")
 	}
 }
 

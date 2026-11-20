@@ -48,16 +48,26 @@ WHERE o.workspace_id = sqlc.arg(organization_id)
 
 -- name: AlignProjectTwinUnits :execrows
 -- Primary twins outside the organization workspace follow their owner's
--- project placement after PropagateOrganizationPlacements.
+-- project placement after PropagateOrganizationPlacements. Projections take
+-- their unit from their source instead (AlignProjectionUnits).
 UPDATE agent a
 SET org_unit_id = m.org_unit_id, updated_at = now()
 FROM member m
 WHERE a.workspace_id <> sqlc.arg(organization_id)
   AND a.is_primary
+  AND a.source_agent_id IS NULL
   AND m.workspace_id = a.workspace_id
   AND m.user_id = a.owner_id
   AND m.org_unit_id IS NOT NULL
   AND a.org_unit_id IS DISTINCT FROM m.org_unit_id;
+
+-- name: AlignProjectionUnits :execrows
+-- Projections carry their organization source's department.
+UPDATE agent p
+SET org_unit_id = s.org_unit_id, updated_at = now()
+FROM agent s
+WHERE p.source_agent_id = s.id
+  AND p.org_unit_id IS DISTINCT FROM s.org_unit_id;
 
 -- name: ListProjectsMissingLeadOwner :many
 -- Projects whose owning department's lead is not yet a stored owner. The lead

@@ -582,7 +582,7 @@ func (h *Handler) ListLabelsForAgent(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) AttachLabelToAgent(w http.ResponseWriter, r *http.Request) {
 	agent, ok := h.loadAgentForUser(w, r, chi.URLParam(r, "id"))
-	if !ok || !h.canManageAgent(w, r, agent) {
+	if !ok || rejectProjectionWrite(w, agent) || !h.canManageAgent(w, r, agent) {
 		return
 	}
 	var req AttachLabelRequest
@@ -611,7 +611,7 @@ func (h *Handler) AttachLabelToAgent(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DetachLabelFromAgent(w http.ResponseWriter, r *http.Request) {
 	agent, ok := h.loadAgentForUser(w, r, chi.URLParam(r, "id"))
-	if !ok || !h.canManageAgent(w, r, agent) {
+	if !ok || rejectProjectionWrite(w, agent) || !h.canManageAgent(w, r, agent) {
 		return
 	}
 	labelID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "labelId"), "label id")

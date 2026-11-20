@@ -45,7 +45,7 @@ func (f *fakeIdentityQueries) GetWorkspaceAccess(_ context.Context, arg db.GetWo
 	if f.memberErr != nil {
 		return db.GetWorkspaceAccessRow{}, f.memberErr
 	}
-	return db.GetWorkspaceAccessRow{WorkspaceID: arg.ID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
+	return db.GetWorkspaceAccessRow{WorkspaceID: arg.WorkspaceID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
 }
 
 func (f *fakeIdentityQueries) CreateChannelUserBinding(_ context.Context, arg db.CreateChannelUserBindingParams) (db.ChannelUserBinding, error) {

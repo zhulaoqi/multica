@@ -441,8 +441,8 @@ func (h *Handler) JoinByShareLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsID := uuidToString(link.WorkspaceID)
-	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), link.WorkspaceID, user.ID, pgtype.UUID{}); err != nil {
-		slog.Warn("clone primary twin for share-link join failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", wsID)...)
+	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), link.WorkspaceID, user.ID); err != nil {
+		slog.Warn("project primary twin for share-link join failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", wsID)...)
 	}
 	slog.Info("user joined via share link", "user_id", userID, "workspace_id", wsID)
 

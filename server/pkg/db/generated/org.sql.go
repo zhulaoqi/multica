@@ -675,6 +675,7 @@ FROM member m
 WHERE a.workspace_id = $1
   AND a.owner_id = $2
   AND a.is_primary
+  AND a.source_agent_id IS NULL
   AND m.workspace_id = a.workspace_id
   AND m.user_id = a.owner_id
   AND a.org_unit_id IS DISTINCT FROM m.org_unit_id

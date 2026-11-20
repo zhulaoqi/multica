@@ -189,7 +189,7 @@ func (h *Handler) GetAgentEnv(w http.ResponseWriter, r *http.Request) {
 // leave a phantom audit row claiming a change that never happened.
 func (h *Handler) UpdateAgentEnv(w http.ResponseWriter, r *http.Request) {
 	agent, member, ok := h.authorizeAgentEnv(w, r)
-	if !ok {
+	if !ok || rejectProjectionWrite(w, agent) {
 		return
 	}
 

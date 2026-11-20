@@ -103,6 +103,9 @@ func (h *Handler) CreateIntakeAgent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if h.rejectProjectAgentCreate(w, r, wsUUID) {
+		return
+	}
 	ownerUUID := parseUUID(callerID)
 	if target := strings.TrimSpace(body.OwnerID); target != "" && target != callerID {
 		ownerUUID, ok = parseUUIDOrBadRequest(w, target, "owner id")
@@ -127,6 +130,7 @@ func (h *Handler) CreateIntakeAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "could not register agent")
 		return
 	}
+	h.projectPrimaryTwin(r.Context(), agent)
 	writeJSON(w, http.StatusCreated, intakeAgentFromRow(agent, false))
 }
 
@@ -269,6 +273,9 @@ func (h *Handler) PatchIntakeAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if rejectProjectionWrite(w, existing) {
+		return
+	}
 	editorID := ownerID
 	if uuidToString(existing.OwnerID) != ownerID {
 		if !h.mayConfigureIntakeAgentOwnedBy(r, parseUUID(workspaceID), member, existing.OwnerID) {
@@ -287,6 +294,7 @@ func (h *Handler) PatchIntakeAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	h.syncProjectionsForSource(r.Context(), updated)
 	writeJSON(w, http.StatusOK, intakeAgentFromRow(updated, false))
 }
 

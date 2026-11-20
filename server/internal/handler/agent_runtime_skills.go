@@ -87,6 +87,9 @@ func (h *Handler) SetAgentRuntimeSkillEnabled(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
+	if rejectProjectionWrite(w, agent) {
+		return
+	}
 	if !h.canManageAgent(w, r, agent) {
 		return
 	}

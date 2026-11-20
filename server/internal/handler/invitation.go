@@ -649,8 +649,8 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 	if capacityActive {
 		h.confirmCapacityIntent(r.Context(), uuid.UUID(accepted.WorkspaceID.Bytes), uuid.UUID(accepted.ID.Bytes), uuid.UUID(member.ID.Bytes))
 	}
-	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), accepted.WorkspaceID, user.ID, inviteeUnit); err != nil {
-		slog.Warn("clone primary twin for invitee failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", uuidToString(accepted.WorkspaceID))...)
+	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), accepted.WorkspaceID, user.ID); err != nil {
+		slog.Warn("project primary twin for invitee failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", uuidToString(accepted.WorkspaceID))...)
 	}
 
 	slog.Info("invitation accepted", "invitation_id", invitationID, "user_id", userID, "workspace_id", uuidToString(accepted.WorkspaceID))

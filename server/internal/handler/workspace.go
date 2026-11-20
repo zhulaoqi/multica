@@ -376,8 +376,8 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	wsID := uuidToString(ws.ID)
 
-	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), ws.ID, parseUUID(userID), ws.OrgUnitID); err != nil {
-		slog.Warn("clone primary twin into new workspace failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", wsID)...)
+	if err := h.ensurePrimaryTwinInWorkspace(r.Context(), ws.ID, parseUUID(userID)); err != nil {
+		slog.Warn("project primary twin into new workspace failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", wsID)...)
 	}
 
 	// "Is this the user's first workspace?" is derived in PostHog by looking

@@ -2733,17 +2733,6 @@ WHERE workspace_id = @workspace_id
   AND archived_at IS NULL
   AND is_primary;
 
--- name: GetPrimaryTwinForUser :many
--- The user's most recent primary twin across workspaces, used as the template
--- when they join a project that has no twin yet. Returned as a list because a
--- user can have one primary per workspace; callers pick the first row.
-SELECT * FROM agent
-WHERE owner_id = @owner_id
-  AND kind = 'user'
-  AND archived_at IS NULL
-  AND is_primary
-ORDER BY updated_at DESC, created_at DESC;
-
 -- name: ClearPrimaryAgentsForOwner :exec
 UPDATE agent
 SET is_primary = false, updated_at = now()
@@ -2773,6 +2762,8 @@ WITH candidate AS (
       AND a.owner_id = @owner_id
       AND a.kind = 'user'
       AND a.archived_at IS NULL
+      -- A projection's primary flag follows its organization source.
+      AND a.source_agent_id IS NULL
       AND NOT EXISTS (
           SELECT 1 FROM agent p
           WHERE p.workspace_id = @workspace_id
@@ -2787,34 +2778,4 @@ WITH candidate AS (
 UPDATE agent
 SET is_primary = true, updated_at = now()
 WHERE id = (SELECT id FROM candidate)
-RETURNING *;
-
--- name: CloneAgentAsTwin :one
--- Copies a member's primary twin into a project they just joined. Only portable
--- identity and instructions travel: runtime_id, custom_env, mcp_config and the
--- model stay behind because runtimes and secrets are workspace-specific. The
--- caller checks that the target workspace has no active agent for this owner
--- first, which keeps the one-primary invariant.
-INSERT INTO agent (
-    workspace_id, name, description, avatar_url, runtime_mode, runtime_config,
-    visibility, permission_mode, max_concurrent_tasks, owner_id, instructions,
-    custom_env, custom_args, conversation_starters, intake_can, intake_cannot,
-    org_unit_id, is_primary
-)
-SELECT
-    @workspace_id, a.name, a.description, a.avatar_url, a.runtime_mode, '{}'::jsonb,
-    'private', 'private', a.max_concurrent_tasks, @owner_id, a.instructions,
-    '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, a.intake_can, a.intake_cannot,
-    CASE
-        WHEN EXISTS (
-            SELECT 1 FROM org_unit u
-            WHERE u.id = sqlc.narg('org_unit_id')::uuid
-              AND u.workspace_id = @workspace_id
-        )
-        THEN sqlc.narg('org_unit_id')::uuid
-        ELSE NULL::uuid
-    END,
-    true
-FROM agent a
-WHERE a.id = @source_id
 RETURNING *;

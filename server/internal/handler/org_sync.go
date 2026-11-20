@@ -213,14 +213,18 @@ func (h *Handler) syncDirectory(ctx context.Context, org db.Workspace) (orgSyncR
 
 // followOrganization makes projects agree with the organization workspace:
 // project placements and primary twins follow each person's organization
-// placement, and every owning-department lead is a project owner. unitID
-// narrows the lead pass to projects owned by one unit.
+// placement, projections carry their source's unit, and every
+// owning-department lead is a project owner. unitID narrows the lead pass to
+// projects owned by one unit.
 func (h *Handler) followOrganization(ctx context.Context, qtx *db.Queries, orgID, unitID pgtype.UUID) error {
 	if _, err := qtx.PropagateOrganizationPlacements(ctx, orgID); err != nil {
 		return fmt.Errorf("propagate placements: %w", err)
 	}
 	if _, err := qtx.AlignProjectTwinUnits(ctx, orgID); err != nil {
 		return fmt.Errorf("align project twins: %w", err)
+	}
+	if _, err := qtx.AlignProjectionUnits(ctx); err != nil {
+		return fmt.Errorf("align projections: %w", err)
 	}
 	if _, err := h.healProjectLeadOwners(ctx, qtx, unitID); err != nil {
 		return err

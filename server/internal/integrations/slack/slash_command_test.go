@@ -43,7 +43,7 @@ func (f *fakeSlashQueries) GetWorkspaceAccess(_ context.Context, arg db.GetWorks
 	if f.memberErr != nil {
 		return db.GetWorkspaceAccessRow{}, f.memberErr
 	}
-	return db.GetWorkspaceAccessRow{WorkspaceID: arg.ID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
+	return db.GetWorkspaceAccessRow{WorkspaceID: arg.WorkspaceID, MemberID: slashTestUUID(0x01), Role: "member"}, nil
 }
 
 // fakeQuickCreate records the last EnqueueQuickCreateTask call so tests can
