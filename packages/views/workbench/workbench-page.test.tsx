@@ -223,6 +223,18 @@ async function submitText(text: string) {
 }
 
 describe("WorkbenchPage", () => {
+  it("sends a project to its issues: work is dispatched only in the organization", async () => {
+    const [project] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
+    qc.setQueryData(workspaceListOptions().queryKey, [
+      project!,
+      { ...project!, id: "ws-org", slug: "org", name: "Org", is_organization: true },
+    ]);
+    renderPage();
+
+    await waitFor(() => expect(state.replace).toHaveBeenCalledWith("/acme/issues"));
+    expect(screen.queryByRole("textbox", { name: "What needs doing?" })).not.toBeInTheDocument();
+  });
+
   it("asks an unbound member to bind an agent before dispatching", async () => {
     qc.setQueryData(agentListOptions(WS).queryKey, []);
     renderPage();

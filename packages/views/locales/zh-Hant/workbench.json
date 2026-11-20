@@ -136,10 +136,5 @@
     "requested_by": "來自 {{name}}",
     "unknown_requester": "來自同事",
     "blocked": "阻塞：{{missing}}"
-  },
-  "project": {
-    "title": "派工作在組織裡進行",
-    "description": "部門和部門的 AI 代理在組織工作區裡接工作。",
-    "open_organization": "開啟組織的工作台"
   }
 }

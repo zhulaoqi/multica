@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Clock, Plus, Sparkles } from "@multica/ui/icons";
+import { ArrowLeft, Clock, Plus, Sparkles } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Sheet,
@@ -23,7 +23,7 @@ import {
 } from "@multica/core/hooks/use-file-upload";
 import { useCreateComment } from "@multica/core/issues/mutations";
 import { useActorName, useOrganizationContext } from "@multica/core/workspace/hooks";
-import { paths, useWorkspacePaths } from "@multica/core/paths";
+import { useWorkspacePaths } from "@multica/core/paths";
 import {
   parseDispatchCandidates,
   useDispatchWork,
@@ -37,9 +37,9 @@ import {
   squadListOptions,
 } from "@multica/core/workspace/queries";
 import { createSafeId } from "@multica/core/utils";
-import { CollectionPageHeader, CollectionPageState } from "../layout";
+import { CollectionPageHeader } from "../layout";
 import { useT, useTimeAgo } from "../i18n";
-import { AppLink, useNavigation } from "../navigation";
+import { useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
 import { followUpComment, subjectMention } from "./dispatch-actions";
 import { DepartmentQueue } from "./department-queue";
@@ -232,34 +232,16 @@ function HistoryList({
  */
 export function WorkbenchPage() {
   const wsId = useWorkspaceId();
-  const { organization, isProject } = useOrganizationContext(wsId);
-  if (isProject && organization) {
-    return <ProjectWorkbench organizationSlug={organization.slug} />;
-  }
+  const p = useWorkspacePaths();
+  const { replace } = useNavigation();
+  const { isProject } = useOrganizationContext(wsId);
+  // Work is dispatched only in the organization, so a project has no
+  // workbench; links that land here by default open the project's issues.
+  useEffect(() => {
+    if (isProject) replace(p.issues());
+  }, [isProject, p, replace]);
+  if (isProject) return null;
   return <DispatchWorkbench />;
-}
-
-/** Work is dispatched only in the organization; a project points there. */
-function ProjectWorkbench({ organizationSlug }: { organizationSlug: string }) {
-  const { t } = useT("workbench");
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <CollectionPageHeader icon={Sparkles} title={t(($) => $.page.title)} />
-      <CollectionPageState
-        icon={Building2}
-        title={t(($) => $.project.title)}
-        description={t(($) => $.project.description)}
-        actions={
-          <Button
-            render={<AppLink href={paths.workspace(organizationSlug).workbench()} />}
-            nativeButton={false}
-          >
-            {t(($) => $.project.open_organization)}
-          </Button>
-        }
-      />
-    </div>
-  );
 }
 
 function DispatchWorkbench() {

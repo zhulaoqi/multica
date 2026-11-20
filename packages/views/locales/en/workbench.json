@@ -137,10 +137,5 @@
     "requested_by": "From {{name}}",
     "unknown_requester": "From a teammate",
     "blocked": "Blocked: {{missing}}"
-  },
-  "project": {
-    "title": "Work is sent from the organization",
-    "description": "Departments and their agents take work in the organization workspace.",
-    "open_organization": "Open the organization's workbench"
   }
 }

@@ -3,6 +3,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider, useSidebar } from "@multica/ui/components/ui/sidebar";
+import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { renderWithI18n } from "../test/i18n";
 import { AppRail } from "./app-rail";
 import { AppShellProvider, useAppShell } from "./app-shell-context";
@@ -14,6 +15,7 @@ const state = vi.hoisted(() => ({
   chatSessions: [] as { id: string; unread_count?: number }[],
   chat: { activeSessionId: null as string | null, isOpen: false },
   stuck: [] as unknown[],
+  workspaces: [] as { id: string; slug: string; is_organization?: boolean }[],
 }));
 
 vi.mock("../navigation", () => ({
@@ -81,6 +83,7 @@ function renderRail(children?: ReactNode, rail: ReactNode = <AppRail />) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   client.setQueryData(["chat", "ws-1", "sessions"], state.chatSessions);
+  client.setQueryData(workspaceListOptions().queryKey, state.workspaces as never);
   return renderWithI18n(
     <QueryClientProvider client={client}>
       <SidebarProvider>
@@ -104,6 +107,7 @@ beforeEach(() => {
   state.chatSessions = [];
   state.chat = { activeSessionId: null, isOpen: false };
   state.stuck = [];
+  state.workspaces = [];
 });
 
 describe("AppRail global actions", () => {
@@ -134,6 +138,16 @@ describe("AppRail spaces", () => {
     // Projects belong to the work space, which links to Issues.
     expect(link("/acme/issues")).toHaveAttribute("aria-current", "page");
     expect(link("/acme/agents")).not.toHaveAttribute("aria-current");
+  });
+
+  it("hides the workbench in a project", () => {
+    state.workspaces = [
+      { id: "ws-1", slug: "acme" },
+      { id: "ws-org", slug: "org", is_organization: true },
+    ];
+    renderRail();
+    expect(link("/acme/workbench")).toBeNull();
+    expect(link("/acme/autopilots")).not.toBeNull();
   });
 
   it("marks Settings in the footer while on a settings route", () => {

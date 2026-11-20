@@ -137,10 +137,5 @@
     "requested_by": "De {{name}}",
     "unknown_requester": "De un compañero",
     "blocked": "Bloqueado: {{missing}}"
-  },
-  "project": {
-    "title": "El trabajo se envía desde la organización",
-    "description": "Los departamentos y sus agentes reciben trabajo en el espacio de la organización.",
-    "open_organization": "Abrir el centro de trabajo de la organización"
   }
 }

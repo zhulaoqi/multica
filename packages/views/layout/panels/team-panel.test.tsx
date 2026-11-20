@@ -265,7 +265,7 @@ describe("TeamPanel member directory", () => {
 });
 
 describe("TeamPanel in a project of the organization", () => {
-  it("links the org chart to the organization workspace", () => {
+  it("keeps the org chart inside the project", () => {
     const [project] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
     qc.setQueryData(workspaceListOptions().queryKey, [
       project!,
@@ -275,7 +275,7 @@ describe("TeamPanel in a project of the organization", () => {
 
     expect(screen.getByRole("link", { name: /Organization/ })).toHaveAttribute(
       "href",
-      "/org/org",
+      "/acme/org",
     );
   });
 });

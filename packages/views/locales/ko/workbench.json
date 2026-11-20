@@ -136,10 +136,5 @@
     "requested_by": "{{name}} 님 요청",
     "unknown_requester": "동료 요청",
     "blocked": "차단됨: {{missing}}"
-  },
-  "project": {
-    "title": "작업은 조직에서 보냅니다",
-    "description": "부서와 부서의 에이전트는 조직 워크스페이스에서 작업을 받습니다.",
-    "open_organization": "조직 워크벤치 열기"
   }
 }

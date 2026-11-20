@@ -11,7 +11,6 @@ import { useMyDispatches } from "@multica/core/workbench";
 import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import {
   RAIL_SPACES,
-  paths,
   useCurrentWorkspace,
   useWorkspacePaths,
   type AppSpaceId,
@@ -191,14 +190,14 @@ export function AppRail({
   const badges = useRailBadges();
   const space = shell?.space ?? null;
   const settingsPeek = usePeekHandlers("settings", space === "settings");
-  const { organization, isOrganization, isProject } = useOrganizationContext(
+  const { isOrganization, isProject } = useOrganizationContext(
     useCurrentWorkspace()?.id ?? "",
   );
-  // Work is dispatched only in the organization, so a project's workbench
-  // entry goes there. The organization runs no autopilots.
-  const organizationWorkbench =
-    isProject && organization ? paths.workspace(organization.slug).workbench() : null;
-  const spaces = isOrganization ? RAIL_SPACES.filter((id) => id !== "autopilots") : RAIL_SPACES;
+  // Work is dispatched only in the organization, so a project has no
+  // workbench. The organization runs no autopilots.
+  const spaces = RAIL_SPACES.filter(
+    (id) => !(isProject && id === "workbench") && !(isOrganization && id === "autopilots"),
+  );
 
   const items: Record<RailSpaceId, { href: string; icon: IconComponent; label: string; fullLabel: string }> = {
     workbench: {
@@ -263,11 +262,7 @@ export function AppRail({
             key={id}
             space={id}
             {...items[id]}
-            href={
-              id === "workbench" && organizationWorkbench
-                ? organizationWorkbench
-                : (shell?.spaceHref(id, items[id].href) ?? items[id].href)
-            }
+            href={shell?.spaceHref(id, items[id].href) ?? items[id].href}
             active={space === id}
             badge={badges[id]}
           />

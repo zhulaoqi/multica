@@ -137,10 +137,5 @@
     "requested_by": "De {{name}}",
     "unknown_requester": "D'un collègue",
     "blocked": "Bloqué : {{missing}}"
-  },
-  "project": {
-    "title": "Le travail s'envoie depuis l'organisation",
-    "description": "Les départements et leurs agents reçoivent le travail dans l'espace de l'organisation.",
-    "open_organization": "Ouvrir l'atelier de l'organisation"
   }
 }

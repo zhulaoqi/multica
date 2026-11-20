@@ -10,7 +10,7 @@ import { agentTaskSnapshotOptions, type AgentPresenceDetail } from "@multica/cor
 import { useAgentsViewStore } from "@multica/core/agents/stores";
 import { useAuthStore } from "@multica/core/auth";
 import { issueDetailOptions } from "@multica/core/issues/queries";
-import { paths, useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
+import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { memberListOptions, orgTreeOptions, skillListOptions, squadListOptions } from "@multica/core/workspace/queries";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
@@ -157,8 +157,7 @@ export function TeamPanel() {
   // A project's agents are projections of organization agents: managers add
   // them from the organization instead of creating new ones. The organization
   // itself takes members only from the company directory, never invitations.
-  const { organization, isOrganization, isProject } = useOrganizationContext(wsId);
-  const orgPage = isProject && organization ? paths.workspace(organization.slug).org() : p.org();
+  const { isOrganization, isProject } = useOrganizationContext(wsId);
   const [addFromOrgOpen, setAddFromOrgOpen] = useState(false);
   const onAgents = pathname === p.agents();
   // Member pages live under /members/:id; the list itself is a Settings tab.
@@ -296,7 +295,7 @@ export function TeamPanel() {
           <PanelList>
             {showOrgLink && (
               <PanelLink
-                href={orgPage}
+                href={p.org()}
                 icon={<Network />}
                 label={t(($) => $.nav.org)}
                 active={isPathWithin(pathname, p.org())}

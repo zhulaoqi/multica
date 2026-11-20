@@ -136,10 +136,5 @@
     "requested_by": "来自 {{name}}",
     "unknown_requester": "来自同事",
     "blocked": "阻塞：{{missing}}"
-  },
-  "project": {
-    "title": "派活在组织里进行",
-    "description": "部门和部门的智能体在组织工作区里接活。",
-    "open_organization": "打开组织的工作台"
   }
 }

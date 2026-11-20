@@ -136,10 +136,5 @@
     "requested_by": "{{name}} より",
     "unknown_requester": "チームメンバーより",
     "blocked": "ブロック中: {{missing}}"
-  },
-  "project": {
-    "title": "仕事は組織から依頼します",
-    "description": "部署とそのエージェントは組織ワークスペースで仕事を受けます。",
-    "open_organization": "組織のワークベンチを開く"
   }
 }
