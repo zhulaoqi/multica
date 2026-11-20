@@ -38,10 +38,12 @@ export function dispatchPhase(
   const category =
     item.issue.status_category ?? statusCategoryOfKey(item.issue.status);
   if (item.issue.status === "cancelled") return "cancelled";
+  // The server writes the delivery receipt as soon as the issue reaches review,
+  // so review must win over the receipt or the requester never gets to accept.
+  if (item.issue.status === "in_review") return "in_review";
   if (item.completed || category === "done" || category === "closed") {
     return "completed";
   }
-  if (item.issue.status === "in_review") return "in_review";
   if (item.leader_state === "failed") return "failed";
   if (progress && progress.total > 0) return "progress";
   if (item.leader_state === "running" || item.leader_state === "queued") {

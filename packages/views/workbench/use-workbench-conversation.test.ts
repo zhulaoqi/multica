@@ -60,6 +60,12 @@ describe("dispatchPhase", () => {
     expect(dispatchPhase(dispatch({ status: "in_review" }), NONE)).toBe("in_review");
   });
 
+  it("keeps a delivered dispatch reviewable after the receipt is written", () => {
+    expect(
+      dispatchPhase(dispatch({ status: "in_review", completed: true }), NONE),
+    ).toBe("in_review");
+  });
+
   it("reports failure only from the leader task", () => {
     expect(
       dispatchPhase(dispatch({ leaderState: "failed" }), NONE),

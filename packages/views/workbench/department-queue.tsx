@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useAuthStore } from "@multica/core/auth";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   DISPATCH_QUEUE_STAGES,
@@ -33,7 +34,15 @@ export function DepartmentQueue({ wsId }: { wsId: string }) {
   const { t } = useT("workbench");
   const p = useWorkspacePaths();
   const { push } = useNavigation();
+  const userId = useAuthStore((state) => state.user?.id ?? "");
   const { dispatches, isLoading, error } = useDepartmentDispatches(wsId);
+
+  // The requester accepts or rejects in their workbench thread; the issue page
+  // has no review controls, so a lead who also requested the work goes there.
+  const openItem = (item: DispatchQueueItem) => {
+    const ownRequest = !!userId && item.requester_id === userId;
+    push(ownRequest ? p.workbenchDispatch(item.issue.id) : p.issueDetail(item.issue.id));
+  };
 
   const grouped = useMemo(() => {
     const buckets = new Map<DispatchQueueStage, DispatchQueueItem[]>(
@@ -78,7 +87,7 @@ export function DepartmentQueue({ wsId }: { wsId: string }) {
                 <li key={item.issue.id}>
                   <button
                     type="button"
-                    onClick={() => push(p.issueDetail(item.issue.id))}
+                    onClick={() => openItem(item)}
                     className="flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted"
                   >
                     <span className="flex items-center gap-2">

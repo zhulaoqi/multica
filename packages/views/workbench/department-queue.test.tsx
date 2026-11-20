@@ -1,5 +1,6 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { WorkspaceSlugProvider } from "@multica/core/paths";
 import type { DispatchQueueItem } from "@multica/core/workbench";
 import { NavigationProvider, type NavigationAdapter } from "../navigation";
@@ -58,6 +59,15 @@ function queueItem(overrides: Partial<DispatchQueueItem> = {}): DispatchQueueIte
   } as DispatchQueueItem;
 }
 
+function signIn(userId: string | null) {
+  const auth = createAuthStore({
+    api: {} as never,
+    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  });
+  if (userId) auth.setState({ user: { id: userId } as never });
+  registerAuthStore(auth);
+}
+
 function render() {
   renderWithI18n(
     <WorkspaceSlugProvider slug="acme">
@@ -74,6 +84,7 @@ describe("DepartmentQueue", () => {
     state.isLoading = false;
     state.error = null;
     state.push.mockReset();
+    signIn("lead-1");
   });
 
   it("renders nothing when the caller leads no unit with open work", () => {
@@ -106,5 +117,14 @@ describe("DepartmentQueue", () => {
 
     fireEvent.click(screen.getByText("修复导出"));
     expect(state.push).toHaveBeenCalledWith("/acme/issues/issue-1");
+  });
+
+  it("opens the caller's own request in the workbench thread so they can review it", () => {
+    signIn("user-1");
+    state.dispatches = [queueItem({ stage: "review" })];
+    render();
+
+    fireEvent.click(screen.getByText("修复导出"));
+    expect(state.push).toHaveBeenCalledWith("/acme/workbench?dispatch=issue-1");
   });
 });
