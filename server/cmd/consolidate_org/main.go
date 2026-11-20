@@ -16,7 +16,8 @@
 //     task history, squads and chats keep working.
 //  5. Deletes the project-local units and the retired directory rows.
 //
-// Default is a read-only dry run. Pass -apply to execute. Every step is
+// Set PROFILE=prod-ali to load DATABASE_URL and the Feishu credentials from
+// Apollo like the API does. Default is a read-only dry run. Pass -apply to execute. Every step is
 // idempotent, so a partial run can be resumed. Restart the API afterwards so
 // its caches drop the old trees; daemons pick up the organization workspace on
 // their next workspace sync (at most 30 minutes, or on restart).
@@ -38,6 +39,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/multica-ai/multica/server/internal/analytics"
+	appconfig "github.com/multica-ai/multica/server/internal/config"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/integrations/feishu/contact"
@@ -83,6 +85,12 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Same profile and Apollo keys as the API, so the Feishu credentials the
+	// sync needs come from Apollo instead of the command line.
+	if err := appconfig.ApplyProfile(os.Getenv("PROFILE"), ""); err != nil {
+		return fmt.Errorf("load profile: %w", err)
+	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
