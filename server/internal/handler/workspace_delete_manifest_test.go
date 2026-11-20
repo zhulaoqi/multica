@@ -112,6 +112,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"agent_mcp_server":                   workspaceDelete,
 	"workspace_mcp_server":               workspaceDelete,
 	"notification_preference":            workspaceDelete,
+	"org_channel_installation":           workspaceDeleteKeep, // deployment-wide organization bot, no workspace_id
 	"org_sync_run":                       workspaceDelete,
 	"org_unit":                           workspaceDelete,
 	"personal_access_token":              workspaceDeleteKeep,

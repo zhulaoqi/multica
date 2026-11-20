@@ -232,6 +232,28 @@ func (h *Handler) followOrganization(ctx context.Context, qtx *db.Queries, orgID
 	return nil
 }
 
+// FollowOrganization runs the follow pass on its own, for operator commands
+// that rewrite project placements outside a directory sync.
+func (h *Handler) FollowOrganization(ctx context.Context) error {
+	org, ok, err := h.organizationWorkspace(ctx)
+	if err != nil || !ok {
+		return err
+	}
+	tx, err := h.TxStarter.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := h.followOrganization(ctx, h.Queries.WithTx(tx), org.ID, pgtype.UUID{}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	h.syncAllOrgSquadLeadership(ctx, org.ID)
+	return nil
+}
+
 // SyncAllDirectories refreshes the organization workspace. It returns the
 // number of workspaces synced: 0 when no organization workspace exists yet.
 func (h *Handler) SyncAllDirectories(ctx context.Context) (int, error) {

@@ -57,6 +57,16 @@ func defaultIssuePrefixFromSlug(slug string) string {
 	return strings.ToUpper(head)
 }
 
+// ValidNewWorkspaceSlug and DefaultIssuePrefixFromSlug give operator commands
+// that create workspaces the same rules CreateWorkspace applies.
+func ValidNewWorkspaceSlug(slug string) bool {
+	return workspaceSlugPattern.MatchString(slug) && !isReservedSlug(slug)
+}
+
+func DefaultIssuePrefixFromSlug(slug string) string {
+	return defaultIssuePrefixFromSlug(slug)
+}
+
 // legacyIssuePrefixFromName is the pre-MUL-6050 derivation: first 3 ASCII
 // letters of the workspace name, uppercased, "WS" when the name has none.
 //

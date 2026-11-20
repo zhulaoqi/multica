@@ -173,6 +173,17 @@ func (h *Handler) projectPrimaryTwin(ctx context.Context, source db.Agent) {
 	h.syncProjectionsForSource(ctx, source)
 }
 
+// ProjectOrganizationAgent pushes an organization agent out to the projects:
+// a primary twin is projected into every project its owner has joined, any
+// other agent refreshes the projections it already has.
+func (h *Handler) ProjectOrganizationAgent(ctx context.Context, source db.Agent) {
+	if source.IsPrimary {
+		h.projectPrimaryTwin(ctx, source)
+		return
+	}
+	h.syncProjectionsForSource(ctx, source)
+}
+
 // archiveProjectionsForSource archives the source's active projections with
 // the source's own archived_at, so restoring the source restores exactly them.
 func (h *Handler) archiveProjectionsForSource(ctx context.Context, source db.Agent) {

@@ -108,22 +108,26 @@ Workspace-scoped queries filter by `workspace_id`; membership gates access and `
 
 ## Workspace Department Scope
 
-A workspace is a project owned by one department (`workspace.org_unit_id`, NULL for legacy flat workspaces).
+There is one organization workspace (`workspace.is_organization`, at most one, `workspace_organization_uidx`). It owns the only department tree (`org_unit`) and the company roster, both written by Feishu directory sync. Every other workspace is a project owned by one department (`workspace.org_unit_id`, an organization unit id; NULL for legacy flat workspaces).
 
 - Every authorization check on an owned workspace resolves through `server/internal/workspaceaccess` (`Resolve`, `Allowed`, `IsManager`). Do not reintroduce `GetMemberByUserAndWorkspace` as an access check on those paths.
 - Access = an explicit member row (wherever the person is placed, so a project manager can pull in colleagues from other departments) OR leading the owning department or one of its ancestors. Descendant departments inherit nothing. `IsManager` (owner/admin or owning-department lead) gates settings and member management; integrations, plugins, MCP, runtimes, share links and billing stay on the stored role. An ancestor lead without a member row gets `Access.Implicit()` and a synthetic `EffectiveMember` identity, never a seat or management rights.
-- A `member` row means "joined the project" and owns seats, notifications, presence and rosters. `workspace_directory_member` is the company candidate directory: it grants nothing and only feeds candidates and org-page `in_project`.
+- Unit ids are global: project `workspace.org_unit_id` and `member.org_unit_id` point into the organization tree, and access CTEs join units by id only. Projects have no tree of their own; their org-page endpoints return 409 `organization_managed`.
+- A project `member` row means "joined the project" and owns seats, notifications, presence and rosters. Organization member rows come from sync and are the company directory: they write no seat intent, and the organization disables `@all`, member-wide notifications, invitations and share links. Project member candidates are read from the organization roster; `workspace_directory_member` is retired.
+- Organization issues are visible by department (`workspaceaccess.ResolveIssueScope`): managers, creator, assignee or their agent's owner, subscribers, members of the issue's `org_unit_id` subtree, and leads of that unit or its ancestors. List, detail, search and realtime fan-out all apply it; hidden issues return 404.
 - New member/organization queries must follow content access: explicit member rows without a subtree filter, plus ancestor leads through the recursive `ancestors` CTE. The owning department's lead always has a real member row and owns the project; a lead is removed only after transferring the department lead.
-- Existing workspaces are converted with `server/cmd/reset_project_members`, never by deleting member rows in SQL.
+- Dispatch and reassign run only in the organization workspace (409 `dispatch_organization_only` elsewhere); root issues carry the target `org_unit_id` and sub-issues inherit it.
+- Existing workspaces are converted with `server/cmd/reset_project_members` and `server/cmd/consolidate_org`, never by deleting member rows or units in SQL.
 
 ## Digital Twin
 
 A member's agent is their digital twin: it represents them when they dispatch work and receives the department's follow-ups.
 
-- Each member has at most one primary agent per workspace (`agent.is_primary`, unique partial index `agent_primary_twin_uidx`). Creating the first active owned agent promotes it; archiving or restoring the primary promotes the owner's next active agent through `EnsurePrimaryAgentForOwner`. `PUT /api/agents/{id}/primary` switches it.
+- Agents are created and edited in the organization workspace. A project holds read-only projections (`agent.source_agent_id`) that `syncProjectionsForSource` refreshes from the source; their runtime maps to the project runtime on the same daemon and provider (or profile), else NULL. Write endpoints on a projection return 409 `agent_managed_by_organization`, and projects cannot create native user agents. Project managers add projections of members' organization agents with `POST /api/agents/projections`.
+- Each member has at most one primary agent per workspace (`agent.is_primary`, unique partial index `agent_primary_twin_uidx`). Creating the first active owned agent promotes it; archiving or restoring the primary promotes the owner's next active agent through `EnsurePrimaryAgentForOwner`. `PUT /api/agents/{id}/primary` switches it. A projection's `is_primary` follows its source.
 - Dispatching and submitting intake require a primary agent. Unbound members may browse and review but get `agent_binding_required` (403). Apply the gate after unit visibility checks so a hidden unit still returns 404.
 - Assigning an issue (or a workflow step) to a member also requires their primary agent; `validateAssigneePair` returns 403 otherwise. The web/desktop shell reminds unbound members once per workspace per session (`AgentBindingReminder`).
-- Joining a workspace (create, direct add, invitation, share link) clones the member's primary twin from another project via `ensurePrimaryTwinInWorkspace`; org sync mass-adds do not.
+- Joining a project (create, direct add, invitation, share link) projects the member's organization primary twin via `ensurePrimaryTwinInWorkspace`; org sync mass-adds do not. Skills are per workspace and do not travel with projections.
 - Frontend resolves the twin with `findPrimaryTwin` / `ownedTwins` from `@multica/core/agents`; do not re-implement the primary-first ordering.
 
 ## Desktop Rules
