@@ -145,7 +145,8 @@
       "resources": "Resources",
       "runtimes_online_one": "{{count}} online",
       "runtimes_online_other": "{{count}} online",
-      "invite_member": "Invite member"
+      "invite_member": "Invite member",
+      "add_from_organization": "Add from organization"
     },
     "autopilots": {
       "all": "All autopilots",

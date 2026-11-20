@@ -651,6 +651,11 @@ export interface Agent {
    * omit it, so callers fall back to the first owned agent.
    */
   is_primary?: boolean;
+  /**
+   * Set on a project's read-only projection of an organization agent; the
+   * source lives in the organization workspace and owns every edit.
+   */
+  source_agent_id?: string | null;
   skills: AgentSkillSummary[];
   /** Runtime-local skills this agent must not inherit. Older servers omit it. */
   disabled_runtime_skills?: DisabledRuntimeSkill[];
@@ -658,6 +663,18 @@ export interface Agent {
   updated_at: string;
   archived_at: string | null;
   archived_by: string | null;
+}
+
+/** One organization agent a project manager may add to the project. */
+export interface ProjectionCandidate {
+  id: string;
+  name: string;
+  description: string;
+  avatar_url: string | null;
+  owner_id: string;
+  is_primary: boolean;
+  /** Already in this project. */
+  projected: boolean;
 }
 
 export interface AgentConversationStarter {

@@ -106,7 +106,8 @@
     "personal_squad_not_found": "That personal squad no longer exists. Send again to start a new one.",
     "org_dispatch_target_conflict": "Choose either a department or your squad.",
     "org_dispatch_reassign_forbidden": "Only the requester can reassign this work.",
-    "dispatch_not_found": "This work is no longer in your dispatch history."
+    "dispatch_not_found": "This work is no longer in your dispatch history.",
+    "dispatch_organization_only": "Work is sent from the organization's workbench."
   },
   "plan": {
     "title": "Plan"
@@ -136,5 +137,10 @@
     "requested_by": "From {{name}}",
     "unknown_requester": "From a teammate",
     "blocked": "Blocked: {{missing}}"
+  },
+  "project": {
+    "title": "Work is sent from the organization",
+    "description": "Departments and their agents take work in the organization workspace.",
+    "open_organization": "Open the organization's workbench"
   }
 }

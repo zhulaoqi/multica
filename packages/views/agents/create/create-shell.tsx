@@ -1,13 +1,19 @@
 "use client";
 
 import { Fragment, type ReactNode } from "react";
-import { Check, X } from "@multica/ui/icons";
+import { Building2, Check, X } from "@multica/ui/icons";
+import { Button } from "@multica/ui/components/ui/button";
 import { IconButton } from "@multica/ui/components/common/icon-button";
 import { Separator } from "@multica/ui/components/ui/separator";
 import { cn } from "@multica/ui/lib/utils";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
+import { useWorkspaceId } from "@multica/core/hooks";
+import { paths } from "@multica/core/paths";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import { useVisualViewportKeyboard } from "../../chat/components/use-visual-viewport-keyboard";
+import { CollectionPageState } from "../../layout/collection-page";
 import { PageHeader } from "../../layout/page-header";
+import { AppLink } from "../../navigation";
 import { useT } from "../../i18n";
 
 export type AgentCreateStep = 1 | 2 | 3;
@@ -18,7 +24,8 @@ export const AGENT_CREATE_STEP_COUNT = 3;
  * Chrome shared by every agent-creation route: the close control, the flow
  * title, and where the route sits in runtime → configure → done. Each route
  * owns what leaving means, so the shell takes a handler rather than deriving
- * it.
+ * it. A project's agents come from the organization, so there the shell
+ * points at the organization instead of the flow.
  */
 export function AgentCreateShell({
   title,
@@ -44,6 +51,7 @@ export function AgentCreateShell({
   const { t } = useT("agents");
   const isMobile = useIsMobile();
   const keyboard = useVisualViewportKeyboard();
+  const { organization, isProject } = useOrganizationContext(useWorkspaceId());
   return (
     <div
       data-testid="agent-create-shell"
@@ -84,7 +92,23 @@ export function AgentCreateShell({
           </div>
         ) : null}
       </PageHeader>
-      {children}
+      {isProject && organization ? (
+        <CollectionPageState
+          icon={Building2}
+          title={t(($) => $.creation_studio.project_title)}
+          description={t(($) => $.creation_studio.project_description)}
+          actions={
+            <Button
+              render={<AppLink href={paths.workspace(organization.slug).newAgent()} />}
+              nativeButton={false}
+            >
+              {t(($) => $.creation_studio.open_organization)}
+            </Button>
+          }
+        />
+      ) : (
+        children
+      )}
     </div>
   );
 }

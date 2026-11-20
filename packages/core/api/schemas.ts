@@ -3871,6 +3871,7 @@ export const WorkspaceSchema = z.object({
   // Older servers omit the field; null keeps the legacy flat-workspace
   // semantics, which is what those servers implement.
   org_unit_id: z.string().nullable().optional().default(null),
+  is_organization: z.boolean().optional().default(false),
   created_at: z.string().optional().default(""),
   updated_at: z.string().optional().default(""),
 }).loose();
@@ -3888,6 +3889,7 @@ export const EMPTY_WORKSPACE: Workspace = {
   issue_prefix: "",
   avatar_url: null,
   org_unit_id: null,
+  is_organization: false,
   created_at: "",
   updated_at: "",
 };
@@ -3923,6 +3925,19 @@ export const ProjectMemberCandidateSchema = z.object({
 
 export const ProjectMemberCandidateListSchema =
   z.array(ProjectMemberCandidateSchema).default([]);
+
+export const ProjectionCandidateSchema = z.object({
+  id: z.string(),
+  name: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  avatar_url: z.string().nullable().optional().default(null),
+  owner_id: z.string().optional().default(""),
+  is_primary: z.boolean().optional().default(false),
+  projected: z.boolean().optional().default(false),
+}).loose();
+
+export const ProjectionCandidateListSchema =
+  z.array(ProjectionCandidateSchema).default([]);
 
 export const MemberWithUserSchema = z.object({
   id: z.string(),

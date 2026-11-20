@@ -179,7 +179,13 @@
     "copy_link": "Copy link",
     "copy_id": "Copy agent ID",
     "link_copied_toast": "Link copied",
-    "id_copied_toast": "Agent ID copied"
+    "id_copied_toast": "Agent ID copied",
+    "managed_by_organization_banner": "Managed by the organization. Edit it there; changes reach this project automatically.",
+    "open_in_organization": "Open in organization",
+    "remove_from_project": "Remove from project",
+    "remove_dialog_title": "Remove from project?",
+    "remove_dialog_description": "\"{{name}}\" will leave this project. The agent stays in the organization, and this project keeps its history.",
+    "remove_dialog_confirm": "Remove"
   },
   "inspector": {
     "section_profile": "Profile",
@@ -462,7 +468,10 @@
       "footer_selected": "Selected:",
       "cancel": "Cancel",
       "next": "Next"
-    }
+    },
+    "project_title": "Agents are created in the organization",
+    "project_description": "Create the agent in the organization, then add it to this project from the agent list.",
+    "open_organization": "Go to organization"
   },
   "create_dialog": {
     "title_create": "Create Agent",
@@ -1109,5 +1118,19 @@
     "cancel": "Cancel",
     "save_failed": "Couldn't save the responsibilities.",
     "dispatch": "Assign work"
+  },
+  "add_from_organization": {
+    "title": "Add from organization",
+    "description": "Agents owned by this project's members. The project gets a read-only copy that follows the organization.",
+    "empty": "Every agent owned by this project's members is already here.",
+    "load_failed": "Couldn't load the organization's agents. Try again.",
+    "organization_missing": "There is no organization workspace yet.",
+    "primary_twin_of": "{{name}}'s digital twin",
+    "cancel": "Cancel",
+    "confirm_one": "Add {{count}} agent",
+    "confirm_other": "Add {{count}} agents",
+    "added_toast_one": "Added {{count}} agent",
+    "added_toast_other": "Added {{count}} agents",
+    "add_failed": "Couldn't add the agents. Try again."
   }
 }

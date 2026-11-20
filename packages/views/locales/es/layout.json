@@ -145,7 +145,8 @@
       "resources": "Recursos",
       "runtimes_online_one": "{{count}} en línea",
       "runtimes_online_other": "{{count}} en línea",
-      "invite_member": "Invitar miembro"
+      "invite_member": "Invitar miembro",
+      "add_from_organization": "Añadir desde la organización"
     },
     "autopilots": {
       "all": "Todas las automatizaciones",

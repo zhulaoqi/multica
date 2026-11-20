@@ -170,7 +170,13 @@
     "copy_link": "复制链接",
     "copy_id": "复制智能体 ID",
     "link_copied_toast": "链接已复制",
-    "id_copied_toast": "智能体 ID 已复制"
+    "id_copied_toast": "智能体 ID 已复制",
+    "managed_by_organization_banner": "由组织管理。到组织里修改，改动会自动同步到这个项目。",
+    "open_in_organization": "在组织中打开",
+    "remove_from_project": "从项目移除",
+    "remove_dialog_title": "从项目移除？",
+    "remove_dialog_description": "「{{name}}」将离开这个项目。智能体仍在组织里，这个项目的历史记录也会保留。",
+    "remove_dialog_confirm": "移除"
   },
   "inspector": {
     "section_profile": "资料",
@@ -447,7 +453,10 @@
       "footer_selected": "已选：",
       "cancel": "取消",
       "next": "下一步"
-    }
+    },
+    "project_title": "智能体在组织里创建",
+    "project_description": "先在组织里创建智能体，再从智能体列表把它添加到这个项目。",
+    "open_organization": "去组织"
   },
   "create_dialog": {
     "title_create": "创建智能体",
@@ -1082,5 +1091,17 @@
     "cancel": "取消",
     "save_failed": "职责没有保存成功。",
     "dispatch": "派活"
+  },
+  "add_from_organization": {
+    "title": "从组织添加",
+    "description": "这些是项目成员的智能体。项目里得到的是只读副本，跟随组织同步。",
+    "empty": "项目成员的智能体都已经在这里了。",
+    "load_failed": "没能加载组织的智能体，请重试。",
+    "organization_missing": "还没有组织工作区。",
+    "primary_twin_of": "{{name}} 的数字分身",
+    "cancel": "取消",
+    "confirm_other": "添加 {{count}} 个智能体",
+    "added_toast_other": "已添加 {{count}} 个智能体",
+    "add_failed": "没能添加智能体，请重试。"
   }
 }

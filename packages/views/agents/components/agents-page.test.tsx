@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   agentsLoading: false,
   runCounts: [] as Array<{ agent_id: string; run_count: number }>,
   runCountsPending: false,
+  isProject: false,
+  members: [] as Array<{ user_id: string; role: string }>,
   // Org tree decides whether the caller may open the full agent list.
   // Defaults to a caller who manages a department so the legacy scope
   // behavior (all agents visible) is what most tests here pin.
@@ -78,6 +80,9 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (key === "org") {
       return { data: mocks.orgTree };
+    }
+    if (key === "members") {
+      return { data: mocks.members, isLoading: false };
     }
     return { data: [], isLoading: false, isPending: false, isSuccess: true };
   },
@@ -136,6 +141,19 @@ vi.mock("@multica/core/auth", () => ({
 
 vi.mock("@multica/core/hooks", () => ({
   useWorkspaceId: () => "workspace-1",
+}));
+
+vi.mock("@multica/core/workspace/hooks", () => ({
+  useOrganizationContext: () => ({
+    organization: mocks.isProject ? { id: "org-ws", slug: "org" } : null,
+    isOrganization: false,
+    isProject: mocks.isProject,
+  }),
+}));
+
+vi.mock("./add-from-organization-dialog", () => ({
+  AddFromOrganizationDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="add-from-organization" /> : null,
 }));
 
 vi.mock("@multica/core/paths", () => ({
@@ -266,6 +284,8 @@ beforeEach(() => {
   mocks.viewState.scopeTouched = true;
   mocks.runCounts = [];
   mocks.runCountsPending = false;
+  mocks.isProject = false;
+  mocks.members = [];
   mocks.activity = { byAgent: new Map(), loading: false };
   mocks.presence = { byAgent: new Map(), loading: false };
   mocks.viewState.scope = "all";
@@ -467,6 +487,27 @@ describe("AgentsPage header", () => {
     ).toBeInTheDocument();
     fireEvent.click(within(header).getByRole("button", { name: "New agent" }));
     expect(adapter.push).toHaveBeenCalledWith("/test-workspace/agents/new");
+  });
+
+  it("lets a project manager add organization agents instead of creating one", () => {
+    mocks.isProject = true;
+    mocks.members = [{ user_id: "user-1", role: "admin" }];
+    const adapter = renderPage();
+
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByRole("button", { name: "New agent" })).toBeNull();
+    fireEvent.click(within(header).getByRole("button", { name: "Add from organization" }));
+    expect(screen.getByTestId("add-from-organization")).toBeInTheDocument();
+    expect(adapter.push).not.toHaveBeenCalled();
+  });
+
+  it("hides creation from a plain project member", () => {
+    mocks.isProject = true;
+    renderPage();
+
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByRole("button", { name: "New agent" })).toBeNull();
+    expect(within(header).queryByRole("button", { name: "Add from organization" })).toBeNull();
   });
 });
 

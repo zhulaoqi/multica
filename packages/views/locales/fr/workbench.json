@@ -106,7 +106,8 @@
     "personal_squad_not_found": "Cette équipe personnelle n'existe plus. Renvoyez pour en créer une nouvelle.",
     "org_dispatch_target_conflict": "Choisissez un département ou votre équipe, pas les deux.",
     "org_dispatch_reassign_forbidden": "Seul le demandeur peut réattribuer ce travail.",
-    "dispatch_not_found": "Ce travail ne figure plus dans votre historique d'envois."
+    "dispatch_not_found": "Ce travail ne figure plus dans votre historique d'envois.",
+    "dispatch_organization_only": "Le travail s'envoie depuis l'atelier de l'organisation."
   },
   "plan": {
     "title": "Plan"
@@ -136,5 +137,10 @@
     "requested_by": "De {{name}}",
     "unknown_requester": "D'un collègue",
     "blocked": "Bloqué : {{missing}}"
+  },
+  "project": {
+    "title": "Le travail s'envoie depuis l'organisation",
+    "description": "Les départements et leurs agents reçoivent le travail dans l'espace de l'organisation.",
+    "open_organization": "Ouvrir l'atelier de l'organisation"
   }
 }

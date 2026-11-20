@@ -105,7 +105,8 @@
     "personal_squad_not_found": "這個個人小隊已不存在，重新傳送即可新建。",
     "org_dispatch_target_conflict": "部門和我的小隊只能選一個。",
     "org_dispatch_reassign_forbidden": "只有發起人可以改派這項工作。",
-    "dispatch_not_found": "這項工作已不在你的派活紀錄中。"
+    "dispatch_not_found": "這項工作已不在你的派活紀錄中。",
+    "dispatch_organization_only": "請到組織的工作台派工作。"
   },
   "plan": {
     "title": "計畫"
@@ -135,5 +136,10 @@
     "requested_by": "來自 {{name}}",
     "unknown_requester": "來自同事",
     "blocked": "阻塞：{{missing}}"
+  },
+  "project": {
+    "title": "派工作在組織裡進行",
+    "description": "部門和部門的 AI 代理在組織工作區裡接工作。",
+    "open_organization": "開啟組織的工作台"
   }
 }

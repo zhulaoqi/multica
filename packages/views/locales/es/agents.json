@@ -179,7 +179,13 @@
     "copy_link": "Copiar enlace",
     "copy_id": "Copiar ID del agente",
     "link_copied_toast": "Enlace copiado",
-    "id_copied_toast": "ID del agente copiado"
+    "id_copied_toast": "ID del agente copiado",
+    "managed_by_organization_banner": "Lo gestiona la organización. Edítalo allí; los cambios llegan a este proyecto automáticamente.",
+    "open_in_organization": "Abrir en la organización",
+    "remove_from_project": "Quitar del proyecto",
+    "remove_dialog_title": "¿Quitar del proyecto?",
+    "remove_dialog_description": "\"{{name}}\" saldrá de este proyecto. El agente sigue en la organización y el proyecto conserva su historial.",
+    "remove_dialog_confirm": "Quitar"
   },
   "inspector": {
     "section_profile": "Perfil",
@@ -444,7 +450,10 @@
       "footer_selected": "Seleccionado:",
       "cancel": "Cancelar",
       "next": "Siguiente"
-    }
+    },
+    "project_title": "Los agentes se crean en la organización",
+    "project_description": "Crea el agente en la organización y luego añádelo a este proyecto desde la lista de agentes.",
+    "open_organization": "Ir a la organización"
   },
   "create_dialog": {
     "title_create": "Crear agente",
@@ -1109,5 +1118,19 @@
     "cancel": "Cancelar",
     "save_failed": "No se pudieron guardar las responsabilidades.",
     "dispatch": "Asignar"
+  },
+  "add_from_organization": {
+    "title": "Añadir desde la organización",
+    "description": "Agentes de los miembros de este proyecto. El proyecto recibe una copia de solo lectura que sigue a la organización.",
+    "empty": "Todos los agentes de los miembros de este proyecto ya están aquí.",
+    "load_failed": "No se pudieron cargar los agentes de la organización. Inténtalo de nuevo.",
+    "organization_missing": "Todavía no hay un espacio de trabajo de organización.",
+    "primary_twin_of": "Gemelo digital de {{name}}",
+    "cancel": "Cancelar",
+    "confirm_one": "Añadir {{count}} agente",
+    "confirm_other": "Añadir {{count}} agentes",
+    "added_toast_one": "Se añadió {{count}} agente",
+    "added_toast_other": "Se añadieron {{count}} agentes",
+    "add_failed": "No se pudieron añadir los agentes. Inténtalo de nuevo."
   }
 }

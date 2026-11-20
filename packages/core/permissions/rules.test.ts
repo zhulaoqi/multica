@@ -7,6 +7,7 @@ import {
   canDeleteRuntime,
   canDeleteSkill,
   canDeleteWorkspace,
+  canArchiveAgent,
   canEditAgent,
   canEditComment,
   canEditSkill,
@@ -122,6 +123,19 @@ describe("canEditAgent", () => {
     const d = canEditAgent(agent, { userId: BOB, role: "member" });
     expect(d.allowed).toBe(false);
     expect(d.reason).toBe("not_resource_owner");
+  });
+  it("denies a project projection even to its owner and admins", () => {
+    const projection = makeAgent({ owner_id: ALICE, source_agent_id: "agt_org" });
+    for (const ctx of [
+      { userId: ALICE, role: "member" as const },
+      { userId: BOB, role: "owner" as const },
+    ]) {
+      const d = canEditAgent(projection, ctx);
+      expect(d.allowed).toBe(false);
+      expect(d.reason).toBe("managed_by_organization");
+    }
+    expect(canArchiveAgent(projection, { userId: ALICE, role: "member" }).allowed).toBe(true);
+    expect(canArchiveAgent(projection, { userId: BOB, role: "member" }).allowed).toBe(false);
   });
   it("denies when userId is null", () => {
     const d = canEditAgent(agent, { userId: null, role: null });

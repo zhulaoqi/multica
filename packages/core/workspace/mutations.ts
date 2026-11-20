@@ -64,6 +64,20 @@ export function useAddProjectMember(wsId: string) {
 }
 
 /**
+ * Adds organization agents to the project. The server creates the projections
+ * and maps their runtimes, so the agent list is refetched rather than patched.
+ */
+export function useAddAgentProjections(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (agentIds: string[]) => api.createAgentProjections(agentIds),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
+    },
+  });
+}
+
+/**
  * Operator-only department change. The server recomputes access and retires
  * pending invitations and share links, so both caches are invalidated rather
  * than patched locally.

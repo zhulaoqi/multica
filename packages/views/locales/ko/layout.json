@@ -140,7 +140,8 @@
       "members_other": "멤버 {{count}}명",
       "resources": "리소스",
       "runtimes_online_other": "{{count}}대 온라인",
-      "invite_member": "멤버 초대"
+      "invite_member": "멤버 초대",
+      "add_from_organization": "조직에서 추가"
     },
     "autopilots": {
       "all": "전체 오토파일럿",

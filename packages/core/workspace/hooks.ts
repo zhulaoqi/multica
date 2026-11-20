@@ -61,6 +61,31 @@ export function useWorkspaceList({ enabled = true }: { enabled?: boolean } = {})
   };
 }
 
+/** How a workspace relates to the company's organization workspace. */
+export interface OrganizationContext {
+  /** The organization from the caller's workspace list, if they belong to it. */
+  organization: Workspace | null;
+  isOrganization: boolean;
+  /**
+   * A project of an existing organization: dispatch and agent authoring live
+   * in the organization. Before one exists, every workspace keeps both.
+   */
+  isProject: boolean;
+}
+
+export function useOrganizationContext(wsId: string): OrganizationContext {
+  const { workspaces } = useWorkspaceList();
+  return useMemo(() => {
+    const organization = workspaces.find((w) => w.is_organization) ?? null;
+    const isOrganization = !!organization && organization.id === wsId;
+    return {
+      organization,
+      isOrganization,
+      isProject: !!organization && !isOrganization && !!wsId,
+    };
+  }, [workspaces, wsId]);
+}
+
 /**
  * Pure actor-name resolution over explicit directory snapshots. Async flows
  * (e.g. CSV export) must resolve names from directories they have awaited

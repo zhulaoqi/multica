@@ -4,20 +4,31 @@ import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Button } from "@multica/ui/components/ui/button";
 import { renderWithI18n } from "../../test/i18n";
+import { NavigationProvider } from "../../navigation";
 import { AgentCreateShell } from "./create-shell";
 import { CreateAgentFooter, CreateFlowFooter } from "./create-agent-footer";
 import { BuilderWorkspaceLayout } from "./builder-workspace-layout";
 
 const h = vi.hoisted(() => ({
   keyboard: null as null | { occludedBottom: number; viewportHeight: number },
+  organization: null as null | { slug: string },
 }));
 vi.mock("../../chat/components/use-visual-viewport-keyboard", () => ({
   useVisualViewportKeyboard: () => h.keyboard,
+}));
+vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
+vi.mock("@multica/core/workspace/hooks", () => ({
+  useOrganizationContext: () => ({
+    organization: h.organization,
+    isOrganization: false,
+    isProject: h.organization !== null,
+  }),
 }));
 
 afterEach(() => {
   cleanup();
   h.keyboard = null;
+  h.organization = null;
 });
 
 describe("AgentCreateShell", () => {
@@ -44,6 +55,35 @@ describe("AgentCreateShell", () => {
 
     fireEvent.click(within(header).getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a project to the organization instead of the create flow", () => {
+    h.organization = { slug: "org" };
+    renderWithI18n(
+      <NavigationProvider
+        value={{
+          push: vi.fn(),
+          replace: vi.fn(),
+          back: vi.fn(),
+          pathname: "/project/agents/new",
+          searchParams: new URLSearchParams(),
+          hash: "",
+          getShareableUrl: (path: string) => path,
+          openInNewTab: vi.fn(),
+        }}
+      >
+        <AgentCreateShell title="Create an agent" step="unused" stepIndex={1} onClose={vi.fn()}>
+          <main data-testid="flow" />
+        </AgentCreateShell>
+      </NavigationProvider>,
+    );
+
+    expect(screen.queryByTestId("flow")).not.toBeInTheDocument();
+    expect(screen.getByText("Agents are created in the organization")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to organization" })).toHaveAttribute(
+      "href",
+      "/org/agents/new",
+    );
   });
 
   it("names the screen instead of showing steps off the step path", () => {

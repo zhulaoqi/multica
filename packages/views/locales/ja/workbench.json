@@ -105,7 +105,8 @@
     "personal_squad_not_found": "この個人チームは存在しません。もう一度送信すると新しく作成されます。",
     "org_dispatch_target_conflict": "部署かマイチームのどちらかを選んでください。",
     "org_dispatch_reassign_forbidden": "この作業を割り当て直せるのは依頼者だけです。",
-    "dispatch_not_found": "この作業は依頼履歴にありません。"
+    "dispatch_not_found": "この作業は依頼履歴にありません。",
+    "dispatch_organization_only": "仕事は組織のワークベンチから依頼します。"
   },
   "plan": {
     "title": "計画"
@@ -135,5 +136,10 @@
     "requested_by": "{{name}} より",
     "unknown_requester": "チームメンバーより",
     "blocked": "ブロック中: {{missing}}"
+  },
+  "project": {
+    "title": "仕事は組織から依頼します",
+    "description": "部署とそのエージェントは組織ワークスペースで仕事を受けます。",
+    "open_organization": "組織のワークベンチを開く"
   }
 }

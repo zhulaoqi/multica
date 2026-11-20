@@ -105,7 +105,8 @@
     "personal_squad_not_found": "이 개인 팀은 더 이상 존재하지 않습니다. 다시 보내면 새로 만들어집니다.",
     "org_dispatch_target_conflict": "부서와 내 팀 중 하나만 선택하세요.",
     "org_dispatch_reassign_forbidden": "이 작업을 다시 배정할 수 있는 사람은 요청자뿐입니다.",
-    "dispatch_not_found": "이 작업은 더 이상 내 요청 기록에 없습니다."
+    "dispatch_not_found": "이 작업은 더 이상 내 요청 기록에 없습니다.",
+    "dispatch_organization_only": "작업은 조직의 워크벤치에서 보냅니다."
   },
   "plan": {
     "title": "계획"
@@ -135,5 +136,10 @@
     "requested_by": "{{name}} 님 요청",
     "unknown_requester": "동료 요청",
     "blocked": "차단됨: {{missing}}"
+  },
+  "project": {
+    "title": "작업은 조직에서 보냅니다",
+    "description": "부서와 부서의 에이전트는 조직 워크스페이스에서 작업을 받습니다.",
+    "open_organization": "조직 워크벤치 열기"
   }
 }

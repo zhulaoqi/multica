@@ -8,8 +8,10 @@ import { chatSessionsOptions } from "@multica/core/chat/queries";
 import { countUnreadChatMessages } from "@multica/core/chat/unread";
 import { useInboxUnreadCount } from "@multica/core/inbox/queries";
 import { useMyDispatches } from "@multica/core/workbench";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import {
   RAIL_SPACES,
+  paths,
   useCurrentWorkspace,
   useWorkspacePaths,
   type AppSpaceId,
@@ -72,8 +74,10 @@ function useRailBadges(): Partial<Record<RailSpaceId, RailBadge>> {
   const { stuck } = useTeamAgentStatus(wsId);
   // Delivered work waits on the requester; the badge says how much without
   // opening the workbench. Reading the same cached list the page uses costs
-  // no extra request once either surface has loaded.
-  const { dispatches } = useMyDispatches(wsId ?? "");
+  // no extra request once either surface has loaded. A project's workbench
+  // entry opens the organization's, so it carries no badge of its own.
+  const { isProject } = useOrganizationContext(wsId ?? "");
+  const { dispatches } = useMyDispatches(isProject ? "" : (wsId ?? ""));
   const awaitingReview = dispatches.filter(
     (item) => dispatchPhase(item, undefined) === "in_review",
   ).length;
@@ -187,6 +191,14 @@ export function AppRail({
   const badges = useRailBadges();
   const space = shell?.space ?? null;
   const settingsPeek = usePeekHandlers("settings", space === "settings");
+  const { organization, isOrganization, isProject } = useOrganizationContext(
+    useCurrentWorkspace()?.id ?? "",
+  );
+  // Work is dispatched only in the organization, so a project's workbench
+  // entry goes there. The organization runs no autopilots.
+  const organizationWorkbench =
+    isProject && organization ? paths.workspace(organization.slug).workbench() : null;
+  const spaces = isOrganization ? RAIL_SPACES.filter((id) => id !== "autopilots") : RAIL_SPACES;
 
   const items: Record<RailSpaceId, { href: string; icon: IconComponent; label: string; fullLabel: string }> = {
     workbench: {
@@ -246,12 +258,16 @@ export function AppRail({
         <div className="h-2 shrink-0" />
       )}
       <ul className="flex flex-col items-center gap-0.5">
-        {RAIL_SPACES.map((id) => (
+        {spaces.map((id) => (
           <RailSpaceLink
             key={id}
             space={id}
             {...items[id]}
-            href={shell?.spaceHref(id, items[id].href) ?? items[id].href}
+            href={
+              id === "workbench" && organizationWorkbench
+                ? organizationWorkbench
+                : (shell?.spaceHref(id, items[id].href) ?? items[id].href)
+            }
             active={space === id}
             badge={badges[id]}
           />

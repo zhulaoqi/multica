@@ -5,6 +5,7 @@ import { useRegisterCommandBarContext } from "../../search/register-context";
 import {
   AlertCircle,
   Archive,
+  Building2,
   Copy,
   Hash,
   Link2,
@@ -30,7 +31,7 @@ import { api, ApiError } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useModalStore } from "@multica/core/modals";
-import { useWorkspacePaths } from "@multica/core/paths";
+import { paths as workspacePaths, useWorkspacePaths } from "@multica/core/paths";
 import {
   agentDetailOptions,
   agentListOptions,
@@ -39,6 +40,7 @@ import {
   workspaceKeys,
 } from "@multica/core/workspace/queries";
 import { runtimeListOptions } from "@multica/core/runtimes";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import { useAgentPermissions } from "@multica/core/permissions";
 import { Button } from "@multica/ui/components/ui/button";
 import { IconButton } from "@multica/ui/components/common/icon-button";
@@ -161,13 +163,15 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
     useMemo(() => (agent ? { kind: "agent", agent } : null), [agent]),
   );
 
-  // Backend gates archive and restore identically to edit, so a single
-  // `canEdit` covers them all.
+  // A projection is edited in the organization; in a project it can only be
+  // removed (archived) or restored, so those follow `canArchive`.
   const {
     canAssign,
     canEdit,
+    canArchive: archiveDecision,
     isLoading: permissionsLoading,
   } = useAgentPermissions(agent, wsId);
+  const { organization } = useOrganizationContext(wsId);
 
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmCancelRuns, setConfirmCancelRuns] = useState(false);
@@ -429,8 +433,14 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   const runningCount = presence?.runningCount ?? 0;
   const queuedCount = presence?.queuedCount ?? 0;
   const hasActiveWork = runningCount + queuedCount > 0;
+  const isProjection = !!agent.source_agent_id;
+  const canRestore = archiveDecision.allowed;
   // Multica's built-in agents cannot be archived — the server refuses it.
-  const canArchive = canEdit.allowed && !isArchived && !agent.system_key;
+  const canArchive = archiveDecision.allowed && !isArchived && !agent.system_key;
+  const sourceHref =
+    isProjection && organization && agent.source_agent_id
+      ? workspacePaths.workspace(organization.slug).agentDetail(agent.source_agent_id)
+      : null;
 
   // Chat shares the invocation gate with assignment (MUL-3963): starting a
   // chat triggers agent runs. The button stays visible either way — a denied
@@ -535,7 +545,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
             <Hash />
             {t(($) => $.detail.copy_id)}
           </DropdownMenuItem>
-          {!isArchived && (
+          {!isArchived && !isProjection && (
             <DropdownMenuItem
               render={
                 <AppLink href={`${paths.newAgentManual()}?duplicate=${agent.id}`} />
@@ -551,7 +561,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
               {t(($) => $.row_actions.cancel_all_tasks)}
             </DropdownMenuItem>
           )}
-          {canEdit.allowed && isArchived && (
+          {canRestore && isArchived && (
             <DropdownMenuItem onClick={() => handleRestore(agent.id)}>
               <RotateCcw />
               {t(($) => $.detail.restore)}
@@ -565,7 +575,9 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
                 onClick={() => setConfirmArchive(true)}
               >
                 <Trash2 />
-                {t(($) => $.detail.more_archive)}
+                {isProjection
+                  ? t(($) => $.detail.remove_from_project)
+                  : t(($) => $.detail.more_archive)}
               </DropdownMenuItem>
             </>
           )}
@@ -575,7 +587,22 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   );
 
   const notices = [
-    !canEdit.allowed && (
+    isProjection && (
+      <Notice
+        key="organization"
+        icon={<Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+        action={
+          sourceHref ? (
+            <Button variant="outline" size="xs" render={<AppLink href={sourceHref} />} nativeButton={false}>
+              {t(($) => $.detail.open_in_organization)}
+            </Button>
+          ) : null
+        }
+      >
+        {t(($) => $.detail.managed_by_organization_banner)}
+      </Notice>
+    ),
+    !isProjection && !canEdit.allowed && (
       <CapabilityBanner
         key="capability"
         reason={canEdit.reason}
@@ -588,7 +615,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         key="archived"
         icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
         action={
-          canEdit.allowed ? (
+          canRestore ? (
             <Button
               variant="outline"
               size="xs"
@@ -755,10 +782,14 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
               </div>
               <DialogHeader className="flex-1 gap-1">
                 <DialogTitle className="text-body font-semibold">
-                  {t(($) => $.detail.archive_dialog_title)}
+                  {isProjection
+                    ? t(($) => $.detail.remove_dialog_title)
+                    : t(($) => $.detail.archive_dialog_title)}
                 </DialogTitle>
                 <DialogDescription className="text-caption">
-                  {t(($) => $.detail.archive_dialog_description, { name: agent.name })}
+                  {isProjection
+                    ? t(($) => $.detail.remove_dialog_description, { name: agent.name })
+                    : t(($) => $.detail.archive_dialog_description, { name: agent.name })}
                 </DialogDescription>
               </DialogHeader>
             </div>
@@ -777,7 +808,9 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
                   navigation.push(paths.agents());
                 }}
               >
-                {t(($) => $.detail.archive_dialog_confirm)}
+                {isProjection
+                  ? t(($) => $.detail.remove_dialog_confirm)
+                  : t(($) => $.detail.archive_dialog_confirm)}
               </Button>
             </DialogFooter>
           </DialogContent>

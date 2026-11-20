@@ -38,6 +38,7 @@ import {
   memberListOptions,
   orgTreeOptions,
 } from "@multica/core/workspace/queries";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import { runtimeDisplayLabel, runtimeListOptions } from "@multica/core/runtimes";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -69,6 +70,7 @@ import {
 } from "../../layout/collection-list";
 import { availabilityConfig } from "../presence";
 import { teamUserIdsFor } from "../team-scope";
+import { AddFromOrganizationDialog } from "./add-from-organization-dialog";
 import { AgentRowActions } from "./agent-row-actions";
 import { TeamTreeView } from "./team-tree-view";
 import { AgentSetupChecklist } from "./agent-setup-checklist";
@@ -722,7 +724,18 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     all: t(($) => $.page.scope_title.all),
     archived: t(($) => $.page.scope_title.archived),
   };
-  const openCreate = () => navigation.push(paths.newAgent());
+  // A project's agents are projections of organization agents, which project
+  // managers add from the organization instead of creating new ones.
+  const { isProject } = useOrganizationContext(wsId);
+  const [addFromOrgOpen, setAddFromOrgOpen] = useState(false);
+  const canAddFromOrganization =
+    isProject &&
+    (!!currentUser?.is_operator ||
+      isWorkspaceAdmin ||
+      !!members.find((m) => m.user_id === currentUser?.id)?.is_org_lead);
+  const canCreate = !isProject || canAddFromOrganization;
+  const openCreate = () =>
+    isProject ? setAddFromOrgOpen(true) : navigation.push(paths.newAgent());
 
   // The active sort field / availability filter reads columns that arrive in
   // separate queries from the main agent list (activity → lastActiveDays,
@@ -787,19 +800,29 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
               onToggleColumn={(key) => toggleColumn(key as AgentColumnKey)}
               sort={sort}
             />
-            <CollectionCreateButton
-              label={t(($) => $.page.new_agent)}
-              onClick={openCreate}
-            />
+            {canCreate && (
+              <CollectionCreateButton
+                label={
+                  isProject
+                    ? t(($) => $.add_from_organization.title)
+                    : t(($) => $.page.new_agent)
+                }
+                onClick={openCreate}
+              />
+            )}
           </>
         }
       />
+      {canAddFromOrganization && (
+        <AddFromOrganizationDialog wsId={wsId} open={addFromOrgOpen} onOpenChange={setAddFromOrgOpen} />
+      )}
 
       {listError ? (
         <ListError listError={listError} onRetry={() => refetchList()} />
       ) : showEmpty ? (
         <AgentsIntro
-          onCreate={openCreate}
+          onCreate={canCreate ? openCreate : undefined}
+          createLabel={isProject ? t(($) => $.add_from_organization.title) : undefined}
           checklist={
             runtimesLoaded ? (
               <AgentSetupChecklist

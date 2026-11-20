@@ -30,6 +30,22 @@ const isAdminLike = (role: MemberRole | null) =>
  * so callers can use `canEditAgent` for all three.
  */
 export function canEditAgent(agent: Agent, ctx: PermissionContext): Decision {
+  // A project projection mirrors an organization agent; every edit goes to
+  // the source, so nobody edits it here.
+  if (ctx.userId !== null && agent.source_agent_id) {
+    return deny(
+      "managed_by_organization",
+      "This agent is managed by the organization. Edit it there.",
+    );
+  }
+  return canArchiveAgent(agent, ctx);
+}
+
+/**
+ * Archive or restore an agent. Same gate as editing, except that a project
+ * projection may still be removed from the project by its owner or an admin.
+ */
+export function canArchiveAgent(agent: Agent, ctx: PermissionContext): Decision {
   if (ctx.userId === null) {
     return deny("not_authenticated", "Sign in to edit this agent.");
   }

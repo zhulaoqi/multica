@@ -69,6 +69,7 @@ import type {
   WorkspaceRepo,
   WorkspaceMcpServer,
   ProjectMemberCandidate,
+  ProjectionCandidate,
   MemberWithUser,
   User,
   Skill,
@@ -533,6 +534,7 @@ import {
   WorkspaceCreateOptionsSchema,
   EMPTY_WORKSPACE_CREATE_OPTIONS,
   ProjectMemberCandidateListSchema,
+  ProjectionCandidateListSchema,
 } from "./schemas";
 import {
   DispatchListResponseSchema,
@@ -1943,6 +1945,25 @@ export class ApiClient {
    * workspace. The server clears the previous primary in the same write. */
   async setPrimaryAgent(id: string): Promise<Agent> {
     return this.fetch(`/api/agents/${id}/primary`, { method: "PUT" });
+  }
+
+  /** Organization agents owned by this project's members, for a manager to add. */
+  async listProjectionCandidates(): Promise<ProjectionCandidate[]> {
+    const raw = await this.fetch<unknown>("/api/agents/projections/candidates");
+    return parseWithFallback<ProjectionCandidate[]>(
+      raw,
+      ProjectionCandidateListSchema,
+      [],
+      { endpoint: "GET /api/agents/projections/candidates" },
+    );
+  }
+
+  /** Adds organization agents to the current project as read-only projections. */
+  async createAgentProjections(agentIds: string[]): Promise<Agent[]> {
+    return this.fetch("/api/agents/projections", {
+      method: "POST",
+      body: JSON.stringify({ agent_ids: agentIds }),
+    });
   }
 
   async createAgent(data: CreateAgentRequest): Promise<Agent> {

@@ -82,6 +82,8 @@ export function DispatchErrorText({ error }: { error: unknown }) {
       return <>{t(($) => $.errors.org_dispatch_reassign_forbidden)}</>;
     case "dispatch_not_found":
       return <>{t(($) => $.errors.dispatch_not_found)}</>;
+    case "dispatch_organization_only":
+      return <>{t(($) => $.errors.dispatch_organization_only)}</>;
     default:
       // Unknown codes include a 422 whose body carried candidates but no
       // recognizable code; the candidates paragraph explains it better.

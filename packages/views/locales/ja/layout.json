@@ -140,7 +140,8 @@
       "members_other": "メンバー {{count}} 人",
       "resources": "リソース",
       "runtimes_online_other": "{{count}} 台オンライン",
-      "invite_member": "メンバーを招待"
+      "invite_member": "メンバーを招待",
+      "add_from_organization": "組織から追加"
     },
     "autopilots": {
       "all": "すべてのオートパイロット",

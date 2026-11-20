@@ -3,6 +3,7 @@
 import type { Agent, Skill } from "../types";
 import { useCurrentMember } from "./use-current-member";
 import {
+  canArchiveAgent,
   canAssignAgentToIssue,
   canDeleteSkill,
   canEditAgent,
@@ -24,15 +25,16 @@ const PENDING: Decision = deny("unknown", "");
  * Resource = `null` collapses every Decision to a denied "unknown" — keeps
  * callers branch-free during loading.
  *
- * `canArchive` / `canRestore` / `canManage` are deliberately not exposed:
- * the backend gates them identically to `canEdit`, so callers can use
- * `canEdit` everywhere and read better at the call site.
+ * `canArchive` covers archive and restore. It matches `canEdit` except on a
+ * project projection, which nobody edits but its owner or an admin may still
+ * remove from the project.
  */
 export function useAgentPermissions(
   agent: Agent | null,
   wsId: string,
 ): {
   canEdit: Decision;
+  canArchive: Decision;
   canAssign: Decision;
   isLoading: boolean;
 } {
@@ -43,10 +45,11 @@ export function useAgentPermissions(
   // public_to+workspace agent). Callers with always-clickable affordances
   // must treat `isLoading` as "undetermined", not as a deny.
   if (agent === null) {
-    return { canEdit: PENDING, canAssign: PENDING, isLoading };
+    return { canEdit: PENDING, canArchive: PENDING, canAssign: PENDING, isLoading };
   }
   return {
     canEdit: canEditAgent(agent, ctx),
+    canArchive: canArchiveAgent(agent, ctx),
     canAssign: canAssignAgentToIssue(agent, ctx),
     isLoading,
   };

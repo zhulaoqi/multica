@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { useWorkspaceId } from "@multica/core";
 import { findPrimaryTwin } from "@multica/core/agents";
 import { useAuthStore } from "@multica/core/auth";
-import { useWorkspacePaths } from "@multica/core/paths";
+import { paths, useWorkspacePaths } from "@multica/core/paths";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import { agentListOptions } from "@multica/core/workspace/queries";
 import { useNavigation } from "../navigation";
 import { useT } from "../i18n";
@@ -19,13 +20,16 @@ const remindedWorkspaces = new Set<string>();
  * Reminds a member without a primary twin to bind one, once per workspace per
  * session. Unbound members can browse and review but cannot dispatch work or
  * be assigned issues, so the reminder points them at the org page where they
- * bind their agent. Mount inside a resolved workspace (DashboardLayout on web,
+ * bind their agent. A project's twins are projections of organization agents,
+ * so there the reminder points at the organization's org page. Mount inside a resolved workspace (DashboardLayout on web,
  * WorkspaceRouteLayout on desktop).
  */
 export function AgentBindingReminder() {
   const { t } = useT("workbench");
   const wsId = useWorkspaceId();
   const p = useWorkspacePaths();
+  const { organization, isProject } = useOrganizationContext(wsId);
+  const orgPage = isProject && organization ? paths.workspace(organization.slug).org() : p.org();
   const { push } = useNavigation();
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const { data: agents, isSuccess } = useQuery(agentListOptions(wsId));
@@ -47,10 +51,10 @@ export function AgentBindingReminder() {
       duration: 10_000,
       action: {
         label: t(($) => $.page.binding_required_action),
-        onClick: () => push(p.org()),
+        onClick: () => push(orgPage),
       },
     });
-  }, [unbound, wsId, t, push, p]);
+  }, [unbound, wsId, t, push, orgPage]);
 
   return null;
 }

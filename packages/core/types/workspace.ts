@@ -22,6 +22,11 @@ export interface Workspace {
    * it; treat `undefined` exactly like null.
    */
   org_unit_id?: string | null;
+  /**
+   * The company's single organization workspace: it owns the department tree,
+   * every agent, and dispatched work. Every other workspace is a project.
+   */
+  is_organization?: boolean;
   created_at: string;
   updated_at: string;
 }

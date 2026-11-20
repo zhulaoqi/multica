@@ -29,9 +29,12 @@ const TEST_RUN = "pnpm test pricing ✓ 12 passed";
 
 export function AgentsIntro({
   onCreate,
+  createLabel,
   checklist,
 }: {
-  onCreate: () => void;
+  /** Omitted when the viewer cannot add agents here. */
+  onCreate?: () => void;
+  createLabel?: string;
   checklist?: ReactNode;
 }) {
   const { t } = useT("agents");
@@ -53,10 +56,12 @@ export function AgentsIntro({
         t(($) => $.columns.last_active),
       ]}
       action={
-        <Button onClick={onCreate}>
-          <Plus aria-hidden="true" />
-          {t(($) => $.page.new_agent)}
-        </Button>
+        onCreate ? (
+          <Button onClick={onCreate}>
+            <Plus aria-hidden="true" />
+            {createLabel ?? t(($) => $.page.new_agent)}
+          </Button>
+        ) : undefined
       }
     >
       <FeatureIntroCarousel

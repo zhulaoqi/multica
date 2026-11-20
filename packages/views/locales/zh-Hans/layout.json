@@ -140,7 +140,8 @@
       "members_other": "{{count}} 位成员",
       "resources": "资源",
       "runtimes_online_other": "{{count}} 台在线",
-      "invite_member": "邀请成员"
+      "invite_member": "邀请成员",
+      "add_from_organization": "从组织添加"
     },
     "autopilots": {
       "all": "全部自动化",

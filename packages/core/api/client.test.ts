@@ -3368,5 +3368,41 @@ describe("ApiClient department projects", () => {
 
     expect(workspaces).toHaveLength(1);
     expect(workspaces[0]?.org_unit_id).toBeNull();
+    expect(workspaces[0]?.is_organization).toBe(false);
+  });
+
+  it("lists organization agents a project may add", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json([
+      { id: "a1", name: "Ada", owner_id: "u1", projected: true },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const candidates = await client.listProjectionCandidates();
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/agents/projections/candidates");
+    expect(candidates[0]?.projected).toBe(true);
+    expect(candidates[0]?.is_primary).toBe(false);
+  });
+
+  it("falls back to no candidates on a malformed response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ agents: "nope" })));
+    const client = new ApiClient("https://api.example.test");
+
+    await expect(client.listProjectionCandidates()).resolves.toEqual([]);
+  });
+
+  it("adds organization agents as projections", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json([{ id: "p1", source_agent_id: "a1" }]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const added = await client.createAgentProjections(["a1"]);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/api/agents/projections");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ agent_ids: ["a1"] });
+    expect(added[0]?.source_agent_id).toBe("a1");
   });
 });

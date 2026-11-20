@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Clock, Plus, Sparkles } from "@multica/ui/icons";
+import { ArrowLeft, Building2, Clock, Plus, Sparkles } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Sheet,
@@ -22,8 +22,8 @@ import {
   type UploadResult,
 } from "@multica/core/hooks/use-file-upload";
 import { useCreateComment } from "@multica/core/issues/mutations";
-import { useActorName } from "@multica/core/workspace/hooks";
-import { useWorkspacePaths } from "@multica/core/paths";
+import { useActorName, useOrganizationContext } from "@multica/core/workspace/hooks";
+import { paths, useWorkspacePaths } from "@multica/core/paths";
 import {
   parseDispatchCandidates,
   useDispatchWork,
@@ -37,9 +37,9 @@ import {
   squadListOptions,
 } from "@multica/core/workspace/queries";
 import { createSafeId } from "@multica/core/utils";
-import { CollectionPageHeader } from "../layout";
+import { CollectionPageHeader, CollectionPageState } from "../layout";
 import { useT, useTimeAgo } from "../i18n";
-import { useNavigation } from "../navigation";
+import { AppLink, useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
 import { followUpComment, subjectMention } from "./dispatch-actions";
 import { DepartmentQueue } from "./department-queue";
@@ -231,6 +231,38 @@ function HistoryList({
  * server has not accepted yet live in component state.
  */
 export function WorkbenchPage() {
+  const wsId = useWorkspaceId();
+  const { organization, isProject } = useOrganizationContext(wsId);
+  if (isProject && organization) {
+    return <ProjectWorkbench organizationSlug={organization.slug} />;
+  }
+  return <DispatchWorkbench />;
+}
+
+/** Work is dispatched only in the organization; a project points there. */
+function ProjectWorkbench({ organizationSlug }: { organizationSlug: string }) {
+  const { t } = useT("workbench");
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <CollectionPageHeader icon={Sparkles} title={t(($) => $.page.title)} />
+      <CollectionPageState
+        icon={Building2}
+        title={t(($) => $.project.title)}
+        description={t(($) => $.project.description)}
+        actions={
+          <Button
+            render={<AppLink href={paths.workspace(organizationSlug).workbench()} />}
+            nativeButton={false}
+          >
+            {t(($) => $.project.open_organization)}
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+function DispatchWorkbench() {
   const { t } = useT("workbench");
   const p = useWorkspacePaths();
   const wsId = useWorkspaceId();

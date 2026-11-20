@@ -170,7 +170,13 @@
     "copy_link": "複製連結",
     "copy_id": "複製 AI 代理 ID",
     "link_copied_toast": "連結已複製",
-    "id_copied_toast": "AI 代理 ID 已複製"
+    "id_copied_toast": "AI 代理 ID 已複製",
+    "managed_by_organization_banner": "由組織管理。到組織裡修改，改動會自動同步到這個專案。",
+    "open_in_organization": "在組織中開啟",
+    "remove_from_project": "從專案移除",
+    "remove_dialog_title": "從專案移除？",
+    "remove_dialog_description": "「{{name}}」將離開這個專案。AI 代理仍在組織裡，這個專案的歷史紀錄也會保留。",
+    "remove_dialog_confirm": "移除"
   },
   "inspector": {
     "section_profile": "資料",
@@ -447,7 +453,10 @@
       "footer_selected": "已選：",
       "cancel": "取消",
       "next": "下一步"
-    }
+    },
+    "project_title": "AI 代理在組織裡建立",
+    "project_description": "先在組織裡建立 AI 代理，再從 AI 代理列表把它加入這個專案。",
+    "open_organization": "前往組織"
   },
   "create_dialog": {
     "title_create": "建立 AI 代理",
@@ -1082,5 +1091,17 @@
     "cancel": "取消",
     "save_failed": "職責沒有儲存成功。",
     "dispatch": "派活"
+  },
+  "add_from_organization": {
+    "title": "從組織加入",
+    "description": "這些是專案成員的 AI 代理。專案裡得到的是唯讀副本，跟隨組織同步。",
+    "empty": "專案成員的 AI 代理都已經在這裡了。",
+    "load_failed": "沒能載入組織的 AI 代理，請重試。",
+    "organization_missing": "還沒有組織工作區。",
+    "primary_twin_of": "{{name}} 的數位分身",
+    "cancel": "取消",
+    "confirm_other": "加入 {{count}} 個 AI 代理",
+    "added_toast_other": "已加入 {{count}} 個 AI 代理",
+    "add_failed": "沒能加入 AI 代理，請重試。"
   }
 }

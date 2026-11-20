@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, BookOpenText, Bot, Building2, Monitor, Network, Plus, User, UserPlus, Users } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
@@ -10,13 +10,15 @@ import { agentTaskSnapshotOptions, type AgentPresenceDetail } from "@multica/cor
 import { useAgentsViewStore } from "@multica/core/agents/stores";
 import { useAuthStore } from "@multica/core/auth";
 import { issueDetailOptions } from "@multica/core/issues/queries";
-import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
+import { paths, useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { memberListOptions, orgTreeOptions, skillListOptions, squadListOptions } from "@multica/core/workspace/queries";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import type { Agent, AgentTask } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
 import { availabilityConfig } from "../../agents/presence";
+import { AddFromOrganizationDialog } from "../../agents/components/add-from-organization-dialog";
 import { teamUserIdsFor } from "../../agents/team-scope";
 import { useT } from "../../i18n";
 import { buildRuntimeMachines, runtimeMachineCounts } from "../../runtimes/components/runtime-machines";
@@ -152,6 +154,12 @@ export function TeamPanel() {
   const teamAgentCount = teamUserIds
     ? agents.filter((agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id)).length
     : 0;
+  // A project's agents are projections of organization agents: managers add
+  // them from the organization instead of creating new ones. The organization
+  // itself takes members only from the company directory, never invitations.
+  const { organization, isOrganization, isProject } = useOrganizationContext(wsId);
+  const orgPage = isProject && organization ? paths.workspace(organization.slug).org() : p.org();
+  const [addFromOrgOpen, setAddFromOrgOpen] = useState(false);
   const onAgents = pathname === p.agents();
   // Member pages live under /members/:id; the list itself is a Settings tab.
   const membersRoot = p.memberDetail("").replace(/\/$/, "");
@@ -159,7 +167,7 @@ export function TeamPanel() {
   return (
     <>
       <PanelHeader title={t(($) => $.spaces.team)}>
-        {canManageMembers && (
+        {canManageMembers && !isOrganization && (
           <IconButton
             label={t(($) => $.panels.team.invite_member)}
             tooltipSide="bottom"
@@ -169,15 +177,31 @@ export function TeamPanel() {
             <UserPlus />
           </IconButton>
         )}
-        <IconButton
-          label={t(($) => $.panels.team.new_agent)}
-          tooltipSide="bottom"
-          className="text-muted-foreground"
-          onClick={() => push(p.newAgent())}
-        >
-          <Plus />
-        </IconButton>
+        {isProject ? (
+          canManageMembers && (
+            <IconButton
+              label={t(($) => $.panels.team.add_from_organization)}
+              tooltipSide="bottom"
+              className="text-muted-foreground"
+              onClick={() => setAddFromOrgOpen(true)}
+            >
+              <Plus />
+            </IconButton>
+          )
+        ) : (
+          <IconButton
+            label={t(($) => $.panels.team.new_agent)}
+            tooltipSide="bottom"
+            className="text-muted-foreground"
+            onClick={() => push(p.newAgent())}
+          >
+            <Plus />
+          </IconButton>
+        )}
       </PanelHeader>
+      {isProject && (
+        <AddFromOrganizationDialog wsId={wsId} open={addFromOrgOpen} onOpenChange={setAddFromOrgOpen} />
+      )}
       <PanelBody>
         {stuck.length > 0 && (
           <PanelSection
@@ -272,7 +296,7 @@ export function TeamPanel() {
           <PanelList>
             {showOrgLink && (
               <PanelLink
-                href={p.org()}
+                href={orgPage}
                 icon={<Network />}
                 label={t(($) => $.nav.org)}
                 active={isPathWithin(pathname, p.org())}

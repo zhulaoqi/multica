@@ -263,3 +263,19 @@ describe("TeamPanel member directory", () => {
     expect(screen.getByRole("link", { name: /Team agents/ })).toBeInTheDocument();
   });
 });
+
+describe("TeamPanel in a project of the organization", () => {
+  it("links the org chart to the organization workspace", () => {
+    const [project] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
+    qc.setQueryData(workspaceListOptions().queryKey, [
+      project!,
+      { ...project!, id: "ws-org", slug: "org", name: "Org", is_organization: true },
+    ]);
+    renderPanel([]);
+
+    expect(screen.getByRole("link", { name: /Organization/ })).toHaveAttribute(
+      "href",
+      "/org/org",
+    );
+  });
+});

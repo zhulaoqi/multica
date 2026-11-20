@@ -126,6 +126,7 @@ const membersRef = vi.hoisted(() => ({ current: [] as unknown[] }));
 const membersPendingRef = vi.hoisted(() => ({ current: false }));
 const presenceRef = vi.hoisted(() => ({ current: new Map<string, unknown>() }));
 const runtimesRef = vi.hoisted(() => ({ current: [] as unknown[] }));
+const organizationRef = vi.hoisted(() => ({ current: null as null | { slug: string } }));
 const currentUserRef = vi.hoisted(() => ({
   current: { id: "user-1" } as { id: string } | null,
 }));
@@ -140,6 +141,13 @@ const mockCopyText = vi.hoisted(() => vi.fn());
 
 vi.mock("@multica/core/hooks", () => ({
   useWorkspaceId: () => "ws-1",
+}));
+vi.mock("@multica/core/workspace/hooks", () => ({
+  useOrganizationContext: () => ({
+    organization: organizationRef.current,
+    isOrganization: false,
+    isProject: organizationRef.current !== null,
+  }),
 }));
 vi.mock("@multica/core/agents", () => ({
   isAgentRuntimeBound: (agent: { runtime_id: string; runtime_bound?: boolean }) =>
@@ -213,6 +221,11 @@ vi.mock("@multica/core/modals", () => ({
   }),
 }));
 vi.mock("@multica/core/paths", () => ({
+  paths: {
+    workspace: (slug: string) => ({
+      agentDetail: (id: string) => `/${slug}/agents/${id}`,
+    }),
+  },
   useWorkspacePaths: () => ({
     agents: () => "/acme/agents",
     agentDetail: (id: string) => `/acme/agents/${id}`,
@@ -312,6 +325,7 @@ beforeEach(() => {
   membersPendingRef.current = false;
   presenceRef.current = new Map();
   runtimesRef.current = [];
+  organizationRef.current = null;
   agentsRef.current = [baseAgent];
   mockGetAgent.mockRejectedValue(new ApiError("not found", 404, "Not Found"));
   mockUpdateAgent.mockResolvedValue({ ...baseAgent, model: "new-model" });
@@ -791,6 +805,27 @@ describe("AgentDetailPage more actions", () => {
       expect(mockToastSuccess).toHaveBeenCalledWith("Agent ID copied"),
     );
     expect(mockCopyText).toHaveBeenLastCalledWith("agent-1");
+  });
+
+  it("keeps a projection read-only but removable, pointing at its organization agent", async () => {
+    organizationRef.current = { slug: "org" };
+    agentsRef.current = [
+      { ...baseAgent, owner_id: "user-1", source_agent_id: "source-1" },
+    ];
+    const { push } = renderPage();
+
+    await screen.findByText(/Managed by the organization/);
+    expect(screen.getByRole("button", { name: "Open in organization" })).toHaveAttribute(
+      "href",
+      "/org/agents/source-1",
+    );
+    const menu = openMoreActions();
+    expect(within(menu).queryByRole("menuitem", { name: "Duplicate" })).not.toBeInTheDocument();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Remove from project" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+
+    expect(mockArchiveAgent).toHaveBeenCalledWith("agent-1");
+    expect(push).toHaveBeenCalledWith("/acme/agents");
   });
 
   it("links Duplicate to the manual create flow", async () => {

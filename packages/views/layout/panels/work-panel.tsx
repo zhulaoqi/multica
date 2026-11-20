@@ -11,6 +11,7 @@ import { useSidebarProjectPrefs } from "@multica/core/issues/sidebar-project-pre
 import { useSidebarKeptStore } from "@multica/core/issues/stores/sidebar-kept-store";
 import { useSidebarTreeStore } from "@multica/core/issues/stores/sidebar-tree-store";
 import { projectListOptions } from "@multica/core/projects/queries";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import type { Project } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
 import { IssueContextMenuProvider } from "../../issues/actions";
@@ -66,10 +67,12 @@ export function WorkPanel() {
   const { pathname } = useNavigation();
   const wsId = useCurrentWorkspace()?.id;
   const userId = useAuthStore((s) => s.user?.id);
+  // The organization groups its work by department, not by project.
+  const { isOrganization } = useOrganizationContext(wsId ?? "");
 
   const { data: projects = EMPTY_PROJECTS } = useQuery({
     ...projectListOptions(wsId ?? ""),
-    enabled: !!wsId,
+    enabled: !!wsId && !isOrganization,
   });
   // Cache read only: the detail page owns resolving the route's issue.
   const issueSegment = routeSegment(pathname, p.issues());
@@ -148,7 +151,7 @@ export function WorkPanel() {
             </div>
           )}
 
-          {wsId && (
+          {wsId && !isOrganization && (
             <ProjectsSection
               wsId={wsId}
               userId={userId}

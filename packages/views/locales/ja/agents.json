@@ -162,7 +162,13 @@
     "copy_link": "リンクをコピー",
     "copy_id": "エージェント ID をコピー",
     "link_copied_toast": "リンクをコピーしました",
-    "id_copied_toast": "エージェント ID をコピーしました"
+    "id_copied_toast": "エージェント ID をコピーしました",
+    "managed_by_organization_banner": "組織で管理されています。組織側で編集すると、このプロジェクトにも自動で反映されます。",
+    "open_in_organization": "組織で開く",
+    "remove_from_project": "プロジェクトから外す",
+    "remove_dialog_title": "プロジェクトから外しますか？",
+    "remove_dialog_description": "「{{name}}」はこのプロジェクトから外れます。エージェントは組織に残り、このプロジェクトの履歴も残ります。",
+    "remove_dialog_confirm": "外す"
   },
   "inspector": {
     "section_profile": "プロフィール",
@@ -1039,7 +1045,10 @@
       "footer_selected": "選択中：",
       "cancel": "キャンセル",
       "next": "次へ"
-    }
+    },
+    "project_title": "エージェントは組織で作成します",
+    "project_description": "組織でエージェントを作成してから、エージェント一覧からこのプロジェクトに追加してください。",
+    "open_organization": "組織へ移動"
   },
   "actions": {},
   "intro": {
@@ -1082,5 +1091,17 @@
     "cancel": "キャンセル",
     "save_failed": "担当業務を保存できませんでした。",
     "dispatch": "仕事を割り当て"
+  },
+  "add_from_organization": {
+    "title": "組織から追加",
+    "description": "このプロジェクトのメンバーが所有するエージェントです。プロジェクトには組織に連動する読み取り専用のコピーが追加されます。",
+    "empty": "このプロジェクトのメンバーのエージェントはすべて追加済みです。",
+    "load_failed": "組織のエージェントを読み込めませんでした。もう一度お試しください。",
+    "organization_missing": "組織ワークスペースがまだありません。",
+    "primary_twin_of": "{{name}} のデジタルツイン",
+    "cancel": "キャンセル",
+    "confirm_other": "{{count}} 件のエージェントを追加",
+    "added_toast_other": "{{count}} 件のエージェントを追加しました",
+    "add_failed": "エージェントを追加できませんでした。もう一度お試しください。"
   }
 }

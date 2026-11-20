@@ -12,6 +12,9 @@ export const workspaceKeys = {
   agents: (wsId: string) => ["workspaces", wsId, "agents"] as const,
   agent: (wsId: string, agentId: string) =>
     ["workspaces", wsId, "agents", "detail", agentId] as const,
+  // Under the agent key so adding a projection refreshes it with the list.
+  projectionCandidates: (wsId: string) =>
+    ["workspaces", wsId, "agents", "projection-candidates"] as const,
   squads: (wsId: string) => ["workspaces", wsId, "squads"] as const,
   // Per-squad member status. Lives under the workspace key tree so
   // workspace switches naturally drop the cache, and so a broad
@@ -118,6 +121,15 @@ export function agentListOptions(wsId: string) {
       )
         ? 30_000
         : false,
+  });
+}
+
+/** Organization agents a project manager may add; only fetched when asked. */
+export function projectionCandidatesOptions(wsId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: workspaceKeys.projectionCandidates(wsId),
+    queryFn: () => api.listProjectionCandidates(),
+    enabled: enabled && !!wsId,
   });
 }
 

@@ -2551,6 +2551,11 @@ describe("WorkspaceSchema department scope", () => {
     const parsed = WorkspaceSchema.parse({ id: "w1", org_unit_id: "unit-1" });
     expect(parsed.org_unit_id).toBe("unit-1");
   });
+
+  it("treats a missing is_organization as a project", () => {
+    expect(WorkspaceSchema.parse({ id: "w1" }).is_organization).toBe(false);
+    expect(WorkspaceSchema.parse({ id: "w1", is_organization: true }).is_organization).toBe(true);
+  });
 });
 
 describe("MemberWithUserSchema department fields", () => {

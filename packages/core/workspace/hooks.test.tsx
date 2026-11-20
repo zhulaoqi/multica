@@ -9,7 +9,7 @@ import { setApiInstance } from "../api";
 import type { ApiClient } from "../api/client";
 import type { Workspace } from "../types";
 import { workspaceKeys } from "./queries";
-import { useActorName, useWorkspaceList } from "./hooks";
+import { useActorName, useOrganizationContext, useWorkspaceList } from "./hooks";
 
 // useActorName reads the current workspace from the core WorkspaceId provider;
 // the directory-name resolution under test does not depend on the real id.
@@ -84,6 +84,38 @@ describe("useWorkspaceList", () => {
     expect(result.current.ready).toBe(true);
     expect(result.current.unavailable).toBe(false);
     expect(result.current.workspaces).toEqual(cached);
+  });
+});
+
+describe("useOrganizationContext", () => {
+  const org = { ...makeWorkspace("company"), is_organization: true };
+
+  function render(wsId: string, list: Workspace[]) {
+    const qc = new QueryClient();
+    qc.setQueryData(workspaceKeys.list(), list);
+    setApiInstance({ listWorkspaces: () => new Promise(() => {}) } as unknown as ApiClient);
+    return renderHook(() => useOrganizationContext(wsId), { wrapper: createWrapper(qc) }).result
+      .current;
+  }
+
+  it("marks the organization itself", () => {
+    const ctx = render(org.id, [makeWorkspace("acme"), org]);
+    expect(ctx.organization?.slug).toBe("company");
+    expect(ctx).toMatchObject({ isOrganization: true, isProject: false });
+  });
+
+  it("marks every other workspace as a project of the organization", () => {
+    expect(render("id-acme", [makeWorkspace("acme"), org])).toMatchObject({
+      isOrganization: false,
+      isProject: true,
+    });
+  });
+
+  it("keeps workspaces standalone until an organization exists", () => {
+    expect(render("id-acme", [makeWorkspace("acme")])).toMatchObject({
+      organization: null,
+      isProject: false,
+    });
   });
 });
 

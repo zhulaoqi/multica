@@ -106,7 +106,8 @@
     "personal_squad_not_found": "Ese equipo personal ya no existe. Vuelve a enviar para crear uno nuevo.",
     "org_dispatch_target_conflict": "Elige un departamento o tu equipo, no ambos.",
     "org_dispatch_reassign_forbidden": "Solo quien solicitó el trabajo puede reasignarlo.",
-    "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos."
+    "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos.",
+    "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización."
   },
   "plan": {
     "title": "Plan"
@@ -136,5 +137,10 @@
     "requested_by": "De {{name}}",
     "unknown_requester": "De un compañero",
     "blocked": "Bloqueado: {{missing}}"
+  },
+  "project": {
+    "title": "El trabajo se envía desde la organización",
+    "description": "Los departamentos y sus agentes reciben trabajo en el espacio de la organización.",
+    "open_organization": "Abrir el centro de trabajo de la organización"
   }
 }

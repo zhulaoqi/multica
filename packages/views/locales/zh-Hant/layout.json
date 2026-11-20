@@ -140,7 +140,8 @@
       "members_other": "{{count}} 位成員",
       "resources": "資源",
       "runtimes_online_other": "{{count}} 台線上",
-      "invite_member": "邀請成員"
+      "invite_member": "邀請成員",
+      "add_from_organization": "從組織加入"
     },
     "autopilots": {
       "all": "全部自動化",
