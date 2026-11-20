@@ -8,7 +8,7 @@ ORDER BY created_at ASC;
 -- the owning department, whose stored role may still be member.
 SELECT m.user_id FROM member m
 JOIN workspace w ON w.id = m.workspace_id
-LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id
 WHERE m.workspace_id = $1
   AND (m.role IN ('owner', 'admin') OR root.lead_user_id = m.user_id)
 ORDER BY m.created_at ASC;
@@ -27,14 +27,14 @@ WHERE user_id = $1 AND workspace_id = $2;
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
       AND w.id = ANY(sqlc.arg(workspace_ids)::uuid[])
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT m.user_id, m.workspace_id
 FROM member m
@@ -50,7 +50,7 @@ FROM (
            unnest(sqlc.arg(workspace_ids)::uuid[]) AS workspace_id
 ) AS requested
 JOIN ancestors a ON a.workspace_id = requested.workspace_id
-JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+JOIN org_unit unit ON unit.id = a.unit_id
 WHERE unit.lead_user_id = requested.user_id;
 
 -- name: GetWorkspaceAccess :one
@@ -61,7 +61,7 @@ WHERE unit.lead_user_id = requested.user_id;
 WITH RECURSIVE scope AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.id = sqlc.arg(workspace_id)
     UNION ALL
     SELECT scope.workspace_id, child.id
@@ -71,13 +71,13 @@ WITH RECURSIVE scope AS (
 ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.id = sqlc.arg(workspace_id)
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT
     w.id AS workspace_id,
@@ -95,11 +95,11 @@ SELECT
     EXISTS (
         SELECT 1
         FROM ancestors a
-        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        JOIN org_unit unit ON unit.id = a.unit_id
         WHERE a.workspace_id = w.id AND unit.lead_user_id = sqlc.arg(user_id)
     )::bool AS ancestor_lead
 FROM workspace w
-LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id
 LEFT JOIN member m ON m.workspace_id = w.id AND m.user_id = sqlc.arg(user_id)
 WHERE w.id = sqlc.arg(workspace_id);
 
@@ -109,7 +109,7 @@ WHERE w.id = sqlc.arg(workspace_id);
 WITH RECURSIVE scope AS (
     SELECT u.id, u.parent_id, u.name, u.lead_user_id, u.description, u.position
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.id = $1
     UNION ALL
     SELECT child.id, child.parent_id, child.name, child.lead_user_id,
@@ -126,15 +126,15 @@ ORDER BY position ASC, name ASC;
 -- that person is placed) plus department leads above the owning department,
 -- who inherit access upward.
 WITH RECURSIVE ancestors AS (
-    SELECT u.id AS unit_id, u.workspace_id
+    SELECT u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.id = $1 AND w.org_unit_id IS NOT NULL
     UNION ALL
-    SELECT parent.id, parent.workspace_id
+    SELECT parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT DISTINCT user_id FROM (
     SELECT m.user_id
@@ -143,7 +143,7 @@ SELECT DISTINCT user_id FROM (
     UNION ALL
     SELECT unit.lead_user_id
     FROM ancestors a
-    JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+    JOIN org_unit unit ON unit.id = a.unit_id
     WHERE unit.lead_user_id IS NOT NULL
 ) members;
 
@@ -167,7 +167,7 @@ SELECT m.id, m.workspace_id, m.user_id, m.role, m.created_at, m.org_unit_id,
 FROM member m
 JOIN "user" u ON u.id = m.user_id
 JOIN workspace w ON w.id = m.workspace_id
-LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id
 WHERE m.workspace_id = $1
 ORDER BY m.created_at ASC;
 
@@ -192,10 +192,10 @@ SELECT
     member_user.name AS member_name,
     member_user.email AS member_email
 FROM workspace w
-JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+JOIN org_unit root ON root.id = w.org_unit_id
 LEFT JOIN "user" lead_user ON lead_user.id = root.lead_user_id
 LEFT JOIN member m ON m.workspace_id = w.id
 LEFT JOIN "user" member_user ON member_user.id = m.user_id
-LEFT JOIN org_unit member_unit ON member_unit.id = m.org_unit_id AND member_unit.workspace_id = w.id
+LEFT JOIN org_unit member_unit ON member_unit.id = m.org_unit_id
 WHERE w.org_unit_id IS NOT NULL
 ORDER BY w.created_at ASC, w.id ASC, m.created_at ASC, m.id ASC;

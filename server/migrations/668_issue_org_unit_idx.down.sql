@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS issue_org_unit_idx;

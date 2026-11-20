@@ -265,7 +265,7 @@ SELECT
 FROM dispatch_origin d
 JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
 JOIN workspace w ON w.id = d.workspace_id
-LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
 LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
 WHERE d.requester_id = $1
@@ -529,7 +529,7 @@ SELECT
 FROM dispatch_origin d
 JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
 JOIN workspace w ON w.id = d.workspace_id
-LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
 LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
 LEFT JOIN LATERAL (
@@ -713,7 +713,7 @@ SET assignee_type = 'squad',
     revision = revision + 1,
     updated_at = now()
 WHERE id = $1 AND workspace_id = $3
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, stage, properties, revision, last_activity_at, triage_state, duplicate_of_issue_id
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, stage, properties, revision, last_activity_at, triage_state, duplicate_of_issue_id, org_unit_id
 `
 
 type UpdateIssueAssigneeParams struct {
@@ -759,6 +759,7 @@ func (q *Queries) UpdateIssueAssignee(ctx context.Context, arg UpdateIssueAssign
 		&i.LastActivityAt,
 		&i.TriageState,
 		&i.DuplicateOfIssueID,
+		&i.OrgUnitID,
 	)
 	return i, err
 }

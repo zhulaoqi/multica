@@ -5,13 +5,13 @@
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT w.*
 FROM workspace w
@@ -22,7 +22,7 @@ WHERE EXISTS (
    OR EXISTS (
         SELECT 1
         FROM ancestors a
-        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        JOIN org_unit unit ON unit.id = a.unit_id
         WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
     )
 ORDER BY w.created_at ASC;
@@ -36,13 +36,13 @@ ORDER BY w.created_at ASC;
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT w.id, w.name
 FROM workspace w
@@ -53,7 +53,7 @@ WHERE EXISTS (
    OR EXISTS (
         SELECT 1
         FROM ancestors a
-        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        JOIN org_unit unit ON unit.id = a.unit_id
         WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
     )
 ORDER BY w.id ASC;
@@ -103,18 +103,6 @@ RETURNING *;
 UPDATE workspace SET org_unit_id = $2, updated_at = now()
 WHERE id = $1
 RETURNING *;
-
--- name: ListOrgUnitsForWorkspaces :many
--- Creation options: every department in the workspaces the caller belongs to,
--- so a department lead can pick a unit without knowing where it lives. The
--- caller filters to units they lead.
-SELECT u.id AS unit_id, u.parent_id, u.name, u.lead_user_id, u.position,
-       w.id AS workspace_id, w.name AS workspace_name
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-JOIN org_unit u ON u.workspace_id = w.id
-WHERE m.user_id = $1
-ORDER BY w.created_at ASC, u.position ASC, u.name ASC;
 
 -- name: IncrementIssueCounter :one
 UPDATE workspace SET issue_counter = issue_counter + 1

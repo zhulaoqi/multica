@@ -51,8 +51,9 @@ type WorkspaceCreationOptionsResponse struct {
 	Departments         []DepartmentOption `json:"departments"`
 }
 
-// ListWorkspaceCreateOptions answers what the create-project screen may offer.
-// Only department leads (and the platform operator) see anything.
+// ListWorkspaceCreateOptions answers what the create-project screen may offer:
+// departments of the organization tree the caller leads, or every department
+// for the platform operator.
 func (h *Handler) ListWorkspaceCreateOptions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := requireUserID(w, r)
 	if !ok {
@@ -63,80 +64,38 @@ func (h *Handler) ListWorkspaceCreateOptions(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-
-	if requestIsOperator(r) {
-		resp.CanCreate = true
-		resp.CanCreateUnassigned = true
-		sourceID := strings.TrimSpace(r.URL.Query().Get("source_workspace_id"))
-		if sourceID == "" {
-			writeJSON(w, http.StatusOK, resp)
-			return
-		}
-		sourceUUID, ok := parseUUIDOrBadRequest(w, sourceID, "source_workspace_id")
-		if !ok {
-			return
-		}
-		ws, err := h.Queries.GetWorkspace(r.Context(), sourceUUID)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "source workspace not found")
-			return
-		}
-		units, err := h.Queries.ListOrgUnits(r.Context(), sourceUUID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to list departments")
-			return
-		}
-		paths := orgscope.Paths(units)
-		for _, unit := range units {
-			resp.Departments = append(resp.Departments, DepartmentOption{
-				SourceWorkspaceID:   uuidToString(ws.ID),
-				SourceWorkspaceName: ws.Name,
-				UnitID:              uuidToString(unit.ID),
-				Path:                paths[unit.ID],
-			})
-		}
+	operator := requestIsOperator(r)
+	resp.CanCreateUnassigned = operator
+	org, found, err := h.organizationWorkspace(r.Context())
+	if err != nil {
+		slog.Error("load organization workspace failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list departments")
+		return
+	}
+	if !found {
+		resp.CanCreate = operator
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-
-	rows, err := h.Queries.ListOrgUnitsForWorkspaces(r.Context(), parseUUID(userID))
+	units, err := h.Queries.ListOrgUnits(r.Context(), org.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list departments")
 		return
 	}
 	userUUID := parseUUID(userID)
-	order := make([]pgtype.UUID, 0, 4)
-	unitsByWorkspace := map[pgtype.UUID][]db.ListOrgUnitsRow{}
-	meta := map[pgtype.UUID]db.ListOrgUnitsForWorkspacesRow{}
-	for _, row := range rows {
-		if _, seen := unitsByWorkspace[row.WorkspaceID]; !seen {
-			order = append(order, row.WorkspaceID)
-			meta[row.WorkspaceID] = row
+	paths := orgscope.Paths(units)
+	for _, unit := range units {
+		if !operator && !orgscope.Leads(units, userUUID, unit.ID) {
+			continue
 		}
-		unitsByWorkspace[row.WorkspaceID] = append(unitsByWorkspace[row.WorkspaceID], db.ListOrgUnitsRow{
-			ID:         row.UnitID,
-			ParentID:   row.ParentID,
-			Name:       row.Name,
-			LeadUserID: row.LeadUserID,
-			Position:   row.Position,
+		resp.Departments = append(resp.Departments, DepartmentOption{
+			SourceWorkspaceID:   uuidToString(org.ID),
+			SourceWorkspaceName: org.Name,
+			UnitID:              uuidToString(unit.ID),
+			Path:                paths[unit.ID],
 		})
 	}
-	for _, wsID := range order {
-		units := unitsByWorkspace[wsID]
-		paths := orgscope.Paths(units)
-		for _, unit := range units {
-			if !orgscope.Leads(units, userUUID, unit.ID) {
-				continue
-			}
-			resp.Departments = append(resp.Departments, DepartmentOption{
-				SourceWorkspaceID:   uuidToString(wsID),
-				SourceWorkspaceName: meta[wsID].WorkspaceName,
-				UnitID:              uuidToString(unit.ID),
-				Path:                paths[unit.ID],
-			})
-		}
-	}
-	resp.CanCreate = len(resp.Departments) > 0
+	resp.CanCreate = operator || len(resp.Departments) > 0
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -155,45 +114,48 @@ func (h *Handler) canCreateWorkspaces(r *http.Request, userID string) bool {
 	return contains(h.cfg.WorkspaceCreationAllowedEmails, strings.TrimSpace(user.Email))
 }
 
-// createDepartment captures the department a new project takes over.
+// createDepartment is the organization department a new project belongs to.
 type createDepartment struct {
-	sourceWorkspaceID pgtype.UUID
-	unitID            pgtype.UUID
-	units             []db.ListOrgUnitsForCopyRow
-	unit              db.ListOrgUnitsForCopyRow
+	unit db.ListOrgUnitsRow
 }
 
-// resolveCreateDepartment validates the requested department. It writes the
-// HTTP error and returns ok=false on failure. A nil result means "create a
-// legacy workspace without a department", which only the operator may do.
+// resolveCreateDepartment validates the requested department against the
+// organization tree. It writes the HTTP error and returns ok=false on failure.
+// A nil result means "create a legacy workspace without a department", which
+// only the operator may do. sourceID is accepted for older clients and must
+// name the organization workspace when given.
 func (h *Handler) resolveCreateDepartment(w http.ResponseWriter, r *http.Request, userID, sourceID, unitID string) (*createDepartment, bool) {
 	operator := requestIsOperator(r)
 
-	if sourceID == "" && unitID == "" {
+	if unitID == "" {
+		if sourceID != "" {
+			writeErrorCode(w, http.StatusBadRequest, codeDepartmentRequired, "org_unit_id is required")
+			return nil, false
+		}
 		if !operator {
 			writeErrorCode(w, http.StatusForbidden, codeDepartmentRequired, "a department is required to create a project")
 			return nil, false
 		}
 		return nil, true
 	}
-	if sourceID == "" || unitID == "" {
-		writeErrorCode(w, http.StatusBadRequest, codeDepartmentRequired, "source_workspace_id and org_unit_id must be provided together")
-		return nil, false
-	}
-	sourceUUID, ok := parseUUIDOrBadRequest(w, sourceID, "source_workspace_id")
-	if !ok {
-		return nil, false
-	}
 	targetUUID, ok := parseUUIDOrBadRequest(w, unitID, "org_unit_id")
 	if !ok {
 		return nil, false
 	}
-	units, err := h.Queries.ListOrgUnitsForCopy(r.Context(), sourceUUID)
+	org, ok := h.requireOrganizationWorkspace(w, r)
+	if !ok {
+		return nil, false
+	}
+	if sourceID != "" && sourceID != uuidToString(org.ID) {
+		writeErrorCode(w, http.StatusBadRequest, codeDepartmentForbidden, "departments come from the organization workspace")
+		return nil, false
+	}
+	units, err := h.Queries.ListOrgUnits(r.Context(), org.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load departments")
 		return nil, false
 	}
-	var unit db.ListOrgUnitsForCopyRow
+	var unit db.ListOrgUnitsRow
 	found := false
 	for _, candidate := range units {
 		if candidate.ID == targetUUID {
@@ -203,53 +165,26 @@ func (h *Handler) resolveCreateDepartment(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if !found {
-		writeErrorCode(w, http.StatusBadRequest, codeDepartmentForbidden, "department does not belong to the source workspace")
+		writeErrorCode(w, http.StatusBadRequest, codeDepartmentForbidden, "department does not belong to the organization")
 		return nil, false
 	}
-
-	if !operator {
-		userUUID := parseUUID(userID)
-		if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
-			UserID:      userUUID,
-			WorkspaceID: sourceUUID,
-		}); err != nil {
-			writeErrorCode(w, http.StatusForbidden, codeDepartmentForbidden, "you are not a member of the source workspace")
-			return nil, false
-		}
-		if !orgscope.Leads(toOrgUnits(units), userUUID, targetUUID) {
-			writeErrorCode(w, http.StatusForbidden, codeDepartmentForbidden, "you do not lead this department")
-			return nil, false
-		}
+	if !operator && !orgscope.Leads(units, parseUUID(userID), targetUUID) {
+		writeErrorCode(w, http.StatusForbidden, codeDepartmentForbidden, "you do not lead this department")
+		return nil, false
 	}
-	return &createDepartment{
-		sourceWorkspaceID: sourceUUID,
-		unitID:            targetUUID,
-		units:             units,
-		unit:              unit,
-	}, true
+	return &createDepartment{unit: unit}, true
 }
 
-// createProjectFromDepartment copies the whole organisation tree and directory
-// of the source workspace into the new one, then makes the creator and the
-// department lead owners placed at the project root.
+// createProjectFromDepartment points the new project at its organization
+// department and makes the creator and the department lead owners placed at
+// the department root.
 func (h *Handler) createProjectFromDepartment(ctx context.Context, qtx *db.Queries, ws db.Workspace, dept *createDepartment, creatorID string) (db.Workspace, error) {
-	remap, err := copyOrgTree(ctx, qtx, ws.ID, dept.units)
-	if err != nil {
-		return ws, err
-	}
-	rootUnitID, ok := remap[dept.unitID]
-	if !ok {
-		return ws, errors.New("copied tree is missing the selected department")
-	}
+	rootUnitID := dept.unit.ID
 	updated, err := qtx.UpdateWorkspaceOrgUnit(ctx, db.UpdateWorkspaceOrgUnitParams{
 		ID:        ws.ID,
 		OrgUnitID: rootUnitID,
 	})
 	if err != nil {
-		return ws, err
-	}
-
-	if err := copyDirectory(ctx, qtx, ws.ID, dept.sourceWorkspaceID, remap); err != nil {
 		return ws, err
 	}
 
@@ -264,7 +199,7 @@ func (h *Handler) createProjectFromDepartment(ctx context.Context, qtx *db.Queri
 	}
 
 	if dept.unit.LeadUserID.Valid && dept.unit.LeadUserID != creatorUUID {
-		// The source tree may name a lead who is no longer a user (no FK on
+		// The tree may name a lead who is no longer a user (no FK on
 		// lead_user_id). Refuse to create an orphan member row: access must
 		// stay visible in the roster.
 		if _, err := qtx.GetUser(ctx, dept.unit.LeadUserID); err == nil {
@@ -287,109 +222,13 @@ func (h *Handler) createProjectFromDepartment(ctx context.Context, qtx *db.Queri
 	return updated, nil
 }
 
-// copyOrgTree inserts every source unit, parents first, and returns the
-// old-to-new id mapping.
-func copyOrgTree(ctx context.Context, qtx *db.Queries, workspaceID pgtype.UUID, units []db.ListOrgUnitsForCopyRow) (map[pgtype.UUID]pgtype.UUID, error) {
-	byID := make(map[pgtype.UUID]db.ListOrgUnitsForCopyRow, len(units))
-	for _, unit := range units {
-		byID[unit.ID] = unit
-	}
-	children := make(map[pgtype.UUID][]db.ListOrgUnitsForCopyRow, len(units))
-	roots := make([]db.ListOrgUnitsForCopyRow, 0, 1)
-	for _, unit := range units {
-		if unit.ParentID.Valid {
-			if _, ok := byID[unit.ParentID]; ok {
-				children[unit.ParentID] = append(children[unit.ParentID], unit)
-				continue
-			}
-		}
-		roots = append(roots, unit)
-	}
-
-	remap := make(map[pgtype.UUID]pgtype.UUID, len(units))
-	var copyUnit func(parent pgtype.UUID, unit db.ListOrgUnitsForCopyRow) error
-	copyUnit = func(parent pgtype.UUID, unit db.ListOrgUnitsForCopyRow) error {
-		if _, done := remap[unit.ID]; done {
-			return nil
-		}
-		newID, err := qtx.CreateOrgUnitClone(ctx, db.CreateOrgUnitCloneParams{
-			WorkspaceID: workspaceID,
-			ParentID:    parent,
-			Name:        unit.Name,
-			LeadUserID:  unit.LeadUserID,
-			Description: unit.Description,
-			Position:    unit.Position,
-			ExternalID:  unit.ExternalID,
-		})
-		if err != nil {
-			return err
-		}
-		remap[unit.ID] = newID
-		for _, child := range children[unit.ID] {
-			if err := copyUnit(newID, child); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	for _, root := range roots {
-		if err := copyUnit(pgtype.UUID{}, root); err != nil {
-			return nil, err
-		}
-	}
-	return remap, nil
-}
-
-// copyDirectory copies the source workspace's department directory into the
-// new project, remapping placements. A row whose unit did not survive the copy
-// keeps a NULL placement: it stays a candidate but has no department.
-func copyDirectory(ctx context.Context, qtx *db.Queries, workspaceID, sourceWorkspaceID pgtype.UUID, remap map[pgtype.UUID]pgtype.UUID) error {
-	rows, err := qtx.ListDirectoryMembersForCopy(ctx, sourceWorkspaceID)
-	if err != nil {
-		return err
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	userIDs := make([]pgtype.UUID, 0, len(rows))
-	unitIDs := make([]pgtype.UUID, 0, len(rows))
-	for _, row := range rows {
-		userIDs = append(userIDs, row.UserID)
-		if mapped, ok := remap[row.OrgUnitID]; ok {
-			unitIDs = append(unitIDs, mapped)
-		} else {
-			unitIDs = append(unitIDs, pgtype.UUID{})
-		}
-	}
-	return qtx.InsertDirectoryMembers(ctx, db.InsertDirectoryMembersParams{
-		WorkspaceID: workspaceID,
-		UserIds:     userIDs,
-		OrgUnitIds:  unitIDs,
-	})
-}
-
-func toOrgUnits(units []db.ListOrgUnitsForCopyRow) []db.ListOrgUnitsRow {
-	out := make([]db.ListOrgUnitsRow, len(units))
-	for i, unit := range units {
-		out[i] = db.ListOrgUnitsRow{
-			ID:          unit.ID,
-			ParentID:    unit.ParentID,
-			Name:        unit.Name,
-			LeadUserID:  unit.LeadUserID,
-			Description: unit.Description,
-			Position:    unit.Position,
-		}
-	}
-	return out
-}
-
-// AddProjectMemberDirectRequest names one directory user to pull in.
+// AddProjectMemberDirectRequest names one organization member to pull in.
 type AddProjectMemberDirectRequest struct {
 	UserID string `json:"user_id"`
 }
 
 // AddProjectMemberDirect is the department-project member path: managers pull
-// a colleague from the department directory instead of sending an email
+// a colleague from the organization roster instead of sending an email
 // invitation.
 func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request) {
 	workspaceID := workspaceIDFromURL(r, "id")
@@ -402,8 +241,12 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
-	if !ws.OrgUnitID.Valid {
+	if !isOrganizationProject(ws) {
 		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "email invitations are available for this workspace")
+		return
+	}
+	org, ok := h.requireOrganizationWorkspace(w, r)
+	if !ok {
 		return
 	}
 
@@ -417,16 +260,16 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	directoryRow, err := h.Queries.GetDirectoryMember(r.Context(), db.GetDirectoryMemberParams{
-		WorkspaceID: wsUUID,
-		UserID:      userUUID,
+	directoryRow, err := h.Queries.GetOrganizationMember(r.Context(), db.GetOrganizationMemberParams{
+		OrganizationID: org.ID,
+		UserID:         userUUID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeErrorCode(w, http.StatusNotFound, codeMemberNotInDirectory, "user is not in the workspace directory")
+			writeErrorCode(w, http.StatusNotFound, codeMemberNotInDirectory, "user is not in the organization")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to load directory member")
+		writeError(w, http.StatusInternalServerError, "failed to load organization member")
 		return
 	}
 	actorUserID := requestUserID(r)
@@ -438,7 +281,7 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 	switch {
 	case err == nil:
 		// A stale row (the person was moved outside the subtree) is restored
-		// to their directory placement instead of failing the pull-in.
+		// to their organization placement instead of failing the pull-in.
 		access, accessErr := workspaceaccess.Resolve(r.Context(), h.Queries, wsUUID, userUUID, false)
 		if accessErr != nil {
 			writeError(w, http.StatusInternalServerError, "failed to resolve membership")
@@ -556,7 +399,7 @@ func (h *Handler) AddProjectMemberDirect(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusCreated, memberResp)
 }
 
-// ProjectMemberCandidate is one directory user the project may pull in.
+// ProjectMemberCandidate is one organization member the project may pull in.
 type ProjectMemberCandidate struct {
 	UserID    string  `json:"user_id"`
 	Name      string  `json:"name"`
@@ -567,7 +410,7 @@ type ProjectMemberCandidate struct {
 	InProject bool    `json:"in_project"`
 }
 
-// ListProjectMemberCandidates searches the company directory. A project
+// ListProjectMemberCandidates searches the organization roster. A project
 // manager may pull in a colleague from another department; the person becomes
 // an explicit member with access wherever they are placed.
 func (h *Handler) ListProjectMemberCandidates(w http.ResponseWriter, r *http.Request) {
@@ -581,19 +424,24 @@ func (h *Handler) ListProjectMemberCandidates(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
-	if !ws.OrgUnitID.Valid {
+	if !isOrganizationProject(ws) {
 		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "this workspace adds members by invitation")
 		return
 	}
-	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	org, ok := h.requireOrganizationWorkspace(w, r)
+	if !ok {
+		return
+	}
+	units, err := h.Queries.ListOrgUnits(r.Context(), org.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load departments")
 		return
 	}
 	paths := orgscope.Paths(units)
-	rows, err := h.Queries.SearchDirectoryMembers(r.Context(), db.SearchDirectoryMembersParams{
-		WorkspaceID: wsUUID,
-		Query:       strings.TrimSpace(r.URL.Query().Get("q")),
+	rows, err := h.Queries.SearchOrganizationMembers(r.Context(), db.SearchOrganizationMembersParams{
+		ProjectID:      wsUUID,
+		OrganizationID: org.ID,
+		Query:          strings.TrimSpace(r.URL.Query().Get("q")),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to search the employee directory")
@@ -636,8 +484,21 @@ func (h *Handler) SetWorkspaceDepartment(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if _, err := h.Queries.GetOrgUnit(r.Context(), db.GetOrgUnitParams{ID: unitUUID, WorkspaceID: wsUUID}); err != nil {
-		writeErrorCode(w, http.StatusBadRequest, codeDepartmentForbidden, "department does not belong to this workspace")
+	target, err := h.Queries.GetWorkspace(r.Context(), wsUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "workspace not found")
+		return
+	}
+	if target.IsOrganization {
+		writeErrorCode(w, http.StatusConflict, codeOrganizationManaged, "the organization workspace has no owning department")
+		return
+	}
+	org, ok := h.requireOrganizationWorkspace(w, r)
+	if !ok {
+		return
+	}
+	if _, err := h.Queries.GetOrgUnit(r.Context(), db.GetOrgUnitParams{ID: unitUUID, WorkspaceID: org.ID}); err != nil {
+		writeErrorCode(w, http.StatusBadRequest, codeDepartmentForbidden, "department does not belong to the organization")
 		return
 	}
 
@@ -657,7 +518,7 @@ func (h *Handler) SetWorkspaceDepartment(w http.ResponseWriter, r *http.Request)
 	// The new department's lead takes over the project. This mirrors creation
 	// and the migration backfill: the lead is always an owner, so the project
 	// cannot be left with nobody able to administer it.
-	units, err := qtx.ListOrgUnits(r.Context(), wsUUID)
+	units, err := qtx.ListOrgUnits(r.Context(), org.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to change department")
 		return

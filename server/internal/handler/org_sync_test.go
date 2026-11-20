@@ -40,8 +40,24 @@ func installOrgDirectory(t *testing.T, directory OrgDirectory, emails ...string)
 		testPool.Exec(ctx, `DELETE FROM org_sync_run WHERE workspace_id = $1`, testWorkspaceID)
 		for _, email := range emails {
 			testPool.Exec(ctx, `DELETE FROM feishu_identity WHERE lower(email) = lower($1)`, email)
+			testPool.Exec(ctx, `
+				DELETE FROM member WHERE user_id IN (SELECT id FROM "user" WHERE lower(email) = lower($1))
+			`, email)
 			testPool.Exec(ctx, `DELETE FROM "user" WHERE lower(email) = lower($1)`, email)
 		}
+	})
+}
+
+// markOrganizationWorkspace makes the shared test workspace the organization
+// workspace for one test. Directory sync only writes there.
+func markOrganizationWorkspace(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := testPool.Exec(ctx, `UPDATE workspace SET is_organization = true WHERE id = $1`, testWorkspaceID); err != nil {
+		t.Fatalf("mark organization workspace: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `UPDATE workspace SET is_organization = false WHERE id = $1`, testWorkspaceID)
 	})
 }
 
@@ -78,6 +94,7 @@ func syncOrg(t *testing.T, admin string) (int, orgSyncReport) {
 func TestSyncOrgFromFeishu_ImportsTreePeopleAndLeads(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
+	markOrganizationWorkspace(t)
 	admin := createOrgTestAdmin(t, "org-sync-admin@example.com")
 	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
 
@@ -139,6 +156,7 @@ func TestSyncOrgFromFeishu_ImportsTreePeopleAndLeads(t *testing.T) {
 func TestSyncOrgFromFeishu_ReportsDetachedAndMovesPeople(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
+	markOrganizationWorkspace(t)
 	admin := createOrgTestAdmin(t, "org-sync-detach@example.com")
 	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
 
@@ -205,6 +223,7 @@ func TestSyncOrgFromFeishu_RequiresOperator(t *testing.T) {
 func TestSyncOrgFromFeishu_AllowsOperator(t *testing.T) {
 	requireDB(t)
 	cleanupOrgUnits(t)
+	markOrganizationWorkspace(t)
 	installOrgDirectory(t, directoryFixture(), "lead@example.com", "ada@example.com")
 
 	req := newRequest("POST", "/api/org/sync/feishu", nil)

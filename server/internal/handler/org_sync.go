@@ -16,7 +16,6 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/feishu/contact"
 	"github.com/multica-ai/multica/server/internal/logger"
-	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -40,15 +39,13 @@ type orgSyncReport struct {
 	MembersWithoutEmail []string `json:"members_without_email"`
 	DetachedDepartments []string `json:"detached_departments"`
 	DetachedUsers       []string `json:"detached_users"`
-	// OwnersOutsideDepartment names stored owners/admins whose new placement
-	// left the project subtree. They keep access by role; sync never demotes
-	// them.
+	// OwnersOutsideDepartment and AccessRevoked are retained for wire
+	// compatibility and stay empty: sync writes only the organization
+	// workspace, and an explicit project member row keeps access wherever the
+	// directory places the person.
 	OwnersOutsideDepartment []string `json:"owners_outside_department"`
-	// AccessRevoked is retained for wire compatibility and stays empty: an
-	// explicit member row keeps access wherever the directory places the
-	// person, so a department change no longer revokes it.
-	AccessRevoked []string `json:"access_revoked"`
-	SyncedAt      string   `json:"synced_at"`
+	AccessRevoked           []string `json:"access_revoked"`
+	SyncedAt                string   `json:"synced_at"`
 }
 
 type orgSyncStatusResponse struct {
@@ -110,12 +107,12 @@ type directoryUpstreamError struct{ err error }
 func (e directoryUpstreamError) Error() string { return e.err.Error() }
 func (e directoryUpstreamError) Unwrap() error { return e.err }
 
-// SyncOrgFromFeishu imports the Feishu department tree and everyone in it.
-// Units are matched by external_id so manual units and manual renames survive;
-// people are matched by email. Nothing is deleted: units and directory-linked
-// members that disappeared upstream are reported for an admin to handle.
-// Only the platform operator may run it: the directory is company-wide and is
-// shared by every workspace.
+// SyncOrgFromFeishu imports the Feishu department tree and everyone in it
+// into the organization workspace. Units are matched by external_id so manual
+// units and manual renames survive; people are matched by email. Nothing is
+// deleted: units and members that disappeared upstream are reported for an
+// admin to handle. Only the platform operator may run it, and only from the
+// organization workspace: projects read that tree instead of owning one.
 func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	if _, ok := h.requireOperator(w, r, workspaceID, "workspace not found"); !ok {
@@ -125,7 +122,21 @@ func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	report, err := h.syncDirectory(r.Context(), wsUUID)
+	h.syncOrganizationFrom(w, r, wsUUID)
+}
+
+// syncOrganizationFrom runs the sync when wsUUID is the organization
+// workspace and answers 409 organization_managed for a project.
+func (h *Handler) syncOrganizationFrom(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID) {
+	org, ok := h.requireOrganizationWorkspace(w, r)
+	if !ok {
+		return
+	}
+	if org.ID != wsUUID {
+		writeErrorCode(w, http.StatusConflict, codeOrganizationManaged, "the organization workspace owns the directory")
+		return
+	}
+	report, err := h.syncDirectory(r.Context(), org)
 	if err != nil {
 		h.writeDirectorySyncError(w, r, err)
 		return
@@ -133,9 +144,10 @@ func (h *Handler) SyncOrgFromFeishu(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, report)
 }
 
-// syncDirectory pulls the Feishu contact tree into one workspace. Callers
-// enforce who may start it; this function only does the import.
-func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyncReport, error) {
+// syncDirectory pulls the Feishu contact tree into the organization workspace
+// and makes every project follow it. Callers enforce who may start it; this
+// function only does the import.
+func (h *Handler) syncDirectory(ctx context.Context, org db.Workspace) (orgSyncReport, error) {
 	if h.OrgDirectory == nil {
 		return orgSyncReport{}, errDirectoryNotConfigured
 	}
@@ -161,22 +173,21 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 	defer tx.Rollback(ctx)
 	qtx := h.Queries.WithTx(tx)
 
-	ws, err := qtx.GetWorkspace(ctx, wsUUID)
-	if err != nil {
-		return orgSyncReport{}, fmt.Errorf("load workspace: %w", err)
-	}
-	unitIDs, err := h.upsertDirectoryUnits(ctx, qtx, wsUUID, ws.OrgUnitID, ordered, &report)
+	unitIDs, err := h.upsertDirectoryUnits(ctx, qtx, org.ID, ordered, &report)
 	if err != nil {
 		return orgSyncReport{}, err
 	}
-	userIDs, err := h.upsertDirectoryUsers(ctx, qtx, ws, users, unitIDs, &report)
+	userIDs, err := h.upsertDirectoryUsers(ctx, qtx, org.ID, users, unitIDs, &report)
 	if err != nil {
 		return orgSyncReport{}, err
 	}
-	if err := h.assignDirectoryLeads(ctx, qtx, wsUUID, ordered, unitIDs, userIDs, &report); err != nil {
+	if err := h.assignDirectoryLeads(ctx, qtx, org.ID, ordered, unitIDs, userIDs, &report); err != nil {
 		return orgSyncReport{}, err
 	}
-	if err := h.reportDetachedEntities(ctx, qtx, wsUUID, ws.OrgUnitID.Valid, ordered, users, userIDs, &report); err != nil {
+	if err := h.reportDetachedEntities(ctx, qtx, org.ID, ordered, users, &report); err != nil {
+		return orgSyncReport{}, err
+	}
+	if err := h.followOrganization(ctx, qtx, org.ID, pgtype.UUID{}); err != nil {
 		return orgSyncReport{}, err
 	}
 
@@ -186,7 +197,7 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 		return orgSyncReport{}, err
 	}
 	if _, err := qtx.InsertOrgSyncRun(ctx, db.InsertOrgSyncRunParams{
-		WorkspaceID: wsUUID,
+		WorkspaceID: org.ID,
 		Summary:     summary,
 	}); err != nil {
 		return orgSyncReport{}, err
@@ -194,53 +205,48 @@ func (h *Handler) syncDirectory(ctx context.Context, wsUUID pgtype.UUID) (orgSyn
 	if err := tx.Commit(ctx); err != nil {
 		return orgSyncReport{}, err
 	}
-	// A successful sync can move people out of the project subtree. Their
-	// member rows stay (the lead may pull them back), but live sessions and
-	// daemon caches must learn about the loss of access.
-	if ws.OrgUnitID.Valid {
-		removed := h.disconnectMembersOutsideProject(ctx, wsUUID)
-		h.publishAccessRevocations(wsUUID, "", removed)
-	}
 	// Directory moves and newly assigned leads invalidate department squads;
 	// one pass re-points any leader that can no longer run and re-rosters.
-	h.syncAllOrgSquadLeadership(ctx, wsUUID)
+	h.syncAllOrgSquadLeadership(ctx, org.ID)
 	return report, nil
 }
 
-// SyncAllDirectories refreshes every workspace. A workspace that fails is
-// logged and skipped so one bad tree does not block the others; the returned
-// error is non-nil when any workspace failed.
+// followOrganization makes projects agree with the organization workspace:
+// project placements and primary twins follow each person's organization
+// placement, and every owning-department lead is a project owner. unitID
+// narrows the lead pass to projects owned by one unit.
+func (h *Handler) followOrganization(ctx context.Context, qtx *db.Queries, orgID, unitID pgtype.UUID) error {
+	if _, err := qtx.PropagateOrganizationPlacements(ctx, orgID); err != nil {
+		return fmt.Errorf("propagate placements: %w", err)
+	}
+	if _, err := qtx.AlignProjectTwinUnits(ctx, orgID); err != nil {
+		return fmt.Errorf("align project twins: %w", err)
+	}
+	if _, err := h.healProjectLeadOwners(ctx, qtx, unitID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SyncAllDirectories refreshes the organization workspace. It returns the
+// number of workspaces synced: 0 when no organization workspace exists yet.
 func (h *Handler) SyncAllDirectories(ctx context.Context) (int, error) {
 	if h.OrgDirectory == nil {
 		return 0, nil
 	}
-	rows, err := h.DB.Query(ctx, `SELECT id FROM workspace ORDER BY created_at ASC`)
+	org, ok, err := h.organizationWorkspace(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
-	var ids []pgtype.UUID
-	for rows.Next() {
-		var id pgtype.UUID
-		if err := rows.Scan(&id); err != nil {
-			return 0, err
-		}
-		ids = append(ids, id)
+	if !ok {
+		slog.Warn("scheduled directory sync skipped: no organization workspace")
+		return 0, nil
 	}
-	if err := rows.Err(); err != nil {
+	if _, err := h.syncDirectory(ctx, org); err != nil {
+		slog.Error("scheduled directory sync failed", "workspace_id", uuidToString(org.ID), "error", err)
 		return 0, err
 	}
-	synced := 0
-	var failed error
-	for _, id := range ids {
-		if _, err := h.syncDirectory(ctx, id); err != nil {
-			slog.Error("scheduled directory sync failed", "workspace_id", uuidToString(id), "error", err)
-			failed = err
-			continue
-		}
-		synced++
-	}
-	return synced, failed
+	return 1, nil
 }
 
 func (h *Handler) writeDirectorySyncError(w http.ResponseWriter, r *http.Request, err error) {
@@ -264,7 +270,6 @@ func (h *Handler) upsertDirectoryUnits(
 	ctx context.Context,
 	qtx *db.Queries,
 	wsUUID pgtype.UUID,
-	rootUnitID pgtype.UUID,
 	departments []contact.Department,
 	report *orgSyncReport,
 ) (map[string]pgtype.UUID, error) {
@@ -287,19 +292,12 @@ func (h *Handler) upsertDirectoryUnits(
 			parent = unitIDs[department.ParentID]
 		}
 		if current, ok := byExternal[department.ID]; ok {
-			nextParent := parent
-			// A project's owning department root keeps its parent: projects read
-			// their scope from that unit, so a directory reshuffle must not move
-			// it. The workspace decides its parent, not the directory.
-			if current.ID == rootUnitID {
-				nextParent = current.ParentID
-			}
-			if current.Name != department.Name || !orgUUIDEqual(current.ParentID, nextParent) {
+			if current.Name != department.Name || !orgUUIDEqual(current.ParentID, parent) {
 				if err := qtx.UpdateOrgUnitFromExternal(ctx, db.UpdateOrgUnitFromExternalParams{
 					ID:          current.ID,
 					WorkspaceID: wsUUID,
 					Name:        department.Name,
-					ParentID:    nextParent,
+					ParentID:    parent,
 				}); err != nil {
 					return nil, fmt.Errorf("update unit %q: %w", department.Name, err)
 				}
@@ -323,32 +321,19 @@ func (h *Handler) upsertDirectoryUnits(
 	return unitIDs, nil
 }
 
-// upsertDirectoryUsers creates missing users, refreshes the department
-// directory for everyone, and keeps placements current. Users without an email
-// cannot be matched or created and are reported instead of silently skipped.
-//
-// A legacy workspace still creates a member row per person, as it always has.
-// A department project never does: its member rows are only the people the
-// department lead pulled in, and sync merely updates their placement so a
-// department change revokes access through the project scope.
+// upsertDirectoryUsers creates missing users, gives every employee a member
+// row in the organization workspace and keeps placements current. Users
+// without an email cannot be matched or created and are reported instead of
+// silently skipped. These rows carry no seat intent: the organization roster is
+// the company directory, not a billed seat.
 func (h *Handler) upsertDirectoryUsers(
 	ctx context.Context,
 	qtx *db.Queries,
-	ws db.Workspace,
+	wsUUID pgtype.UUID,
 	users []contact.User,
 	unitIDs map[string]pgtype.UUID,
 	report *orgSyncReport,
 ) (map[string]pgtype.UUID, error) {
-	wsUUID := ws.ID
-	owned := ws.OrgUnitID.Valid
-	directory, err := qtx.ListDirectoryMembers(ctx, wsUUID)
-	if err != nil {
-		return nil, fmt.Errorf("list directory: %w", err)
-	}
-	directoryByUser := make(map[pgtype.UUID]db.ListDirectoryMembersRow, len(directory))
-	for _, row := range directory {
-		directoryByUser[row.UserID] = row
-	}
 	members, err := qtx.ListMembers(ctx, wsUUID)
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
@@ -359,7 +344,6 @@ func (h *Handler) upsertDirectoryUsers(
 	}
 
 	userIDs := make(map[string]pgtype.UUID, len(users))
-	nameByUser := make(map[pgtype.UUID]string, len(users))
 	for _, person := range users {
 		if person.Email == "" {
 			report.MembersWithoutEmail = append(report.MembersWithoutEmail, person.Name)
@@ -390,41 +374,10 @@ func (h *Handler) upsertDirectoryUsers(
 			}
 		}
 		userIDs[person.OpenID] = user.ID
-		nameByUser[user.ID] = person.Name
 
 		unit := unitIDs[person.DepartmentID]
-		if previous, ok := directoryByUser[user.ID]; ok {
-			if unit.Valid && !orgUUIDEqual(previous.OrgUnitID, unit) {
-				report.MembersMoved = append(report.MembersMoved, person.Name)
-			}
-		} else {
-			report.MembersAdded = append(report.MembersAdded, person.Name)
-		}
-		if _, err := qtx.UpsertDirectoryMember(ctx, db.UpsertDirectoryMemberParams{
-			WorkspaceID: wsUUID,
-			UserID:      user.ID,
-			OrgUnitID:   unit,
-		}); err != nil {
-			return nil, fmt.Errorf("place directory member %q: %w", email, err)
-		}
-
 		member, isMember := memberByUser[user.ID]
-		moved := false
 		switch {
-		case owned:
-			// Only update an existing project member; never create one.
-			if isMember && unit.Valid && !orgUUIDEqual(member.OrgUnitID, unit) {
-				if err := qtx.SetMemberOrgUnit(ctx, db.SetMemberOrgUnitParams{
-					WorkspaceID: wsUUID,
-					UserID:      user.ID,
-					OrgUnitID:   unit,
-				}); err != nil {
-					return nil, fmt.Errorf("place member %q: %w", email, err)
-				}
-				member.OrgUnitID = unit
-				memberByUser[user.ID] = member
-				moved = true
-			}
 		case !isMember:
 			createdMember, err := qtx.CreateMember(ctx, db.CreateMemberParams{
 				WorkspaceID: wsUUID,
@@ -436,6 +389,7 @@ func (h *Handler) upsertDirectoryUsers(
 				return nil, fmt.Errorf("add member %q: %w", email, err)
 			}
 			memberByUser[user.ID] = createdMember
+			report.MembersAdded = append(report.MembersAdded, person.Name)
 		case unit.Valid && !orgUUIDEqual(member.OrgUnitID, unit):
 			if err := qtx.SetMemberOrgUnit(ctx, db.SetMemberOrgUnitParams{
 				WorkspaceID: wsUUID,
@@ -446,9 +400,7 @@ func (h *Handler) upsertDirectoryUsers(
 			}
 			member.OrgUnitID = unit
 			memberByUser[user.ID] = member
-			moved = true
-		}
-		if moved {
+			report.MembersMoved = append(report.MembersMoved, person.Name)
 			// The member's twin represents them in the organization, so a
 			// directory move moves it too.
 			if _, err := qtx.MovePrimaryTwinToOwnerUnit(ctx, db.MovePrimaryTwinToOwnerUnitParams{
@@ -470,50 +422,7 @@ func (h *Handler) upsertDirectoryUsers(
 			return nil, fmt.Errorf("record feishu identity %q: %w", email, err)
 		}
 	}
-	if owned {
-		if err := reportProjectScopeChanges(ctx, qtx, wsUUID, memberByUser, nameByUser, report); err != nil {
-			return nil, err
-		}
-	}
 	return userIDs, nil
-}
-
-// reportProjectScopeChanges lists owners/admins the directory moved outside
-// the project subtree. Ordinary members need no report: their explicit member
-// row keeps access wherever the directory places them.
-func reportProjectScopeChanges(
-	ctx context.Context,
-	qtx *db.Queries,
-	wsUUID pgtype.UUID,
-	members map[pgtype.UUID]db.Member,
-	nameByUser map[pgtype.UUID]string,
-	report *orgSyncReport,
-) error {
-	units, err := qtx.ListWorkspaceSubtreeUnits(ctx, wsUUID)
-	if err != nil {
-		return fmt.Errorf("list project departments: %w", err)
-	}
-	subtree := make(map[pgtype.UUID]bool, len(units))
-	for _, unit := range units {
-		subtree[unit.ID] = true
-	}
-	owners := make([]string, 0)
-	for userID, member := range members {
-		if subtree[member.OrgUnitID] {
-			continue
-		}
-		if member.Role != "owner" && member.Role != "admin" {
-			continue
-		}
-		name := nameByUser[userID]
-		if name == "" {
-			name = util.UUIDToString(userID)
-		}
-		owners = append(owners, name)
-	}
-	sort.Strings(owners)
-	report.OwnersOutsideDepartment = append(report.OwnersOutsideDepartment, owners...)
-	return nil
 }
 
 // assignDirectoryLeads fills empty unit leads from the directory's department
@@ -552,16 +461,14 @@ func (h *Handler) assignDirectoryLeads(
 	return nil
 }
 
-// reportDetachedEntities lists synced units and directory-linked members the
-// directory no longer returned. Sync never deletes them: an admin decides.
+// reportDetachedEntities lists synced units and members the directory no
+// longer returned. Sync never deletes them: an admin decides.
 func (h *Handler) reportDetachedEntities(
 	ctx context.Context,
 	qtx *db.Queries,
 	wsUUID pgtype.UUID,
-	owned bool,
 	departments []contact.Department,
 	users []contact.User,
-	userIDs map[string]pgtype.UUID,
 	report *orgSyncReport,
 ) error {
 	present := make(map[string]struct{}, len(departments))
@@ -585,25 +492,9 @@ func (h *Handler) reportDetachedEntities(
 			presentEmails[strings.ToLower(person.Email)] = struct{}{}
 		}
 	}
-	identities := []db.ListWorkspaceFeishuIdentitiesRow{}
-	if owned {
-		directoryIdentities, err := qtx.ListWorkspaceDirectoryFeishuIdentities(ctx, wsUUID)
-		if err != nil {
-			return fmt.Errorf("list directory members: %w", err)
-		}
-		for _, identity := range directoryIdentities {
-			identities = append(identities, db.ListWorkspaceFeishuIdentitiesRow{
-				UserID: identity.UserID,
-				Email:  identity.Email,
-				Name:   identity.Name,
-			})
-		}
-	} else {
-		memberIdentities, err := qtx.ListWorkspaceFeishuIdentities(ctx, wsUUID)
-		if err != nil {
-			return fmt.Errorf("list directory members: %w", err)
-		}
-		identities = memberIdentities
+	identities, err := qtx.ListWorkspaceFeishuIdentities(ctx, wsUUID)
+	if err != nil {
+		return fmt.Errorf("list directory members: %w", err)
 	}
 	for _, identity := range identities {
 		if _, ok := presentEmails[strings.ToLower(identity.Email)]; !ok {

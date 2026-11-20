@@ -52,6 +52,10 @@ func (h *Handler) GenerateOrgUnitSquad(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if access.owned {
+		writeOrganizationManaged(w)
+		return
+	}
 	if !access.managesAny() {
 		writeError(w, http.StatusForbidden, "insufficient permissions")
 		return

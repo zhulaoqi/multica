@@ -132,7 +132,7 @@ SELECT
 FROM dispatch_origin d
 JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
 JOIN workspace w ON w.id = d.workspace_id
-LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
 LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
 LEFT JOIN LATERAL (
@@ -180,7 +180,7 @@ SELECT
 FROM dispatch_origin d
 JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
 JOIN workspace w ON w.id = d.workspace_id
-LEFT JOIN org_unit u ON u.id = d.target_unit_id AND u.workspace_id = d.workspace_id
+LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
 LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
 WHERE d.requester_id = $1

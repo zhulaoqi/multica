@@ -14,8 +14,8 @@
 // realtime connections drop and the API's caches expire. The command does not
 // publish in-process events and does not need the API's Hub.
 //
-// Removed people remain in workspace_directory_member and can be pulled back
-// into the project by a manager; their IM bindings are pruned by the
+// Removed people remain on the organization workspace's roster and can be
+// pulled back into the project by a manager; their IM bindings are pruned by the
 // revocation, so they must re-bind (or wait for the next org sync) afterwards.
 package main
 

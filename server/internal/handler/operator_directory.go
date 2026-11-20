@@ -86,8 +86,10 @@ ORDER BY w.name ASC`)
 	})
 }
 
-// OperatorSyncDirectory runs one workspace's Feishu directory sync from the
-// operator console. The route is operator-only; workspace role is not required.
+// OperatorSyncDirectory runs the Feishu directory sync from the operator
+// console. Only the organization workspace owns a directory; a project id gets
+// 409 organization_managed. The route is operator-only; workspace role is not
+// required.
 func (h *Handler) OperatorSyncDirectory(w http.ResponseWriter, r *http.Request) {
 	wsUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "workspaceId"), "workspace id")
 	if !ok {
@@ -98,10 +100,5 @@ func (h *Handler) OperatorSyncDirectory(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
-	report, err := h.syncDirectory(r.Context(), wsUUID)
-	if err != nil {
-		h.writeDirectorySyncError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, report)
+	h.syncOrganizationFrom(w, r, wsUUID)
 }

@@ -14,7 +14,7 @@ import (
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspace (name, slug, description, context, issue_prefix)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id, is_organization
 `
 
 type CreateWorkspaceParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
 		&i.OrgUnitID,
+		&i.IsOrganization,
 	)
 	return i, err
 }
@@ -236,7 +237,7 @@ func (q *Queries) GetDaemonWorkspace(ctx context.Context, id pgtype.UUID) (GetDa
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id, is_organization FROM workspace
 WHERE id = $1
 `
 
@@ -258,6 +259,7 @@ func (q *Queries) GetWorkspace(ctx context.Context, id pgtype.UUID) (Workspace, 
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
 		&i.OrgUnitID,
+		&i.IsOrganization,
 	)
 	return i, err
 }
@@ -277,7 +279,7 @@ func (q *Queries) GetWorkspaceAttributionFailClosed(ctx context.Context, id pgty
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id FROM workspace
+SELECT id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id, is_organization FROM workspace
 WHERE slug = $1
 `
 
@@ -299,6 +301,7 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
 		&i.OrgUnitID,
+		&i.IsOrganization,
 	)
 	return i, err
 }
@@ -320,13 +323,13 @@ const listDaemonWorkspaces = `-- name: ListDaemonWorkspaces :many
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT w.id, w.name
 FROM workspace w
@@ -337,7 +340,7 @@ WHERE EXISTS (
    OR EXISTS (
         SELECT 1
         FROM ancestors a
-        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        JOIN org_unit unit ON unit.id = a.unit_id
         WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
     )
 ORDER BY w.id ASC
@@ -373,70 +376,19 @@ func (q *Queries) ListDaemonWorkspaces(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
-const listOrgUnitsForWorkspaces = `-- name: ListOrgUnitsForWorkspaces :many
-SELECT u.id AS unit_id, u.parent_id, u.name, u.lead_user_id, u.position,
-       w.id AS workspace_id, w.name AS workspace_name
-FROM member m
-JOIN workspace w ON w.id = m.workspace_id
-JOIN org_unit u ON u.workspace_id = w.id
-WHERE m.user_id = $1
-ORDER BY w.created_at ASC, u.position ASC, u.name ASC
-`
-
-type ListOrgUnitsForWorkspacesRow struct {
-	UnitID        pgtype.UUID `json:"unit_id"`
-	ParentID      pgtype.UUID `json:"parent_id"`
-	Name          string      `json:"name"`
-	LeadUserID    pgtype.UUID `json:"lead_user_id"`
-	Position      int32       `json:"position"`
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	WorkspaceName string      `json:"workspace_name"`
-}
-
-// Creation options: every department in the workspaces the caller belongs to,
-// so a department lead can pick a unit without knowing where it lives. The
-// caller filters to units they lead.
-func (q *Queries) ListOrgUnitsForWorkspaces(ctx context.Context, userID pgtype.UUID) ([]ListOrgUnitsForWorkspacesRow, error) {
-	rows, err := q.db.Query(ctx, listOrgUnitsForWorkspaces, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListOrgUnitsForWorkspacesRow{}
-	for rows.Next() {
-		var i ListOrgUnitsForWorkspacesRow
-		if err := rows.Scan(
-			&i.UnitID,
-			&i.ParentID,
-			&i.Name,
-			&i.LeadUserID,
-			&i.Position,
-			&i.WorkspaceID,
-			&i.WorkspaceName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listWorkspaces = `-- name: ListWorkspaces :many
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
-SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed, w.org_unit_id
+SELECT w.id, w.name, w.slug, w.description, w.settings, w.created_at, w.updated_at, w.context, w.repos, w.issue_prefix, w.issue_counter, w.avatar_url, w.attribution_fail_closed, w.org_unit_id, w.is_organization
 FROM workspace w
 WHERE EXISTS (
         SELECT 1 FROM member m
@@ -445,7 +397,7 @@ WHERE EXISTS (
    OR EXISTS (
         SELECT 1
         FROM ancestors a
-        JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+        JOIN org_unit unit ON unit.id = a.unit_id
         WHERE a.workspace_id = w.id AND unit.lead_user_id = $1
     )
 ORDER BY w.created_at ASC
@@ -478,6 +430,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context, userID pgtype.UUID) ([]Wor
 			&i.AvatarUrl,
 			&i.AttributionFailClosed,
 			&i.OrgUnitID,
+			&i.IsOrganization,
 		); err != nil {
 			return nil, err
 		}
@@ -544,7 +497,7 @@ UPDATE workspace SET
     avatar_url = COALESCE($8, avatar_url),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id, is_organization
 `
 
 type UpdateWorkspaceParams struct {
@@ -585,6 +538,7 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
 		&i.OrgUnitID,
+		&i.IsOrganization,
 	)
 	return i, err
 }
@@ -592,7 +546,7 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 const updateWorkspaceOrgUnit = `-- name: UpdateWorkspaceOrgUnit :one
 UPDATE workspace SET org_unit_id = $2, updated_at = now()
 WHERE id = $1
-RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
+RETURNING id, name, slug, description, settings, created_at, updated_at, context, repos, issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id, is_organization
 `
 
 type UpdateWorkspaceOrgUnitParams struct {
@@ -620,6 +574,7 @@ func (q *Queries) UpdateWorkspaceOrgUnit(ctx context.Context, arg UpdateWorkspac
 		&i.AvatarUrl,
 		&i.AttributionFailClosed,
 		&i.OrgUnitID,
+		&i.IsOrganization,
 	)
 	return i, err
 }

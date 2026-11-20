@@ -56,18 +56,18 @@ WHERE id = sqlc.arg('id')
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
     FROM workspace w
-    JOIN org_unit u ON u.id = w.org_unit_id AND u.workspace_id = w.id
+    JOIN org_unit u ON u.id = w.org_unit_id
     WHERE w.org_unit_id IS NOT NULL
     UNION ALL
     SELECT a.workspace_id, parent.id
     FROM ancestors a
-    JOIN org_unit child ON child.id = a.unit_id AND child.workspace_id = a.workspace_id
-    JOIN org_unit parent ON parent.id = child.parent_id AND parent.workspace_id = child.workspace_id
+    JOIN org_unit child ON child.id = a.unit_id
+    JOIN org_unit parent ON parent.id = child.parent_id
 )
 SELECT w.id, w.name, w.slug, w.issue_prefix,
        COALESCE(root.name, '') AS department_name
 FROM workspace w
-LEFT JOIN org_unit root ON root.id = w.org_unit_id AND root.workspace_id = w.id
+LEFT JOIN org_unit root ON root.id = w.org_unit_id
 WHERE (
         EXISTS (
             SELECT 1 FROM member m
@@ -76,7 +76,7 @@ WHERE (
         OR EXISTS (
             SELECT 1
             FROM ancestors a
-            JOIN org_unit unit ON unit.id = a.unit_id AND unit.workspace_id = a.workspace_id
+            JOIN org_unit unit ON unit.id = a.unit_id
             WHERE a.workspace_id = w.id AND unit.lead_user_id = sqlc.arg('user_id')
         )
     )
@@ -87,5 +87,5 @@ WHERE (
           AND a.is_primary
           AND a.archived_at IS NULL
     )
-  AND EXISTS (SELECT 1 FROM org_unit u WHERE u.workspace_id = w.id)
+  AND w.org_unit_id IS NOT NULL
 ORDER BY w.name ASC, w.id ASC;

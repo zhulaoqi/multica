@@ -608,8 +608,9 @@ func notifyMentionedMembers(
 	}
 
 	// If @all is present, expand to every project member. A department project
-	// reaches only the people inside its owning subtree.
-	if hasAll {
+	// reaches only the people inside its owning subtree. The organization
+	// workspace's roster is the whole company, so @all never fans out there.
+	if hasAll && !isOrganizationWorkspace(queries, e.WorkspaceID) {
 		userIDs, err := queries.ListProjectMemberUserIDs(context.Background(), parseUUID(e.WorkspaceID))
 		if err != nil {
 			slog.Error("failed to list members for @all mention", "workspace_id", e.WorkspaceID, "error", err)
@@ -1101,4 +1102,16 @@ func inboxItemToResponse(item db.InboxItem) map[string]any {
 		"actor_id":       util.UUIDToPtr(item.ActorID),
 		"details":        json.RawMessage(item.Details),
 	}
+}
+
+// isOrganizationWorkspace reports whether workspaceID is the organization
+// workspace. A lookup failure counts as "yes" so a transient error can never
+// notify the whole company.
+func isOrganizationWorkspace(queries *db.Queries, workspaceID string) bool {
+	ws, err := queries.GetWorkspace(context.Background(), parseUUID(workspaceID))
+	if err != nil {
+		slog.Error("failed to load workspace for @all mention", "workspace_id", workspaceID, "error", err)
+		return true
+	}
+	return ws.IsOrganization
 }

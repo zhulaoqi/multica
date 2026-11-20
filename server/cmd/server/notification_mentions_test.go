@@ -100,6 +100,39 @@ func TestNotification_MalformedMemberMentionPreservesValidRecipients(t *testing.
 	}
 }
 
+// The organization workspace holds every employee, so @all there must not
+// reach the whole company.
+func TestNotification_MentionAllSkippedInOrganizationWorkspace(t *testing.T) {
+	fx := workspaceFixture(t)
+	recipientID := fx.User(t, "Org recipient", "org-all-recipient@multica.ai")
+	fx.Member(t, testWorkspaceID, recipientID, "member")
+	fx.Exec(t, `UPDATE workspace SET is_organization = true WHERE id = $1`, testWorkspaceID)
+	fx.Cleanup(t, `UPDATE workspace SET is_organization = false WHERE id = $1`, testWorkspaceID)
+	issueID := fx.Issue(t, "Organization mention all")
+	fx.Cleanup(t, `DELETE FROM inbox_item WHERE issue_id = $1`, issueID)
+	fx.Cleanup(t, `DELETE FROM issue_subscriber WHERE issue_id = $1`, issueID)
+
+	content := "[@All](mention://all/all)"
+	commentID := fx.Comment(t, issueID, content)
+	queries := db.New(testPool)
+	bus := newNotificationBus(t, queries)
+	bus.Publish(events.Event{
+		Type: protocol.EventCommentCreated, WorkspaceID: testWorkspaceID,
+		ActorType: "member", ActorID: testUserID,
+		Payload: map[string]any{
+			"comment": handler.CommentResponse{
+				ID: commentID, IssueID: issueID, AuthorType: "member",
+				AuthorID: testUserID, Content: content, Type: "comment",
+			},
+			"issue_title": "Organization mention all", "issue_status": "todo",
+		},
+	})
+
+	if items := inboxItemsForRecipient(t, queries, recipientID); len(items) != 0 {
+		t.Fatalf("organization member got %d inbox items from @all, want 0", len(items))
+	}
+}
+
 func TestNotifyMentionedMembersOnlyMalformedIDs(t *testing.T) {
 	// Call the boundary directly so the event bus cannot hide a panic. With
 	// no valid recipients, neither the database nor the bus is needed.

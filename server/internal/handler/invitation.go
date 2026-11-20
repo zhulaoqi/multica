@@ -70,10 +70,10 @@ func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Department-owned projects pull colleagues from the department directory
-	// instead of sending email invitations, so the target's placement can be
-	// checked at pull-in time.
-	if ws, err := h.Queries.GetWorkspace(r.Context(), requester.WorkspaceID); err == nil && ws.OrgUnitID.Valid {
+	// Department-owned projects pull colleagues from the organization roster
+	// instead of sending email invitations, and the organization workspace's
+	// roster comes only from directory sync.
+	if ws, err := h.Queries.GetWorkspace(r.Context(), requester.WorkspaceID); err == nil && (ws.OrgUnitID.Valid || ws.IsOrganization) {
 		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "department projects add members directly")
 		return
 	}
@@ -524,18 +524,26 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The workspace may have become department-owned after this invitation
-	// was issued. Revalidate the invitee's directory placement now: an
+	// was issued. Revalidate the invitee's organization placement now: an
 	// invitation is not a way around the department scope.
 	ws, err := h.Queries.GetWorkspace(r.Context(), inv.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
+	if ws.IsOrganization {
+		writeErrorCode(w, http.StatusConflict, codeDirectAddOnly, "the organization roster comes from directory sync")
+		return
+	}
 	var inviteeUnit pgtype.UUID
 	if ws.OrgUnitID.Valid {
-		directoryRow, dirErr := h.Queries.GetDirectoryMember(r.Context(), db.GetDirectoryMemberParams{
-			WorkspaceID: inv.WorkspaceID,
-			UserID:      user.ID,
+		org, ok := h.requireOrganizationWorkspace(w, r)
+		if !ok {
+			return
+		}
+		directoryRow, dirErr := h.Queries.GetOrganizationMember(r.Context(), db.GetOrganizationMemberParams{
+			OrganizationID: org.ID,
+			UserID:         user.ID,
 		})
 		if dirErr != nil {
 			writeErrorCode(w, http.StatusForbidden, codeMemberOutsideDept, "you are not in this project's department")

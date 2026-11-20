@@ -32,12 +32,12 @@ RETURNING *;
 WITH RECURSIVE unit_tree AS (
     SELECT o.id, o.name::text AS path, 1 AS depth
     FROM org_unit o
-    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    WHERE o.parent_id IS NULL
     UNION ALL
     SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
     FROM org_unit o
     JOIN unit_tree ON o.parent_id = unit_tree.id
-    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+    WHERE unit_tree.depth < 16
 )
 SELECT
     a.id,
@@ -404,12 +404,12 @@ WHERE m.workspace_id = $1
 WITH RECURSIVE unit_tree AS (
     SELECT o.id, o.name::text AS path, 1 AS depth
     FROM org_unit o
-    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    WHERE o.parent_id IS NULL
     UNION ALL
     SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
     FROM org_unit o
     JOIN unit_tree ON o.parent_id = unit_tree.id
-    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+    WHERE unit_tree.depth < 16
 )
 SELECT a.id, a.name, a.intake_can, COALESCE(unit_tree.path, '')::text AS org_path,
     (

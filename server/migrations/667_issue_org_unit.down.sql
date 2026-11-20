@@ -1,0 +1,1 @@
+ALTER TABLE issue DROP COLUMN IF EXISTS org_unit_id;

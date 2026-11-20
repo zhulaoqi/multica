@@ -110,8 +110,12 @@ type WorkspaceResponse struct {
 	// OrgUnitID is the owning department, or null for a legacy flat
 	// workspace. Clients treat a null value as "every member row has access".
 	OrgUnitID *string `json:"org_unit_id"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	// IsOrganization marks the organization workspace: it owns the department
+	// tree and the company roster, and every other department-owned workspace
+	// is a project reading that tree.
+	IsOrganization bool   `json:"is_organization"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
@@ -130,18 +134,19 @@ func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
 		repos = []any{}
 	}
 	return WorkspaceResponse{
-		ID:          uuidToString(w.ID),
-		Name:        w.Name,
-		Slug:        w.Slug,
-		Description: textToPtr(w.Description),
-		Context:     textToPtr(w.Context),
-		Settings:    settings,
-		Repos:       repos,
-		IssuePrefix: w.IssuePrefix,
-		AvatarURL:   h.resolveAvatarURLPtr(textToPtr(w.AvatarUrl)),
-		OrgUnitID:   uuidToPtr(w.OrgUnitID),
-		CreatedAt:   timestampToString(w.CreatedAt),
-		UpdatedAt:   timestampToString(w.UpdatedAt),
+		ID:             uuidToString(w.ID),
+		Name:           w.Name,
+		Slug:           w.Slug,
+		Description:    textToPtr(w.Description),
+		Context:        textToPtr(w.Context),
+		Settings:       settings,
+		Repos:          repos,
+		IssuePrefix:    w.IssuePrefix,
+		AvatarURL:      h.resolveAvatarURLPtr(textToPtr(w.AvatarUrl)),
+		OrgUnitID:      uuidToPtr(w.OrgUnitID),
+		IsOrganization: w.IsOrganization,
+		CreatedAt:      timestampToString(w.CreatedAt),
+		UpdatedAt:      timestampToString(w.UpdatedAt),
 	}
 }
 
@@ -210,9 +215,10 @@ type CreateWorkspaceRequest struct {
 	Description *string `json:"description"`
 	Context     *string `json:"context"`
 	IssuePrefix *string `json:"issue_prefix"`
-	// SourceWorkspaceID and OrgUnitID name the department this project takes
-	// over. Non-operators must provide both; the operator may omit them to
-	// create a legacy workspace without a department.
+	// OrgUnitID names the organization department this project belongs to.
+	// Non-operators must provide it; the operator may omit it to create a
+	// legacy workspace without a department. SourceWorkspaceID is optional and,
+	// when present, must name the organization workspace.
 	SourceWorkspaceID *string `json:"source_workspace_id"`
 	OrgUnitID         *string `json:"org_unit_id"`
 }

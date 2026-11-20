@@ -1,8 +1,19 @@
 -- name: ListOrgUnits :many
-SELECT id, parent_id, name, lead_user_id, description, position
-FROM org_unit
-WHERE workspace_id = $1
-ORDER BY position ASC, name ASC;
+-- The department tree a workspace reads. A project reads the tree that owns
+-- its department, the organization workspace's; any other workspace reads its
+-- own units.
+SELECT u.id, u.parent_id, u.name, u.lead_user_id, u.description, u.position
+FROM org_unit u
+WHERE u.workspace_id = COALESCE(
+    (
+        SELECT root.workspace_id
+        FROM workspace w
+        JOIN org_unit root ON root.id = w.org_unit_id
+        WHERE w.id = sqlc.arg(workspace_id)::uuid
+    ),
+    sqlc.arg(workspace_id)::uuid
+)
+ORDER BY u.position ASC, u.name ASC;
 
 -- name: GetOrgUnitByParentAndName :one
 SELECT id
@@ -182,20 +193,6 @@ SELECT count(*)::int
 FROM member
 WHERE workspace_id = $1 AND org_unit_id = $2;
 
--- name: CountDirectoryMembersInUnit :one
--- A unit that still describes directory members cannot be deleted: they would
--- lose their placement, not their project membership.
-SELECT count(*)::int
-FROM workspace_directory_member
-WHERE workspace_id = $1 AND org_unit_id = $2;
-
--- name: CreateOrgUnitClone :one
--- Copy one unit into a newly created workspace when it takes over a department
--- from an existing one. The caller remaps parent_id and lead_user_id.
-INSERT INTO org_unit (workspace_id, parent_id, name, lead_user_id, description, position, external_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id;
-
 -- name: ListSyncedOrgUnits :many
 -- Units this workspace imported from a directory, keyed by the directory's id.
 -- Manual units have no external id and are left alone by sync.
@@ -233,25 +230,9 @@ WHERE workspace_id = $1
 ORDER BY created_at DESC
 LIMIT 1;
 
--- name: ListOrgUnitsForCopy :many
--- A new project copies the complete tree of the workspace it takes its
--- department from, preserving manual units (external_id NULL) as well as
--- synced ones.
-SELECT id, parent_id, name, lead_user_id, description, position, external_id
-FROM org_unit
-WHERE workspace_id = $1
-ORDER BY position ASC, name ASC;
-
 -- name: ListWorkspaceFeishuIdentities :many
--- Directory-linked people in one legacy workspace, so a sync can report who
--- disappeared upstream without touching manually invited members.
+-- Directory-linked members of the organization workspace, so a sync can report
+-- who disappeared upstream without touching manually added accounts.
 SELECT i.user_id, i.email, i.name
 FROM feishu_identity i
 JOIN member m ON m.user_id = i.user_id AND m.workspace_id = $1;
-
--- name: ListWorkspaceDirectoryFeishuIdentities :many
--- The same report for a department project: its directory rows carry the
--- company roster even though most people are not project members.
-SELECT i.user_id, i.email, i.name
-FROM feishu_identity i
-JOIN workspace_directory_member d ON d.user_id = i.user_id AND d.workspace_id = $1;

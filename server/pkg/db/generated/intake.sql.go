@@ -124,7 +124,7 @@ INSERT INTO agent (
           AND p.is_primary
     )
 )
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary, source_agent_id
 `
 
 type CreateIntakeAgentParams struct {
@@ -180,6 +180,7 @@ func (q *Queries) CreateIntakeAgent(ctx context.Context, arg CreateIntakeAgentPa
 		&i.IntakeCannot,
 		&i.OrgUnitID,
 		&i.IsPrimary,
+		&i.SourceAgentID,
 	)
 	return i, err
 }
@@ -622,12 +623,12 @@ const listIntakeAgentsForOwner = `-- name: ListIntakeAgentsForOwner :many
 WITH RECURSIVE unit_tree AS (
     SELECT o.id, o.name::text AS path, 1 AS depth
     FROM org_unit o
-    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    WHERE o.parent_id IS NULL
     UNION ALL
     SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
     FROM org_unit o
     JOIN unit_tree ON o.parent_id = unit_tree.id
-    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+    WHERE unit_tree.depth < 16
 )
 SELECT
     a.id,
@@ -708,12 +709,12 @@ const listIntakeAssignableAgents = `-- name: ListIntakeAssignableAgents :many
 WITH RECURSIVE unit_tree AS (
     SELECT o.id, o.name::text AS path, 1 AS depth
     FROM org_unit o
-    WHERE o.workspace_id = $1 AND o.parent_id IS NULL
+    WHERE o.parent_id IS NULL
     UNION ALL
     SELECT o.id, unit_tree.path || '/' || o.name, unit_tree.depth + 1
     FROM org_unit o
     JOIN unit_tree ON o.parent_id = unit_tree.id
-    WHERE o.workspace_id = $1 AND unit_tree.depth < 16
+    WHERE unit_tree.depth < 16
 )
 SELECT a.id, a.name, a.intake_can, COALESCE(unit_tree.path, '')::text AS org_path,
     (
@@ -1691,7 +1692,7 @@ WHERE id = $1
   AND owner_id = $7
   AND archived_at IS NULL
   AND kind = 'user'
-RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary
+RETURNING id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary, source_agent_id
 `
 
 type UpdateIntakeAgentIdentityParams struct {
@@ -1749,6 +1750,7 @@ func (q *Queries) UpdateIntakeAgentIdentity(ctx context.Context, arg UpdateIntak
 		&i.IntakeCannot,
 		&i.OrgUnitID,
 		&i.IsPrimary,
+		&i.SourceAgentID,
 	)
 	return i, err
 }
