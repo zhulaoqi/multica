@@ -30,6 +30,16 @@ type orgUnitResponse struct {
 	CanManage   bool   `json:"can_manage"`
 	Description string `json:"description"`
 	Position    int32  `json:"position"`
+	// IntakeSources lists who may hand this unit work. Only units the caller
+	// manages carry it; everyone else reads their own answer through dispatch.
+	IntakeSources []orgIntakeSourceResponse `json:"intake_sources,omitempty"`
+}
+
+// orgIntakeSourceResponse is one accepted source of work: a person or a
+// department whose whole subtree may request.
+type orgIntakeSourceResponse struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
 }
 
 type orgAgentResponse struct {
@@ -139,6 +149,19 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not list organisation squads")
 		return
 	}
+	sources, err := h.Queries.ListOrgUnitIntakeSources(r.Context(), access.wsUUID)
+	if err != nil {
+		slog.Error("list org intake sources failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not list organisation intake sources")
+		return
+	}
+	sourcesByUnit := make(map[pgtype.UUID][]orgIntakeSourceResponse, len(access.units))
+	for _, source := range sources {
+		sourcesByUnit[source.OrgUnitID] = append(sourcesByUnit[source.OrgUnitID], orgIntakeSourceResponse{
+			Type: source.SourceType,
+			ID:   uuidToString(source.SourceID),
+		})
+	}
 	resp := orgTreeResponse{
 		Units:     make([]orgUnitResponse, 0, len(access.units)),
 		Agents:    make([]orgAgentResponse, 0, len(agents)),
@@ -189,6 +212,9 @@ func (h *Handler) ListOrgUnits(w http.ResponseWriter, r *http.Request) {
 			Description: unit.Description,
 			Position:    unit.Position,
 		})
+		if resp.Units[len(resp.Units)-1].CanManage {
+			resp.Units[len(resp.Units)-1].IntakeSources = sourcesByUnit[unit.ID]
+		}
 	}
 	for _, agent := range agents {
 		if visible != nil && !visible[agent.OrgUnitID] {
@@ -769,6 +795,119 @@ func (h *Handler) orgLeadRef(w http.ResponseWriter, r *http.Request, access orgA
 	}
 	writeError(w, http.StatusBadRequest, "lead is not a member of this workspace")
 	return pgtype.UUID{}, false
+}
+
+// orgIntakeSourceLimit bounds how many sources one department may accept. A
+// department or two plus the occasional individual is the normal shape; the
+// limit only stops a runaway client.
+const orgIntakeSourceLimit = 200
+
+type orgIntakeSourcesBody struct {
+	Sources []orgIntakeSourceResponse `json:"sources"`
+}
+
+// ReplaceOrgUnitIntakeSources sets who may hand a department work. The lead of
+// the department or of an ancestor decides; the organization owns the setting,
+// so projects get 409 organization_managed. Empty means only the department's
+// leads and the platform managers.
+func (h *Handler) ReplaceOrgUnitIntakeSources(w http.ResponseWriter, r *http.Request) {
+	access, ok := h.orgAccess(w, r)
+	if !ok {
+		return
+	}
+	if access.owned {
+		writeOrganizationManaged(w)
+		return
+	}
+	if !access.managesAny() {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	wsUUID := access.wsUUID
+	unitID, ok := h.orgUnitRef(w, r, wsUUID, chi.URLParam(r, "unitId"))
+	if !ok {
+		return
+	}
+	if !access.manages(unitID) {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+	var body orgIntakeSourcesBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(body.Sources) > orgIntakeSourceLimit {
+		writeError(w, http.StatusBadRequest, "too many intake sources")
+		return
+	}
+	seen := make(map[string]struct{}, len(body.Sources))
+	refs := make([]orgIntakeSourceResponse, 0, len(body.Sources))
+	for _, source := range body.Sources {
+		sourceID, ok := parseUUIDOrBadRequest(w, source.ID, "intake source id")
+		if !ok {
+			return
+		}
+		switch source.Type {
+		case "user":
+			if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+				UserID:      sourceID,
+				WorkspaceID: wsUUID,
+			}); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					writeError(w, http.StatusBadRequest, "intake source user is not a member of this workspace")
+					return
+				}
+				h.importOrgFailed(w, r, err)
+				return
+			}
+		case "org_unit":
+			if !access.unitIDs[sourceID] {
+				writeError(w, http.StatusBadRequest, "intake source department is not in this organisation")
+				return
+			}
+		default:
+			writeError(w, http.StatusBadRequest, "intake source type must be user or org_unit")
+			return
+		}
+		key := source.Type + ":" + uuidToString(sourceID)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		refs = append(refs, orgIntakeSourceResponse{Type: source.Type, ID: uuidToString(sourceID)})
+	}
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := db.New(tx)
+	if err := q.DeleteOrgUnitIntakeSources(r.Context(), db.DeleteOrgUnitIntakeSourcesParams{
+		WorkspaceID: wsUUID,
+		OrgUnitID:   unitID,
+	}); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	for _, ref := range refs {
+		sourceID := parseUUID(ref.ID)
+		if _, err := q.CreateOrgUnitIntakeSource(r.Context(), db.CreateOrgUnitIntakeSourceParams{
+			WorkspaceID: wsUUID,
+			OrgUnitID:   unitID,
+			SourceType:  ref.Type,
+			SourceID:    sourceID,
+		}); err != nil {
+			h.importOrgFailed(w, r, err)
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		h.importOrgFailed(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // SetOrgAgentUnit places an agent in a unit, or clears its unit when unit_id

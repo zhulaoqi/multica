@@ -83,6 +83,18 @@ func setOrgUnitLead(t *testing.T, unitID, userID string) {
 	}
 }
 
+// addOrgIntakeSource lets a person or a department hand the unit work, the way
+// the unit's lead configures it.
+func addOrgIntakeSource(t *testing.T, unitID, sourceType, sourceID string) {
+	t.Helper()
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO org_unit_intake_source (workspace_id, org_unit_id, source_type, source_id)
+		VALUES ($1, $2, $3, $4)
+	`, testWorkspaceID, unitID, sourceType, sourceID); err != nil {
+		t.Fatalf("add intake source: %v", err)
+	}
+}
+
 // startDispatchTest clears leftovers from earlier runs. Fixture cleanups delete
 // users, and issues hold a non-cascading creator reference, so the test must
 // also register clearDispatchFixtures(t) once its fixtures exist: cleanups run
@@ -120,6 +132,7 @@ func clearDispatchFixtures(t *testing.T) {
 		)
 	`, testWorkspaceID)
 	testPool.Exec(ctx, `DELETE FROM squad WHERE workspace_id = $1 AND (org_unit_id IS NOT NULL OR is_private)`, testWorkspaceID)
+	testPool.Exec(ctx, `DELETE FROM org_unit_intake_source WHERE workspace_id = $1`, testWorkspaceID)
 }
 
 func TestDispatchToOrgUnit_CreatesSquadIssueAndOrigin(t *testing.T) {
@@ -288,12 +301,15 @@ func TestDispatchToOrgUnit_EnforcesVisibilityAndLeaderAccess(t *testing.T) {
 		t.Fatalf("hidden unit status = %d, want 404: %s", status, body)
 	}
 
-	// The member can see a department they were placed in, but its only agent
-	// belongs to the admin and is not shared, so the dispatch is refused rather
-	// than waking a private agent.
+	// Being placed in a department does not by itself let a member hand it
+	// work; the department's lead decides who may. With the member configured
+	// as a source the request reaches the agent gate, and the department's only
+	// agent belongs to the admin and is not shared, so the dispatch is refused
+	// rather than waking a private agent.
 	leaderUnit := createOrgUnitAs(t, admin, "管理员私有人部门", "")
 	placeOrgMember(t, member, leaderUnit)
 	placeOrgAgent(t, admin, adminAgent, leaderUnit)
+	addOrgIntakeSource(t, leaderUnit, "user", member)
 	if status, _, body := dispatchToOrgUnit(t, member, leaderUnit, map[string]any{
 		"title": "dispatch-test 私有人", "description": "x",
 	}); status != http.StatusForbidden {
@@ -701,5 +717,56 @@ func TestDispatch_OnlyInOrganizationWorkspace(t *testing.T) {
 	}
 	if root, sub := issueUnit(res.Issue.ID), issueUnit(child.ID); root != unitB || sub != unitB {
 		t.Fatalf("after reassign root/child = %s/%s, want %s", root, sub, unitB)
+	}
+}
+
+// TestDispatchToOrgUnit_IntakeSourcesGateRequests checks the request scope: a
+// department takes work from its leads, and from anybody its lead configured
+// as a person or as a department whose subtree covers the requester.
+func TestDispatchToOrgUnit_IntakeSourcesGateRequests(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "dispatch-sources-admin@example.com")
+	member := createPermissionTestMember(t, "dispatch-sources-member@example.com")
+	memberAgent := insertRunnableDutyAgent(t, "dispatch-sources-member-agent", member)
+	parent := createOrgUnitAs(t, admin, "提需求部", "")
+	child := createOrgUnitAs(t, admin, "提需求子部", parent)
+	target := createOrgUnitAs(t, admin, "受理部", "")
+	placeOrgMember(t, member, child)
+	placeOrgAgent(t, admin, memberAgent, target)
+	t.Cleanup(func() { clearDispatchFixtures(t) })
+
+	dispatch := func(title string) int {
+		status, _, body := dispatchToOrgUnit(t, member, target, map[string]any{
+			"title": title, "description": "x",
+		})
+		if status != http.StatusCreated && status != http.StatusNotFound {
+			t.Fatalf("unexpected status %d: %s", status, body)
+		}
+		return status
+	}
+
+	// Being placed in a department is not enough to hand another one work.
+	if status := dispatch("dispatch-test 未配置"); status != http.StatusNotFound {
+		t.Fatalf("unconfigured status = %d, want 404", status)
+	}
+
+	// The requester's own parent department as a source covers its whole
+	// subtree, so the child member may now request.
+	addOrgIntakeSource(t, target, "org_unit", parent)
+	if status := dispatch("dispatch-test 部门来源"); status != http.StatusCreated {
+		t.Fatalf("department source status = %d, want 201", status)
+	}
+
+	// A person source works on its own too.
+	testPool.Exec(context.Background(), `DELETE FROM org_unit_intake_source WHERE workspace_id = $1 AND org_unit_id = $2`, testWorkspaceID, target)
+	addOrgIntakeSource(t, target, "user", member)
+	if status := dispatch("dispatch-test 个人来源"); status != http.StatusCreated {
+		t.Fatalf("user source status = %d, want 201", status)
+	}
+
+	// Removing every source closes the door again.
+	testPool.Exec(context.Background(), `DELETE FROM org_unit_intake_source WHERE workspace_id = $1 AND org_unit_id = $2`, testWorkspaceID, target)
+	if status := dispatch("dispatch-test 已撤销"); status != http.StatusNotFound {
+		t.Fatalf("revoked status = %d, want 404", status)
 	}
 }

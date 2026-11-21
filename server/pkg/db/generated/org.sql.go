@@ -106,6 +106,31 @@ func (q *Queries) CreateOrgUnit(ctx context.Context, arg CreateOrgUnitParams) (p
 	return id, err
 }
 
+const createOrgUnitIntakeSource = `-- name: CreateOrgUnitIntakeSource :one
+INSERT INTO org_unit_intake_source (workspace_id, org_unit_id, source_type, source_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id
+`
+
+type CreateOrgUnitIntakeSourceParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+	SourceType  string      `json:"source_type"`
+	SourceID    pgtype.UUID `json:"source_id"`
+}
+
+func (q *Queries) CreateOrgUnitIntakeSource(ctx context.Context, arg CreateOrgUnitIntakeSourceParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createOrgUnitIntakeSource,
+		arg.WorkspaceID,
+		arg.OrgUnitID,
+		arg.SourceType,
+		arg.SourceID,
+	)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createOrgUnitWithExternal = `-- name: CreateOrgUnitWithExternal :one
 INSERT INTO org_unit (workspace_id, parent_id, name, external_id)
 VALUES ($1, $2, $3, $4)
@@ -143,6 +168,21 @@ type DeleteOrgUnitParams struct {
 
 func (q *Queries) DeleteOrgUnit(ctx context.Context, arg DeleteOrgUnitParams) error {
 	_, err := q.db.Exec(ctx, deleteOrgUnit, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const deleteOrgUnitIntakeSources = `-- name: DeleteOrgUnitIntakeSources :exec
+DELETE FROM org_unit_intake_source
+WHERE workspace_id = $1 AND org_unit_id = $2
+`
+
+type DeleteOrgUnitIntakeSourcesParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+}
+
+func (q *Queries) DeleteOrgUnitIntakeSources(ctx context.Context, arg DeleteOrgUnitIntakeSourcesParams) error {
+	_, err := q.db.Exec(ctx, deleteOrgUnitIntakeSources, arg.WorkspaceID, arg.OrgUnitID)
 	return err
 }
 
@@ -309,6 +349,49 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.Status,
 			&i.RuntimeMode,
 			&i.IsPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgUnitIntakeSources = `-- name: ListOrgUnitIntakeSources :many
+SELECT id, workspace_id, org_unit_id, source_type, source_id
+FROM org_unit_intake_source
+WHERE workspace_id = $1
+ORDER BY org_unit_id, source_type, created_at
+`
+
+type ListOrgUnitIntakeSourcesRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+	SourceType  string      `json:"source_type"`
+	SourceID    pgtype.UUID `json:"source_id"`
+}
+
+// Who may hand work to a department. Empty for a unit means only its leads
+// and the platform managers.
+func (q *Queries) ListOrgUnitIntakeSources(ctx context.Context, workspaceID pgtype.UUID) ([]ListOrgUnitIntakeSourcesRow, error) {
+	rows, err := q.db.Query(ctx, listOrgUnitIntakeSources, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrgUnitIntakeSourcesRow{}
+	for rows.Next() {
+		var i ListOrgUnitIntakeSourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.OrgUnitID,
+			&i.SourceType,
+			&i.SourceID,
 		); err != nil {
 			return nil, err
 		}

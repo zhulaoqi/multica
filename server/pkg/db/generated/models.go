@@ -1371,6 +1371,15 @@ type OrgUnit struct {
 	ExternalID  pgtype.Text        `json:"external_id"`
 }
 
+type OrgUnitIntakeSource struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	OrgUnitID   pgtype.UUID        `json:"org_unit_id"`
+	SourceType  string             `json:"source_type"`
+	SourceID    pgtype.UUID        `json:"source_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type PersonalAccessToken struct {
 	ID          pgtype.UUID        `json:"id"`
 	UserID      pgtype.UUID        `json:"user_id"`

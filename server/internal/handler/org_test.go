@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -869,5 +870,116 @@ func TestOrgSquadsAttachToUnitsAndMembersSeeTheirOwnDepartment(t *testing.T) {
 	}
 	if squadUnit != "" {
 		t.Fatalf("squad unit after delete = %q, want empty", squadUnit)
+	}
+}
+
+// TestOrgUnitIntakeSources_LeadConfiguresWhoMayRequest covers the department
+// request scope: its lead sets the people and departments that may hand it
+// work, the org tree reports the setting to whoever manages the unit, and
+// projects cannot edit it.
+func TestOrgUnitIntakeSources_LeadConfiguresWhoMayRequest(t *testing.T) {
+	requireDB(t)
+	cleanupOrgUnits(t)
+	admin := createOrgTestAdmin(t, "org-sources-admin@example.com")
+	lead := createPermissionTestMember(t, "org-sources-lead@example.com")
+	member := createPermissionTestMember(t, "org-sources-member@example.com")
+	unitID := createOrgUnitAs(t, admin, "需求受理部", "")
+	sourceUnitID := createOrgUnitAs(t, admin, "提需求方", "")
+	setOrgUnitLead(t, unitID, lead)
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM org_unit_intake_source WHERE workspace_id = $1`, testWorkspaceID)
+	})
+
+	put := func(userID, targetUnit string, body map[string]any) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.ReplaceOrgUnitIntakeSources(rec, orgRequestWithParam(userID, "PUT", "/api/org/units/x/intake-sources", "unitId", targetUnit, body))
+		return rec
+	}
+
+	if rec := put(member, unitID, map[string]any{"sources": []map[string]any{{"type": "user", "id": member}}}); rec.Code != http.StatusForbidden {
+		t.Fatalf("member status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(lead, unitID, map[string]any{"sources": []map[string]any{
+		{"type": "user", "id": member},
+		{"type": "org_unit", "id": sourceUnitID},
+	}}); rec.Code != http.StatusNoContent {
+		t.Fatalf("lead status = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	listRec := httptest.NewRecorder()
+	testHandler.ListOrgUnits(listRec, orgRequestWithParam(lead, "GET", "/api/org/units", "unitId", "", nil))
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status = %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var tree struct {
+		Units []struct {
+			ID            string `json:"id"`
+			IntakeSources []struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+			} `json:"intake_sources"`
+		} `json:"units"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &tree); err != nil {
+		t.Fatalf("decode org tree: %v %s", err, listRec.Body.String())
+	}
+	var sources []string
+	for _, unit := range tree.Units {
+		if unit.ID != unitID {
+			continue
+		}
+		for _, source := range unit.IntakeSources {
+			sources = append(sources, source.Type+":"+source.ID)
+		}
+	}
+	want := map[string]bool{"user:" + member: true, "org_unit:" + sourceUnitID: true}
+	if len(sources) != len(want) {
+		t.Fatalf("intake sources = %v, want %v", sources, want)
+	}
+	for _, source := range sources {
+		if !want[source] {
+			t.Fatalf("unexpected intake source %q in %v", source, sources)
+		}
+	}
+
+	// An invalid target is a client error, not a silent no-op.
+	if rec := put(lead, unitID, map[string]any{"sources": []map[string]any{{"type": "team", "id": member}}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad type status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(lead, unitID, map[string]any{"sources": []map[string]any{{"type": "user", "id": "00000000-0000-0000-0000-000000000000"}}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("non-member status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if rec := put(lead, unitID, map[string]any{"sources": []map[string]any{{"type": "org_unit", "id": "00000000-0000-0000-0000-000000000000"}}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown unit status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	// Replacing with an empty list falls back to leads only.
+	if rec := put(lead, unitID, map[string]any{"sources": []map[string]any{}}); rec.Code != http.StatusNoContent {
+		t.Fatalf("clear status = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	var remaining int
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT count(*) FROM org_unit_intake_source WHERE workspace_id = $1 AND org_unit_id = $2`,
+		testWorkspaceID, unitID,
+	).Scan(&remaining); err != nil {
+		t.Fatalf("count sources: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("remaining sources = %d, want 0", remaining)
+	}
+
+	// A project reads the organization's tree, so the setting stays there.
+	project := createOrganizationProject(t, "org-sources-project", unitID)
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO member (workspace_id, user_id, role) VALUES ($1, $2, 'member')
+	`, project, lead); err != nil {
+		t.Fatalf("join project: %v", err)
+	}
+	projectRec := httptest.NewRecorder()
+	req := orgRequestWithParam(lead, "PUT", "/api/org/units/x/intake-sources", "unitId", unitID, map[string]any{"sources": []map[string]any{}})
+	req.Header.Set("X-Workspace-ID", project)
+	testHandler.ReplaceOrgUnitIntakeSources(projectRec, req)
+	if projectRec.Code != http.StatusConflict || !strings.Contains(projectRec.Body.String(), "organization_managed") {
+		t.Fatalf("project status = %d, body = %s, want 409 organization_managed", projectRec.Code, projectRec.Body.String())
 	}
 }

@@ -364,7 +364,9 @@ func TestDispatchWork_UnboundMemberCannotDispatch(t *testing.T) {
 	unitID := createOrgUnitAs(t, admin, "未绑定部", "")
 	placeOrgAgent(t, admin, leader, unitID)
 	member := createPermissionTestMember(t, "workbench-unbound-member@example.com")
-	placeOrgMember(t, member, unitID)
+	// The member leads the department, so visibility passes and the missing
+	// agent binding is what stops the dispatch.
+	setOrgUnitLead(t, unitID, member)
 	t.Cleanup(func() { clearDispatchFixtures(t) })
 
 	status, _, body := postDispatchWork(t, member, map[string]any{

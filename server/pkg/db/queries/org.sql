@@ -237,3 +237,20 @@ LIMIT 1;
 SELECT i.user_id, i.email, i.name
 FROM feishu_identity i
 JOIN member m ON m.user_id = i.user_id AND m.workspace_id = $1;
+
+-- name: ListOrgUnitIntakeSources :many
+-- Who may hand work to a department. Empty for a unit means only its leads
+-- and the platform managers.
+SELECT id, workspace_id, org_unit_id, source_type, source_id
+FROM org_unit_intake_source
+WHERE workspace_id = $1
+ORDER BY org_unit_id, source_type, created_at;
+
+-- name: DeleteOrgUnitIntakeSources :exec
+DELETE FROM org_unit_intake_source
+WHERE workspace_id = $1 AND org_unit_id = $2;
+
+-- name: CreateOrgUnitIntakeSource :one
+INSERT INTO org_unit_intake_source (workspace_id, org_unit_id, source_type, source_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id;

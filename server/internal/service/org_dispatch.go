@@ -194,7 +194,11 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		if !ok {
 			return OrgDispatchResult{}, ErrOrgUnitNotFound
 		}
-		if !canDispatchToUnit(access, units, found.ID) {
+		sources, err := intakeSources(ctx, s.Queries, p.WorkspaceID)
+		if err != nil {
+			return OrgDispatchResult{}, err
+		}
+		if !canRequestToUnit(access, units, sources, found.ID) {
 			return OrgDispatchResult{}, ErrOrgUnitNoAccess
 		}
 		unit = found
@@ -299,7 +303,11 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 	if !ok {
 		return OrgDispatchResult{}, ErrOrgUnitNotFound
 	}
-	if !canDispatchToUnit(access, units, unit.ID) {
+	sources, err := intakeSources(ctx, s.Queries, p.WorkspaceID)
+	if err != nil {
+		return OrgDispatchResult{}, err
+	}
+	if !canRequestToUnit(access, units, sources, unit.ID) {
 		return OrgDispatchResult{}, ErrOrgUnitNoAccess
 	}
 	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, p.WorkspaceID)
@@ -596,7 +604,11 @@ func (s *OrgDispatchService) ResolveUnits(ctx context.Context, wsUUID, actorID p
 	if err != nil {
 		return nil, fmt.Errorf("list org units: %w", err)
 	}
-	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, access.IsAdmin() || access.Implicit())
+	sources, err := intakeSources(ctx, s.Queries, wsUUID)
+	if err != nil {
+		return nil, err
+	}
+	visible := requestableUnits(access, units, sources)
 	paths := orgscope.Paths(units)
 
 	var exact, partial []UnitMatch
@@ -834,15 +846,59 @@ func orgUnitsForUser(ctx context.Context, q *db.Queries, workspaceID pgtype.UUID
 	return q.ListOrgUnits(ctx, workspaceID)
 }
 
-// canDispatchToUnit mirrors the org page's visibility: managers and the
-// project's parent-department leads dispatch anywhere in the project, everyone
-// else only to their own department subtree and to the departments they lead.
-func canDispatchToUnit(access workspaceaccess.Access, units []db.ListOrgUnitsRow, unitID pgtype.UUID) bool {
-	if access.IsAdmin() || access.Implicit() {
-		return true
+// intakeSources loads who each department accepts work from.
+func intakeSources(ctx context.Context, q *db.Queries, workspaceID pgtype.UUID) ([]db.ListOrgUnitIntakeSourcesRow, error) {
+	sources, err := q.ListOrgUnitIntakeSources(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list intake sources: %w", err)
 	}
-	visible := orgscope.Visible(units, access.MemberUnit, access.UserID, false)
-	return visible[unitID]
+	return sources, nil
+}
+
+// requestableUnits answers which departments accept the caller's work.
+// Platform managers and the leads of a department or its ancestors always may.
+// Everyone else needs a configured intake source: a person, or a department
+// whose subtree covers them. A department with no sources accepts nobody but
+// its leads, so "who may hand me work" is a decision each lead makes.
+// A nil result means every unit.
+func requestableUnits(access workspaceaccess.Access, units []db.ListOrgUnitsRow, sources []db.ListOrgUnitIntakeSourcesRow) map[pgtype.UUID]bool {
+	if access.IsAdmin() || access.Implicit() {
+		return nil
+	}
+	allowed := make(map[pgtype.UUID]bool, len(sources)+1)
+	for _, unit := range units {
+		if orgscope.Leads(units, access.UserID, unit.ID) {
+			allowed[unit.ID] = true
+		}
+	}
+	subtreeCache := map[pgtype.UUID]map[pgtype.UUID]bool{}
+	for _, source := range sources {
+		if !source.SourceID.Valid {
+			continue
+		}
+		switch source.SourceType {
+		case "user":
+			if source.SourceID == access.UserID {
+				allowed[source.OrgUnitID] = true
+			}
+		case "org_unit":
+			covered := subtreeCache[source.SourceID]
+			if covered == nil {
+				covered = orgscope.Subtree(units, source.SourceID)
+				subtreeCache[source.SourceID] = covered
+			}
+			if access.MemberUnit.Valid && covered[access.MemberUnit] ||
+				orgscope.Leads(units, access.UserID, source.SourceID) {
+				allowed[source.OrgUnitID] = true
+			}
+		}
+	}
+	return allowed
+}
+
+func canRequestToUnit(access workspaceaccess.Access, units []db.ListOrgUnitsRow, sources []db.ListOrgUnitIntakeSourcesRow, unitID pgtype.UUID) bool {
+	allowed := requestableUnits(access, units, sources)
+	return allowed == nil || allowed[unitID]
 }
 
 func isWorkspaceAdmin(role string) bool {

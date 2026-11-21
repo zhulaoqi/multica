@@ -2646,6 +2646,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/units/import", h.ImportOrgUnits)
 				r.Patch("/units/{unitId}", h.UpdateOrgUnit)
 				r.Delete("/units/{unitId}", h.DeleteOrgUnit)
+				r.Put("/units/{unitId}/intake-sources", h.ReplaceOrgUnitIntakeSources)
 				r.Post("/units/{unitId}/squad", h.GenerateOrgUnitSquad)
 				r.Post("/units/{unitId}/dispatch", h.DispatchToOrgUnit)
 				r.Put("/agents/{agentId}/unit", h.SetOrgAgentUnit)
