@@ -23,13 +23,10 @@ export function ProjectTeamRoster({
   members,
   agents,
   search,
-  loading = false,
 }: {
   members: readonly MemberWithUser[];
   agents: readonly Agent[];
   search: string;
-  /** The roster query is still in flight; don't claim the team is empty. */
-  loading?: boolean;
 }) {
   const { t } = useT("agents");
   const { t: tMembers } = useT("members");
@@ -63,11 +60,9 @@ export function ProjectTeamRoster({
         className="p-6 text-caption text-muted-foreground"
         data-testid="project-team-roster"
       >
-        {loading
-          ? null
-          : query
-            ? t(($) => $.page.no_member_match, { query: search.trim() })
-            : t(($) => $.page.no_members)}
+        {query
+          ? t(($) => $.page.no_member_match, { query: search.trim() })
+          : t(($) => $.page.no_members)}
       </div>
     );
   }

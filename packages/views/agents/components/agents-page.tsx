@@ -491,6 +491,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
         : teamUserIds !== null
           ? "team"
           : "mine";
+  // A project's "My team" is a people roster; the organisation's stays the
+  // department chart of member agents.
+  const isProjectTeam = isProject && scope === "team";
   const scopeOptions = AGENT_SCOPES.filter((value) => {
     if (value === "all") return canViewAllAgents;
     if (value === "team") return teamUserIds !== null;
@@ -630,7 +633,11 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     [paths],
   );
 
-  const selectedRows = rows.filter((row) => selectedIds.has(row.agent.id));
+  // The roster has no checkboxes, so a selection made in another scope must
+  // not keep the batch toolbar up over it.
+  const selectedRows = isProjectTeam
+    ? []
+    : rows.filter((row) => selectedIds.has(row.agent.id));
 
   const columns = useMemo<CollectionColumn<AgentListRow>[]>(
     () => [
@@ -768,10 +775,6 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     (!needsActivity || !activityLoading) &&
     (!needsRunCounts || !runCountsPending) &&
     (!needsPresence || !presenceLoading);
-  // A project's "My team" is a people roster; the organisation's stays the
-  // department chart of member agents.
-  const isProjectTeam = isProject && scope === "team";
-
   return (
     // relative: positioning anchor for the batch toolbar (page-centered,
     // not viewport-centered).
@@ -853,7 +856,6 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
           members={members}
           agents={agents}
           search={search}
-          loading={!membersLoaded}
         />
       ) : showEmpty ? (
         <AgentsIntro

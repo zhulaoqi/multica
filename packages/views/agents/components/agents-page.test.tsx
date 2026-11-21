@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Agent } from "@multica/core/types";
 import type { AgentActivity } from "@multica/core/agents";
 import type { SupportedLocale } from "@multica/core/i18n";
@@ -654,6 +654,51 @@ describe("AgentsPage team scope", () => {
     expect(within(roster).getByText("Alpha Agent")).toBeInTheDocument();
     expect(within(roster).getByText("Team Agent")).toBeInTheDocument();
     expect(screen.queryByTestId("team-tree")).not.toBeInTheDocument();
+  });
+
+  it("drops a selection made elsewhere when the project roster opens", async () => {
+    renderAsLead();
+    mocks.isProject = true;
+    mocks.members = [
+      { user_id: "user-1", role: "owner", name: "Ada", email: "ada@example.com" },
+      { user_id: "user-2", role: "member", name: "Bo", email: "bo@example.com" },
+    ];
+    mocks.viewState.scope = "all";
+    const adapter = makeAdapter();
+    const page = () => (
+      <NavigationProvider value={adapter}>
+        <AgentsPage />
+      </NavigationProvider>
+    );
+    const { rerender } = renderWithI18n(page());
+
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "Select row" })[0]!);
+    expect(screen.getByRole("toolbar", { name: "1 selected" })).toBeInTheDocument();
+
+    mocks.viewState.scope = "team";
+    rerender(page());
+
+    expect(screen.getByTestId("project-team-roster")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: "1 selected" })).not.toBeInTheDocument();
+    });
+  });
+
+  it("searches a project's roster by name or email", () => {
+    renderAsLead();
+    mocks.isProject = true;
+    mocks.members = [
+      { user_id: "user-1", role: "owner", name: "Ada", email: "ada@example.com" },
+      { user_id: "user-2", role: "member", name: "Bo", email: "bo@corp.test" },
+    ];
+    mocks.viewState.scopeTouched = false;
+    mocks.viewState.search = "corp";
+
+    renderPage();
+
+    const roster = screen.getByTestId("project-team-roster");
+    expect(within(roster).getByText("Bo")).toBeInTheDocument();
+    expect(within(roster).queryByText("Ada")).not.toBeInTheDocument();
   });
 
   it("keeps a plain member on their own agents", () => {
