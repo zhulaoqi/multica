@@ -162,6 +162,7 @@ vi.mock("./add-from-organization-dialog", () => ({
 }));
 
 vi.mock("@multica/core/paths", () => ({
+  useCurrentWorkspace: () => ({ id: "workspace-1", name: "AIHUB" }),
   useWorkspacePaths: () => ({
     newAgent: () => "/test-workspace/agents/new",
     newAgentManual: () => "/test-workspace/agents/new/manual",
@@ -646,7 +647,10 @@ describe("AgentsPage team scope", () => {
       screen.getByRole("heading", { name: "Team agents", level: 1 }),
     ).toBeInTheDocument();
     const roster = screen.getByTestId("project-team-roster");
-    expect(within(roster).getByText("Ada")).toBeInTheDocument();
+    // The tree starts at the project, led by its owners, then fans out to people.
+    expect(within(roster).getByText("AIHUB")).toBeInTheDocument();
+    expect(within(roster).getByText("3 members")).toBeInTheDocument();
+    expect(within(roster).getAllByText("Ada")).toHaveLength(2);
     expect(within(roster).getByText("Bo")).toBeInTheDocument();
     expect(within(roster).getByText("Cy")).toBeInTheDocument();
     // Members without a projected agent stay on the roster.
@@ -696,9 +700,9 @@ describe("AgentsPage team scope", () => {
 
     renderPage();
 
-    const roster = screen.getByTestId("project-team-roster");
-    expect(within(roster).getByText("Bo")).toBeInTheDocument();
-    expect(within(roster).queryByText("Ada")).not.toBeInTheDocument();
+    // Ada still leads the project card; only her member card is filtered out.
+    expect(screen.getByRole("link", { name: "Bo" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ada" })).not.toBeInTheDocument();
   });
 
   it("keeps a plain member on their own agents", () => {
