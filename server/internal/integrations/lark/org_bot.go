@@ -111,6 +111,17 @@ func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult
 	if msg.ChatID == "" || msg.MessageID == "" || msg.SenderOpenID == "" {
 		return DispatchResult{Outcome: OutcomeDropped, DropReason: DropReasonInvalidEvent}, nil
 	}
+	// Logging only p2p and addressed group messages keeps chatty groups quiet
+	// while making a silent bot diagnosable: no "inbound message" line means
+	// the event never reached this deployment.
+	if msg.ChatType == ChatTypeP2P || msg.AddressedToBot {
+		b.cfg.Logger.Info("lark org bot: inbound message",
+			"message_id", msg.MessageID,
+			"chat_id", string(msg.ChatID),
+			"chat_type", string(msg.ChatType),
+			"message_type", msg.MessageType,
+		)
+	}
 	// Group chats only ingest messages that mention the bot; p2p is always
 	// addressed. This mirrors the per-agent pipeline.
 	if msg.ChatType == ChatTypeGroup && !msg.AddressedToBot {
@@ -122,6 +133,7 @@ func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult
 		MessageID:      msg.MessageID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
+		b.cfg.Logger.Info("lark org bot: duplicate message dropped", "message_id", msg.MessageID)
 		return DispatchResult{Outcome: OutcomeDropped, DropReason: DropReasonDuplicate}, nil
 	}
 	if err != nil {
@@ -174,7 +186,10 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 	}
 	command := strings.TrimSpace(msg.CommandBody)
 	if command == "" {
-		return "", DispatchResult{Outcome: OutcomeDropped, DropReason: DropReasonInvalidEvent}, nil
+		// Stickers, voice and video carry no dispatchable text. Answering beats
+		// silence: a person who just sent something must see that the bot is
+		// alive and what it accepts.
+		return orgBotEmptyMessageCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 	}
 	if chatCommand, ok := parseOrgChatCommand(command); ok {
 		return b.chatCommandReply(ctx, msg, chatCommand)
@@ -320,6 +335,7 @@ const (
 		"`/accept 编号` 验收通过；`/reject 编号 <原因>` 驳回返工。"
 	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
+	orgBotEmptyMessageCopy   = "这条消息里没有文字。派活请用 `/dispatch <部门名或完整路径>`；在派活的话题里可以直接用文字追问，或发送图片、文件。"
 )
 
 // orgDispatchCreatedText links into the organization workspace, where every

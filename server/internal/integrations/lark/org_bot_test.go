@@ -187,6 +187,31 @@ func TestOrgBot_DuplicateClaimIsDropped(t *testing.T) {
 	}
 }
 
+func TestOrgBot_EmptyP2PMessageGetsReply(t *testing.T) {
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
+	msg := InboundMessage{
+		ChatID:       "oc_dm",
+		ChatType:     ChatTypeP2P,
+		MessageID:    "om_dm_sticker",
+		SenderOpenID: "ou_user",
+		MessageType:  "sticker",
+	}
+
+	res, err := h.bot.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if res.Outcome != OutcomeDispatchUsage {
+		t.Fatalf("outcome = %q, want dispatch_usage", res.Outcome)
+	}
+	if len(h.client.textSent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(h.client.textSent))
+	}
+	if text := h.client.textSent[0].Text; !strings.Contains(text, "/dispatch") {
+		t.Fatalf("sticker reply missing dispatch hint: %q", text)
+	}
+}
+
 func TestOrgBot_UnboundSenderGetsLoginPrompt(t *testing.T) {
 	h := newOrgBotHarness(t,
 		orgBotIdentityFake{err: pgx.ErrNoRows},
