@@ -144,13 +144,15 @@ export function TeamPanel() {
   // is still member.
   const canManageMembers =
     isOperator || me?.role === "owner" || me?.role === "admin" || !!me?.is_org_lead;
-  // A workspace with no organisation should not carry a dead directory entry.
-  // Managers always keep it: they need the create and sync actions, including
-  // when the tree request itself fails. While the list is still loading we
-  // keep it to avoid a flicker.
+  // The company directory belongs to the organisation; a project shows its own
+  // members instead. Within the organisation, a workspace with no tree should
+  // not carry a dead entry, while managers always keep it: they need the
+  // create and sync actions, including when the tree request itself fails.
+  // While the list is still loading we keep it to avoid a flicker.
   const showOrgLink =
-    canManageMembers ||
-    (!orgUnavailable && (orgTree === undefined || orgTree.units.length > 0));
+    !isProject &&
+    (canManageMembers ||
+      (!orgUnavailable && (orgTree === undefined || orgTree.units.length > 0)));
   // A project's team is the people who joined it; only the organization reads
   // "my team" from the department subtree this viewer leads.
   const teamUserIds = useMemo<ReadonlySet<string> | null>(() => {

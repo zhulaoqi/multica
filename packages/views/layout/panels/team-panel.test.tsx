@@ -266,17 +266,31 @@ describe("TeamPanel member directory", () => {
 });
 
 describe("TeamPanel in a project of the organization", () => {
-  it("keeps the org chart inside the project", () => {
+  it("leaves the company directory to the organization", () => {
     const [project] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
     qc.setQueryData(workspaceListOptions().queryKey, [
       project!,
       { ...project!, id: "ws-org", slug: "org", name: "Org", is_organization: true },
     ]);
+    qc.setQueryData(orgTreeOptions(WS).queryKey, {
+      units: [{
+        id: "unit-rd",
+        parent_id: "",
+        name: "Engineering",
+        lead_user_id: "user-1",
+        can_manage: true,
+        description: "",
+        position: 0,
+        intake_sources: [],
+      }],
+      agents: [],
+      members: [],
+      squads: [],
+      can_manage: false,
+      my_unit_id: "",
+    });
     renderPanel([]);
 
-    expect(screen.getByRole("link", { name: /Organization/ })).toHaveAttribute(
-      "href",
-      "/acme/org",
-    );
+    expect(screen.queryByRole("link", { name: /Organization/ })).toBeNull();
   });
 });
