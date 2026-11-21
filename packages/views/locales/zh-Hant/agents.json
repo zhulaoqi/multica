@@ -9,6 +9,10 @@
     "list_load_failed_default": "獲取 AI 代理列表時出錯。",
     "try_again": "重試",
     "team_unassigned": "未分配部門",
+    "search_members": "搜尋成員",
+    "no_agent": "未綁定智慧體",
+    "no_members": "暫無成員。",
+    "no_member_match": "沒有匹配「{{query}}」的成員。",
     "scope_title": {
       "mine": "我的 AI 代理",
       "team": "我的團隊",

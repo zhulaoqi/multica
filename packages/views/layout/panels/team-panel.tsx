@@ -167,6 +167,9 @@ export function TeamPanel() {
   const teamAgentCount = teamUserIds
     ? agents.filter((agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id)).length
     : 0;
+  // A project's team is counted in people; the organisation counts the agents
+  // its members own.
+  const teamCount = isProject ? members.length : teamAgentCount;
   // A project's agents are projections of organization agents: managers add
   // them from the organization instead of creating new ones. The organization
   // itself takes members only from the company directory, never invitations.
@@ -280,7 +283,7 @@ export function TeamPanel() {
                 icon={<Users />}
                 label={t(($) => $.panels.team.team_agents)}
                 active={onAgents && agentsScope === "team"}
-                trailing={<PanelCount value={teamAgentCount} />}
+                trailing={<PanelCount value={teamCount} />}
                 onNavigate={() => setAgentsScope("team")}
               />
             )}

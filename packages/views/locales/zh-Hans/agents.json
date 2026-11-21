@@ -9,6 +9,10 @@
     "list_load_failed_default": "获取智能体列表时出错。",
     "try_again": "重试",
     "team_unassigned": "未分配部门",
+    "search_members": "搜索成员",
+    "no_agent": "未绑定智能体",
+    "no_members": "暂无成员。",
+    "no_member_match": "没有匹配「{{query}}」的成员。",
     "scope_title": {
       "mine": "我的智能体",
       "team": "我的团队",

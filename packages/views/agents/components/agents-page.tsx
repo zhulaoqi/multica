@@ -72,6 +72,7 @@ import { availabilityConfig } from "../presence";
 import { teamUserIdsFor } from "../team-scope";
 import { AddFromOrganizationDialog } from "./add-from-organization-dialog";
 import { AgentRowActions } from "./agent-row-actions";
+import { ProjectTeamRoster } from "./project-team-roster";
 import { TeamTreeView } from "./team-tree-view";
 import { AgentSetupChecklist } from "./agent-setup-checklist";
 import {
@@ -498,7 +499,8 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
 
   // Scope counts come from the FULL set (filters never affect them).
   // Archived ignores the ownership lens for managers; members still only
-  // count their own archived agents.
+  // count their own archived agents. A project's team is counted in people,
+  // because that scope renders the roster rather than the agent list.
   const scopeCounts = useMemo<Record<AgentsScope, number>>(() => {
     let mine = 0;
     let team = 0;
@@ -514,8 +516,8 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       if (isMine) mine++;
       if (a.owner_id && teamUserIds?.has(a.owner_id)) team++;
     }
-    return { mine, team, all, archived };
-  }, [agents, currentUser, canViewAllAgents, teamUserIds]);
+    return { mine, team: isProject ? members.length : team, all, archived };
+  }, [agents, currentUser, canViewAllAgents, teamUserIds, isProject, members]);
 
   // Rows within the current scope, unfiltered, fully assembled — the
   // filter menu's option lists derive from this; cells never pull their
@@ -766,6 +768,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     (!needsActivity || !activityLoading) &&
     (!needsRunCounts || !runCountsPending) &&
     (!needsPresence || !presenceLoading);
+  // A project's "My team" is a people roster; the organisation's stays the
+  // department chart of member agents.
+  const isProjectTeam = isProject && scope === "team";
 
   return (
     // relative: positioning anchor for the batch toolbar (page-centered,
@@ -786,29 +791,44 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
           />
         }
         tools={
-          <>
-            <AgentListFilterMenu
-              filters={filters}
-              onToggleFilter={toggleFilter}
-              allRows={scopeRows}
-              members={members}
-            />
-            <CollectionSearch
-              value={search}
-              onChange={setSearch}
-              label={t(($) => $.page.search)}
-            />
-            {hasNarrowing ? <CollectionResetButton onClick={resetNarrowing} /> : null}
-          </>
+          isProjectTeam ? (
+            <>
+              <CollectionSearch
+                value={search}
+                onChange={setSearch}
+                label={t(($) => $.page.search_members)}
+              />
+              {search.trim() ? (
+                <CollectionResetButton onClick={resetNarrowing} />
+              ) : null}
+            </>
+          ) : (
+            <>
+              <AgentListFilterMenu
+                filters={filters}
+                onToggleFilter={toggleFilter}
+                allRows={scopeRows}
+                members={members}
+              />
+              <CollectionSearch
+                value={search}
+                onChange={setSearch}
+                label={t(($) => $.page.search)}
+              />
+              {hasNarrowing ? <CollectionResetButton onClick={resetNarrowing} /> : null}
+            </>
+          )
         }
         actions={
           <>
-            <CollectionDisplayMenu
-              columns={columns}
-              hiddenColumns={hiddenColumns}
-              onToggleColumn={(key) => toggleColumn(key as AgentColumnKey)}
-              sort={sort}
-            />
+            {!isProjectTeam && (
+              <CollectionDisplayMenu
+                columns={columns}
+                hiddenColumns={hiddenColumns}
+                onToggleColumn={(key) => toggleColumn(key as AgentColumnKey)}
+                sort={sort}
+              />
+            )}
             {canCreate && (
               <CollectionCreateButton
                 label={
@@ -828,6 +848,13 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
 
       {listError ? (
         <ListError listError={listError} onRetry={() => refetchList()} />
+      ) : isProjectTeam ? (
+        <ProjectTeamRoster
+          members={members}
+          agents={agents}
+          search={search}
+          loading={!membersLoaded}
+        />
       ) : showEmpty ? (
         <AgentsIntro
           onCreate={canCreate ? openCreate : undefined}
@@ -844,7 +871,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       ) : scope === "team" && !isProject && orgTree && rows.length > 0 && listReady && !isLoading ? (
         // In the organization, "My team" reads as the org chart, so a lead sees
         // each department, its lead, and every member's agent with its duties
-        // before commanding it. A project team stays a flat list.
+        // before commanding it. Projects render the member roster above.
         <TeamTreeView
           rows={rows}
           orgTree={orgTree}

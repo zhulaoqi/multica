@@ -8,6 +8,10 @@
     "list_load_failed_default": "Algo ha ido mal al obtener la lista de agentes.",
     "try_again": "Reintentar",
     "team_unassigned": "Sin departamento",
+    "search_members": "Buscar miembros",
+    "no_agent": "Sin agente todavía",
+    "no_members": "Aún no hay miembros.",
+    "no_member_match": "Ningún miembro coincide con «{{query}}».",
     "search": "Buscar agentes",
     "scope_title": {
       "mine": "Mis agentes",

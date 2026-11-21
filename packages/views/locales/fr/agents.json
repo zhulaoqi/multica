@@ -9,6 +9,10 @@
     "list_load_failed_default": "Une erreur est survenue lors de la récupération de la liste des agents.",
     "try_again": "Réessayer",
     "team_unassigned": "Sans département",
+    "search_members": "Rechercher des membres",
+    "no_agent": "Aucun agent pour l'instant",
+    "no_members": "Aucun membre pour l'instant.",
+    "no_member_match": "Aucun membre ne correspond à « {{query}} ».",
     "scope_title": {
       "mine": "Mes agents",
       "team": "Agents de l'équipe",

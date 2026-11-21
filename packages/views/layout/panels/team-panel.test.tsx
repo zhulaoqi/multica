@@ -183,39 +183,39 @@ describe("TeamPanel runtime badge", () => {
   });
 });
 
-describe("TeamPanel member directory", () => {
-  function memberRow(role: "owner" | "admin" | "member") {
-    return {
-      id: "member-1",
-      workspace_id: WS,
-      user_id: "user-1",
-      role,
-      created_at: new Date(NOW).toISOString(),
+function memberRow(role: "owner" | "admin" | "member") {
+  return {
+    id: "member-1",
+    workspace_id: WS,
+    user_id: "user-1",
+    role,
+    created_at: new Date(NOW).toISOString(),
+    name: "Ada",
+    email: "ada@example.com",
+    avatar_url: null,
+  };
+}
+
+function signIn() {
+  auth.setState({
+    user: {
+      id: "user-1",
       name: "Ada",
       email: "ada@example.com",
       avatar_url: null,
-    };
-  }
+      onboarded_at: null,
+      onboarding_questionnaire: {},
+      language: null,
+      profile_description: "",
+      timezone: null,
+      is_operator: false,
+      created_at: new Date(NOW).toISOString(),
+      updated_at: new Date(NOW).toISOString(),
+    },
+  });
+}
 
-  function signIn() {
-    auth.setState({
-      user: {
-        id: "user-1",
-        name: "Ada",
-        email: "ada@example.com",
-        avatar_url: null,
-        onboarded_at: null,
-        onboarding_questionnaire: {},
-        language: null,
-        profile_description: "",
-        timezone: null,
-        is_operator: false,
-        created_at: new Date(NOW).toISOString(),
-        updated_at: new Date(NOW).toISOString(),
-      },
-    });
-  }
-
+describe("TeamPanel member directory", () => {
   it("hides the workspace-wide member count from plain members", () => {
     signIn();
     qc.setQueryData(memberListOptions(WS).queryKey, [memberRow("member")]);
@@ -292,5 +292,23 @@ describe("TeamPanel in a project of the organization", () => {
     renderPanel([]);
 
     expect(screen.queryByRole("link", { name: /Organization/ })).toBeNull();
+  });
+
+  it("counts a project's team in people, not agents", () => {
+    signIn();
+    const [project] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
+    qc.setQueryData(workspaceListOptions().queryKey, [
+      project!,
+      { ...project!, id: "ws-org", slug: "org", name: "Org", is_organization: true },
+    ]);
+    qc.setQueryData(memberListOptions(WS).queryKey, [
+      memberRow("owner"),
+      { ...memberRow("member"), id: "member-2", user_id: "user-2", name: "Bo", email: "bo@example.com" },
+      { ...memberRow("member"), id: "member-3", user_id: "user-3", name: "Cy", email: "cy@example.com" },
+    ]);
+    renderPanel([]);
+
+    const link = screen.getByRole("link", { name: /Team agents/ });
+    expect(within(link).getByText("3")).toBeInTheDocument();
   });
 });

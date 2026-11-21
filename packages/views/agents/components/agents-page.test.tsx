@@ -23,7 +23,12 @@ const mocks = vi.hoisted(() => ({
   runCounts: [] as Array<{ agent_id: string; run_count: number }>,
   runCountsPending: false,
   isProject: false,
-  members: [] as Array<{ user_id: string; role: string }>,
+  members: [] as Array<{
+    user_id: string;
+    role: string;
+    name?: string;
+    email?: string;
+  }>,
   // Org tree decides whether the caller may open the full agent list.
   // Defaults to a caller who manages a department so the legacy scope
   // behavior (all agents visible) is what most tests here pin.
@@ -161,6 +166,7 @@ vi.mock("@multica/core/paths", () => ({
     newAgent: () => "/test-workspace/agents/new",
     newAgentManual: () => "/test-workspace/agents/new/manual",
     agentDetail: (id: string) => `/test-workspace/agents/${id}`,
+    memberDetail: (id: string) => `/test-workspace/members/${id}`,
     chatWithAgent: (id: string) => `/test-workspace/chat?agent=${id}`,
     runtimes: () => "/test-workspace/runtimes",
   }),
@@ -623,22 +629,14 @@ describe("AgentsPage team scope", () => {
     expect(screen.queryByText("Team Agent")).not.toBeInTheDocument();
   });
 
-  it("shows a project's team as a flat list of its members' agents", () => {
+  it("shows a project's team as its people, agents or not", () => {
     renderAsLead();
     mocks.isProject = true;
-    // The owning department's roster is the organization's lens: user-3 sits in
-    // the subtree but never joined the project, so they stay out of the team.
-    mocks.orgTree = {
-      units: [{ id: "unit-a", can_manage: true }],
-      members: [
-        { user_id: "user-1", unit_id: "unit-a" },
-        { user_id: "user-2", unit_id: "unit-a" },
-        { user_id: "user-3", unit_id: "unit-a" },
-      ],
-    };
+    mocks.agents = [ALPHA, TEAMMATE_AGENT];
     mocks.members = [
-      { user_id: "user-1", role: "owner" },
-      { user_id: "user-2", role: "member" },
+      { user_id: "user-1", role: "owner", name: "Ada", email: "ada@example.com" },
+      { user_id: "user-2", role: "member", name: "Bo", email: "bo@example.com" },
+      { user_id: "user-3", role: "member", name: "Cy", email: "cy@example.com" },
     ];
     mocks.viewState.scopeTouched = false;
 
@@ -647,9 +645,14 @@ describe("AgentsPage team scope", () => {
     expect(
       screen.getByRole("heading", { name: "Team agents", level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
-    expect(screen.getByText("Team Agent")).toBeInTheDocument();
-    expect(screen.queryByText("Outsider Agent")).not.toBeInTheDocument();
+    const roster = screen.getByTestId("project-team-roster");
+    expect(within(roster).getByText("Ada")).toBeInTheDocument();
+    expect(within(roster).getByText("Bo")).toBeInTheDocument();
+    expect(within(roster).getByText("Cy")).toBeInTheDocument();
+    // Members without a projected agent stay on the roster.
+    expect(within(roster).getByText("No agent yet")).toBeInTheDocument();
+    expect(within(roster).getByText("Alpha Agent")).toBeInTheDocument();
+    expect(within(roster).getByText("Team Agent")).toBeInTheDocument();
     expect(screen.queryByTestId("team-tree")).not.toBeInTheDocument();
   });
 

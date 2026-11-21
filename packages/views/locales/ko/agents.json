@@ -9,6 +9,10 @@
     "list_load_failed_default": "에이전트 목록을 가져오는 중 문제가 발생했습니다.",
     "try_again": "다시 시도",
     "team_unassigned": "부서 없음",
+    "search_members": "멤버 검색",
+    "no_agent": "아직 에이전트 없음",
+    "no_members": "아직 멤버가 없습니다.",
+    "no_member_match": "\"{{query}}\"와 일치하는 멤버가 없습니다.",
     "scope_title": {
       "mine": "내 에이전트",
       "team": "팀 에이전트",

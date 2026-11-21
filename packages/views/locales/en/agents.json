@@ -9,6 +9,10 @@
     "list_load_failed_default": "Something went wrong fetching the agent list.",
     "try_again": "Try again",
     "team_unassigned": "No department",
+    "search_members": "Search members",
+    "no_agent": "No agent yet",
+    "no_members": "No members yet.",
+    "no_member_match": "No members match \"{{query}}\".",
     "scope_title": {
       "mine": "My agents",
       "team": "Team agents",

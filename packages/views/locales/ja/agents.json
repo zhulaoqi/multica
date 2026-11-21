@@ -9,6 +9,10 @@
     "list_load_failed_default": "エージェント一覧の取得中に問題が発生しました。",
     "try_again": "再試行",
     "team_unassigned": "部署未設定",
+    "search_members": "メンバーを検索",
+    "no_agent": "エージェント未設定",
+    "no_members": "メンバーがいません。",
+    "no_member_match": "「{{query}}」に一致するメンバーはいません。",
     "scope_title": {
       "mine": "自分のエージェント",
       "team": "チームのエージェント",
