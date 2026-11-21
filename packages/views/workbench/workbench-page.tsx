@@ -48,7 +48,6 @@ import {
 import { createSafeId } from "@multica/core/utils";
 import { cendDispatchPath, useHomeMode } from "../common/home-mode";
 import { CollectionPageHeader } from "../layout";
-import { isDesktopShell } from "../platform";
 import { useT, useTimeAgo } from "../i18n";
 import { useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
@@ -246,20 +245,14 @@ export function WorkbenchPage() {
   const p = useWorkspacePaths();
   const { replace } = useNavigation();
   const homeMode = useHomeMode();
-  const desktop = isDesktopShell();
-  const { isProject, isOrganization } = useOrganizationContext(wsId);
+  const { isProject } = useOrganizationContext(wsId);
   // Work is dispatched only in the organization, so a project has no
-  // workbench; links that land here by default open the project's issues.
-  // On web the organization's workbench belongs to the C-end (`/home`), not
-  // to the admin shell, so a direct link opens department management instead.
-  // The C-end renders the same workbench and is the exception to both.
-  // Desktop has no C-end and keeps its workbench in the organization.
+  // workbench; links that land here open the project's issues.
   useEffect(() => {
     if (homeMode) return;
     if (isProject) replace(p.issues());
-    else if (isOrganization && !desktop) replace(p.org());
-  }, [homeMode, desktop, isProject, isOrganization, p, replace]);
-  if (!homeMode && (isProject || (isOrganization && !desktop))) return null;
+  }, [homeMode, isProject, p, replace]);
+  if (!homeMode && isProject) return null;
   return <DispatchWorkbench />;
 }
 

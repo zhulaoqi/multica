@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ListTodo, MessagesSquare, type IconComponent } from "@multica/ui/icons";
+import {
+  Building2,
+  ListTodo,
+  MessagesSquare,
+  type IconComponent,
+} from "@multica/ui/icons";
 import { HomeModeProvider, cendDispatchPath } from "../common/home-mode";
 import { useT } from "../i18n";
 import { AccountMenu } from "../layout/account-menu";
 import { useNavigation } from "../navigation";
+import { OfficePage } from "../office";
 import { WorkbenchPage } from "../workbench";
 import { HomeTasksPage } from "./home-tasks-page";
 
-type HomeTab = "conversation" | "tasks";
+type HomeTab = "conversation" | "tasks" | "office";
 
 const TAB_CLASS =
   "group relative flex h-[52px] w-[52px] flex-col items-center justify-center gap-1 rounded-xl text-muted-foreground transition-colors outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground focus-visible:outline-2 focus-visible:outline-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-accent-foreground";
@@ -32,6 +38,7 @@ export function HomePage() {
   const tabs: { id: HomeTab; icon: IconComponent; label: string }[] = [
     { id: "conversation", icon: MessagesSquare, label: t(($) => $.home.conversation) },
     { id: "tasks", icon: ListTodo, label: t(($) => $.home.tasks) },
+    { id: "office", icon: Building2, label: t(($) => $.home.office) },
   ];
 
   return (
@@ -65,13 +72,15 @@ export function HomePage() {
           <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
             {tab === "conversation" ? (
               <WorkbenchPage />
-            ) : (
+            ) : tab === "tasks" ? (
               <HomeTasksPage
                 onOpen={(issueId) => {
                   setTab("conversation");
                   push(cendDispatchPath(issueId));
                 }}
               />
+            ) : (
+              <OfficePage variant="home" />
             )}
           </div>
         </main>

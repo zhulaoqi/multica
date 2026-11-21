@@ -1,14 +1,14 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentTask, Issue } from "@multica/core/types";
 import type { DispatchListItem } from "@multica/core/workbench";
 import { renderWithI18n } from "../test/i18n";
+import type { MyDispatchScope } from "../workbench/use-my-dispatch-scope";
 import { HomeTasksPage } from "./home-tasks-page";
 
 const state = vi.hoisted(() => ({
-  dispatches: [] as DispatchListItem[],
-  isLoading: false,
-  error: null as Error | null,
+  scope: null as unknown,
 }));
 
 vi.mock("@multica/core/hooks", async (importOriginal) => ({
@@ -16,29 +16,35 @@ vi.mock("@multica/core/hooks", async (importOriginal) => ({
   useWorkspaceId: () => "ws-test",
 }));
 
-vi.mock("@multica/core/workbench", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@multica/core/workbench")>();
-  return {
-    ...actual,
-    useMyDispatches: () => ({
-      dispatches: state.dispatches,
-      isLoading: state.isLoading,
-      error: state.error,
-    }),
-  };
-});
+vi.mock("@multica/core/workspace/hooks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@multica/core/workspace/hooks")>()),
+  useActorName: () => ({
+    getActorName: (type: string, id: string) =>
+      type === "agent" && id === "agent-1" ? "Mika" : id,
+  }),
+}));
+
+vi.mock("../workbench/use-my-dispatch-scope", () => ({
+  useMyDispatchScope: () => state.scope,
+}));
 
 const NOW = "2026-11-12T08:00:00Z";
 
-function dispatchItem(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
+function dispatchItem(
+  id: string,
+  title: string,
+  overrides: Partial<DispatchListItem> = {},
+): DispatchListItem {
   return {
     issue: {
-      id: "issue-1",
-      identifier: "ACM-1",
-      title: "Prepare onboarding materials",
-      description: "Prepare onboarding materials for next week",
-      status: "in_review",
-      status_category: "in_review",
+      id,
+      identifier: `ACM-${id}`,
+      title,
+      description: title,
+      status: "in_progress",
+      status_category: "started",
+      assignee_type: null,
+      assignee_id: null,
       created_at: NOW,
     },
     unit_id: "unit-1",
@@ -50,72 +56,107 @@ function dispatchItem(overrides: Partial<DispatchListItem> = {}): DispatchListIt
   } as unknown as DispatchListItem;
 }
 
+function withStatus(
+  item: DispatchListItem,
+  status: string,
+  category: string,
+): DispatchListItem {
+  return { ...item, issue: { ...item.issue, status, status_category: category } };
+}
+
+function childIssue(id: string, assigneeId: string): Issue {
+  return {
+    id,
+    identifier: `ACM-${id}`,
+    title: `Part ${id}`,
+    status: "in_progress",
+    status_category: "started",
+    assignee_type: "agent",
+    assignee_id: assigneeId,
+    created_at: NOW,
+  } as unknown as Issue;
+}
+
+function scope(overrides: Partial<MyDispatchScope> = {}): MyDispatchScope {
+  return {
+    dispatches: [],
+    isLoading: false,
+    error: null,
+    childrenByRoot: new Map(),
+    issueIds: new Set(),
+    agentIds: new Set(),
+    workingAgentIds: new Set(),
+    tasksByIssue: new Map(),
+    progressByRoot: new Map(),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
-  state.dispatches = [];
-  state.isLoading = false;
-  state.error = null;
+  state.scope = scope();
 });
 
 describe("HomeTasksPage", () => {
-  it("lists the caller's requests and opens one in the conversation", async () => {
+  it("puts each request in its lane and opens one in the conversation", async () => {
     const onOpen = vi.fn();
-    state.dispatches = [
-      dispatchItem(),
-      dispatchItem({
-        completed: true,
-        issue: {
-          ...dispatchItem().issue,
-          id: "issue-2",
-          status: "done",
-          status_category: "done",
-          title: "Ship the pricing page",
-        },
-      }),
-    ];
+    const active = dispatchItem("active", "Draft the launch plan");
+    const review = withStatus(
+      dispatchItem("review", "Prepare onboarding materials"),
+      "in_review",
+      "in_review",
+    );
+    const done = withStatus(
+      dispatchItem("done", "Ship the pricing page", { completed: true }),
+      "done",
+      "done",
+    );
+    state.scope = scope({
+      dispatches: [active, review, done],
+      progressByRoot: new Map([["active", { done: 1, total: 3 }]]),
+    });
     renderWithI18n(<HomeTasksPage onOpen={onOpen} />);
 
     expect(screen.getByRole("heading", { name: "My tasks" })).toBeInTheDocument();
-    expect(screen.getByText("Prepare onboarding materials")).toBeInTheDocument();
-    expect(screen.getByText("Ship the pricing page")).toBeInTheDocument();
 
-    const filters = screen.getByRole("group", { name: "Filter work" });
-    expect(within(filters).getByRole("button", { name: /Needs review/ })).toHaveTextContent("1");
-    expect(within(filters).getByRole("button", { name: /Done/ })).toHaveTextContent("1");
+    const moving = screen.getByRole("region", { name: "In progress" });
+    expect(within(moving).getByText("Draft the launch plan")).toBeInTheDocument();
+    expect(within(moving).getByText("1 of 3 tasks done")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByText("Prepare onboarding materials"));
-    expect(onOpen).toHaveBeenCalledWith("issue-1");
+    const waiting = screen.getByRole("region", { name: "Awaiting review" });
+    expect(within(waiting).getByText("Prepare onboarding materials")).toBeInTheDocument();
+
+    const settled = screen.getByRole("region", { name: "Settled" });
+    expect(within(settled).getByText("Ship the pricing page")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Draft the launch plan"));
+    expect(onOpen).toHaveBeenCalledWith("active");
   });
 
-  it("filters the list without leaving the C-end", async () => {
-    state.dispatches = [
-      dispatchItem(),
-      dispatchItem({
-        completed: true,
-        issue: {
-          ...dispatchItem().issue,
-          id: "issue-2",
-          title: "Ship the pricing page",
-          status: "done",
-          status_category: "done",
-        },
-      }),
-    ];
+  it("names the agents the lead handed parts of the work to", () => {
+    const active = dispatchItem("active", "Draft the launch plan");
+    state.scope = scope({
+      dispatches: [active],
+      childrenByRoot: new Map([["active", [childIssue("active-child", "agent-1")]]]),
+      tasksByIssue: new Map([
+        [
+          "active",
+          [{ agent_id: "agent-1", status: "running", issue_id: "active" } as AgentTask],
+        ],
+      ]),
+    });
     renderWithI18n(<HomeTasksPage onOpen={vi.fn()} />);
 
-    const filters = screen.getByRole("group", { name: "Filter work" });
-    await userEvent.click(within(filters).getByRole("button", { name: /Needs review/ }));
-
-    expect(screen.getByText("Prepare onboarding materials")).toBeInTheDocument();
-    expect(screen.queryByText("Ship the pricing page")).not.toBeInTheDocument();
+    const moving = screen.getByRole("region", { name: "In progress" });
+    expect(within(moving).getByText("Mika")).toBeInTheDocument();
   });
 
-  it("says so when nothing is waiting on the caller", async () => {
+  it("says so when nothing has been sent", () => {
     renderWithI18n(<HomeTasksPage onOpen={vi.fn()} />);
     expect(screen.getByText("Work you send will appear here.")).toBeInTheDocument();
   });
 
   it("reports a failed load instead of pretending there is no work", () => {
-    state.error = new Error("network");
+    state.scope = scope({ error: new Error("network") });
     renderWithI18n(<HomeTasksPage onOpen={vi.fn()} />);
     expect(screen.getByText("Couldn't load recent work.")).toBeInTheDocument();
   });

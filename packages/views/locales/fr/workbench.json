@@ -143,6 +143,28 @@
   "home": {
     "label": "Navigation de l'accueil",
     "conversation": "Conversation",
-    "tasks": "Mes tâches"
+    "tasks": "Mes tâches",
+    "office": "Bureau"
+  },
+  "board": {
+    "columns": {
+      "active": "En cours",
+      "review": "En attente de validation",
+      "done": "Terminé"
+    },
+    "empty_column": "Rien ici.",
+    "agent_working": "{{count}} agent au travail"
+  },
+  "trail": {
+    "title": "Déroulé",
+    "submitted": "Envoyé à {{unit}}",
+    "submitted_personal": "Envoyé à votre équipe",
+    "decomposing": "Le responsable découpe le travail",
+    "decomposed": "Découpé en {{count}} tâches",
+    "stopped": "Arrêté avant de commencer",
+    "delivered": "Livré",
+    "accepted": "Accepté",
+    "acceptance": "Validation",
+    "acceptance_waiting": "En attente de votre validation"
   }
 }

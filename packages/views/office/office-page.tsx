@@ -23,12 +23,12 @@ import {
 import type { Agent, Squad } from "@multica/core/types";
 import type { PlayerEmoteId } from "./game/emotes";
 import type { OfficeEventId } from "./game/events";
-import { useMyDispatches } from "@multica/core/workbench";
 import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
 import { CollectionPageHeader } from "../layout";
 import { isAgentStuck } from "../layout/panels/team-status";
 import { useNavigation } from "../navigation";
 import { useT } from "../i18n";
+import { useMyDispatchScope } from "../workbench/use-my-dispatch-scope";
 import { dispatchPhase } from "../workbench/use-workbench-conversation";
 import { AgentInteractPanel } from "./components/agent-interact-panel";
 import {
@@ -65,6 +65,7 @@ import { isTypingTarget } from "./scene/input";
 import { buildOfficeLayout, spawnFor, type RoomId } from "./scene/layout";
 import type { DeskTrace, OfficePlace, RoomBadge } from "./scene/office-scene";
 import { useAgentActivityText } from "./use-agent-activity";
+import { useMyOfficeActivityText } from "./use-my-office-activity";
 import { useOpenAgentChat } from "./use-open-agent-chat";
 
 const EMPTY_AGENTS: Agent[] = [];
@@ -79,12 +80,22 @@ export function deskStatus(detail: AgentPresenceDetail | undefined): AgentDeskSt
   return "idle";
 }
 
-export function OfficePage() {
+export function OfficePage({
+  variant = "workspace",
+}: {
+  variant?: "workspace" | "home";
+} = {}) {
   const { t } = useT("office");
   const p = useWorkspacePaths();
   const { push } = useNavigation();
   const wsId = useCurrentWorkspace()?.id ?? "";
   const user = useAuthStore((s) => s.user);
+  // The C-end office is a window onto the caller's own work: only the agents
+  // on their dispatches, and bubbles naming their tasks. The admin office
+  // shows the whole company.
+  const home = variant === "home";
+  const scope = useMyDispatchScope(wsId);
+  const dispatches = scope.dispatches;
 
   const { data: members = [] } = useQuery({
     ...memberListOptions(wsId),
@@ -95,10 +106,11 @@ export function OfficePage() {
     enabled: !!wsId,
   });
   // Department plaques are a bonus layer: a workspace without an organisation,
-  // or a caller that cannot read it, still gets the whole office.
+  // or a caller that cannot read it, still gets the whole office. The C-end
+  // omits them — they describe the company, not the caller's work.
   const { data: orgTree } = useQuery({
     ...orgTreeOptions(wsId),
-    enabled: !!wsId,
+    enabled: !!wsId && !home,
     retry: false,
   });
   const { byAgent } = useWorkspacePresenceMap(wsId || undefined);
@@ -146,10 +158,13 @@ export function OfficePage() {
     [peers, nameById, t],
   );
 
-  const activeAgents = useMemo(
-    () => agents.filter((agent) => !agent.archived_at),
-    [agents],
-  );
+  const activeAgents = useMemo(() => {
+    const live = agents.filter((agent) => !agent.archived_at);
+    if (!home) return live;
+    return live.filter(
+      (agent) => scope.agentIds.has(agent.id) || scope.workingAgentIds.has(agent.id),
+    );
+  }, [agents, home, scope.agentIds, scope.workingAgentIds]);
 
   // Office levels read the same 30-day series as the Agents list, so the
   // roster, the crown, and the company level all agree with the Team panel.
@@ -215,7 +230,25 @@ export function OfficePage() {
         }),
     [activeAgents, byAgent],
   );
-  const activityById = useAgentActivityText(wsId, agentStatuses);
+  const workspaceActivityById = useAgentActivityText(wsId, agentStatuses);
+  const myLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const item of dispatches) {
+      labels.set(item.issue.id, `${item.issue.identifier} ${item.issue.title}`);
+    }
+    for (const children of scope.childrenByRoot.values()) {
+      for (const child of children) {
+        labels.set(child.id, `${child.identifier} ${child.title}`);
+      }
+    }
+    return labels;
+  }, [dispatches, scope.childrenByRoot]);
+  const myActivityById = useMyOfficeActivityText({
+    agents: agentStatuses,
+    tasksByIssue: scope.tasksByIssue,
+    labels: myLabels,
+  });
+  const activityById = home ? myActivityById : workspaceActivityById;
   const agentViews = useMemo(
     () =>
       agentStatuses.map(({ id, name, status, alert }) => ({
@@ -275,7 +308,6 @@ export function OfficePage() {
   // leader to the front desk with a paper, a failed one raises an alert. Only
   // changes after the first load animate, so opening the page does not replay
   // yesterday's history.
-  const { dispatches } = useMyDispatches(wsId);
   const { data: squads = EMPTY_SQUADS } = useQuery({
     ...squadListOptions(wsId),
     enabled: !!wsId,
@@ -577,9 +609,10 @@ export function OfficePage() {
   const anyPanelOpen =
     !!panelAgentId || receptionOpen || coffeeOpen || meetingOpen || trophiesOpen;
   const canTalk = !!focusedAgent && !panelAgentId;
-  const canCheckIn = placeFocused === "reception" && !receptionOpen && !panelAgentId;
-  const canCoffee = placeFocused === "coffee" && !coffeeOpen && !panelAgentId;
-  const canMeeting = placeFocused === "meeting" && !meetingOpen && !panelAgentId;
+  const canCheckIn =
+    !home && placeFocused === "reception" && !receptionOpen && !panelAgentId;
+  const canCoffee = !home && placeFocused === "coffee" && !coffeeOpen && !panelAgentId;
+  const canMeeting = !home && placeFocused === "meeting" && !meetingOpen && !panelAgentId;
 
   // T is the walk-up key: talk to the agent in front of you, or check in at
   // the front desk, grab a coffee, or look at the board. A person always wins
@@ -632,7 +665,7 @@ export function OfficePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {!photoMode && (
+      {!photoMode && !home && (
         <CollectionPageHeader icon={Building2} title={t(($) => $.page.title)} />
       )}
       {error && !photoMode && (
@@ -663,6 +696,13 @@ export function OfficePage() {
               engagedAgentId={panelAgent?.id ?? null}
               className={photoMode ? "rounded-none border-0 shadow-none" : undefined}
             />
+            {home && !photoMode && !scope.isLoading && activeAgents.length === 0 && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                <p className="max-w-xs rounded-lg bg-surface-raised/95 px-4 py-3 text-center text-body text-muted-foreground shadow-sm ring-1 ring-surface-border">
+                  {t(($) => $.page.home_empty)}
+                </p>
+              </div>
+            )}
             {!photoMode && (
               <>
                 <OfficeToolbar
@@ -685,6 +725,7 @@ export function OfficePage() {
                     setTrophiesOpen(true);
                     setEmotesOpen(false);
                   }}
+                  showTrophies={!home}
                 />
                 {emotesOpen && (
                   <OfficeEmoteWheel
@@ -693,7 +734,7 @@ export function OfficePage() {
                     onClose={() => setEmotesOpen(false)}
                   />
                 )}
-                {trophiesOpen && (
+                {trophiesOpen && !home && (
                   <OfficeTrophyPanel
                     className="absolute right-3 top-3 z-10"
                     stats={trophyStats}
@@ -724,28 +765,28 @@ export function OfficePage() {
                 </span>
               </div>
             )}
-            {!anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "reception" && (
+            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "reception" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.reception.hint, { key: "T" })}
                 </span>
               </div>
             )}
-            {!anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "coffee" && (
+            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "coffee" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.coffee.hint, { key: "T" })}
                 </span>
               </div>
             )}
-            {!anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "meeting" && (
+            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "meeting" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.meeting.hint, { key: "T" })}
                 </span>
               </div>
             )}
-            {receptionOpen && !panelAgent && (
+            {!home && receptionOpen && !panelAgent && (
               <OfficeReceptionPanel
                 className="absolute bottom-3 left-3"
                 wsId={wsId}
@@ -759,7 +800,7 @@ export function OfficePage() {
                 onAccepted={handleAccepted}
               />
             )}
-            {coffeeOpen && !panelAgent && (
+            {!home && coffeeOpen && !panelAgent && (
               <OfficeCoffeePanel
                 className="absolute bottom-3 left-3"
                 prompt={coffeePrompt}
@@ -768,7 +809,7 @@ export function OfficePage() {
                 onClose={closeCoffee}
               />
             )}
-            {meetingOpen && !panelAgent && (
+            {!home && meetingOpen && !panelAgent && (
               <OfficeMeetingPanel
                 className="absolute bottom-3 left-3"
                 notes={meetingNotes}
@@ -786,6 +827,8 @@ export function OfficePage() {
                 onOpenDetail={() => push(p.agentDetail(panelAgent.id))}
                 onTaskCreated={handleTaskCreated}
                 onMoreOptionsTask={handleMoreOptionsTask}
+                showActions={!home}
+                activity={activityById.get(panelAgent.id) ?? null}
               />
             )}
             {photoMode && (
@@ -807,7 +850,7 @@ export function OfficePage() {
             </p>
           )}
         </div>
-        {!photoMode && (
+        {!photoMode && !home && (
           <OfficeRoster
             members={rosterMembers}
             agents={rosterAgents}

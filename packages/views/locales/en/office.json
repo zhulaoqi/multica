@@ -4,6 +4,7 @@
     "connecting": "Connecting to the office…",
     "hint": "Walk with WASD or the arrow keys, scroll to zoom, and walk up to an agent to press T.",
     "error": "Lost the office connection. Reconnecting…",
+    "home_empty": "Agents working on your requests will show up here.",
     "roster": {
       "title": "In the office",
       "count_one": "{{count}} person",

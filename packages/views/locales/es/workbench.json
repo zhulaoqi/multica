@@ -143,6 +143,28 @@
   "home": {
     "label": "Navegación de inicio",
     "conversation": "Conversación",
-    "tasks": "Mis tareas"
+    "tasks": "Mis tareas",
+    "office": "Oficina"
+  },
+  "board": {
+    "columns": {
+      "active": "En curso",
+      "review": "Pendiente de revisión",
+      "done": "Finalizado"
+    },
+    "empty_column": "Nada aquí.",
+    "agent_working": "{{count}} agente trabajando"
+  },
+  "trail": {
+    "title": "Cómo va",
+    "submitted": "Enviado a {{unit}}",
+    "submitted_personal": "Enviado a tu escuadrón",
+    "decomposing": "El responsable está dividiendo el trabajo",
+    "decomposed": "Dividido en {{count}} tareas",
+    "stopped": "Detenido antes de empezar",
+    "delivered": "Entregado",
+    "accepted": "Aceptado",
+    "acceptance": "Aceptación",
+    "acceptance_waiting": "Esperando tu revisión"
   }
 }

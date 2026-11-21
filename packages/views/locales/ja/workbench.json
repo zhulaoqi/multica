@@ -142,6 +142,28 @@
   "home": {
     "label": "ホームナビゲーション",
     "conversation": "会話",
-    "tasks": "自分のタスク"
+    "tasks": "自分のタスク",
+    "office": "オフィス"
+  },
+  "board": {
+    "columns": {
+      "active": "進行中",
+      "review": "確認待ち",
+      "done": "終了"
+    },
+    "empty_column": "なし",
+    "agent_working": "{{count}} 個のエージェントが作業中"
+  },
+  "trail": {
+    "title": "進捗の流れ",
+    "submitted": "{{unit}} に依頼しました",
+    "submitted_personal": "自分のチームに依頼しました",
+    "decomposing": "リーダーがタスクに分解しています",
+    "decomposed": "{{count}} 個のタスクに分解しました",
+    "stopped": "開始前に停止しました",
+    "delivered": "納品済み",
+    "accepted": "承認済み",
+    "acceptance": "承認",
+    "acceptance_waiting": "確認をお待ちください"
   }
 }

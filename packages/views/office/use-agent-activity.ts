@@ -109,13 +109,13 @@ export function useAgentActivityText(
         queuedCount: agent.queuedCount,
         issueLabels: labels,
       });
-      texts.set(agent.id, activityText(activity, t));
+      texts.set(agent.id, agentActivityText(activity, t));
     }
     return texts;
   }, [agents, runningByAgent, issueLabels, t]);
 }
 
-function activityText(activity: AgentActivity, t: OfficeT): string {
+export function agentActivityText(activity: AgentActivity, t: OfficeT): string {
   switch (activity.kind) {
     case "issue":
       return activity.label;

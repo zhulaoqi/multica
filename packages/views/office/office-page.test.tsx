@@ -307,10 +307,12 @@ function renderPage({
   members = [makeMember(), makeMember({ id: "member-2", user_id: "user-2", name: "Jamie Chen" })],
   agents = [makeAgent()],
   squads = [],
+  variant = "workspace",
 }: {
   members?: MemberWithUser[];
   agents?: Agent[];
   squads?: unknown[];
+  variant?: "workspace" | "home";
 } = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -327,7 +329,7 @@ function renderPage({
   const ui = () => (
     <QueryClientProvider client={qc}>
       <I18nProvider locale="en" resources={TEST_RESOURCES}>
-        <OfficePage />
+        <OfficePage variant={variant} />
       </I18nProvider>
     </QueryClientProvider>
   );
@@ -386,6 +388,36 @@ describe("OfficePage", () => {
     expect(screen.getByText("Atlas")).toBeInTheDocument();
     expect(screen.getByText("Working")).toBeInTheDocument();
     expect(screen.getByTestId("office-canvas")).toHaveTextContent("1");
+  });
+
+  it("shows only the agents on the caller's own work on the C-end", () => {
+    dispatchState.items = [makeDispatch()];
+    renderPage({
+      variant: "home",
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+      ],
+      squads: [SQUAD],
+    });
+
+    // Company-wide chrome is gone: no page title, roster or trophy wall.
+    expect(screen.queryByRole("heading", { name: "Office" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Alex Doe")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Trophy wall" }),
+    ).not.toBeInTheDocument();
+
+    // Only the squad leader on the caller's dispatch is in the room.
+    expect(screen.getByTestId("activity-agent-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("activity-agent-2")).not.toBeInTheDocument();
+  });
+
+  it("explains an empty C-end office instead of showing a blank room", () => {
+    renderPage({ variant: "home" });
+    expect(
+      screen.getByText("Agents working on your requests will show up here."),
+    ).toBeInTheDocument();
   });
 
   it("captions a working agent with the issue it is running", () => {

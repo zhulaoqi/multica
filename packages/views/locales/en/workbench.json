@@ -143,6 +143,28 @@
   "home": {
     "label": "Home navigation",
     "conversation": "Conversation",
-    "tasks": "My tasks"
+    "tasks": "My tasks",
+    "office": "Office"
+  },
+  "board": {
+    "columns": {
+      "active": "In progress",
+      "review": "Awaiting review",
+      "done": "Settled"
+    },
+    "empty_column": "Nothing here.",
+    "agent_working": "{{count}} agent working"
+  },
+  "trail": {
+    "title": "How it's going",
+    "submitted": "Sent to {{unit}}",
+    "submitted_personal": "Sent to your squad",
+    "decomposing": "The lead is breaking it into tasks",
+    "decomposed": "Broke it into {{count}} tasks",
+    "stopped": "Stopped before it started",
+    "delivered": "Delivered",
+    "accepted": "Accepted",
+    "acceptance": "Acceptance",
+    "acceptance_waiting": "Waiting for your review"
   }
 }

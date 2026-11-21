@@ -4,6 +4,7 @@
     "connecting": "Connexion au bureau…",
     "hint": "Déplacez-vous avec WASD ou les flèches, zoomez avec la molette et approchez-vous d’un agent pour appuyer sur T.",
     "error": "Connexion au bureau perdue. Reconnexion…",
+    "home_empty": "Les agents qui traitent vos demandes apparaîtront ici.",
     "roster": {
       "title": "Au bureau",
       "count_one": "{{count}} personne",

@@ -142,6 +142,28 @@
   "home": {
     "label": "首頁導覽",
     "conversation": "對話",
-    "tasks": "我的任務"
+    "tasks": "我的任務",
+    "office": "辦公室"
+  },
+  "board": {
+    "columns": {
+      "active": "進行中",
+      "review": "待驗收",
+      "done": "已結束"
+    },
+    "empty_column": "暫無",
+    "agent_working": "{{count}} 個 Agent 正在處理"
+  },
+  "trail": {
+    "title": "協同軌跡",
+    "submitted": "已提交給 {{unit}}",
+    "submitted_personal": "已交給你的小隊",
+    "decomposing": "隊長正在拆解任務",
+    "decomposed": "拆成 {{count}} 個任務",
+    "stopped": "沒能開工",
+    "delivered": "已交付",
+    "accepted": "已驗收",
+    "acceptance": "驗收",
+    "acceptance_waiting": "等待你驗收"
   }
 }

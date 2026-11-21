@@ -142,6 +142,28 @@
   "home": {
     "label": "홈 내비게이션",
     "conversation": "대화",
-    "tasks": "내 작업"
+    "tasks": "내 작업",
+    "office": "오피스"
+  },
+  "board": {
+    "columns": {
+      "active": "진행 중",
+      "review": "검토 대기",
+      "done": "종료됨"
+    },
+    "empty_column": "없음",
+    "agent_working": "에이전트 {{count}}개 작업 중"
+  },
+  "trail": {
+    "title": "진행 과정",
+    "submitted": "{{unit}}에 요청함",
+    "submitted_personal": "내 스쿼드에 요청함",
+    "decomposing": "리드가 작업으로 나누는 중",
+    "decomposed": "{{count}}개 작업으로 분해됨",
+    "stopped": "시작 전에 중단됨",
+    "delivered": "전달됨",
+    "accepted": "승인됨",
+    "acceptance": "승인",
+    "acceptance_waiting": "검토를 기다리는 중"
   }
 }

@@ -25,6 +25,10 @@ export interface AgentInteractPanelProps {
   onTaskCreated: () => void;
   /** Hand the typed brief to the full create dialog. */
   onMoreOptionsTask: (prompt: string) => void;
+  /** The C-end shows what the agent is doing but offers no admin actions. */
+  showActions?: boolean;
+  /** What the agent is working on, shown when actions are hidden. */
+  activity?: string | null;
   className?: string;
 }
 
@@ -42,6 +46,8 @@ export function AgentInteractPanel({
   onOpenDetail,
   onTaskCreated,
   onMoreOptionsTask,
+  showActions = true,
+  activity,
   className,
 }: AgentInteractPanelProps) {
   const { t } = useT("office");
@@ -69,10 +75,10 @@ export function AgentInteractPanel({
         return;
       }
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-      if (key === "t") {
+      if (showActions && key === "t") {
         event.preventDefault();
         onOpenChat();
-      } else if (key === "q" && canAssign) {
+      } else if (showActions && key === "q" && canAssign) {
         event.preventDefault();
         setComposing((open) => !open);
       } else if (event.key === "Escape") {
@@ -84,7 +90,7 @@ export function AgentInteractPanel({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canAssign, composing, onClose, onOpenChat]);
+  }, [canAssign, composing, onClose, onOpenChat, showActions]);
 
   return (
     <div
@@ -121,7 +127,11 @@ export function AgentInteractPanel({
         </Button>
       </div>
 
-      {composing ? (
+      {!showActions ? (
+        activity ? (
+          <p className="text-caption text-muted-foreground">{activity}</p>
+        ) : null
+      ) : composing ? (
         <AgentTaskComposer
           agent={agent}
           onCreated={() => {

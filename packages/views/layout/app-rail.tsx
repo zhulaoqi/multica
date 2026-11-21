@@ -195,13 +195,19 @@ export function AppRail({
     useCurrentWorkspace()?.id ?? "",
   );
   // Work is dispatched only in the organization, so a project has no
-  // workbench. On web the organization's admin side is department management:
-  // its one space is the team (org chart, people, agents); work, inbox and
-  // chat belong to the C-end. Desktop has no C-end and keeps every space.
+  // workbench. On web the organization's admin side manages departments and
+  // hands out work: workbench, inbox, work and team. Conversation and
+  // autopilots live on the C-end. Desktop has no C-end and keeps every space.
   const desktop = isDesktopShell();
+  const organizationSpaces: readonly RailSpaceId[] = [
+    "workbench",
+    "inbox",
+    "work",
+    "team",
+  ];
   const spaces = RAIL_SPACES.filter((id) =>
     isOrganization && !desktop
-      ? id === "team"
+      ? organizationSpaces.includes(id)
       : !(isProject && id === "workbench") && !(isOrganization && id === "autopilots"),
   );
 

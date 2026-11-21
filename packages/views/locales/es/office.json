@@ -4,6 +4,7 @@
     "connecting": "Conectando a la oficina…",
     "hint": "Camina con WASD o las flechas, usa la rueda para acercar y acércate a un agente para pulsar T.",
     "error": "Conexión con la oficina perdida. Reconectando…",
+    "home_empty": "Los agentes que trabajan en tus solicitudes aparecerán aquí.",
     "roster": {
       "title": "En la oficina",
       "count_one": "{{count}} persona",

@@ -10,6 +10,9 @@ vi.mock("../workbench", () => ({
 vi.mock("./home-tasks-page", () => ({
   HomeTasksPage: () => <p>tasks surface</p>,
 }));
+vi.mock("../office", () => ({
+  OfficePage: () => <p>office surface</p>,
+}));
 vi.mock("../layout/account-menu", () => ({
   AccountMenu: () => <button type="button">account menu</button>,
 }));
@@ -41,5 +44,10 @@ describe("HomePage", () => {
 
     expect(screen.getByText("tasks surface")).toBeInTheDocument();
     expect(screen.queryByText("conversation surface")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Office" }));
+
+    expect(screen.getByText("office surface")).toBeInTheDocument();
+    expect(screen.queryByText("tasks surface")).not.toBeInTheDocument();
   });
 });

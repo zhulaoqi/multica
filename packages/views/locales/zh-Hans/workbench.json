@@ -142,6 +142,28 @@
   "home": {
     "label": "首页导航",
     "conversation": "对话",
-    "tasks": "我的任务"
+    "tasks": "我的任务",
+    "office": "办公室"
+  },
+  "board": {
+    "columns": {
+      "active": "进行中",
+      "review": "待验收",
+      "done": "已结束"
+    },
+    "empty_column": "暂无",
+    "agent_working": "{{count}} 个 Agent 正在处理"
+  },
+  "trail": {
+    "title": "协同轨迹",
+    "submitted": "已提交给 {{unit}}",
+    "submitted_personal": "已交给你的小队",
+    "decomposing": "队长正在拆解任务",
+    "decomposed": "拆成了 {{count}} 个任务",
+    "stopped": "没能开工",
+    "delivered": "已交付",
+    "accepted": "已验收",
+    "acceptance": "验收",
+    "acceptance_waiting": "等待你验收"
   }
 }

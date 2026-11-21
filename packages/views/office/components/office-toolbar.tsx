@@ -25,6 +25,8 @@ export interface OfficeToolbarProps {
   onTogglePhoto: () => void;
   onToggleEmotes: () => void;
   onOpenTrophies: () => void;
+  /** Company-wide trophies are hidden on the C-end, which shows one person's work. */
+  showTrophies?: boolean;
   className?: string;
 }
 
@@ -39,6 +41,7 @@ export function OfficeToolbar({
   onTogglePhoto,
   onToggleEmotes,
   onOpenTrophies,
+  showTrophies = true,
   className,
 }: OfficeToolbarProps) {
   const { t } = useT("office");
@@ -71,14 +74,16 @@ export function OfficeToolbar({
       >
         <SmilePlus />
       </IconButton>
-      <IconButton
-        label={t(($) => $.page.toolbar.trophies)}
-        className="text-muted-foreground"
-        onClick={onOpenTrophies}
-        data-testid="office-toolbar-trophies"
-      >
-        <Star />
-      </IconButton>
+      {showTrophies ? (
+        <IconButton
+          label={t(($) => $.page.toolbar.trophies)}
+          className="text-muted-foreground"
+          onClick={onOpenTrophies}
+          data-testid="office-toolbar-trophies"
+        >
+          <Star />
+        </IconButton>
+      ) : null}
       <IconButton
         label={
           minimapOn
