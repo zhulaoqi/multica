@@ -100,6 +100,7 @@ export function TeamPanel() {
   const p = useWorkspacePaths();
   const { pathname, push } = useNavigation();
   const wsId = useCurrentWorkspace()?.id ?? "";
+  const { isOrganization, isProject } = useOrganizationContext(wsId);
   const userId = useAuthStore((s) => s.user?.id);
   const isOperator = useAuthStore((s) => s.user?.is_operator ?? false);
   const agentsScope = useAgentsViewStore((s) => s.scope);
@@ -120,7 +121,10 @@ export function TeamPanel() {
 
   const { data: squads = [] } = useQuery({ ...squadListOptions(wsId), enabled: !!wsId });
   const liveSquads = useMemo(() => squads.filter((squad) => !squad.archived_at), [squads]);
-  const { data: members = [] } = useQuery({ ...memberListOptions(wsId), enabled: !!wsId });
+  const { data: members = [], isSuccess: membersLoaded } = useQuery({
+    ...memberListOptions(wsId),
+    enabled: !!wsId,
+  });
   const { data: skills = [] } = useQuery({ ...skillListOptions(wsId), enabled: !!wsId });
   const { data: orgTree, isError: orgUnavailable } = useQuery({
     ...orgTreeOptions(wsId),
@@ -147,17 +151,23 @@ export function TeamPanel() {
   const showOrgLink =
     canManageMembers ||
     (!orgUnavailable && (orgTree === undefined || orgTree.units.length > 0));
-  const teamUserIds = useMemo(
-    () => teamUserIdsFor(orgTree, userId),
-    [orgTree, userId],
-  );
+  // A project's team is the people who joined it; only the organization reads
+  // "my team" from the department subtree this viewer leads.
+  const teamUserIds = useMemo<ReadonlySet<string> | null>(() => {
+    if (isProject) {
+      if (!membersLoaded || !canManageMembers) return null;
+      const ids = new Set(members.map((member) => member.user_id));
+      if (userId) ids.add(userId);
+      return ids;
+    }
+    return teamUserIdsFor(orgTree, userId);
+  }, [isProject, membersLoaded, canManageMembers, members, orgTree, userId]);
   const teamAgentCount = teamUserIds
     ? agents.filter((agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id)).length
     : 0;
   // A project's agents are projections of organization agents: managers add
   // them from the organization instead of creating new ones. The organization
   // itself takes members only from the company directory, never invitations.
-  const { isOrganization, isProject } = useOrganizationContext(wsId);
   const [addFromOrgOpen, setAddFromOrgOpen] = useState(false);
   const onAgents = pathname === p.agents();
   // Member pages live under /members/:id; the list itself is a Settings tab.

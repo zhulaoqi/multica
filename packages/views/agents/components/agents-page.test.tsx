@@ -82,7 +82,7 @@ vi.mock("@tanstack/react-query", () => ({
       return { data: mocks.orgTree };
     }
     if (key === "members") {
-      return { data: mocks.members, isLoading: false };
+      return { data: mocks.members, isLoading: false, isSuccess: true };
     }
     return { data: [], isLoading: false, isPending: false, isSuccess: true };
   },
@@ -621,6 +621,36 @@ describe("AgentsPage team scope", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
     expect(screen.queryByText("Team Agent")).not.toBeInTheDocument();
+  });
+
+  it("shows a project's team as a flat list of its members' agents", () => {
+    renderAsLead();
+    mocks.isProject = true;
+    // The owning department's roster is the organization's lens: user-3 sits in
+    // the subtree but never joined the project, so they stay out of the team.
+    mocks.orgTree = {
+      units: [{ id: "unit-a", can_manage: true }],
+      members: [
+        { user_id: "user-1", unit_id: "unit-a" },
+        { user_id: "user-2", unit_id: "unit-a" },
+        { user_id: "user-3", unit_id: "unit-a" },
+      ],
+    };
+    mocks.members = [
+      { user_id: "user-1", role: "owner" },
+      { user_id: "user-2", role: "member" },
+    ];
+    mocks.viewState.scopeTouched = false;
+
+    renderPage();
+
+    expect(
+      screen.getByRole("heading", { name: "Team agents", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
+    expect(screen.getByText("Team Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Outsider Agent")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-tree")).not.toBeInTheDocument();
   });
 
   it("keeps a plain member on their own agents", () => {

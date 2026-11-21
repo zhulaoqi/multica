@@ -383,6 +383,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
   const currentUser = useAuthStore((s) => s.user);
+  const { isProject } = useOrganizationContext(wsId);
 
   const {
     data: agents = [],
@@ -393,7 +394,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   const { data: runtimes = [], isSuccess: runtimesLoaded } = useQuery(
     runtimeListOptions(wsId),
   );
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
+  const { data: members = [], isSuccess: membersLoaded } = useQuery(
+    memberListOptions(wsId),
+  );
   // The org tree carries can_manage, which decides whether the caller may
   // open the full agent list or only sees their own.
   const { data: orgTree } = useQuery(orgTreeOptions(wsId));
@@ -456,13 +459,20 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     isWorkspaceAdmin ||
     (orgTree?.units.some((unit) => unit.can_manage) ?? false);
 
-  // "My team" users: members of the units this viewer leads, including
+  // "My team" users. In a project that is everyone who joined it; the owning
+  // department's subtree belongs to the organization, not the project. In the
+  // organization it is the members of the units this viewer leads, including
   // themselves. A workspace role does not widen the org scope, so owners and
   // admins who lead a department keep the lens.
-  const teamUserIds = useMemo<ReadonlySet<string> | null>(
-    () => teamUserIdsFor(orgTree, currentUser?.id),
-    [orgTree, currentUser],
-  );
+  const teamUserIds = useMemo<ReadonlySet<string> | null>(() => {
+    if (isProject) {
+      if (!membersLoaded || !canViewAllAgents) return null;
+      const ids = new Set(members.map((member) => member.user_id));
+      if (currentUser?.id) ids.add(currentUser.id);
+      return ids;
+    }
+    return teamUserIdsFor(orgTree, currentUser?.id);
+  }, [isProject, membersLoaded, canViewAllAgents, members, orgTree, currentUser]);
 
   // Leads land on "team" until they pick a scope themselves. A stale value
   // from a less privileged session never leaks through: non-managers are
@@ -726,7 +736,6 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   };
   // A project's agents are projections of organization agents, which project
   // managers add from the organization instead of creating new ones.
-  const { isProject } = useOrganizationContext(wsId);
   const [addFromOrgOpen, setAddFromOrgOpen] = useState(false);
   const canAddFromOrganization =
     isProject &&
@@ -832,9 +841,10 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
             ) : null
           }
         />
-      ) : scope === "team" && orgTree && rows.length > 0 && listReady && !isLoading ? (
-        // "My team" reads as the org chart, so a lead sees each department,
-        // its lead, and every member's agent with its duties before commanding it.
+      ) : scope === "team" && !isProject && orgTree && rows.length > 0 && listReady && !isLoading ? (
+        // In the organization, "My team" reads as the org chart, so a lead sees
+        // each department, its lead, and every member's agent with its duties
+        // before commanding it. A project team stays a flat list.
         <TeamTreeView
           rows={rows}
           orgTree={orgTree}
