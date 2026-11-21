@@ -27,6 +27,13 @@ export interface Workspace {
    * every agent, and dispatched work. Every other workspace is a project.
    */
   is_organization?: boolean;
+  /**
+   * Whether the requesting user may open this workspace's admin side. Members
+   * without it work in the C-end and in project content only. Older servers
+   * omit it; `undefined` then keeps the legacy admin access rather than
+   * locking department leads out, so only an explicit false blocks.
+   */
+  viewer_can_manage?: boolean;
   created_at: string;
   updated_at: string;
 }

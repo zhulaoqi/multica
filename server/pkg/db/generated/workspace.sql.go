@@ -376,6 +376,45 @@ func (q *Queries) ListDaemonWorkspaces(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
+const listManageableWorkspaceIDs = `-- name: ListManageableWorkspaceIDs :many
+SELECT w.id
+FROM workspace w
+WHERE EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = w.id AND m.user_id = $1
+          AND m.role IN ('owner', 'admin')
+    )
+   OR EXISTS (
+        SELECT 1 FROM org_unit u
+        WHERE u.lead_user_id = $1
+          AND (w.is_organization OR u.id = w.org_unit_id)
+    )
+`
+
+// The admin side is for managers: stored owner/admin roles, the lead of the
+// department that owns a project, or — for the organization workspace — the
+// lead of any department. Ancestor leads keep content access but do not inherit
+// administration.
+func (q *Queries) ListManageableWorkspaceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listManageableWorkspaceIDs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaces = `-- name: ListWorkspaces :many
 WITH RECURSIVE ancestors AS (
     SELECT w.id AS workspace_id, u.id AS unit_id
@@ -577,4 +616,36 @@ func (q *Queries) UpdateWorkspaceOrgUnit(ctx context.Context, arg UpdateWorkspac
 		&i.IsOrganization,
 	)
 	return i, err
+}
+
+const workspaceViewerCanManage = `-- name: WorkspaceViewerCanManage :one
+SELECT EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = $1 AND m.user_id = $2
+          AND m.role IN ('owner', 'admin')
+    )
+   OR EXISTS (
+        SELECT 1
+        FROM workspace w
+        LEFT JOIN org_unit owner ON owner.id = w.org_unit_id
+        WHERE w.id = $1
+          AND (
+              (w.is_organization AND EXISTS (
+                  SELECT 1 FROM org_unit lead WHERE lead.lead_user_id = $2
+              ))
+              OR owner.lead_user_id = $2
+          )
+    ) AS can_manage
+`
+
+type WorkspaceViewerCanManageParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) WorkspaceViewerCanManage(ctx context.Context, arg WorkspaceViewerCanManageParams) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, workspaceViewerCanManage, arg.WorkspaceID, arg.UserID)
+	var can_manage pgtype.Bool
+	err := row.Scan(&can_manage)
+	return can_manage, err
 }

@@ -3872,6 +3872,9 @@ export const WorkspaceSchema = z.object({
   // semantics, which is what those servers implement.
   org_unit_id: z.string().nullable().optional().default(null),
   is_organization: z.boolean().optional().default(false),
+  // No default: an older server omits it, and `undefined` keeps the legacy
+  // admin access instead of locking every department lead out.
+  viewer_can_manage: z.boolean().optional(),
   created_at: z.string().optional().default(""),
   updated_at: z.string().optional().default(""),
 }).loose();
@@ -3890,6 +3893,7 @@ export const EMPTY_WORKSPACE: Workspace = {
   avatar_url: null,
   org_unit_id: null,
   is_organization: false,
+  viewer_can_manage: false,
   created_at: "",
   updated_at: "",
 };

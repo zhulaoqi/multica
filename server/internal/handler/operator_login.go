@@ -80,7 +80,8 @@ func (h *Handler) listOperatorWorkspaces(r *http.Request) ([]db.Workspace, error
 	rows, err := h.DB.Query(r.Context(), `
 SELECT id, name, slug, description, settings,
        created_at, updated_at, context, repos,
-       issue_prefix, issue_counter, avatar_url, attribution_fail_closed, org_unit_id
+       issue_prefix, issue_counter, avatar_url, attribution_fail_closed,
+       org_unit_id, is_organization
 FROM workspace
 ORDER BY created_at ASC`)
 	if err != nil {
@@ -94,7 +95,7 @@ ORDER BY created_at ASC`)
 			&item.ID, &item.Name, &item.Slug, &item.Description, &item.Settings,
 			&item.CreatedAt, &item.UpdatedAt, &item.Context, &item.Repos,
 			&item.IssuePrefix, &item.IssueCounter, &item.AvatarUrl, &item.AttributionFailClosed,
-			&item.OrgUnitID,
+			&item.OrgUnitID, &item.IsOrganization,
 		); err != nil {
 			return nil, err
 		}

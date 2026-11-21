@@ -27,6 +27,43 @@ WHERE EXISTS (
     )
 ORDER BY w.created_at ASC;
 
+-- name: ListManageableWorkspaceIDs :many
+-- The admin side is for managers: stored owner/admin roles, the lead of the
+-- department that owns a project, or — for the organization workspace — the
+-- lead of any department. Ancestor leads keep content access but do not inherit
+-- administration.
+SELECT w.id
+FROM workspace w
+WHERE EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = w.id AND m.user_id = $1
+          AND m.role IN ('owner', 'admin')
+    )
+   OR EXISTS (
+        SELECT 1 FROM org_unit u
+        WHERE u.lead_user_id = $1
+          AND (w.is_organization OR u.id = w.org_unit_id)
+    );
+
+-- name: WorkspaceViewerCanManage :one
+SELECT EXISTS (
+        SELECT 1 FROM member m
+        WHERE m.workspace_id = $1 AND m.user_id = $2
+          AND m.role IN ('owner', 'admin')
+    )
+   OR EXISTS (
+        SELECT 1
+        FROM workspace w
+        LEFT JOIN org_unit owner ON owner.id = w.org_unit_id
+        WHERE w.id = $1
+          AND (
+              (w.is_organization AND EXISTS (
+                  SELECT 1 FROM org_unit lead WHERE lead.lead_user_id = $2
+              ))
+              OR owner.lead_user_id = $2
+          )
+    ) AS can_manage;
+
 -- name: ListDaemonWorkspaces :many
 -- Daemons only need the membership set and display name to discover which
 -- workspaces should have local runtimes. Keep this projection intentionally

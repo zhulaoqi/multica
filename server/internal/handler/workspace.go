@@ -123,9 +123,12 @@ type WorkspaceResponse struct {
 	// IsOrganization marks the organization workspace: it owns the department
 	// tree and the company roster, and every other department-owned workspace
 	// is a project reading that tree.
-	IsOrganization bool   `json:"is_organization"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	IsOrganization bool `json:"is_organization"`
+	// ViewerCanManage gates the admin side for the requesting user. Members
+	// without it still work in the C-end and in project content.
+	ViewerCanManage bool   `json:"viewer_can_manage"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
@@ -184,27 +187,50 @@ func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userUUID := parseUUID(userID)
+	isOperator := requestIsOperator(r)
 	var workspaces []db.Workspace
 	var err error
-	if requestIsOperator(r) {
+	if isOperator {
 		workspaces, err = h.listOperatorWorkspaces(r)
 	} else {
-		workspaces, err = h.Queries.ListWorkspaces(r.Context(), parseUUID(userID))
+		workspaces, err = h.Queries.ListWorkspaces(r.Context(), userUUID)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list workspaces")
 		return
 	}
 
+	manageable := map[string]struct{}{}
+	if isOperator {
+		for _, ws := range workspaces {
+			manageable[uuidToString(ws.ID)] = struct{}{}
+		}
+	} else {
+		ids, err := h.Queries.ListManageableWorkspaceIDs(r.Context(), userUUID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list workspaces")
+			return
+		}
+		for _, id := range ids {
+			manageable[uuidToString(id)] = struct{}{}
+		}
+	}
+
 	resp := make([]WorkspaceResponse, len(workspaces))
 	for i, ws := range workspaces {
 		resp[i] = h.workspaceToResponse(ws)
+		_, resp[i].ViewerCanManage = manageable[uuidToString(ws.ID)]
 	}
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
 	id := workspaceIDFromURL(r, "id")
 	idUUID, ok := parseUUIDOrBadRequest(w, id, "workspace id")
 	if !ok {
@@ -216,7 +242,21 @@ func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, h.workspaceToResponse(ws))
+	resp := h.workspaceToResponse(ws)
+	if requestIsOperator(r) {
+		resp.ViewerCanManage = true
+	} else {
+		canManage, err := h.Queries.WorkspaceViewerCanManage(r.Context(), db.WorkspaceViewerCanManageParams{
+			WorkspaceID: idUUID,
+			UserID:      parseUUID(userID),
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load workspace")
+			return
+		}
+		resp.ViewerCanManage = canManage.Bool
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type CreateWorkspaceRequest struct {
