@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enCommon from "../locales/en/common.json";
@@ -57,6 +57,11 @@ describe("NoAccessPage", () => {
   beforeEach(() => {
     navigate.mockReset();
     logout.mockReset();
+    delete (window as unknown as { desktopAPI?: unknown }).desktopAPI;
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { desktopAPI?: unknown }).desktopAPI;
   });
 
   it("renders generic message that doesn't leak existence", () => {
@@ -66,7 +71,16 @@ describe("NoAccessPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("navigates to the first accessible workspace on 'Go to my workspaces'", () => {
+  it("sends the web C-end user home on 'Go to my workspaces'", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /go to my workspaces/i }));
+    expect(navigate).toHaveBeenCalledWith("/home");
+  });
+
+  it("sends a desktop user to their first accessible workspace", () => {
+    (window as unknown as { desktopAPI?: unknown }).desktopAPI = {
+      pickDirectory: () => undefined,
+    };
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /go to my workspaces/i }));
     expect(navigate).toHaveBeenCalledWith("/valid-team/workbench");
