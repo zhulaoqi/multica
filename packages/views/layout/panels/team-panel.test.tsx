@@ -244,6 +244,7 @@ describe("TeamPanel member directory", () => {
         can_manage: true,
         description: "",
         position: 0,
+        intake_sources: [],
       }],
       agents: [],
       members: [{

@@ -14,7 +14,7 @@ import { Input } from "@multica/ui/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@multica/ui/components/ui/select";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@multica/ui/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@multica/ui/components/ui/popover";
-import { Bot, ChevronDown, ChevronRight } from "@multica/ui/icons";
+import { Bot, ChevronDown, ChevronRight, Plus, X } from "@multica/ui/icons";
 import { useT } from "../i18n";
 import { IntroArtCard, IntroArtConnector } from "../layout/feature-intro";
 import { DispatchDialog } from "../squads/components/dispatch-dialog";
@@ -364,6 +364,102 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/**
+ * Who may hand this department work. Its leads always may; the list adds
+ * people and whole departments. An empty list therefore reads "leads only",
+ * which is the setting a new department starts from.
+ */
+function IntakeSourcesRow({
+  unit,
+  allMembers,
+  unitChoices,
+  run,
+}: {
+  unit: OrgUnit;
+  allMembers: Array<{ user_id: string; label: string }>;
+  unitChoices: Array<{ id: string; path: string }>;
+  run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
+}) {
+  const { t } = useT("org");
+  const [open, setOpen] = useState(false);
+  const sources = unit.intake_sources;
+  const save = (next: Array<{ type: "user" | "org_unit"; id: string }>) =>
+    run(() => api.replaceOrgUnitIntakeSources(unit.id, next), t(($) => $.action_failed));
+  const remove = (type: "user" | "org_unit", id: string) =>
+    void save(sources.filter((source) => !(source.type === type && source.id === id)).map((source) => ({ type: source.type, id: source.id })));
+  const add = (type: "user" | "org_unit", id: string) => {
+    if (sources.some((source) => source.type === type && source.id === id)) return;
+    void save([...sources.map((source) => ({ type: source.type, id: source.id })), { type, id }]);
+    setOpen(false);
+  };
+  const unitLabel = (id: string) => unitChoices.find((choice) => choice.id === id)?.path ?? id.slice(0, 8);
+  const memberLabel = (id: string) => allMembers.find((member) => member.user_id === id)?.label ?? id.slice(0, 8);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+      <span className="text-caption text-muted-foreground">{t(($) => $.intake_sources)}</span>
+      {sources.length === 0 ? (
+        <span className="text-caption text-muted-foreground">{t(($) => $.intake_sources_leads_only)}</span>
+      ) : (
+        sources.map((source) => {
+          const label = source.type === "user" ? memberLabel(source.id) : unitLabel(source.id);
+          return (
+            <span
+              key={`${source.type}:${source.id}`}
+              className="inline-flex items-center gap-1 rounded-full border border-border/60 py-0.5 pr-1 pl-2 text-caption"
+            >
+              <span className="max-w-40 truncate">{label}</span>
+              <button
+                type="button"
+                aria-label={t(($) => $.intake_source_remove, { name: label })}
+                className="rounded-full p-0.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                onClick={() => remove(source.type, source.id)}
+              >
+                <X className="size-3" aria-hidden />
+              </button>
+            </span>
+          );
+        })
+      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 gap-1 px-1.5 text-caption text-muted-foreground"
+            />
+          }
+        >
+          <Plus className="size-3" aria-hidden />
+          {t(($) => $.intake_source_add)}
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-80 p-0">
+          <Command>
+            <CommandInput placeholder={t(($) => $.picker_search)} />
+            <CommandList>
+              <CommandEmpty>{t(($) => $.picker_empty)}</CommandEmpty>
+              {unitChoices
+                .filter((choice) => choice.id !== unit.id)
+                .map((choice) => (
+                  <CommandItem key={`unit:${choice.id}`} value={choice.path} onSelect={() => add("org_unit", choice.id)}>
+                    <span className="min-w-0 flex-1 truncate">{choice.path}</span>
+                    <span className="text-caption text-muted-foreground">{t(($) => $.intake_source_department)}</span>
+                  </CommandItem>
+                ))}
+              {allMembers.map((member) => (
+                <CommandItem key={`member:${member.user_id}`} value={member.label} onSelect={() => add("user", member.user_id)}>
+                  <span className="min-w-0 flex-1 truncate">{member.label}</span>
+                  <span className="text-caption text-muted-foreground">{t(($) => $.intake_source_person)}</span>
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function UnitHeaderCard({
   unit,
   path,
@@ -374,6 +470,8 @@ function UnitHeaderCard({
   allMembers,
   squad,
   squadAgents,
+  unitChoices,
+  canConfigureSources,
   actions,
 }: {
   unit: OrgUnit;
@@ -387,6 +485,10 @@ function UnitHeaderCard({
   squad: OrgSquad | null;
   /** Agents this department and its sub-departments cover, for leader choice. */
   squadAgents: OrgAgent[];
+  /** Departments with their full paths, for the request-source picker. */
+  unitChoices: Array<{ id: string; path: string }>;
+  /** Request sources are organization settings; projects only read them. */
+  canConfigureSources: boolean;
   actions: {
     run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
   };
@@ -528,6 +630,9 @@ function UnitHeaderCard({
       <p className="mt-1 text-caption text-muted-foreground tabular-nums">
         {t(($) => $.members)} {memberCount} · {t(($) => $.squads)} {squadCount} · {t(($) => $.agents)} {agentCount}
       </p>
+      {unit.can_manage && canConfigureSources ? (
+        <IntakeSourcesRow unit={unit} allMembers={allMembers} unitChoices={unitChoices} run={run} />
+      ) : null}
       {creating ? <CreateUnitDialog unitId={unit.id} open onOpenChange={setCreating} /> : null}
       {generating ? (
         <GenerateSquadDialog
@@ -671,6 +776,7 @@ export function OrgCanvas({
   onSelect,
   canAddToProject,
   onAddToProject,
+  canConfigureSources = false,
 }: {
   node: OrgNode;
   path: string;
@@ -686,6 +792,8 @@ export function OrgCanvas({
   onSelect: (unitId: string) => void;
   canAddToProject?: boolean;
   onAddToProject?: (userId: string) => void | Promise<void>;
+  /** Request sources are organization settings; projects only read them. */
+  canConfigureSources?: boolean;
 }) {
   const { t } = useT("org");
   const { unit, agents, members, squads, children } = node;
@@ -813,6 +921,8 @@ export function OrgCanvas({
         allMembers={allMembers}
         squad={unitSquad}
         squadAgents={squadAgents}
+        unitChoices={unitChoices}
+        canConfigureSources={canConfigureSources}
         actions={actions}
       />
       {sections.map((section) => (

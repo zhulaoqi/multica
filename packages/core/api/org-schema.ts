@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const OrgIntakeSourceSchema = z.object({
+  // "user" names one person; "org_unit" covers that department's whole subtree.
+  type: z.enum(["user", "org_unit"]).catch("user"),
+  id: z.string(),
+});
+
 export const OrgUnitSchema = z.object({
   id: z.string(),
   parent_id: z.string().optional().default(""),
@@ -10,7 +16,11 @@ export const OrgUnitSchema = z.object({
   can_manage: z.boolean().optional().default(false),
   description: z.string().optional().default(""),
   position: z.number().optional().default(0),
+  // Who may hand this department work beyond its leads. Only units the
+  // requester manages carry it; older servers omit it.
+  intake_sources: OrgIntakeSourceSchema.array().optional().default([]),
 });
+
 
 export const OrgMemberSchema = z.object({
   user_id: z.string(),
@@ -117,6 +127,7 @@ export type OrgSyncReport = z.infer<typeof OrgSyncReportSchema>;
 export type OrgSyncStatus = z.infer<typeof OrgSyncStatusSchema>;
 
 export type OrgUnit = z.infer<typeof OrgUnitSchema>;
+export type OrgIntakeSource = z.infer<typeof OrgIntakeSourceSchema>;
 export type OrgAgent = z.infer<typeof OrgAgentSchema>;
 export type OrgMember = z.infer<typeof OrgMemberSchema>;
 export type OrgSquad = z.infer<typeof OrgSquadSchema>;

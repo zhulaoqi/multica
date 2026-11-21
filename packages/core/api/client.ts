@@ -5921,6 +5921,20 @@ export class ApiClient {
   }
 
   /**
+   * Replaces who may hand a department work. Its leads always may; the list
+   * adds people and whole departments. Empty leaves it to the leads.
+   */
+  async replaceOrgUnitIntakeSources(
+    unitId: string,
+    sources: Array<{ type: "user" | "org_unit"; id: string }>,
+  ): Promise<void> {
+    await this.fetch(`/api/org/units/${encodeURIComponent(unitId)}/intake-sources`, {
+      method: "PUT",
+      body: JSON.stringify({ sources }),
+    });
+  }
+
+  /**
    * Creates the department's squad when it has none, then re-syncs its roster
    * from the unit subtree. Idempotent, so "generate" and "sync" share it.
    */

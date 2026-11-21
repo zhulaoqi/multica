@@ -185,6 +185,7 @@ beforeEach(() => {
         can_manage: false,
         description: "",
         position: 0,
+        intake_sources: [],
       },
       {
         id: "unit-2",
@@ -194,6 +195,7 @@ beforeEach(() => {
         can_manage: false,
         description: "",
         position: 0,
+        intake_sources: [],
       },
     ],
     agents: [],

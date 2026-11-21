@@ -14,7 +14,7 @@ export type {
 } from "./client";
 export { parseWithFallback, setSchemaLogger } from "./schema";
 export type { IntakeAgent, IntakeListItem, IntakeMaintainProject, IntakeModule, IntakeProjectItem, IntakeSession } from "./intake-schema";
-export type { OrgAgent, OrgImportResult, OrgImportRow, OrgMember, OrgSquad, OrgSquadSyncResult, OrgSyncReport, OrgSyncStatus, OrgTree, OrgUnit } from "./org-schema";
+export type { OrgAgent, OrgImportResult, OrgImportRow, OrgMember, OrgSquad, OrgSquadSyncResult, OrgSyncReport, OrgSyncStatus, OrgTree, OrgUnit, OrgIntakeSource } from "./org-schema";
 export type { ParseOptions } from "./schema";
 export { DuplicateIssueErrorBodySchema } from "./schemas";
 export type { DuplicateIssueErrorBody } from "./schemas";

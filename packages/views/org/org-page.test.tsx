@@ -10,6 +10,7 @@ vi.mock("@multica/core/api", async (importOriginal) => ({
     createOrgUnit: vi.fn(),
     updateOrgUnit: vi.fn(),
     deleteOrgUnit: vi.fn(),
+    replaceOrgUnitIntakeSources: vi.fn(),
     setOrgMemberUnit: vi.fn(),
     setOrgAgentUnit: vi.fn(),
     setOrgSquadUnit: vi.fn(),
@@ -48,6 +49,7 @@ const baseUnit: OrgUnit = {
   can_manage: false,
   description: "",
   position: 0,
+  intake_sources: [],
 };
 const baseAgent: OrgAgent = { id: "", name: "", unit_id: "", owner_id: "", is_primary: false, runtime_mode: "", can: "", cannot: "", status: "" };
 const baseSquad: OrgSquad = {
@@ -313,6 +315,48 @@ describe("OrgPage Feishu sync", () => {
     expect(
       screen.getByText("People added: Person 1, Person 2, Person 3, Person 4, Person 5, Person 6, Person 7, Person 8 +3"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("OrgPage request sources", () => {
+  it("shows who may request work and removes a source", async () => {
+    vi.mocked(api.replaceOrgUnitIntakeSources).mockResolvedValue(undefined);
+    renderPage(tree({
+      units: [
+        unit({
+          id: "dept-root",
+          name: "Engineering",
+          can_manage: true,
+          intake_sources: [
+            { type: "user", id: "u-ada" },
+            { type: "org_unit", id: "dept-child" },
+          ],
+        }),
+        unit({ id: "dept-child", parent_id: "dept-root", name: "Shared Services", can_manage: true }),
+      ],
+      members: [{ ...baseOrgMember, user_id: "u-ada", unit_id: "dept-child", name: "Ada", email: "ada@example.com" }],
+    }));
+    selectUnit("Engineering");
+
+    expect(screen.getByText("Accepts requests from")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Ada" })).toBeInTheDocument();
+    expect(screen.getByText("Engineering/Shared Services")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Ada" }));
+    await waitFor(() => {
+      expect(api.replaceOrgUnitIntakeSources).toHaveBeenCalledWith("dept-root", [
+        { type: "org_unit", id: "dept-child" },
+      ]);
+    });
+  });
+
+  it("says a department with no sources takes requests from its leads", () => {
+    renderPage(tree({ units: [unit({ id: "dept-root", name: "Engineering", can_manage: true })] }));
+    selectUnit("Engineering");
+
+    expect(screen.getByText("Accepts requests from")).toBeInTheDocument();
+    expect(screen.getByText("Leads only")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove Ada" })).not.toBeInTheDocument();
   });
 });
 

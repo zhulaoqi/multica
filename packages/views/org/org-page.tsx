@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { EMPTY_ORG_TREE, api, type OrgAgent, type OrgSyncReport, type OrgTree } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useOrganizationContext } from "@multica/core/workspace/hooks";
 import { useCurrentMember } from "@multica/core/permissions";
 import {
   memberListOptions,
@@ -113,6 +114,7 @@ function SyncReport({ report }: { report: OrgSyncReport }) {
 export function OrgPage() {
   const { t } = useT("org");
   const wsId = useWorkspaceId();
+  const { isProject } = useOrganizationContext(wsId);
   const isOperator = useAuthStore((state) => state.user?.is_operator ?? false);
   const { isManager } = useCurrentMember(wsId);
   const queryClient = useQueryClient();
@@ -298,6 +300,7 @@ export function OrgPage() {
                 t(($) => $.action_failed),
               )
             }
+            canConfigureSources={!isProject}
           />
         ) : activeSelected === NO_UNIT ? (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">

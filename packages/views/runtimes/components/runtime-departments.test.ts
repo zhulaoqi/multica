@@ -14,7 +14,7 @@ function machine(id: string, ownerId: string): RuntimeMachine {
 }
 
 function unit(id: string, name: string, parentId = "") {
-  return { id, name, parent_id: parentId, lead_user_id: "", can_manage: false, description: "", position: 0 };
+  return { id, name, parent_id: parentId, lead_user_id: "", can_manage: false, description: "", position: 0, intake_sources: [] };
 }
 
 function member(userId: string, unitId: string) {

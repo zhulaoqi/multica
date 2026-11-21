@@ -38,6 +38,30 @@ describe("org tree wire compatibility", () => {
     expect(parsed.my_unit_id).toBe("dept-1");
   });
 
+  it("defaults request sources for older servers and maps unknown types", () => {
+    const legacy = OrgTreeSchema.parse({
+      units: [{ id: "dept-1", name: "研发中心" }],
+      agents: [],
+      members: [],
+    });
+    expect(legacy.units[0]?.intake_sources).toEqual([]);
+
+    const parsed = OrgTreeSchema.parse({
+      units: [{
+        id: "dept-1",
+        name: "研发中心",
+        intake_sources: [
+          { type: "user", id: "u-1" },
+          { type: "org_unit", id: "dept-2" },
+          { type: "team", id: "dept-3" },
+        ],
+      }],
+      agents: [],
+      members: [],
+    });
+    expect(parsed.units[0]?.intake_sources.map((source) => source.type)).toEqual(["user", "org_unit", "user"]);
+  });
+
   it("falls back to an empty tree on malformed payloads", () => {
     const parsed = parseWithFallback(
       { units: "not-an-array", agents: [{ name: 5 }] },

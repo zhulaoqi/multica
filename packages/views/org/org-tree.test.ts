@@ -21,9 +21,9 @@ function squad(id: string, name: string, unitId: string, leaderId: string, agent
 }
 
 const UNITS = [
-  { id: "a", parent_id: "", name: "研发中心", lead_user_id: "", can_manage: true, description: "", position: 0 },
-  { id: "b", parent_id: "a", name: "支付组", lead_user_id: "", can_manage: true, description: "", position: 0 },
-  { id: "c", parent_id: "a", name: "结算组", lead_user_id: "", can_manage: false, description: "", position: 0 },
+  { id: "a", parent_id: "", name: "研发中心", lead_user_id: "", can_manage: true, description: "", position: 0, intake_sources: [] },
+  { id: "b", parent_id: "a", name: "支付组", lead_user_id: "", can_manage: true, description: "", position: 0, intake_sources: [] },
+  { id: "c", parent_id: "a", name: "结算组", lead_user_id: "", can_manage: false, description: "", position: 0, intake_sources: [] },
 ];
 
 describe("unitPaths", () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { countDepartmentRows, departmentForest, type DepartmentNode } from "./team-tree";
 
 function unit(id: string, name: string, parentId = "", position = 0, lead = "") {
-  return { id, name, parent_id: parentId, lead_user_id: lead, can_manage: true, description: "", position };
+  return { id, name, parent_id: parentId, lead_user_id: lead, can_manage: true, description: "", position, intake_sources: [] };
 }
 
 function member(userId: string, unitId: string) {
