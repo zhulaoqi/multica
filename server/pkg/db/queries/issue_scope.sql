@@ -37,13 +37,23 @@ SELECT led.id::uuid AS id FROM led;
 -- name: ListIssueAudience :many
 -- Members of the issue's workspace who may read it, for per-user realtime
 -- delivery. Mirrors the read predicate: owners/admins, members placed in the
--- issue's department subtree, leads of the department or an ancestor, and the
--- people directly involved. Empty when the issue has no department.
+-- issue's department subtree, leads of the department or an ancestor, the
+-- people directly involved, and the requester whose issue this tree belongs
+-- to. Empty when the issue has no department.
 WITH RECURSIVE target AS (
     SELECT i.id, i.workspace_id, i.org_unit_id, i.creator_type, i.creator_id,
-           i.assignee_type, i.assignee_id
+           i.assignee_type, i.assignee_id, i.parent_issue_id
     FROM issue i
     WHERE i.id = sqlc.arg(issue_id) AND i.org_unit_id IS NOT NULL
+),
+requesters AS (
+    SELECT i.parent_issue_id AS next_id, i.creator_type, i.creator_id
+    FROM target t
+    JOIN issue i ON i.id = t.parent_issue_id
+    UNION
+    SELECT i.parent_issue_id, i.creator_type, i.creator_id
+    FROM requesters r
+    JOIN issue i ON i.id = r.next_id
 ),
 subtree AS (
     SELECT t.org_unit_id AS id FROM target t
@@ -105,4 +115,8 @@ WHERE m.role IN ('owner', 'admin')
          AND s.user_type = 'member'
          AND s.user_id = m.user_id
          AND s.unsubscribed_at IS NULL
+   )
+   OR EXISTS (
+       SELECT 1 FROM requesters r
+       WHERE r.creator_type = 'member' AND r.creator_id = m.user_id
    );

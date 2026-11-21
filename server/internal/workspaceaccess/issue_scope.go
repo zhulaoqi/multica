@@ -17,7 +17,10 @@ import (
 //   - members placed in that department or one of its sub-teams,
 //   - leads of that department or one of its ancestors,
 //   - the people directly involved: creator, assignee (or the owner of the
-//     assigned agent, or a member of the assigned squad), and subscribers.
+//     assigned agent, or a member of the assigned squad), and subscribers,
+//   - the requester behind the work: the creator of any ancestor issue reads
+//     the whole tree the leader decomposes it into, even when those child
+//     issues are assigned to agents in another department.
 //
 // Issues without a department stay visible to the whole workspace. A nil scope
 // means "no narrowing": projects, the organization's owners/admins, and the
@@ -101,6 +104,22 @@ func (s *IssueScope) Predicate(alias string, addArg func(any) string) string {
           AND scope_sub.user_type = 'member'
           AND scope_sub.user_id = %[2]s::uuid
           AND scope_sub.unsubscribed_at IS NULL
+    )
+    OR EXISTS (
+        WITH RECURSIVE scope_chain AS (
+            SELECT %[1]s.parent_issue_id AS id
+            WHERE %[1]s.parent_issue_id IS NOT NULL
+            UNION
+            SELECT scope_parent.parent_issue_id
+            FROM scope_chain
+            JOIN issue scope_parent ON scope_parent.id = scope_chain.id
+            WHERE scope_parent.parent_issue_id IS NOT NULL
+        )
+        SELECT 1
+        FROM scope_chain
+        JOIN issue scope_ancestor ON scope_ancestor.id = scope_chain.id
+        WHERE scope_ancestor.creator_type = 'member'
+          AND scope_ancestor.creator_id = %[2]s::uuid
     )
 )`, alias, viewer, units)
 }

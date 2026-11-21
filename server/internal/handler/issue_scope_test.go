@@ -15,6 +15,7 @@ import (
 // both in a dedicated project so list assertions ignore other rows.
 type issueScopeFixture struct {
 	projectID, deptIssue, flatIssue, needle string
+	dispatchChild, dispatchGrandchild       string
 	viewers                                 map[string]string
 }
 
@@ -32,6 +33,7 @@ func newIssueScopeFixture(t *testing.T) issueScopeFixture {
 		"creator":                  viewer("creator"),
 		"assignee":                 viewer("assignee"),
 		"subscriber":               viewer("subscriber"),
+		"requester":                viewer("requester"),
 		"workspace owner":          testUserID,
 	}}
 	v := f.viewers
@@ -57,6 +59,7 @@ func newIssueScopeFixture(t *testing.T) issueScopeFixture {
 		"creator":                  other,
 		"assignee":                 other,
 		"subscriber":               other,
+		"requester":                other,
 	}
 	for name, unit := range place {
 		dbfx.Exec(t, `UPDATE member SET org_unit_id = $3 WHERE workspace_id = $1 AND user_id = $2`, testWorkspaceID, v[name], unit)
@@ -72,6 +75,29 @@ func newIssueScopeFixture(t *testing.T) issueScopeFixture {
 		"creator_id":      v["creator"],
 		"assignee_type":   "member",
 		"assignee_id":     v["assignee"],
+	})
+	// A dispatch the requester sent to the department: the leader decomposes
+	// it into child issues staffed by that department, and the requester must
+	// read the whole tree even though they sit in another department. The
+	// outsider sits beside the requester and must not inherit that access.
+	dispatchRoot := dbfx.Issue(t, f.needle+" dispatch root", testutil.Cols{
+		"project_id":  f.projectID,
+		"org_unit_id": dept,
+		"creator_id":  v["requester"],
+	})
+	f.dispatchChild = dbfx.Issue(t, f.needle+" dispatch child", testutil.Cols{
+		"project_id":      f.projectID,
+		"parent_issue_id": dispatchRoot,
+		"org_unit_id":     dept,
+		"creator_id":      v["member of the department"],
+	})
+	f.dispatchGrandchild = dbfx.Issue(t, f.needle+" dispatch grandchild", testutil.Cols{
+		"project_id":      f.projectID,
+		"parent_issue_id": f.dispatchChild,
+		"org_unit_id":     dept,
+		"creator_id":      v["member of the department"],
+		"assignee_type":   "member",
+		"assignee_id":     v["member of the department"],
 	})
 	dbfx.Exec(t, `
 		INSERT INTO issue_subscriber (issue_id, user_type, user_id, reason) VALUES ($1, 'member', $2, 'manual')
@@ -89,7 +115,8 @@ func (f issueScopeFixture) visibleIssueIDs(t *testing.T, userID string) map[stri
 	collect := func(ids []string) map[string]bool {
 		seen := map[string]bool{}
 		for _, id := range ids {
-			if id == f.deptIssue || id == f.flatIssue {
+			if id == f.deptIssue || id == f.flatIssue ||
+			id == f.dispatchChild || id == f.dispatchGrandchild {
 				seen[id] = true
 			}
 		}
@@ -202,6 +229,46 @@ func TestOrganizationIssuesAreScopedByDepartment(t *testing.T) {
 			}
 		})
 	}
+
+	// The requester follows their dispatch down the tree the leader built, at
+	// every depth and on every surface the C-end reads (list, search, table,
+	// children, detail). A colleague in the same outside department does not.
+	t.Run("requester follows their dispatch subtree", func(t *testing.T) {
+		seen := f.visibleIssueIDs(t, f.viewers["requester"])
+		for _, id := range []string{f.dispatchChild, f.dispatchGrandchild} {
+			if !seen[id] {
+				t.Fatalf("requester must read dispatch issue %s: %v", id, seen)
+			}
+		}
+		audience, err := testHandler.Queries.ListIssueAudience(context.Background(), parseUUID(f.dispatchGrandchild))
+		if err != nil {
+			t.Fatalf("list issue audience: %v", err)
+		}
+		inAudience := map[string]bool{}
+		for _, user := range audience {
+			inAudience[uuidToString(user)] = true
+		}
+		if !inAudience[f.viewers["requester"]] {
+			t.Fatal("requester must receive realtime updates for a grandchild issue")
+		}
+	})
+	t.Run("outsider does not follow the dispatch subtree", func(t *testing.T) {
+		seen := f.visibleIssueIDs(t, f.viewers["outsider"])
+		for _, id := range []string{f.dispatchChild, f.dispatchGrandchild} {
+			if seen[id] {
+				t.Fatalf("outsider must not read dispatch issue %s: %v", id, seen)
+			}
+		}
+		audience, err := testHandler.Queries.ListIssueAudience(context.Background(), parseUUID(f.dispatchGrandchild))
+		if err != nil {
+			t.Fatalf("list issue audience: %v", err)
+		}
+		for _, user := range audience {
+			if uuidToString(user) == f.viewers["outsider"] {
+				t.Fatal("outsider must not receive realtime updates for a dispatch grandchild")
+			}
+		}
+	})
 }
 
 func TestProjectIssuesIgnoreDepartmentScope(t *testing.T) {
