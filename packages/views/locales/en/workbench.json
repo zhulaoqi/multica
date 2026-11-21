@@ -47,7 +47,9 @@
     "target_department": "Department",
     "target_personal": "My squad",
     "personal_squad": "My squad",
-    "blocked": "Blocked: {{missing}}"
+    "blocked": "Blocked: {{missing}}",
+    "binding_none": "You don't own an agent yet. Ask your department lead to set one up.",
+    "binding_failed": "Couldn't bind that agent. Try again."
   },
   "status": {
     "queued": "Sent to the department. Its lead will pick it up shortly.",

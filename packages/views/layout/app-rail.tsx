@@ -22,6 +22,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { useAppForeground } from "../common/use-app-foreground";
 import { useT } from "../i18n";
 import { AppLink, useNavigation } from "../navigation";
+import { isDesktopShell } from "../platform";
 import { AccountMenu } from "./account-menu";
 import { useAppShell } from "./app-shell-context";
 import { SearchButton } from "./global-actions";
@@ -194,9 +195,14 @@ export function AppRail({
     useCurrentWorkspace()?.id ?? "",
   );
   // Work is dispatched only in the organization, so a project has no
-  // workbench. The organization runs no autopilots.
-  const spaces = RAIL_SPACES.filter(
-    (id) => !(isProject && id === "workbench") && !(isOrganization && id === "autopilots"),
+  // workbench. On web the organization's admin side is department management:
+  // its one space is the team (org chart, people, agents); work, inbox and
+  // chat belong to the C-end. Desktop has no C-end and keeps every space.
+  const desktop = isDesktopShell();
+  const spaces = RAIL_SPACES.filter((id) =>
+    isOrganization && !desktop
+      ? id === "team"
+      : !(isProject && id === "workbench") && !(isOrganization && id === "autopilots"),
   );
 
   const items: Record<RailSpaceId, { href: string; icon: IconComponent; label: string; fullLabel: string }> = {

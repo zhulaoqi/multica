@@ -1,13 +1,14 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { NavigationProvider, type NavigationAdapter } from "../navigation";
 import { renderWithI18n } from "../test/i18n";
 
 vi.mock("../workbench", () => ({
   WorkbenchPage: () => <p>conversation surface</p>,
 }));
-vi.mock("../my-issues", () => ({
-  MyIssuesPage: () => <p>tasks surface</p>,
+vi.mock("./home-tasks-page", () => ({
+  HomeTasksPage: () => <p>tasks surface</p>,
 }));
 vi.mock("../layout/account-menu", () => ({
   AccountMenu: () => <button type="button">account menu</button>,
@@ -15,9 +16,23 @@ vi.mock("../layout/account-menu", () => ({
 
 import { HomePage } from "./home-page";
 
+const adapter: NavigationAdapter = {
+  push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+  pathname: "/home",
+  searchParams: new URLSearchParams(),
+  hash: "",
+  getShareableUrl: (path) => path,
+};
+
 describe("HomePage", () => {
   it("opens on the conversation and switches to the caller's tasks", async () => {
-    renderWithI18n(<HomePage />);
+    renderWithI18n(
+      <NavigationProvider value={adapter}>
+        <HomePage />
+      </NavigationProvider>,
+    );
 
     expect(screen.getByText("conversation surface")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "account menu" })).toBeInTheDocument();

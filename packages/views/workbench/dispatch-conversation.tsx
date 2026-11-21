@@ -19,6 +19,7 @@ import { errorCode } from "@multica/core/api";
 import { issueTimelineOptions } from "@multica/core/issues/queries";
 import { useWorkspacePaths } from "@multica/core/paths";
 import type { DispatchCandidate, DispatchListItem } from "@multica/core/workbench";
+import { useHomeMode } from "../common/home-mode";
 import { ReadonlyContent } from "../editor/readonly-content";
 import { useT, useTimeAgo } from "../i18n";
 import { AppLink } from "../navigation";
@@ -192,6 +193,7 @@ export function DispatchConversation({
   const { t } = useT("workbench");
   const p = useWorkspacePaths();
   const timeAgo = useTimeAgo();
+  const homeMode = useHomeMode();
   const [reassignOpen, setReassignOpen] = useState(false);
   const issueHref = p.issueDetail(item.issue.id);
   const percent =
@@ -251,22 +253,28 @@ export function DispatchConversation({
               </span>
             ) : null}
             <span>{t(($) => $.status.dispatched_at, { time: timeAgo(item.dispatched_at) })}</span>
-            <AppLink
-              href={issueHref}
-              className="font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              {item.issue.identifier}
-            </AppLink>
+            {homeMode ? (
+              <span className="font-medium text-foreground">{item.issue.identifier}</span>
+            ) : (
+              <AppLink
+                href={issueHref}
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                {item.issue.identifier}
+              </AppLink>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<AppLink href={issueHref} />}
-            >
-              {t(($) => $.card.view_issue)}
-            </Button>
+            {!homeMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<AppLink href={issueHref} />}
+              >
+                {t(($) => $.card.view_issue)}
+              </Button>
+            )}
             {phase === "failed" && onRetry ? (
               <Button variant="outline" size="sm" onClick={onRetry}>
                 <RotateCcw />

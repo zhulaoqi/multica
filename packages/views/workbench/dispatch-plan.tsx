@@ -9,6 +9,7 @@ import { statusCategoryOfKey } from "@multica/core/issues";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
 import type { Issue, IssueStatusCategory } from "@multica/core/types";
+import { useHomeMode } from "../common/home-mode";
 import { useT } from "../i18n";
 import { AppLink } from "../navigation";
 import { useStatusLabel } from "../issues/utils/status-label";
@@ -48,6 +49,7 @@ export function DispatchPlan({
 }) {
   const { t } = useT("workbench");
   const paths = useWorkspacePaths();
+  const homeMode = useHomeMode();
   const statusLabel = useStatusLabel(wsId);
   const { getActorName } = useActorName();
   const [open, setOpen] = useState(false);
@@ -97,7 +99,7 @@ export function DispatchPlan({
             <PlanRow
               key={child.id}
               issue={child}
-              href={paths.issueDetail(child.id)}
+              href={homeMode ? null : paths.issueDetail(child.id)}
               statusLabel={statusLabel}
               assigneeName={
                 child.assignee_type && child.assignee_id
@@ -119,23 +121,29 @@ function PlanRow({
   assigneeName,
 }: {
   issue: Issue;
-  href: string;
+  /** Null on the C-end, where issue pages belong to the admin side. */
+  href: string | null;
   statusLabel: (status: string) => string;
   assigneeName: string | null;
 }) {
   const category = issue.status_category ?? statusCategoryOfKey(issue.status);
+  const titleClass = "min-w-0 flex-1 truncate text-foreground";
   return (
     <li className="flex min-w-0 items-center gap-2 text-caption">
       <span
         aria-hidden
         className={cn("size-1.5 shrink-0 rounded-full", dotClass(issue.status, category))}
       />
-      <AppLink
-        href={href}
-        className="min-w-0 flex-1 truncate text-foreground underline-offset-2 hover:underline"
-      >
-        {issue.title}
-      </AppLink>
+      {href ? (
+        <AppLink
+          href={href}
+          className={cn(titleClass, "underline-offset-2 hover:underline")}
+        >
+          {issue.title}
+        </AppLink>
+      ) : (
+        <span className={titleClass}>{issue.title}</span>
+      )}
       <span className="shrink-0 text-muted-foreground">{statusLabel(issue.status)}</span>
       {assigneeName ? (
         <span className="max-w-32 shrink-0 truncate text-muted-foreground">{assigneeName}</span>

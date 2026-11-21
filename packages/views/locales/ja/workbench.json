@@ -47,7 +47,9 @@
     "target_department": "部署",
     "target_personal": "マイチーム",
     "personal_squad": "マイチーム",
-    "blocked": "ブロック中: {{missing}}"
+    "blocked": "ブロック中: {{missing}}",
+    "binding_none": "まだ自分の Agent がありません。部門の責任者に作成を依頼してください。",
+    "binding_failed": "エージェントを紐付けできませんでした。もう一度お試しください。"
   },
   "status": {
     "queued": "部署に送りました。責任者がまもなく着手します。",

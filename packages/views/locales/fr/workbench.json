@@ -47,7 +47,9 @@
     "target_department": "Département",
     "target_personal": "Mon équipe",
     "personal_squad": "Mon équipe",
-    "blocked": "Bloqué : {{missing}}"
+    "blocked": "Bloqué : {{missing}}",
+    "binding_none": "Vous n'avez pas encore d'agent. Demandez à votre responsable de département d'en créer un.",
+    "binding_failed": "Impossible de lier cet agent. Réessayez."
   },
   "status": {
     "queued": "Envoyé au département. Son responsable s'en saisit bientôt.",

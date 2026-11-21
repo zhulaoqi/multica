@@ -35,6 +35,7 @@ import { Kbd, KbdGroup } from "@multica/ui/components/ui/kbd";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../i18n";
 import { AppLink, useNavigation } from "../navigation";
+import { isDesktopShell } from "../platform";
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 
 // Stable empty defaults: an inline `= []` is a new array every render.
@@ -117,7 +118,13 @@ function useInvitationActions(invitations: Invitation[]) {
       // the list before its slug can be resolved.
       const list = await queryClient.fetchQuery({ ...workspaceListOptions(), staleTime: 0 });
       const joined = invitation ? list.find((w) => w.id === invitation.workspace_id) : null;
-      if (joined) push(paths.workspace(joined.slug).workbench());
+      if (joined) {
+        push(
+          joined.is_organization
+            ? paths.workspace(joined.slug).org()
+            : paths.workspace(joined.slug).issues(),
+        );
+      }
     },
     // "Invitation is not pending": it was concluded on another surface while
     // this row was on screen. Refetch so the stale row drops.
@@ -204,10 +211,28 @@ export function RailWorkspaces() {
   const { openWorkspaceInNewWindow, workspacesInOtherWindows } = useNavigation();
   // Read when the menu opens: other windows switch workspaces independently.
   const [inOtherWindows, setInOtherWindows] = useState(EMPTY_SLUGS);
+  // The organization workspace's admin shell is for department leads and
+  // administrators. Projects stay listed for their members, who work in them.
+  // Desktop has no C-end, so it keeps its previous list.
+  const visibleWorkspaces = useMemo(
+    () =>
+      workspaces.filter(
+        (ws) =>
+          !ws.is_organization || ws.viewer_can_manage !== false || isDesktopShell(),
+      ),
+    [workspaces],
+  );
+  // Web puts the organization on its admin landing; projects open on issues.
+  // Desktop still opens the workbench it always has.
+  const landingHref = (ws: Workspace) => {
+    const wsPaths = paths.workspace(ws.slug);
+    if (isDesktopShell()) return wsPaths.workbench();
+    return ws.is_organization ? wsPaths.org() : wsPaths.issues();
+  };
 
   const current = workspaces.find((ws) => ws.id === wsId) ?? workspace;
   if (!current) return null;
-  const otherUnread = workspaces.some((ws) => ws.id !== wsId && unreadIds.has(ws.id));
+  const otherUnread = visibleWorkspaces.some((ws) => ws.id !== wsId && unreadIds.has(ws.id));
   const label = t(($) => $.rail.switch_workspace);
 
   return (
@@ -238,7 +263,7 @@ export function RailWorkspaces() {
           <DropdownMenuLabel className="text-caption text-muted-foreground">
             {t(($) => $.sidebar.workspaces_label)}
           </DropdownMenuLabel>
-          {workspaces.map((ws) => {
+          {visibleWorkspaces.map((ws) => {
             const isCurrent = ws.id === wsId;
             // A workspace shown by another window is focused there by a
             // plain click, so it offers no new window of its own.
@@ -261,7 +286,7 @@ export function RailWorkspaces() {
                       }
                     : undefined
                 }
-                render={<AppLink href={paths.workspace(ws.slug).workbench()} />}
+                render={<AppLink href={landingHref(ws)} />}
               >
                 <WorkspaceAvatar name={ws.name} avatarUrl={ws.avatar_url} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{ws.name}</span>

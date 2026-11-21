@@ -4,7 +4,14 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { renderWithI18n } from "../test/i18n";
 import { RailWorkspaces } from "./rail-workspaces";
 
-type Ws = { id: string; name: string; slug: string; avatar_url: string | null };
+type Ws = {
+  id: string;
+  name: string;
+  slug: string;
+  avatar_url: string | null;
+  is_organization?: boolean;
+  viewer_can_manage?: boolean;
+};
 
 const state = vi.hoisted(() => ({
   workspaces: [] as Ws[],
@@ -122,7 +129,24 @@ describe("RailWorkspaces", () => {
     const items = within(menu).getAllByRole("menuitem").filter((el) => el.getAttribute("href") !== "/workspaces/new");
     expect(items.map((el) => el.textContent?.slice(1))).toEqual(["WS 2", "WS 3", "WS 4", "WS 5", "WS 6", "Active WS"]);
     expect(within(menu).getByRole("menuitem", { name: /Active WS$/ })).toHaveAttribute("aria-current", "page");
-    expect(within(menu).getByRole("menuitem", { name: /WS 3$/ })).toHaveAttribute("href", "/ws3/workbench");
+    // A project opens on its admin landing, the issues page.
+    expect(within(menu).getByRole("menuitem", { name: /WS 3$/ })).toHaveAttribute("href", "/ws3/issues");
+  });
+
+  it("puts the organization on its org page and hides it from members who cannot manage it", async () => {
+    state.workspaces = [
+      ws(1),
+      { ...ws(2), slug: "company", is_organization: true, viewer_can_manage: true },
+      { ...ws(3), slug: "other", is_organization: true, viewer_can_manage: false },
+    ];
+    renderWithI18n(<RailWorkspaces />);
+
+    const menu = await openMenu();
+    expect(within(menu).getByRole("menuitem", { name: /WS 2$/ })).toHaveAttribute(
+      "href",
+      "/company/org",
+    );
+    expect(within(menu).queryByRole("menuitem", { name: /WS 3$/ })).not.toBeInTheDocument();
   });
 
   it("dots the switcher while another workspace has unread inbox items", async () => {

@@ -4,13 +4,14 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@multica/ui/components/ui/button";
 import {
+  paths,
   resolvePostAuthDestination,
   useHasOnboarded,
 } from "@multica/core/paths";
 import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { useNavigation } from "../navigation";
 import { useLogout } from "../auth";
-import { DragStrip } from "../platform";
+import { DragStrip, isDesktopShell } from "../platform";
 import { useT } from "../i18n";
 
 /**
@@ -43,7 +44,13 @@ export function NoAccessPage() {
   // replace, not push: the failed `/<bad-slug>` URL must not stay in history,
   // or a browser Back would land the user right back on this NoAccessPage.
   const recover = () => {
-    nav.replace(resolvePostAuthDestination(workspaces, hasOnboarded));
+    // Web sends an onboarded member to the C-end; desktop has no C-end and
+    // keeps opening its first workspace.
+    const destination =
+      !isDesktopShell() && hasOnboarded && workspaces.length > 0
+        ? paths.home()
+        : resolvePostAuthDestination(workspaces, hasOnboarded);
+    nav.replace(destination);
   };
 
   return (

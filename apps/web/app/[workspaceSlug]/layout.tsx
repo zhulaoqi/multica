@@ -61,6 +61,15 @@ export default function WorkspaceLayout({
     setCurrentWorkspace(workspaceSlug, workspace.id);
   }
 
+  // The organization workspace's admin shell belongs to department leads and
+  // administrators. Everyone else works in the C-end and their projects, so a
+  // direct link here returns them home instead of rendering the shell.
+  const organizationBlocked =
+    workspace?.is_organization === true && workspace.viewer_can_manage === false;
+  useEffect(() => {
+    if (organizationBlocked) router.replace(paths.home());
+  }, [organizationBlocked, router]);
+
   // Cookie write (last_workspace_slug) — proxy reads it on next page load
   // to redirect unauthenticated-URL hits to the user's last workspace.
   useEffect(() => {
@@ -90,6 +99,7 @@ export default function WorkspaceLayout({
   // after an initial request failure. It returns null only when an
   // authoritative list does not contain this slug.
   if (workspace === undefined) return loadingIndicator;
+  if (organizationBlocked) return loadingIndicator;
   if (workspace === null) {
     // If we've resolved this slug before in this session, it was just
     // removed from our list (deleted/left/evicted). A navigate is almost

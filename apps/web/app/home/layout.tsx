@@ -7,6 +7,7 @@ import { WorkspaceSlugProvider, paths } from "@multica/core/paths";
 import { setCurrentWorkspace } from "@multica/core/platform";
 import { useWorkspaceList } from "@multica/core/workspace";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
+import { WebNotificationBridge } from "@/components/web-notification-bridge";
 
 /**
  * The C-end lives outside the workspace routes but still needs a workspace
@@ -47,6 +48,10 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
   if (!user || !workspace) return null;
 
   return (
-    <WorkspaceSlugProvider slug={workspace.slug}>{children}</WorkspaceSlugProvider>
+    <WorkspaceSlugProvider slug={workspace.slug}>
+      {/* Notification clicks stay on the C-end. */}
+      <WebNotificationBridge variant="home" />
+      {children}
+    </WorkspaceSlugProvider>
   );
 }

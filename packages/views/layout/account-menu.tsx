@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Keyboard,
   Globe,
@@ -13,8 +15,10 @@ import {
   User,
 } from "@multica/ui/icons";
 import { useAuthStore } from "@multica/core/auth";
-import { useWorkspacePaths } from "@multica/core/paths";
+import { paths, useWorkspacePaths } from "@multica/core/paths";
 import type { SupportedLocale } from "@multica/core/i18n";
+import type { Workspace } from "@multica/core/types";
+import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { useTheme } from "@multica/ui/components/common/theme-provider";
@@ -55,11 +59,33 @@ function SubmenuLabel({ label, value }: { label: string; value?: string }) {
   );
 }
 
-/** The signed-in user's menu at the foot of the rail. */
-export function AccountMenu() {
+// Stable empty default: an inline `= []` is a new array every render.
+const EMPTY_WORKSPACES: Workspace[] = [];
+
+/**
+ * The signed-in user's menu at the foot of the rail.
+ *
+ * `home` is the C-end variant: it never links into the current workspace's
+ * settings, and it offers the admin side only to people who manage a
+ * workspace — pointing at the organization when they lead one. Everyone else
+ * stays on the C-end.
+ */
+export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" | "home" }) {
   const { t } = useT("layout");
   const user = useAuthStore((s) => s.user);
   const p = useWorkspacePaths();
+  const { data: workspaces = EMPTY_WORKSPACES } = useQuery({
+    ...workspaceListOptions(),
+    enabled: variant === "home",
+  });
+  const homeAdminHref = useMemo(() => {
+    if (variant !== "home") return null;
+    const manageable = workspaces.filter((ws) => ws.viewer_can_manage !== false);
+    const target = manageable.find((ws) => ws.is_organization) ?? manageable[0];
+    if (!target) return null;
+    const targetPaths = paths.workspace(target.slug);
+    return target.is_organization ? targetPaths.org() : targetPaths.issues();
+  }, [variant, workspaces]);
   const logout = useLogout();
   const { theme, setTheme } = useTheme();
   const language = useLanguageSwitch();
@@ -96,14 +122,25 @@ export function AccountMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<AppLink href={`${p.settings()}?tab=profile`} />}>
-            <User />
-            {t(($) => $.account.profile)}
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<AppLink href={p.issues()} />}>
-            <LayoutDashboard />
-            {t(($) => $.account.admin)}
-          </DropdownMenuItem>
+          {variant === "workspace" && (
+            <DropdownMenuItem render={<AppLink href={`${p.settings()}?tab=profile`} />}>
+              <User />
+              {t(($) => $.account.profile)}
+            </DropdownMenuItem>
+          )}
+          {variant === "workspace" ? (
+            <DropdownMenuItem render={<AppLink href={p.issues()} />}>
+              <LayoutDashboard />
+              {t(($) => $.account.admin)}
+            </DropdownMenuItem>
+          ) : (
+            homeAdminHref && (
+              <DropdownMenuItem render={<AppLink href={homeAdminHref} />}>
+                <LayoutDashboard />
+                {t(($) => $.account.admin)}
+              </DropdownMenuItem>
+            )
+          )}
           {user?.is_operator && !isDesktopShell() ? (
             <DropdownMenuItem render={<AppLink href="/admin" />}>
               <Shield />
@@ -150,10 +187,12 @@ export function AccountMenu() {
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem render={<AppLink href={`${p.settings()}?tab=shortcuts`} />}>
-            <Keyboard />
-            {t(($) => $.account.shortcuts)}
-          </DropdownMenuItem>
+          {variant === "workspace" && (
+            <DropdownMenuItem render={<AppLink href={`${p.settings()}?tab=shortcuts`} />}>
+              <Keyboard />
+              {t(($) => $.account.shortcuts)}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

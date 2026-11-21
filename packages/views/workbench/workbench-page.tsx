@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Clock, Plus, Sparkles } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@multica/ui/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -13,9 +21,10 @@ import {
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
-import { findPrimaryTwin } from "@multica/core/agents";
+import { findPrimaryTwin, ownedTwins } from "@multica/core/agents";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
+import type { Agent } from "@multica/core/types";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   useFileUpload,
@@ -23,7 +32,7 @@ import {
 } from "@multica/core/hooks/use-file-upload";
 import { useCreateComment } from "@multica/core/issues/mutations";
 import { useActorName, useOrganizationContext } from "@multica/core/workspace/hooks";
-import { useWorkspacePaths } from "@multica/core/paths";
+import { paths, useWorkspacePaths } from "@multica/core/paths";
 import {
   parseDispatchCandidates,
   useDispatchWork,
@@ -37,7 +46,9 @@ import {
   squadListOptions,
 } from "@multica/core/workspace/queries";
 import { createSafeId } from "@multica/core/utils";
+import { cendDispatchPath, useHomeMode } from "../common/home-mode";
 import { CollectionPageHeader } from "../layout";
+import { isDesktopShell } from "../platform";
 import { useT, useTimeAgo } from "../i18n";
 import { useNavigation } from "../navigation";
 import { unitPaths } from "../org/org-tree";
@@ -55,11 +66,11 @@ import {
 } from "./use-workbench-conversation";
 
 /** Which slice of the history the requester is looking at. */
-type DispatchFilter = "all" | "review" | "active" | "completed";
+export type DispatchFilter = "all" | "review" | "active" | "completed";
 
-const FILTERS: DispatchFilter[] = ["all", "review", "active", "completed"];
+export const FILTERS: DispatchFilter[] = ["all", "review", "active", "completed"];
 
-function matchesFilter(phase: DispatchPhase, filter: DispatchFilter): boolean {
+export function matchesFilter(phase: DispatchPhase, filter: DispatchFilter): boolean {
   switch (filter) {
     case "review":
       return phase === "in_review";
@@ -77,7 +88,7 @@ function matchesFilter(phase: DispatchPhase, filter: DispatchFilter): boolean {
   }
 }
 
-function phaseDotClass(phase: DispatchPhase): string {
+export function phaseDotClass(phase: DispatchPhase): string {
   switch (phase) {
     case "completed":
       return "bg-success";
@@ -234,14 +245,88 @@ export function WorkbenchPage() {
   const wsId = useWorkspaceId();
   const p = useWorkspacePaths();
   const { replace } = useNavigation();
-  const { isProject } = useOrganizationContext(wsId);
+  const homeMode = useHomeMode();
+  const desktop = isDesktopShell();
+  const { isProject, isOrganization } = useOrganizationContext(wsId);
   // Work is dispatched only in the organization, so a project has no
   // workbench; links that land here by default open the project's issues.
+  // On web the organization's workbench belongs to the C-end (`/home`), not
+  // to the admin shell, so a direct link opens department management instead.
+  // The C-end renders the same workbench and is the exception to both.
+  // Desktop has no C-end and keeps its workbench in the organization.
   useEffect(() => {
+    if (homeMode) return;
     if (isProject) replace(p.issues());
-  }, [isProject, p, replace]);
-  if (isProject) return null;
+    else if (isOrganization && !desktop) replace(p.org());
+  }, [homeMode, desktop, isProject, isOrganization, p, replace]);
+  if (!homeMode && (isProject || (isOrganization && !desktop))) return null;
   return <DispatchWorkbench />;
+}
+
+/**
+ * C-end binding: pick which of the caller's own agents represents them. The
+ * admin side edits agents; here the only choice is which existing one is
+ * primary, so the user never leaves `/home`.
+ */
+function BindAgentDialog({
+  wsId,
+  agents,
+  userId,
+}: {
+  wsId: string;
+  agents: Agent[];
+  userId: string;
+}) {
+  const { t } = useT("workbench");
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const owned = ownedTwins(
+    agents.filter((agent) => !agent.archived_at),
+    userId,
+  );
+  const bind = useMutation({
+    mutationFn: (agentId: string) => api.setPrimaryAgent(agentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: agentListOptions(wsId).queryKey });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button size="sm" className="self-start" />}>
+        {t(($) => $.page.binding_required_action)}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t(($) => $.page.binding_required_title)}</DialogTitle>
+          <DialogDescription>{t(($) => $.page.binding_required_description)}</DialogDescription>
+        </DialogHeader>
+        {owned.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            {owned.map((agent) => (
+              <Button
+                key={agent.id}
+                variant={agent.is_primary ? "secondary" : "outline"}
+                className="justify-start"
+                disabled={bind.isPending}
+                onClick={() => bind.mutate(agent.id)}
+              >
+                {agent.name}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-caption text-muted-foreground">{t(($) => $.page.binding_none)}</p>
+        )}
+        {bind.isError ? (
+          <p role="alert" className="text-caption text-destructive">
+            {t(($) => $.page.binding_failed)}
+          </p>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function DispatchWorkbench() {
@@ -250,7 +335,12 @@ function DispatchWorkbench() {
   const wsId = useWorkspaceId();
   const { pathname, searchParams, push, replace } = useNavigation();
   const isCompact = useIsCompact();
-  const workbenchPath = p.workbench();
+  // On the C-end the thread is a `/home` query, never a workspace route, so
+  // nothing the workbench opens hands the user to the admin side.
+  const homeMode = useHomeMode();
+  const workbenchPath = homeMode ? paths.home() : p.workbench();
+  const dispatchHref = (issueId: string) =>
+    homeMode ? cendDispatchPath(issueId) : p.workbenchDispatch(issueId);
 
   const { dispatches, isLoading, error } = useMyDispatches(wsId);
   const { phaseFor, progressFor } = useWorkbenchConversation(wsId);
@@ -425,7 +515,7 @@ function DispatchWorkbench() {
       setAttempts((prev) => prev.filter((attempt) => attempt.id !== id));
       setText("");
       setAttachments([]);
-      replace(p.workbenchDispatch(result.issue.id));
+      replace(dispatchHref(result.issue.id));
     } catch (err) {
       setAttempts((prev) =>
         prev.map((attempt) =>
@@ -465,7 +555,7 @@ function DispatchWorkbench() {
   };
 
   const selectDispatch = (item: DispatchListItem) => {
-    push(p.workbenchDispatch(item.issue.id));
+    push(dispatchHref(item.issue.id));
     setHistoryOpen(false);
   };
 
@@ -490,7 +580,7 @@ function DispatchWorkbench() {
           <Plus />
         </Button>
       </div>
-      <DepartmentQueue wsId={wsId} />
+      {!homeMode && <DepartmentQueue wsId={wsId} />}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <HistoryList
           dispatches={dispatches}
@@ -640,9 +730,17 @@ function DispatchWorkbench() {
               <p className="text-caption text-muted-foreground">
                 {t(($) => $.page.binding_required_description)}
               </p>
-              <Button size="sm" className="self-start" onClick={() => push(p.org())}>
-                {t(($) => $.page.binding_required_action)}
-              </Button>
+              {homeMode ? (
+                <BindAgentDialog
+                  wsId={wsId}
+                  agents={agents}
+                  userId={userId}
+                />
+              ) : (
+                <Button size="sm" className="self-start" onClick={() => push(p.org())}>
+                  {t(($) => $.page.binding_required_action)}
+                </Button>
+              )}
             </div>
           ) : (
             <DispatchComposer

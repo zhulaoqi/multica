@@ -47,7 +47,9 @@
     "target_department": "部门",
     "target_personal": "我的小队",
     "personal_squad": "我的小队",
-    "blocked": "阻塞：{{missing}}"
+    "blocked": "阻塞：{{missing}}",
+    "binding_none": "你还没有自己的 Agent，请联系部门负责人创建。",
+    "binding_failed": "绑定失败，请重试。"
   },
   "status": {
     "queued": "已交给部门，负责人稍后接手。",

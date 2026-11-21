@@ -19,8 +19,12 @@ import { useNavigation } from "@multica/views/navigation";
  * after the user switches workspaces (#3766). An empty slug (unresolved
  * source) is ignored. Marking the row read is handled by InboxPage's
  * selected-item effect, which covers the `?issue=` URL-param path.
+ *
+ * The C-end (`variant="home"`) has no inbox; a click opens the matching
+ * dispatch thread there, so a notification never drops the user into the
+ * admin side.
  */
-export function WebNotificationBridge() {
+export function WebNotificationBridge({ variant = "inbox" }: { variant?: "inbox" | "home" }) {
   const { push } = useNavigation();
   // The adapter identity changes with the current route; the ref keeps the
   // registered click handler stable while always calling the latest push.
@@ -32,13 +36,17 @@ export function WebNotificationBridge() {
   useEffect(() => {
     registerSystemNotificationClickHandler(
       ({ slug, issueKey }: SystemNotificationPayload) => {
+        if (variant === "home") {
+          pushRef.current(`${paths.home()}?dispatch=${encodeURIComponent(issueKey)}`);
+          return;
+        }
         if (!slug) return;
         const inboxPath = `${paths.workspace(slug).inbox()}?issue=${encodeURIComponent(issueKey)}`;
         pushRef.current(inboxPath);
       },
     );
     return () => registerSystemNotificationClickHandler(null);
-  }, []);
+  }, [variant]);
 
   return null;
 }

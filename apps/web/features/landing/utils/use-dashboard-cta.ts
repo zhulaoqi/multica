@@ -2,21 +2,16 @@
 
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceList } from "@multica/core/workspace";
-import {
-  paths,
-  resolvePostAuthDestination,
-  useHasOnboarded,
-} from "@multica/core/paths";
+import { paths, useHasOnboarded } from "@multica/core/paths";
 import type { Workspace } from "@multica/core/types";
+import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 
 /**
- * While the workspace list is in flight the CTA points at `/issues`, which the
- * proxy rewrites to the last workspace. That keeps the button working during
- * hydration without hiding or disabling it (which would flicker). A visitor
- * with no workspace history lands back on the landing page in that window and
- * can click again once the list resolves.
+ * While the workspace list is in flight the CTA points at the C-end, which
+ * needs no workspace slug. That keeps the button working during hydration
+ * without hiding or disabling it (which would flicker).
  */
-const LOADING_FALLBACK_HREF = "/issues";
+const LOADING_FALLBACK_HREF = paths.home();
 
 export function resolveDashboardCtaHref({
   isAuthenticated,
@@ -31,7 +26,7 @@ export function resolveDashboardCtaHref({
 }): string {
   if (!isAuthenticated) return paths.login();
   if (!workspaceListReady) return LOADING_FALLBACK_HREF;
-  return resolvePostAuthDestination(workspaces, hasOnboarded);
+  return resolveWebPostAuthDestination(workspaces, hasOnboarded);
 }
 
 /**

@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { sanitizeNextUrl, useAuthStore } from "@multica/core/auth";
 import { workspaceKeys } from "@multica/core/workspace/queries";
-import { paths, resolvePostAuthDestination } from "@multica/core/paths";
+import { paths } from "@multica/core/paths";
+import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 import { api } from "@multica/core/api";
 import { createLogger } from "@multica/core/logger";
 import { validateCliCallback, redirectToCliCallback } from "@multica/views/auth";
@@ -153,7 +154,7 @@ function CallbackContent() {
           //    backfill for onboarded users with no recorded source is
           //    handled by `<SourceBackfillModal />` inside the dashboard
           //    shell — not a route detour, so we route straight to dest.
-          router.push(resolvePostAuthDestination(wsList, onboarded));
+          router.push(resolveWebPostAuthDestination(wsList, onboarded));
         })
         .catch((err) => {
           authLogger.error("Web Google OAuth callback failed", err);
