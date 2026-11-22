@@ -102,6 +102,14 @@ detached_client_usage AS (
 deleted_share_links AS (
     DELETE FROM workspace_share_link
     WHERE workspace_share_link.workspace_id = $1
+),
+deleted_intake_sources AS (
+    DELETE FROM workspace_intake_source
+    WHERE workspace_intake_source.workspace_id = $1
+),
+deleted_org_intake_sources AS (
+    DELETE FROM org_unit_intake_source
+    WHERE org_unit_intake_source.workspace_id = $1
 )
 DELETE FROM workspace_invitation
 WHERE workspace_invitation.workspace_id = $1

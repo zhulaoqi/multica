@@ -14,6 +14,7 @@ import {
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
 import { WorkspaceSlugProvider } from "@multica/core/paths";
+import { HomeModeProvider } from "../common/home-mode";
 import { NavigationProvider, type NavigationAdapter } from "../navigation";
 import { renderWithI18n } from "../test/i18n";
 import { WorkbenchPage } from "./workbench-page";
@@ -32,6 +33,7 @@ const apiState = vi.hoisted(() => ({
   listAgents: vi.fn().mockResolvedValue([]),
   listSquads: vi.fn().mockResolvedValue([]),
   listPlugins: vi.fn().mockResolvedValue({ plugins: [] }),
+  listRequestableProjects: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@multica/core/api", async (importOriginal) => {
@@ -218,6 +220,22 @@ function renderPage() {
   );
 }
 
+function renderHomeAsOrganization() {
+  const [workspace] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
+  qc.setQueryData(workspaceListOptions().queryKey, [{ ...workspace!, is_organization: true }]);
+  renderWithI18n(
+    <QueryClientProvider client={qc}>
+      <WorkspaceSlugProvider slug="acme">
+        <HomeModeProvider>
+          <NavigationProvider value={adapter}>
+            <WorkbenchPage />
+          </NavigationProvider>
+        </HomeModeProvider>
+      </WorkspaceSlugProvider>
+    </QueryClientProvider>,
+  );
+}
+
 async function submitText(text: string) {
   const input = screen.getByRole("textbox", { name: "What needs doing?" });
   await userEvent.type(input, text);
@@ -234,6 +252,17 @@ describe("WorkbenchPage", () => {
     renderPage();
 
     await waitFor(() => expect(state.replace).toHaveBeenCalledWith("/acme/issues"));
+    expect(screen.queryByRole("textbox", { name: "What needs doing?" })).not.toBeInTheDocument();
+  });
+
+  it("sends the organization's web workbench to the C-end, where that conversation lives", async () => {
+    const [workspace] = qc.getQueryData(workspaceListOptions().queryKey) ?? [];
+    qc.setQueryData(workspaceListOptions().queryKey, [
+      { ...workspace!, is_organization: true },
+    ]);
+    renderPage();
+
+    await waitFor(() => expect(state.replace).toHaveBeenCalledWith("/home"));
     expect(screen.queryByRole("textbox", { name: "What needs doing?" })).not.toBeInTheDocument();
   });
 
@@ -298,6 +327,118 @@ describe("WorkbenchPage", () => {
           text: "Plan my week",
           unitId: undefined,
           personal: true,
+        }),
+      ),
+    );
+  });
+
+  it("offers no project target outside the organization", async () => {
+    apiState.listRequestableProjects.mockResolvedValue([
+      {
+        id: "proj-1",
+        name: "Onboarding",
+        slug: "onboarding",
+        unit_id: "unit-1",
+        unit_path: "Engineering",
+      },
+    ]);
+    renderPage();
+
+    const target = await screen.findByRole("group", { name: "Send to" });
+    expect(within(target).queryByRole("button", { name: "Project" })).not.toBeInTheDocument();
+    expect(apiState.listRequestableProjects).not.toHaveBeenCalled();
+  });
+
+  it("offers only the projects the server allows and sends the chosen one", async () => {
+    apiState.listRequestableProjects.mockResolvedValue([
+      {
+        id: "proj-1",
+        name: "Onboarding",
+        slug: "onboarding",
+        unit_id: "unit-1",
+        unit_path: "Engineering",
+      },
+    ]);
+    state.mutateAsync.mockResolvedValue(dispatchResponse());
+    renderHomeAsOrganization();
+
+    const target = await screen.findByRole("group", { name: "Send to" });
+    await userEvent.click(await within(target).findByRole("button", { name: "Project" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Onboarding/ }));
+    expect(screen.getByText("Onboarding", { selector: "span" })).toBeInTheDocument();
+
+    await submitText("Plan the launch");
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Plan the launch",
+          unitId: undefined,
+          personal: false,
+          projectId: "proj-1",
+        }),
+      ),
+    );
+  });
+
+  it("keeps the project on a failed dispatch so retrying stays inside it", async () => {
+    apiState.listRequestableProjects.mockResolvedValue([
+      {
+        id: "proj-1",
+        name: "Onboarding",
+        slug: "onboarding",
+        unit_id: "unit-1",
+        unit_path: "Engineering",
+      },
+    ]);
+    state.mutateAsync.mockRejectedValueOnce(
+      new ApiError("offline", 409, "Conflict", { code: "org_dispatch_leader_offline" }),
+    );
+    state.mutateAsync.mockResolvedValueOnce(dispatchResponse());
+    renderHomeAsOrganization();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Project" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Onboarding/ }));
+    await submitText("Plan the launch");
+
+    expect(await screen.findByRole("button", { name: "Send again" })).toBeInTheDocument();
+    expect(screen.getAllByText("Onboarding").length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Send again" }));
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "Plan the launch", projectId: "proj-1" }),
+      ),
+    );
+  });
+
+  it("clears the chosen project and goes back to the department", async () => {
+    apiState.listRequestableProjects.mockResolvedValue([
+      {
+        id: "proj-1",
+        name: "Onboarding",
+        slug: "onboarding",
+        unit_id: "unit-1",
+        unit_path: "Engineering",
+      },
+    ]);
+    state.mutateAsync.mockResolvedValue(dispatchResponse());
+    renderHomeAsOrganization();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Project" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Onboarding/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear project" }));
+
+    expect(screen.queryByText("Onboarding", { selector: "span" })).not.toBeInTheDocument();
+    await submitText("Plan the launch");
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Plan the launch",
+          unitId: undefined,
+          personal: false,
+          projectId: undefined,
         }),
       ),
     );

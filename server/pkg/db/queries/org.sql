@@ -254,3 +254,35 @@ WHERE workspace_id = $1 AND org_unit_id = $2;
 INSERT INTO org_unit_intake_source (workspace_id, org_unit_id, source_type, source_id)
 VALUES ($1, $2, $3, $4)
 RETURNING id;
+
+-- name: ListWorkspaceIntakeSources :many
+-- Who may hand one project work. Empty means the project follows its owning
+-- department's list.
+SELECT id, workspace_id, source_type, source_id
+FROM workspace_intake_source
+WHERE workspace_id = $1
+ORDER BY source_type, created_at;
+
+-- name: ListWorkspaceIntakeSourcesForProjects :many
+-- Every project list at once, so routing can decide all candidates without a
+-- query per project.
+SELECT id, workspace_id, source_type, source_id
+FROM workspace_intake_source
+WHERE workspace_id = ANY(sqlc.arg(workspace_ids)::uuid[])
+ORDER BY workspace_id, source_type, created_at;
+
+-- name: DeleteWorkspaceIntakeSources :exec
+DELETE FROM workspace_intake_source WHERE workspace_id = $1;
+
+-- name: CreateWorkspaceIntakeSource :one
+INSERT INTO workspace_intake_source (workspace_id, source_type, source_id)
+VALUES ($1, $2, $3)
+RETURNING id;
+
+-- name: ListDepartmentProjects :many
+-- Every department-owned project in the company. Who may request each one is
+-- decided in Go against the caller's access, so this query is access-neutral.
+SELECT id, name, slug, org_unit_id
+FROM workspace
+WHERE NOT is_organization AND org_unit_id IS NOT NULL
+ORDER BY name;

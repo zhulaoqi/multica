@@ -405,6 +405,7 @@
       "github": "GitHub",
       "labs": "실험실",
       "members": "멤버",
+      "intake": "접수",
       "labels": "레이블",
       "issue_statuses": "태스크 상태",
       "wakeups": "깨우기",
@@ -430,7 +431,14 @@
     "search_clear": "검색 지우기",
     "search_empty": "일치하는 설정이 없습니다",
     "search_results_other": "결과 {{count}}개",
-    "admin_only": "소유자와 관리자만 변경할 수 있습니다"
+    "admin_only": "소유자와 관리자만 변경할 수 있습니다",
+    "project_intake": {
+      "title": "여기에 작업을 요청할 수 있는 사람",
+      "description": "비워 두면 이 프로젝트를 소유한 부서의 설정을 따릅니다.",
+      "inherited": "\"{{path}}\"의 목록을 따릅니다",
+      "unavailable": "접수 목록은 부서에 속한 프로젝트에서만 설정할 수 있습니다.",
+      "save_failed": "접수 목록을 저장하지 못했습니다."
+    }
   },
   "plugins": {
     "title": "플러그인",

@@ -84,6 +84,11 @@ export type DispatchListResponse = z.infer<typeof DispatchListResponseSchema>;
 export interface DispatchWorkInput {
   text: string;
   unit_id?: string;
+  /**
+   * A project the requester may hand work. The work still lands on the
+   * project's owning department; the project only gates who may ask.
+   */
+  project_id?: string;
   /** Send to the requester's own personal squad instead of a department. */
   personal?: boolean;
   client_request_id: string;

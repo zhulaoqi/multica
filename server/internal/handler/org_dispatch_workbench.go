@@ -26,8 +26,11 @@ const (
 )
 
 type dispatchWorkRequest struct {
-	Text            string   `json:"text"`
-	UnitID          string   `json:"unit_id"`
+	Text   string `json:"text"`
+	UnitID string `json:"unit_id"`
+	// ProjectID names a project the caller may request work for. The work
+	// still lands on the project's owning department.
+	ProjectID       string   `json:"project_id"`
 	Personal        bool     `json:"personal"`
 	SquadID         string   `json:"squad_id"`
 	ClientRequestID string   `json:"client_request_id"`
@@ -104,6 +107,13 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var explicitProject pgtype.UUID
+	if strings.TrimSpace(body.ProjectID) != "" {
+		explicitProject, ok = parseUUIDOrBadRequest(w, body.ProjectID, "project_id")
+		if !ok {
+			return
+		}
+	}
 	var personalSquad pgtype.UUID
 	if strings.TrimSpace(body.SquadID) != "" {
 		personalSquad, ok = parseUUIDOrBadRequest(w, body.SquadID, "squad_id")
@@ -112,8 +122,14 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	personal := body.Personal || personalSquad.Valid
-	if personal && explicitUnit.Valid {
-		writeErrorCode(w, http.StatusBadRequest, "org_dispatch_target_conflict", "choose a department or a personal squad, not both")
+	targets := 0
+	for _, chosen := range []bool{personal, explicitUnit.Valid, explicitProject.Valid} {
+		if chosen {
+			targets++
+		}
+	}
+	if targets > 1 {
+		writeErrorCode(w, http.StatusBadRequest, "org_dispatch_target_conflict", "choose one of a department, a project, or a personal squad")
 		return
 	}
 	attachmentIDs, ok := parseUUIDSliceOrBadRequest(w, body.AttachmentIDs, "attachment_ids")
@@ -139,6 +155,7 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 	params := service.OrgDispatchParams{
 		WorkspaceID:     wsUUID,
 		ActorID:         member.UserID,
+		ProjectID:       explicitProject,
 		Personal:        personal,
 		SquadID:         personalSquad,
 		Title:           service.DispatchTextTitle(text),
@@ -148,7 +165,10 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 		Platform:        func() string { p, _, _ := middleware.ClientMetadataFromContext(r.Context()); return p }(),
 	}
 	unitPath := ""
-	if !personal {
+	// A project target skips free-text routing: only an explicit project
+	// selection may reach a project, so unmentioned and unauthorised projects
+	// are never inferred.
+	if !personal && !explicitProject.Valid {
 		route, err := h.OrgDispatchService.Route(r.Context(), wsUUID, member.UserID, text, explicitUnit)
 		if err != nil {
 			switch {
@@ -192,6 +212,9 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 	ref := dispatchWorkRef{UnitID: uuidToString(result.Unit.ID), UnitPath: unitPath}
 	if result.Personal {
 		ref = dispatchWorkRef{SquadID: uuidToString(result.Squad.ID), Personal: true}
+	} else if ref.UnitPath == "" {
+		units, _ := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+		ref.UnitPath = dispatchUnitPath(units, result.Unit.ID)
 	}
 	resp := issueToResponse(result.Issue, h.getIssuePrefix(r.Context(), result.Issue.WorkspaceID))
 	h.fillStatusCategory(r.Context(), result.Issue.WorkspaceID, &resp)

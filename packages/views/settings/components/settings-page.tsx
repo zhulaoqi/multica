@@ -9,6 +9,7 @@ import {
   FolderGit2,
   Keyboard,
   KeyRound,
+  ListChecks,
   ListPlus,
   Lock,
   MessagesSquare,
@@ -40,6 +41,7 @@ import { PreferencesTab } from "./preferences-tab";
 import { TokensTab } from "./tokens-tab";
 import { WorkspaceTab } from "./workspace-tab";
 import { MembersTab } from "./members-tab";
+import { ProjectIntakeTab } from "./project-intake-tab";
 import { CodeTab } from "./code-tab";
 import { ChannelsTab } from "./channels-tab";
 import { ConnectedAppsTab, useComposioAvailable } from "./connected-apps-tab";
@@ -111,6 +113,9 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
   const { t } = useT("settings");
   const workspace = useCurrentWorkspace();
   const workspaceName = workspace?.name ?? t(($) => $.page.workspace_fallback);
+  // Project intake lists need a project owned by a department; a legacy flat
+  // workspace has none to hand work to and answers 409.
+  const isProject = !!workspace?.org_unit_id && !workspace.is_organization;
   const { isAdmin, isManager } = useCurrentMember(workspace?.id ?? "");
   // A department lead manages project settings and members without owning the
   // stored admin role, so the project pages follow the manager predicate while
@@ -185,6 +190,17 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
                     t(($) => $.page.tabs.members),
                     Users,
                     <MembersTab />,
+                  ),
+                ]
+              : []),
+            ...(isProject
+              ? [
+                  entry(
+                    "intake",
+                    t(($) => $.page.tabs.intake),
+                    ListChecks,
+                    <ProjectIntakeTab />,
+                    { managerOnly: true },
                   ),
                 ]
               : []),

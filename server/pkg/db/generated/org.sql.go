@@ -156,6 +156,25 @@ func (q *Queries) CreateOrgUnitWithExternal(ctx context.Context, arg CreateOrgUn
 	return id, err
 }
 
+const createWorkspaceIntakeSource = `-- name: CreateWorkspaceIntakeSource :one
+INSERT INTO workspace_intake_source (workspace_id, source_type, source_id)
+VALUES ($1, $2, $3)
+RETURNING id
+`
+
+type CreateWorkspaceIntakeSourceParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	SourceType  string      `json:"source_type"`
+	SourceID    pgtype.UUID `json:"source_id"`
+}
+
+func (q *Queries) CreateWorkspaceIntakeSource(ctx context.Context, arg CreateWorkspaceIntakeSourceParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, createWorkspaceIntakeSource, arg.WorkspaceID, arg.SourceType, arg.SourceID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteOrgUnit = `-- name: DeleteOrgUnit :exec
 DELETE FROM org_unit
 WHERE id = $1 AND workspace_id = $2
@@ -183,6 +202,15 @@ type DeleteOrgUnitIntakeSourcesParams struct {
 
 func (q *Queries) DeleteOrgUnitIntakeSources(ctx context.Context, arg DeleteOrgUnitIntakeSourcesParams) error {
 	_, err := q.db.Exec(ctx, deleteOrgUnitIntakeSources, arg.WorkspaceID, arg.OrgUnitID)
+	return err
+}
+
+const deleteWorkspaceIntakeSources = `-- name: DeleteWorkspaceIntakeSources :exec
+DELETE FROM workspace_intake_source WHERE workspace_id = $1
+`
+
+func (q *Queries) DeleteWorkspaceIntakeSources(ctx context.Context, workspaceID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteWorkspaceIntakeSources, workspaceID)
 	return err
 }
 
@@ -349,6 +377,47 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 			&i.Status,
 			&i.RuntimeMode,
 			&i.IsPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDepartmentProjects = `-- name: ListDepartmentProjects :many
+SELECT id, name, slug, org_unit_id
+FROM workspace
+WHERE NOT is_organization AND org_unit_id IS NOT NULL
+ORDER BY name
+`
+
+type ListDepartmentProjectsRow struct {
+	ID        pgtype.UUID `json:"id"`
+	Name      string      `json:"name"`
+	Slug      string      `json:"slug"`
+	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+}
+
+// Every department-owned project in the company. Who may request each one is
+// decided in Go against the caller's access, so this query is access-neutral.
+func (q *Queries) ListDepartmentProjects(ctx context.Context) ([]ListDepartmentProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listDepartmentProjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDepartmentProjectsRow{}
+	for rows.Next() {
+		var i ListDepartmentProjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.OrgUnitID,
 		); err != nil {
 			return nil, err
 		}
@@ -741,6 +810,88 @@ func (q *Queries) ListWorkspaceFeishuIdentities(ctx context.Context, workspaceID
 	for rows.Next() {
 		var i ListWorkspaceFeishuIdentitiesRow
 		if err := rows.Scan(&i.UserID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceIntakeSources = `-- name: ListWorkspaceIntakeSources :many
+SELECT id, workspace_id, source_type, source_id
+FROM workspace_intake_source
+WHERE workspace_id = $1
+ORDER BY source_type, created_at
+`
+
+type ListWorkspaceIntakeSourcesRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	SourceType  string      `json:"source_type"`
+	SourceID    pgtype.UUID `json:"source_id"`
+}
+
+// Who may hand one project work. Empty means the project follows its owning
+// department's list.
+func (q *Queries) ListWorkspaceIntakeSources(ctx context.Context, workspaceID pgtype.UUID) ([]ListWorkspaceIntakeSourcesRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceIntakeSources, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceIntakeSourcesRow{}
+	for rows.Next() {
+		var i ListWorkspaceIntakeSourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SourceType,
+			&i.SourceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceIntakeSourcesForProjects = `-- name: ListWorkspaceIntakeSourcesForProjects :many
+SELECT id, workspace_id, source_type, source_id
+FROM workspace_intake_source
+WHERE workspace_id = ANY($1::uuid[])
+ORDER BY workspace_id, source_type, created_at
+`
+
+type ListWorkspaceIntakeSourcesForProjectsRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	SourceType  string      `json:"source_type"`
+	SourceID    pgtype.UUID `json:"source_id"`
+}
+
+// Every project list at once, so routing can decide all candidates without a
+// query per project.
+func (q *Queries) ListWorkspaceIntakeSourcesForProjects(ctx context.Context, workspaceIds []pgtype.UUID) ([]ListWorkspaceIntakeSourcesForProjectsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceIntakeSourcesForProjects, workspaceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceIntakeSourcesForProjectsRow{}
+	for rows.Next() {
+		var i ListWorkspaceIntakeSourcesForProjectsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SourceType,
+			&i.SourceID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

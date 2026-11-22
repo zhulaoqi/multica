@@ -2636,8 +2636,15 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			})
 			r.Post("/api/issues/{id}/intake-blocker", h.CreateIntakeBlocker)
 
+			r.Route("/api/project-intake", func(r chi.Router) {
+				r.Get("/sources", h.GetProjectIntakeSources)
+				r.Put("/sources", h.ReplaceProjectIntakeSources)
+				r.Get("/candidates", h.ListProjectIntakeCandidates)
+			})
+
 			r.Route("/api/org", func(r chi.Router) {
 				r.Post("/dispatch", h.DispatchWork)
+				r.Get("/request-projects", h.ListRequestableProjects)
 				r.Get("/dispatches", h.ListMyDispatches)
 				r.Get("/dispatch-queue", h.ListDepartmentDispatches)
 				r.Post("/dispatches/{issueId}/reassign", h.ReassignDispatch)

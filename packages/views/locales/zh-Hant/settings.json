@@ -405,6 +405,7 @@
       "github": "GitHub",
       "labs": "實驗室",
       "members": "成員",
+      "intake": "提需求名單",
       "labels": "標籤",
       "issue_statuses": "任務狀態",
       "wakeups": "喚醒",
@@ -430,7 +431,14 @@
     "search_clear": "清除搜尋",
     "search_empty": "沒有匹配的設定",
     "search_results_other": "{{count}} 個結果",
-    "admin_only": "只有所有者和管理員可以修改"
+    "admin_only": "只有所有者和管理員可以修改",
+    "project_intake": {
+      "title": "誰可以往這個專案提需求",
+      "description": "留空時沿用歸屬部門的名單。",
+      "inherited": "沿用「{{path}}」的名單",
+      "unavailable": "只有歸屬部門的專案可以設定接活名單。",
+      "save_failed": "接活名單儲存失敗。"
+    }
   },
   "plugins": {
     "title": "外掛",

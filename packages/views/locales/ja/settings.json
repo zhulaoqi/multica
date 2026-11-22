@@ -405,6 +405,7 @@
       "github": "GitHub",
       "labs": "ラボ",
       "members": "メンバー",
+      "intake": "受け付け",
       "labels": "ラベル",
       "issue_statuses": "タスクステータス",
       "wakeups": "ウェイクアップ",
@@ -430,7 +431,14 @@
     "search_clear": "検索をクリア",
     "search_empty": "一致する設定はありません",
     "search_results_other": "{{count}} 件の結果",
-    "admin_only": "オーナーと管理者のみ変更できます"
+    "admin_only": "オーナーと管理者のみ変更できます",
+    "project_intake": {
+      "title": "ここに作業を依頼できる人",
+      "description": "空のままにすると、このプロジェクトを所有する部門の設定に従います。",
+      "inherited": "「{{path}}」の設定に従っています",
+      "unavailable": "受け付けリストは、部門に属するプロジェクトでのみ設定できます。",
+      "save_failed": "受け付けリストを保存できませんでした。"
+    }
   },
   "plugins": {
     "title": "プラグイン",

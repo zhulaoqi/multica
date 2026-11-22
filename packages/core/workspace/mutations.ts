@@ -229,3 +229,17 @@ export function useRemoveAgentMcpServer(agentId: string) {
   return useAgentMcpMutation(agentId, (serverId: string) =>
     api.removeAgentMcpServer(agentId, serverId));
 }
+
+/**
+ * Replaces who may hand the project work. The response carries no body, so
+ * the saved list is refetched instead of guessed.
+ */
+export function useReplaceProjectIntakeSources(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sources: Array<{ type: "user" | "org_unit"; id: string }>) =>
+      api.replaceProjectIntakeSources(sources),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: workspaceKeys.projectIntakeSources(wsId) }),
+  });
+}

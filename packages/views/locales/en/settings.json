@@ -407,6 +407,7 @@
       "github": "GitHub",
       "labs": "Labs",
       "members": "Members",
+      "intake": "Intake requests",
       "labels": "Labels",
       "issue_statuses": "Issue Statuses",
       "wakeups": "Wakeups",
@@ -433,7 +434,14 @@
     "search_empty": "No matching settings",
     "search_results_one": "{{count}} result",
     "search_results_other": "{{count}} results",
-    "admin_only": "Only owners and admins can change this"
+    "admin_only": "Only owners and admins can change this",
+    "project_intake": {
+      "title": "Who can send work here",
+      "description": "Leave it empty to follow the department that owns this project.",
+      "inherited": "Following the list of \"{{path}}\"",
+      "unavailable": "Intake lists are only available for projects owned by a department.",
+      "save_failed": "Could not save the intake list."
+    }
   },
   "plugins": {
     "title": "Plugins",

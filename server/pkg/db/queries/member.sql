@@ -13,6 +13,11 @@ WHERE m.workspace_id = $1
   AND (m.role IN ('owner', 'admin') OR root.lead_user_id = m.user_id)
 ORDER BY m.created_at ASC;
 
+-- name: ListUserWorkspaceMemberships :many
+-- Every workspace the person holds an explicit member row in, wherever they
+-- are placed. The project intake gate treats such a row as permission.
+SELECT workspace_id FROM member WHERE user_id = $1;
+
 -- name: GetMember :one
 SELECT * FROM member
 WHERE id = $1;

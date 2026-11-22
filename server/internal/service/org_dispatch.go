@@ -75,6 +75,10 @@ type OrgDispatchParams struct {
 	WorkspaceID pgtype.UUID
 	ActorID     pgtype.UUID
 	UnitID      pgtype.UUID
+	// ProjectID targets a project the caller may request work for. The work
+	// still lands on the project's owning department; the project only gates
+	// who may ask.
+	ProjectID pgtype.UUID
 	// Personal targets the requester's own private squad instead of a
 	// department. SquadID selects one of the caller's private squads; leaving
 	// it empty with Personal set reuses (or creates) their personal squad.
@@ -190,18 +194,25 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		if err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
 		}
-		found, ok := findUnit(units, p.UnitID)
-		if !ok {
-			return OrgDispatchResult{}, ErrOrgUnitNotFound
+		if p.ProjectID.Valid {
+			unit, err = s.projectDispatchUnit(ctx, p, access, units)
+			if err != nil {
+				return OrgDispatchResult{}, err
+			}
+		} else {
+			found, ok := findUnit(units, p.UnitID)
+			if !ok {
+				return OrgDispatchResult{}, ErrOrgUnitNotFound
+			}
+			sources, err := intakeSources(ctx, s.Queries, p.WorkspaceID)
+			if err != nil {
+				return OrgDispatchResult{}, err
+			}
+			if !canRequestToUnit(access, units, sources, found.ID) {
+				return OrgDispatchResult{}, ErrOrgUnitNoAccess
+			}
+			unit = found
 		}
-		sources, err := intakeSources(ctx, s.Queries, p.WorkspaceID)
-		if err != nil {
-			return OrgDispatchResult{}, err
-		}
-		if !canRequestToUnit(access, units, sources, found.ID) {
-			return OrgDispatchResult{}, ErrOrgUnitNoAccess
-		}
-		unit = found
 
 		agents, err := s.Queries.ListAgentsInOrgUnits(ctx, p.WorkspaceID)
 		if err != nil {
@@ -825,6 +836,50 @@ func (s *OrgDispatchService) issueIdentifier(ctx context.Context, issue db.Issue
 		return IssueIdentifier("", issue.Number)
 	}
 	return IssueIdentifier(ws.IssuePrefix, issue.Number)
+}
+
+// projectDispatchUnit resolves a project target to the department that owns
+// it and applies the project's intake list. The work still lands on that
+// department; the project only decides who may ask. A project the caller may
+// not request is reported as a missing unit, so a caller cannot probe which
+// projects exist.
+func (s *OrgDispatchService) projectDispatchUnit(ctx context.Context, p OrgDispatchParams, access workspaceaccess.Access, units []db.ListOrgUnitsRow) (db.ListOrgUnitsRow, error) {
+	project, err := s.Queries.GetWorkspace(ctx, p.ProjectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+	}
+	if err != nil {
+		return db.ListOrgUnitsRow{}, fmt.Errorf("load project: %w", err)
+	}
+	if project.IsOrganization || !project.OrgUnitID.Valid {
+		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+	}
+	found, ok := findUnit(units, project.OrgUnitID)
+	if !ok {
+		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+	}
+	sources, err := s.Queries.ListWorkspaceIntakeSources(ctx, p.ProjectID)
+	if err != nil {
+		return db.ListOrgUnitsRow{}, fmt.Errorf("list project intake sources: %w", err)
+	}
+	var departmentSources []db.ListOrgUnitIntakeSourcesRow
+	if len(sources) == 0 {
+		departmentSources, err = intakeSources(ctx, s.Queries, p.WorkspaceID)
+		if err != nil {
+			return db.ListOrgUnitsRow{}, err
+		}
+	}
+	_, memberErr := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
+		UserID:      p.ActorID,
+		WorkspaceID: p.ProjectID,
+	})
+	if memberErr != nil && !errors.Is(memberErr, pgx.ErrNoRows) {
+		return db.ListOrgUnitsRow{}, fmt.Errorf("check project membership: %w", memberErr)
+	}
+	if !ProjectRequestable(access, units, departmentSources, project, sources, memberErr == nil) {
+		return db.ListOrgUnitsRow{}, ErrOrgUnitNoAccess
+	}
+	return found, nil
 }
 
 func findUnit(units []db.ListOrgUnitsRow, unitID pgtype.UUID) (db.ListOrgUnitsRow, bool) {

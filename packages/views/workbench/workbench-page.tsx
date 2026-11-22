@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Clock, Plus, Sparkles } from "@multica/ui/icons";
+import { ArrowLeft, Clock, FolderKanban, Plus, Sparkles } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@multica/ui/components/ui/sheet";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@multica/ui/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@multica/ui/components/ui/popover";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
@@ -35,11 +47,13 @@ import { useActorName, useOrganizationContext } from "@multica/core/workspace/ho
 import { paths, useWorkspacePaths } from "@multica/core/paths";
 import {
   parseDispatchCandidates,
+  requestableProjectsOptions,
   useDispatchWork,
   useMyDispatches,
   type DispatchCandidate,
   type DispatchListItem,
 } from "@multica/core/workbench";
+import type { RequestableProject } from "@multica/core/api";
 import {
   agentListOptions,
   orgTreeOptions,
@@ -47,6 +61,7 @@ import {
 } from "@multica/core/workspace/queries";
 import { createSafeId } from "@multica/core/utils";
 import { cendDispatchPath, useHomeMode } from "../common/home-mode";
+import { isDesktopShell } from "../platform";
 import { CollectionPageHeader } from "../layout";
 import { useT, useTimeAgo } from "../i18n";
 import { useNavigation } from "../navigation";
@@ -63,6 +78,9 @@ import {
   useWorkbenchConversation,
   type DispatchPhase,
 } from "./use-workbench-conversation";
+
+/** Where a new submission goes. */
+type DispatchTarget = "department" | "personal" | "project";
 
 /** Which slice of the history the requester is looking at. */
 export type DispatchFilter = "all" | "review" | "active" | "completed";
@@ -245,14 +263,19 @@ export function WorkbenchPage() {
   const p = useWorkspacePaths();
   const { replace } = useNavigation();
   const homeMode = useHomeMode();
-  const { isProject } = useOrganizationContext(wsId);
+  const desktop = isDesktopShell();
+  const { isProject, isOrganization } = useOrganizationContext(wsId);
   // Work is dispatched only in the organization, so a project has no
-  // workbench; links that land here open the project's issues.
+  // workbench; links that land here open the project's issues. On web the
+  // organization's workbench is the C-end's conversation, so the admin shell
+  // sends people to /home; desktop has no C-end and keeps its own workbench.
+  const adminWorkbenchRedirected = isProject || (isOrganization && !desktop);
   useEffect(() => {
     if (homeMode) return;
     if (isProject) replace(p.issues());
-  }, [homeMode, isProject, p, replace]);
-  if (!homeMode && isProject) return null;
+    else if (isOrganization && !desktop) replace(paths.home());
+  }, [desktop, homeMode, isOrganization, isProject, p, replace]);
+  if (!homeMode && adminWorkbenchRedirected) return null;
   return <DispatchWorkbench />;
 }
 
@@ -331,6 +354,7 @@ function DispatchWorkbench() {
   // On the C-end the thread is a `/home` query, never a workspace route, so
   // nothing the workbench opens hands the user to the admin side.
   const homeMode = useHomeMode();
+  const { isOrganization } = useOrganizationContext(wsId);
   const workbenchPath = homeMode ? paths.home() : p.workbench();
   const dispatchHref = (issueId: string) =>
     homeMode ? cendDispatchPath(issueId) : p.workbenchDispatch(issueId);
@@ -359,8 +383,15 @@ function DispatchWorkbench() {
   }, [orgTree.data, presetUnitId]);
 
   const [text, setText] = useState("");
-  // Sends to the requester's own personal squad instead of a department.
-  const [personal, setPersonal] = useState(false);
+  // Who receives the work: a department, the requester's own squad, or one of
+  // the projects the caller may hand work.
+  const [target, setTarget] = useState<DispatchTarget>("department");
+  const [project, setProject] = useState<RequestableProject | null>(null);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const { data: requestableProjects = [] } = useQuery({
+    ...requestableProjectsOptions(wsId),
+    enabled: isOrganization,
+  });
   const [focusToken, setFocusToken] = useState(0);
   const [attempts, setAttempts] = useState<WorkbenchAttempt[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -471,10 +502,19 @@ function DispatchWorkbench() {
 
   const submitDispatch = async (
     raw: string,
-    unitId?: string,
-    attemptId?: string,
-    files: string[] = [],
-    personalTarget = false,
+    {
+      unitId,
+      attemptId,
+      files = [],
+      personal: personalTarget = false,
+      project: projectTarget,
+    }: {
+      unitId?: string;
+      attemptId?: string;
+      files?: string[];
+      personal?: boolean;
+      project?: { id: string; name: string };
+    } = {},
   ) => {
     const trimmed = raw.trim();
     if (!trimmed || pending) return;
@@ -491,6 +531,7 @@ function DispatchWorkbench() {
         candidates: [],
         attachmentIds: files,
         personal: personalTarget,
+        project: projectTarget,
       };
       const existing = prev.findIndex((attempt) => attempt.id === id);
       if (existing === -1) return [...prev, next];
@@ -501,6 +542,7 @@ function DispatchWorkbench() {
       const result = await dispatch.mutateAsync({
         text: trimmed,
         unitId,
+        projectId: projectTarget?.id,
         personal: personalTarget,
         clientRequestId: id,
         attachmentIds: files.length > 0 ? files : undefined,
@@ -508,6 +550,8 @@ function DispatchWorkbench() {
       setAttempts((prev) => prev.filter((attempt) => attempt.id !== id));
       setText("");
       setAttachments([]);
+      setTarget("department");
+      setProject(null);
       replace(dispatchHref(result.issue.id));
     } catch (err) {
       setAttempts((prev) =>
@@ -536,15 +580,24 @@ function DispatchWorkbench() {
       void sendFollowUp(trimmed);
       return;
     }
-    // A preset department from the org page wins over the personal toggle.
-    const targetPersonal = personal && !presetUnitId;
-    void submitDispatch(
-      trimmed,
-      targetPersonal ? undefined : (presetUnitId ?? undefined),
-      undefined,
-      attachmentIds,
-      targetPersonal,
-    );
+    // A preset department from the org page wins over the target switch.
+    const projectMode = target === "project" && !presetUnitId;
+    const projectTarget = projectMode ? project : null;
+    if (projectMode && !projectTarget) {
+      // Still choosing: the picker is the next step, not a send.
+      setProjectPickerOpen(true);
+      return;
+    }
+    const targetPersonal = target === "personal" && !presetUnitId;
+    void submitDispatch(trimmed, {
+      unitId:
+        targetPersonal || projectTarget ? undefined : (presetUnitId ?? undefined),
+      files: attachmentIds,
+      personal: targetPersonal,
+      project: projectTarget
+        ? { id: projectTarget.id, name: projectTarget.name }
+        : undefined,
+    });
   };
 
   const selectDispatch = (item: DispatchListItem) => {
@@ -598,10 +651,10 @@ function DispatchWorkbench() {
       onRetry={() =>
         void submitDispatch(
           selected.issue.description ?? selected.issue.title,
-          selected.personal ? undefined : selected.unit_id,
-          undefined,
-          [],
-          selected.personal,
+          {
+            unitId: selected.personal ? undefined : selected.unit_id,
+            personal: selected.personal,
+          },
         )
       }
     />
@@ -612,21 +665,19 @@ function DispatchWorkbench() {
           key={attempt.id}
           attempt={attempt}
           onRetry={() =>
-            void submitDispatch(
-              attempt.text,
-              undefined,
-              attempt.id,
-              attempt.attachmentIds,
-              attempt.personal,
-            )
+            void submitDispatch(attempt.text, {
+              attemptId: attempt.id,
+              files: attempt.attachmentIds,
+              personal: attempt.personal,
+              project: attempt.project,
+            })
           }
           onPickCandidate={(candidate: DispatchCandidate) =>
-            void submitDispatch(
-              attempt.text,
-              candidate.unit_id,
-              attempt.id,
-              attempt.attachmentIds,
-            )
+            void submitDispatch(attempt.text, {
+              unitId: candidate.unit_id,
+              attemptId: attempt.id,
+              files: attempt.attachmentIds,
+            })
           }
         />
       ))}
@@ -698,23 +749,75 @@ function DispatchWorkbench() {
               className="flex items-center gap-1"
             >
               <Button
-                variant={personal ? "ghost" : "secondary"}
+                variant={target === "department" ? "secondary" : "ghost"}
                 size="sm"
-                aria-pressed={!personal}
+                aria-pressed={target === "department"}
                 className="h-6 rounded-full px-2 text-caption"
-                onClick={() => setPersonal(false)}
+                onClick={() => setTarget("department")}
               >
                 {t(($) => $.page.target_department)}
               </Button>
               <Button
-                variant={personal ? "secondary" : "ghost"}
+                variant={target === "personal" ? "secondary" : "ghost"}
                 size="sm"
-                aria-pressed={personal}
+                aria-pressed={target === "personal"}
                 className="h-6 rounded-full px-2 text-caption"
-                onClick={() => setPersonal(true)}
+                onClick={() => setTarget("personal")}
               >
                 {t(($) => $.page.target_personal)}
               </Button>
+              {requestableProjects.length > 0 ? (
+                <Popover
+                  open={projectPickerOpen}
+                  onOpenChange={(open) => {
+                    setProjectPickerOpen(open);
+                    if (open) setTarget("project");
+                  }}
+                >
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant={target === "project" ? "secondary" : "ghost"}
+                        size="sm"
+                        aria-pressed={target === "project"}
+                        className="h-6 rounded-full px-2 text-caption"
+                      />
+                    }
+                  >
+                    {t(($) => $.page.target_project)}
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-80 p-0">
+                    <Command>
+                      <CommandInput
+                        placeholder={t(($) => $.page.project_picker_placeholder)}
+                      />
+                      <CommandList>
+                        <CommandEmpty>{t(($) => $.page.project_picker_empty)}</CommandEmpty>
+                        {requestableProjects.map((entry) => (
+                          <CommandItem
+                            key={entry.id}
+                            value={`${entry.name} ${entry.unit_path}`}
+                            onSelect={() => {
+                              setProject(entry);
+                              setTarget("project");
+                              setProjectPickerOpen(false);
+                            }}
+                          >
+                            <FolderKanban
+                              className="size-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden
+                            />
+                            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                            <span className="text-caption text-muted-foreground">
+                              {entry.unit_path}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
             </div>
           ) : null}
           {dispatchBlocked ? (
@@ -747,6 +850,15 @@ function DispatchWorkbench() {
                   ? () => replace(workbenchPath)
                   : undefined
               }
+              projectName={
+                target === "project" && !presetUnitId && !selected
+                  ? (project?.name ?? null)
+                  : null
+              }
+              onClearProject={() => {
+                setTarget("department");
+                setProject(null);
+              }}
               threadTitle={selected ? selected.issue.title : null}
               onExitThread={
                 selected

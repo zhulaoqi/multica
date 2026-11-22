@@ -1,5 +1,5 @@
 import type { ZodType } from "zod";
-import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_SYNC_REPORT, EMPTY_ORG_SYNC_STATUS, EMPTY_ORG_TREE, OrgImportResultSchema, OrgSquadSyncResultSchema, OrgSyncReportSchema, OrgSyncStatusSchema, OrgTreeSchema, OrgUnitCreatedSchema, type OrgImportResult, type OrgImportRow, type OrgSquadSyncResult, type OrgSyncReport, type OrgSyncStatus, type OrgTree, type OrgUnitCreated } from "./org-schema";
+import { EMPTY_ORG_IMPORT_RESULT, EMPTY_ORG_SYNC_REPORT, EMPTY_ORG_SYNC_STATUS, EMPTY_ORG_TREE, OrgImportResultSchema, OrgSquadSyncResultSchema, OrgSyncReportSchema, OrgSyncStatusSchema, OrgTreeSchema, OrgUnitCreatedSchema, ProjectIntakeCandidatesSchema, ProjectIntakeSourcesSchema, RequestableProjectsSchema, type OrgImportResult, type OrgImportRow, type OrgSquadSyncResult, type OrgSyncReport, type OrgSyncStatus, type OrgTree, type OrgUnitCreated, type ProjectIntakeCandidates, type ProjectIntakeSources, type RequestableProject } from "./org-schema";
 import { EMPTY_INTAKE_SUBMIT_RESPONSE, IntakeAgentSchema, IntakeListItemSchema, IntakeMaintainProjectSchema, IntakeModuleSchema, IntakeProjectItemSchema, IntakeSessionSchema, IntakeSubmitResponseSchema, type IntakeAgent, type IntakeListItem, type IntakeMaintainProject, type IntakeModule, type IntakeProjectItem, type IntakeSession, type IntakeSubmitResponse } from "./intake-schema";
 import { AgentRuntimeSchema, EMPTY_RUNTIME } from "../runtimes/schema";
 import type { IssueWakeup, IssueWakeupInput, IssueWakeupSummaryRow, PausedWakeup, SystemWakeup, WakeupRun, WorkspaceSystemWakeup } from "../types/issue-wakeup";
@@ -5932,6 +5932,54 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify({ sources }),
     });
+  }
+
+  /**
+   * Who may hand this project work. An empty list follows the owning
+   * department. Runs in the project workspace.
+   */
+  async getProjectIntakeSources(): Promise<ProjectIntakeSources> {
+    const raw = await this.fetch<unknown>("/api/project-intake/sources");
+    const parsed = parseWithFallback(
+      raw,
+      ProjectIntakeSourcesSchema,
+      { sources: [], inherited: true, unit_id: "", unit_path: "" },
+      { endpoint: "GET /api/project-intake/sources" },
+    );
+    return parsed;
+  }
+
+  async replaceProjectIntakeSources(
+    sources: Array<{ type: "user" | "org_unit"; id: string }>,
+  ): Promise<void> {
+    await this.fetch("/api/project-intake/sources", {
+      method: "PUT",
+      body: JSON.stringify({ sources }),
+    });
+  }
+
+  /** Departments and organization members a project may list as sources. */
+  async listProjectIntakeCandidates(): Promise<ProjectIntakeCandidates> {
+    const raw = await this.fetch<unknown>("/api/project-intake/candidates");
+    const parsed = parseWithFallback(
+      raw,
+      ProjectIntakeCandidatesSchema,
+      { units: [], members: [] },
+      { endpoint: "GET /api/project-intake/candidates" },
+    );
+    return parsed;
+  }
+
+  /**
+   * Projects the caller may hand work. Only these appear in the C-end project
+   * picker, so a project without permission is never offered.
+   */
+  async listRequestableProjects(): Promise<RequestableProject[]> {
+    const raw = await this.fetch<unknown>("/api/org/request-projects");
+    const parsed = parseWithFallback(raw, RequestableProjectsSchema, { projects: [] }, {
+      endpoint: "GET /api/org/request-projects",
+    });
+    return parsed.projects;
   }
 
   /**

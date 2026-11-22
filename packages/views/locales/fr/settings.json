@@ -407,6 +407,7 @@
       "github": "GitHub",
       "labs": "Labo",
       "members": "Membres",
+      "intake": "Demandes",
       "labels": "Étiquettes",
       "issue_statuses": "États des tâches",
       "wakeups": "Réveils",
@@ -433,7 +434,14 @@
     "search_empty": "Aucun paramètre correspondant",
     "search_results_one": "{{count}} résultat",
     "search_results_other": "{{count}} résultats",
-    "admin_only": "Seuls les propriétaires et administrateurs peuvent modifier ceci"
+    "admin_only": "Seuls les propriétaires et administrateurs peuvent modifier ceci",
+    "project_intake": {
+      "title": "Qui peut confier du travail ici",
+      "description": "Laissez vide pour suivre le département propriétaire du projet.",
+      "inherited": "Suit la liste de « {{path}} »",
+      "unavailable": "Les listes de demandes ne sont disponibles que pour les projets rattachés à un département.",
+      "save_failed": "Impossible d'enregistrer la liste des demandes."
+    }
   },
   "plugins": {
     "title": "Plugins",

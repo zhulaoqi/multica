@@ -22,6 +22,52 @@ export const OrgUnitSchema = z.object({
 });
 
 
+/**
+ * Who may hand one project work. An empty list is not "nobody": the project
+ * then follows its owning department (`inherited`).
+ */
+export const ProjectIntakeSourcesSchema = z
+  .object({
+    sources: OrgIntakeSourceSchema.array().default([]),
+    inherited: z.boolean().optional().default(true),
+    unit_id: z.string().optional().default(""),
+    unit_path: z.string().optional().default(""),
+  })
+  .loose();
+
+/** Departments and people a project manager may put on its intake list. */
+export const ProjectIntakeCandidatesSchema = z
+  .object({
+    units: z
+      .object({ id: z.string(), path: z.string().optional().default("") })
+      .loose()
+      .array()
+      .default([]),
+    members: z
+      .object({ id: z.string(), name: z.string().optional().default("") })
+      .loose()
+      .array()
+      .default([]),
+  })
+  .loose();
+
+/** Projects the caller may hand work, each with its owning department. */
+export const RequestableProjectSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().default(""),
+    slug: z.string().default(""),
+    unit_id: z.string().default(""),
+    unit_path: z.string().default(""),
+  })
+  .loose();
+
+export const RequestableProjectsSchema = z
+  .object({
+    projects: RequestableProjectSchema.array().default([]),
+  })
+  .loose();
+
 export const OrgMemberSchema = z.object({
   user_id: z.string(),
   unit_id: z.string().optional().default(""),
@@ -135,6 +181,9 @@ export type OrgSquadSyncResult = z.infer<typeof OrgSquadSyncResultSchema>;
 export type OrgTree = z.infer<typeof OrgTreeSchema>;
 export type OrgImportRow = z.infer<typeof OrgImportRowSchema>;
 export type OrgImportResult = z.infer<typeof OrgImportResultSchema>;
+export type ProjectIntakeSources = z.infer<typeof ProjectIntakeSourcesSchema>;
+export type ProjectIntakeCandidates = z.infer<typeof ProjectIntakeCandidatesSchema>;
+export type RequestableProject = z.infer<typeof RequestableProjectSchema>;
 
 export const EMPTY_ORG_TREE: OrgTree = {
   units: [],

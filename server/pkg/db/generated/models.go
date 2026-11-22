@@ -1977,6 +1977,14 @@ type WorkspaceDirectoryMember struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type WorkspaceIntakeSource struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	SourceType  string             `json:"source_type"`
+	SourceID    pgtype.UUID        `json:"source_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type WorkspaceInvitation struct {
 	ID            pgtype.UUID        `json:"id"`
 	WorkspaceID   pgtype.UUID        `json:"workspace_id"`

@@ -54,6 +54,7 @@ vi.mock("./code-tab", stub("CodeTab"));
 vi.mock("./notifications-tab", stub("NotificationsTab"));
 vi.mock("./labels-tab", stub("LabelsTab"));
 vi.mock("../../workflows/workflows-tab", stub("WorkflowsTab"));
+vi.mock("./project-intake-tab", stub("ProjectIntakeTab"));
 vi.mock("./properties-tab", stub("PropertiesTab"));
 vi.mock("./quick-actions-tab", stub("QuickActionsTab"));
 vi.mock("./keyboard-shortcuts-tab", stub("KeyboardShortcutsTab"));
@@ -64,6 +65,12 @@ vi.mock("./billing-tab", stub("BillingTab"));
 const shell = vi.hoisted(() => ({
   appsAvailable: false,
   role: "owner" as "owner" | "admin" | "member",
+  workspace: { id: "ws-1", name: "Acme" } as {
+    id: string;
+    name: string;
+    org_unit_id?: string;
+    is_organization?: boolean;
+  },
 }));
 vi.mock("./connected-apps-tab", () => ({
   ConnectedAppsTab: () => <div>ConnectedAppsTab</div>,
@@ -71,7 +78,7 @@ vi.mock("./connected-apps-tab", () => ({
 }));
 
 vi.mock("@multica/core/paths", () => ({
-  useCurrentWorkspace: () => ({ id: "ws-1", name: "Acme" }),
+  useCurrentWorkspace: () => shell.workspace,
 }));
 vi.mock("@multica/core/workspace/avatar-url", () => ({
   resolvePublicFileUrl: (url: string | null | undefined) => url ?? null,
@@ -136,6 +143,7 @@ beforeEach(() => {
   navigationState.search = "";
   shell.appsAvailable = false;
   shell.role = "owner";
+  shell.workspace = { id: "ws-1", name: "Acme" };
   tabs.channelDetail = false;
   configStore.getState().setFeatureFlags({});
   replace.mockClear();
@@ -561,5 +569,27 @@ describe("SettingsPage search for the browser notifications row", () => {
     expect(
       within(results).getByRole("option", { name: /Show system notifications/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("SettingsPage project intake", () => {
+  it("offers the intake list on a project owned by a department", () => {
+    shell.workspace = { id: "ws-1", name: "Acme", org_unit_id: "unit-1" };
+    renderWithI18n(<SettingsPage />);
+
+    expect(within(nav()).getByText("Intake requests")).toBeInTheDocument();
+  });
+
+  it("leaves it out for a flat workspace", () => {
+    renderWithI18n(<SettingsPage />);
+
+    expect(within(nav()).queryByText("Intake requests")).not.toBeInTheDocument();
+  });
+
+  it("leaves it out for the organization", () => {
+    shell.workspace = { id: "ws-1", name: "Acme", org_unit_id: "unit-1", is_organization: true };
+    renderWithI18n(<SettingsPage />);
+
+    expect(within(nav()).queryByText("Intake requests")).not.toBeInTheDocument();
   });
 });

@@ -464,6 +464,32 @@ func (q *Queries) ListProjectMemberUserIDs(ctx context.Context, workspaceID pgty
 	return items, nil
 }
 
+const listUserWorkspaceMemberships = `-- name: ListUserWorkspaceMemberships :many
+SELECT workspace_id FROM member WHERE user_id = $1
+`
+
+// Every workspace the person holds an explicit member row in, wherever they
+// are placed. The project intake gate treats such a row as permission.
+func (q *Queries) ListUserWorkspaceMemberships(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listUserWorkspaceMemberships, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var workspace_id pgtype.UUID
+		if err := rows.Scan(&workspace_id); err != nil {
+			return nil, err
+		}
+		items = append(items, workspace_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkspaceManagerUserIDs = `-- name: ListWorkspaceManagerUserIDs :many
 SELECT m.user_id FROM member m
 JOIN workspace w ON w.id = m.workspace_id

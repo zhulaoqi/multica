@@ -23,6 +23,12 @@ export const workspaceKeys = {
     ["workspaces", wsId, "squads", squadId, "members-status"] as const,
   skills: (wsId: string) => ["workspaces", wsId, "skills"] as const,
   org: (wsId: string) => ["workspaces", wsId, "org"] as const,
+  // Who may hand this project work, and the picker behind it. Both live in the
+  // project workspace, so a workspace switch drops them with the rest.
+  projectIntakeSources: (wsId: string) =>
+    ["workspaces", wsId, "project-intake", "sources"] as const,
+  projectIntakeCandidates: (wsId: string) =>
+    ["workspaces", wsId, "project-intake", "candidates"] as const,
   // Account-level: which departments the caller may create a project for.
   // An optional source workspace scopes the answer to that workspace's tree,
   // which the operator also uses to pick a new department for a project.
@@ -58,6 +64,26 @@ export function orgTreeOptions(wsId: string) {
   return queryOptions({
     queryKey: workspaceKeys.org(wsId),
     queryFn: () => api.listOrgUnits(),
+  });
+}
+
+/** Who may hand this project work. Empty follows the owning department. */
+export function projectIntakeSourcesOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.projectIntakeSources(wsId),
+    queryFn: () => api.getProjectIntakeSources(),
+    enabled: wsId.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+/** Departments and organization members the project may add as sources. */
+export function projectIntakeCandidatesOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.projectIntakeCandidates(wsId),
+    queryFn: () => api.listProjectIntakeCandidates(),
+    enabled: wsId.length > 0,
+    staleTime: 5 * 60_000,
   });
 }
 

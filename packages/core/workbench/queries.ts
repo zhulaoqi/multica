@@ -11,7 +11,22 @@ export const workbenchKeys = {
   all: (wsId: string) => ["workbench", wsId] as const,
   dispatches: (wsId: string) => [...workbenchKeys.all(wsId), "dispatches"] as const,
   departmentQueue: (wsId: string) => [...workbenchKeys.all(wsId), "department-queue"] as const,
+  requestableProjects: (wsId: string) =>
+    [...workbenchKeys.all(wsId), "requestable-projects"] as const,
 };
+
+/**
+ * Projects the caller may hand work. The composer only offers these, so a
+ * project without permission is never a dispatch target.
+ */
+export function requestableProjectsOptions(wsId: string) {
+  return queryOptions({
+    queryKey: workbenchKeys.requestableProjects(wsId),
+    queryFn: () => api.listRequestableProjects(),
+    enabled: wsId.length > 0,
+    staleTime: 60_000,
+  });
+}
 
 export const DISPATCH_HISTORY_LIMIT = 30;
 

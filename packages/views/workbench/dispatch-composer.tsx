@@ -5,6 +5,7 @@ import {
   ArrowUp,
   AtSign,
   Building2,
+  FolderKanban,
   MessageSquareText,
   Paperclip,
   X,
@@ -59,6 +60,8 @@ export function DispatchComposer({
   pending,
   unitPath,
   onClearUnit,
+  projectName,
+  onClearProject,
   threadTitle,
   onExitThread,
   attachments = [],
@@ -74,6 +77,9 @@ export function DispatchComposer({
   pending: boolean;
   unitPath?: string | null;
   onClearUnit?: () => void;
+  /** The project the request will be handed through, when one is chosen. */
+  projectName?: string | null;
+  onClearProject?: () => void;
   /** Set while replying inside a dispatch thread instead of starting one. */
   threadTitle?: string | null;
   onExitThread?: () => void;
@@ -147,6 +153,22 @@ export function DispatchComposer({
               type="button"
               aria-label={t(($) => $.page.route_automatically)}
               onClick={onClearUnit}
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {projectName !== undefined && projectName !== null ? (
+        <div className="flex items-center gap-1.5 self-start rounded-md border bg-muted/50 py-0.5 pr-1 pl-2 text-caption">
+          <FolderKanban className="size-3.5 text-muted-foreground" aria-hidden />
+          <span className="max-w-72 truncate">{projectName}</span>
+          {onClearProject ? (
+            <button
+              type="button"
+              aria-label={t(($) => $.page.project_clear)}
+              onClick={onClearProject}
               className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <X className="size-3" />

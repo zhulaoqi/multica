@@ -78,6 +78,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"intake_module":                      workspaceDelete,
 	"intake_project_member":              workspaceDelete,
 	"intake_request":                     workspaceDelete,
+	"org_unit_intake_source":             workspaceDelete,
 	"issue":                              workspaceDelete,
 	"issue_wakeup":                       workspaceDelete,
 	"issue_wakeup_receipt":               workspaceDelete,
@@ -158,6 +159,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"wecom_install_session":              workspaceDelete,
 	"workspace":                          workspaceDelete,
 	"workspace_directory_member":         workspaceDelete,
+	"workspace_intake_source":            workspaceDelete,
 	"workspace_invitation":               workspaceDelete,
 	"workspace_share_link":               workspaceDelete,
 }

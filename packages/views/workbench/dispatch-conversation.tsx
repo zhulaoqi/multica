@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   ArrowLeftRight,
   Building2,
+  FolderKanban,
   CircleAlert,
   CircleCheck,
   CircleDot,
@@ -40,6 +41,8 @@ export interface WorkbenchAttempt {
   attachmentIds: string[];
   /** The attempt targeted the requester's personal squad, not a department. */
   personal?: boolean;
+  /** The project the attempt was handed through, when it named one. */
+  project?: { id: string; name: string };
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -305,6 +308,12 @@ export function DispatchAttemptConversation({
           )}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {attempt.project ? (
+            <span className="inline-flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
+              <FolderKanban className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{attempt.project.name}</span>
+            </span>
+          ) : null}
           {attempt.status === "pending" ? (
             <p className="text-body">{t(($) => $.page.routing)}</p>
           ) : (

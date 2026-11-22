@@ -12,6 +12,8 @@ import type {
 export interface DispatchWorkVariables {
   text: string;
   unitId?: string;
+  /** Target a project; the server resolves its owning department. */
+  projectId?: string;
   personal?: boolean;
   clientRequestId?: string;
   attachmentIds?: string[];
@@ -26,6 +28,7 @@ export function useDispatchWork(wsId: string) {
         client_request_id: variables.clientRequestId ?? createSafeId(),
       };
       if (variables.unitId) input.unit_id = variables.unitId;
+      if (variables.projectId) input.project_id = variables.projectId;
       if (variables.personal) input.personal = true;
       if (variables.attachmentIds?.length) input.attachment_ids = variables.attachmentIds;
       return api.dispatchWork(input);
