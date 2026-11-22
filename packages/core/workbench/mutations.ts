@@ -42,6 +42,8 @@ export function useDispatchWork(wsId: string) {
         unit_path: data.dispatch.unit_path,
         squad_id: data.dispatch.squad_id,
         personal: data.dispatch.personal,
+        project_id: data.dispatch.project_id,
+        project_name: data.dispatch.project_name,
         dispatched_at: data.issue.created_at,
         completed: false,
         leader_state: "queued",
@@ -89,6 +91,10 @@ export function useReassignDispatch(wsId: string) {
                   unit_path: data.dispatch.unit_path,
                   squad_id: data.dispatch.squad_id,
                   personal: data.dispatch.personal,
+                  // Reassignment drops the project: the row now answers only
+                  // the new department.
+                  project_id: "",
+                  project_name: "",
                   completed: false,
                   notified_at: null,
                   leader_state: "queued",

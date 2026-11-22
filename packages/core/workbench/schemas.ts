@@ -18,6 +18,10 @@ export const DispatchWorkResponseSchema = z
         unit_path: z.string().default(""),
         squad_id: z.string().default(""),
         personal: z.boolean().default(false),
+        // The project the request was routed to, when the text named one or
+        // the requester picked it. Older servers omit both.
+        project_id: z.string().default(""),
+        project_name: z.string().default(""),
       })
       .loose(),
   })
@@ -40,6 +44,9 @@ export const DispatchListItemSchema = z
     unit_path: z.string().default(""),
     squad_id: z.string().default(""),
     personal: z.boolean().default(false),
+    // The project the request named or selected; gone after a reassignment.
+    project_id: z.string().default(""),
+    project_name: z.string().default(""),
     dispatched_at: z.string(),
     completed: z.boolean().default(false),
     notified_at: z.string().nullable().optional(),

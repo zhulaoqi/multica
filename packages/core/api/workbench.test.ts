@@ -66,6 +66,8 @@ describe("ApiClient dispatchWork", () => {
       unit_path: "Engineering/Payments",
       squad_id: "",
       personal: false,
+      project_id: "",
+      project_name: "",
     });
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
       "https://api.example.test/api/org/dispatch",
@@ -108,6 +110,36 @@ describe("ApiClient dispatchWork", () => {
     });
   });
 
+  it("carries the project a free-text request routed to", async () => {
+    const fetchMock = respond({
+      issue: issue(),
+      dispatch: {
+        unit_id: "unit-2",
+        unit_path: "研发部",
+        project_id: "project-1",
+        project_name: "AIHUB",
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient("https://api.example.test");
+    const result = await client.dispatchWork({
+      text: "AIHUB 现在接了哪些模型",
+      client_request_id: "req-3",
+    });
+
+    expect(result.dispatch).toMatchObject({
+      unit_id: "unit-2",
+      project_id: "project-1",
+      project_name: "AIHUB",
+    });
+    // Routing is the server's job; the client sends no project for free text.
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      text: "AIHUB 现在接了哪些模型",
+      client_request_id: "req-3",
+    });
+  });
+
   it("rejects a response that carries no readable issue", async () => {
     vi.stubGlobal("fetch", respond({ issue: null, dispatch: {} }));
 
@@ -140,6 +172,8 @@ describe("ApiClient listMyDispatches", () => {
       unit_path: "",
       squad_id: "",
       personal: false,
+      project_id: "",
+      project_name: "",
       dispatched_at: "2026-11-12T08:00:00Z",
       completed: false,
       leader_state: "none",

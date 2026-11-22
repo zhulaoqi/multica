@@ -412,6 +412,33 @@ describe("WorkbenchPage", () => {
     );
   });
 
+  it("retries a failed project dispatch inside the project", async () => {
+    state.dispatches = [
+      dispatchItem({
+        leader_state: "failed",
+        project_id: "project-1",
+        project_name: "AIHUB",
+        issue: { ...dispatchItem().issue, status: "todo", status_category: "todo" },
+      }),
+    ];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    state.mutateAsync.mockResolvedValueOnce(dispatchResponse());
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Send again" }));
+
+    await waitFor(() =>
+      expect(state.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Prepare onboarding materials for next week",
+          projectId: "project-1",
+          unitId: undefined,
+        }),
+      ),
+    );
+  });
+
   it("clears the chosen project and goes back to the department", async () => {
     apiState.listRequestableProjects.mockResolvedValue([
       {
@@ -727,6 +754,21 @@ describe("WorkbenchPage", () => {
     expect(screen.queryByRole("group", { name: "Filter work" })).not.toBeInTheDocument();
     expect(screen.getByText("Prepare onboarding materials", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByText("Finished work")).toBeInTheDocument();
+  });
+
+  it("names the project a dispatch was routed to", () => {
+    state.dispatches = [
+      dispatchItem({ project_id: "project-1", project_name: "AIHUB" }),
+    ];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    expect(
+      screen.getByText(/AIHUB · Engineering \/ Customer Success/),
+    ).toBeInTheDocument();
+    // The thread repeats it so an open conversation says what it was about.
+    expect(screen.getAllByText(/AIHUB/).length).toBeGreaterThan(1);
   });
 
   it("sends uploaded files with the request", async () => {

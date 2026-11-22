@@ -216,6 +216,12 @@ export function DispatchConversation({
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
+            {item.project_name ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <FolderKanban className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{item.project_name}</span>
+              </span>
+            ) : null}
             {item.unit_path ? (
               <span className="inline-flex min-w-0 items-center gap-1">
                 <Building2 className="size-3.5 shrink-0" aria-hidden />

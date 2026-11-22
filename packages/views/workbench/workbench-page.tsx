@@ -168,6 +168,7 @@ function HistoryList({
                 </span>
               </span>
               <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
+                {item.project_name ? `${item.project_name} · ` : null}
                 {item.personal
                   ? t(($) => $.page.personal_squad)
                   : item.unit_path || t(($) => $.page.unknown_department)}
@@ -576,6 +577,13 @@ function DispatchWorkbench() {
     </div>
   );
 
+  // A failed dispatch that named a project retries inside it, not against the
+  // whole department. The server re-checks the project's list.
+  const retryProject =
+    selected && selected.project_id
+      ? { id: selected.project_id, name: selected.project_name }
+      : undefined;
+
   const conversation = selected ? (
     <DispatchConversation
       wsId={wsId}
@@ -586,8 +594,10 @@ function DispatchWorkbench() {
         void submitDispatch(
           selected.issue.description ?? selected.issue.title,
           {
-            unitId: selected.personal ? undefined : selected.unit_id,
+            unitId:
+              selected.personal || retryProject ? undefined : selected.unit_id,
             personal: selected.personal,
+            project: retryProject,
           },
         )
       }
