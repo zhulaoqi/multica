@@ -708,7 +708,7 @@ describe("WorkbenchPage", () => {
     expect(screen.getByRole("textbox", { name: "What needs doing?" })).toHaveValue("");
   });
 
-  it("filters the history to work waiting on the requester", async () => {
+  it("lists recent work regardless of its status", () => {
     state.dispatches = [
       dispatchItem(),
       dispatchItem({
@@ -724,12 +724,9 @@ describe("WorkbenchPage", () => {
     ];
     renderPage();
 
-    const group = screen.getByRole("group", { name: "Filter work" });
-    expect(within(group).getByRole("button", { name: /Needs review/ })).toBeInTheDocument();
-    await userEvent.click(within(group).getByRole("button", { name: /Needs review/ }));
-
+    expect(screen.queryByRole("group", { name: "Filter work" })).not.toBeInTheDocument();
     expect(screen.getByText("Prepare onboarding materials", { selector: "span" })).toBeInTheDocument();
-    expect(screen.queryByText("Finished work")).not.toBeInTheDocument();
+    expect(screen.getByText("Finished work")).toBeInTheDocument();
   });
 
   it("sends uploaded files with the request", async () => {

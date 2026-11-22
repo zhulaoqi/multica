@@ -35,14 +35,6 @@
     "mention_label": "提及",
     "mention_agent": "智慧體",
     "mention_squad": "小隊",
-    "filters": {
-      "label": "篩選派活",
-      "all": "全部",
-      "review": "待驗收",
-      "active": "進行中",
-      "completed": "已完成",
-      "empty": "這裡還沒有內容。"
-    },
     "target_label": "發給",
     "target_department": "部門",
     "target_personal": "我的小隊",

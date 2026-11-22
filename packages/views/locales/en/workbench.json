@@ -35,14 +35,6 @@
     "mention_label": "Mention",
     "mention_agent": "Agent",
     "mention_squad": "Squad",
-    "filters": {
-      "label": "Filter work",
-      "all": "All",
-      "review": "Needs review",
-      "active": "In progress",
-      "completed": "Done",
-      "empty": "Nothing here yet."
-    },
     "target_label": "Send to",
     "target_department": "Department",
     "target_personal": "My squad",

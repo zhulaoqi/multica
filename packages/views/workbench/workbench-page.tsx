@@ -82,29 +82,6 @@ import {
 /** Where a new submission goes. */
 type DispatchTarget = "department" | "personal" | "project";
 
-/** Which slice of the history the requester is looking at. */
-export type DispatchFilter = "all" | "review" | "active" | "completed";
-
-export const FILTERS: DispatchFilter[] = ["all", "review", "active", "completed"];
-
-export function matchesFilter(phase: DispatchPhase, filter: DispatchFilter): boolean {
-  switch (filter) {
-    case "review":
-      return phase === "in_review";
-    case "active":
-      return (
-        phase === "queued" ||
-        phase === "decomposing" ||
-        phase === "progress" ||
-        phase === "failed"
-      );
-    case "completed":
-      return phase === "completed" || phase === "cancelled";
-    default:
-      return true;
-  }
-}
-
 export function phaseDotClass(phase: DispatchPhase): string {
   switch (phase) {
     case "completed":
@@ -128,8 +105,6 @@ function HistoryList({
   isLoading,
   error,
   phaseFor,
-  filter,
-  onFilterChange,
   onSelect,
 }: {
   dispatches: DispatchListItem[];
@@ -137,26 +112,10 @@ function HistoryList({
   isLoading: boolean;
   error: Error | null;
   phaseFor: (item: DispatchListItem) => DispatchPhase;
-  filter: DispatchFilter;
-  onFilterChange: (filter: DispatchFilter) => void;
   onSelect: (item: DispatchListItem) => void;
 }) {
   const { t } = useT("workbench");
   const timeAgo = useTimeAgo();
-
-  const counts: Record<DispatchFilter, number> = {
-    all: dispatches.length,
-    review: 0,
-    active: 0,
-    completed: 0,
-  };
-  for (const item of dispatches) {
-    const phase = phaseFor(item);
-    for (const key of ["review", "active", "completed"] as const) {
-      if (matchesFilter(phase, key)) counts[key] += 1;
-    }
-  }
-  const visible = dispatches.filter((item) => matchesFilter(phaseFor(item), filter));
 
   if (isLoading && dispatches.length === 0) {
     return (
@@ -182,71 +141,49 @@ function HistoryList({
     );
   }
   return (
-    <div className="flex flex-col gap-1.5">
-      <div role="group" aria-label={t(($) => $.page.filters.label)} className="flex flex-wrap gap-1">
-        {FILTERS.map((key) => (
-          <Button
-            key={key}
-            variant={filter === key ? "secondary" : "ghost"}
-            size="sm"
-            aria-pressed={filter === key}
-            className="h-6 gap-1 rounded-full px-2 text-caption"
-            onClick={() => onFilterChange(key)}
-          >
-            {t(($) => $.page.filters[key])}
-            <span className="tabular-nums text-muted-foreground">{counts[key]}</span>
-          </Button>
-        ))}
-      </div>
-      {visible.length === 0 ? (
-        <p className="px-2 py-3 text-caption text-muted-foreground">
-          {t(($) => $.page.filters.empty)}
-        </p>
-      ) : null}
-      <ul className="flex flex-col gap-0.5">
-        {visible.map((item) => {
-          const selected = item.issue.id === selectedId;
-          return (
-            <li key={item.issue.id}>
-              <button
-                type="button"
-                aria-current={selected ? "true" : undefined}
-                onClick={() => onSelect(item)}
-                className={cn(
-                  "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
-                  selected && "bg-muted",
-                )}
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      phaseDotClass(phaseFor(item)),
-                    )}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-body">
-                    {item.issue.title}
-                  </span>
+    <ul className="flex flex-col gap-0.5">
+      {dispatches.map((item) => {
+        const selected = item.issue.id === selectedId;
+        return (
+          <li key={item.issue.id}>
+            <button
+              type="button"
+              aria-current={selected ? "true" : undefined}
+              onClick={() => onSelect(item)}
+              className={cn(
+                "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
+                selected && "bg-muted",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    phaseDotClass(phaseFor(item)),
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate text-body">
+                  {item.issue.title}
                 </span>
-                <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
-                  {item.personal
-                    ? t(($) => $.page.personal_squad)
-                    : item.unit_path || t(($) => $.page.unknown_department)}
-                  {" · "}
-                  {timeAgo(item.dispatched_at)}
+              </span>
+              <span className="min-w-0 truncate pl-3.5 text-caption text-muted-foreground">
+                {item.personal
+                  ? t(($) => $.page.personal_squad)
+                  : item.unit_path || t(($) => $.page.unknown_department)}
+                {" · "}
+                {timeAgo(item.dispatched_at)}
+              </span>
+              {item.blocker?.missing ? (
+                <span className="min-w-0 truncate pl-3.5 text-caption text-warning">
+                  {t(($) => $.page.blocked, { missing: item.blocker.missing })}
                 </span>
-                {item.blocker?.missing ? (
-                  <span className="min-w-0 truncate pl-3.5 text-caption text-warning">
-                    {t(($) => $.page.blocked, { missing: item.blocker.missing })}
-                  </span>
-                ) : null}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -395,7 +332,6 @@ function DispatchWorkbench() {
   const [focusToken, setFocusToken] = useState(0);
   const [attempts, setAttempts] = useState<WorkbenchAttempt[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [filter, setFilter] = useState<DispatchFilter>("all");
   const [followUpPending, setFollowUpPending] = useState(false);
   const [followUpError, setFollowUpError] = useState<unknown>(null);
   const [attachments, setAttachments] = useState<UploadResult[]>([]);
@@ -634,8 +570,6 @@ function DispatchWorkbench() {
           isLoading={isLoading}
           error={error}
           phaseFor={phaseFor}
-          filter={filter}
-          onFilterChange={setFilter}
           onSelect={selectDispatch}
         />
       </div>

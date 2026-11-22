@@ -35,14 +35,6 @@
     "mention_label": "提及",
     "mention_agent": "智能体",
     "mention_squad": "小队",
-    "filters": {
-      "label": "筛选派活",
-      "all": "全部",
-      "review": "待验收",
-      "active": "进行中",
-      "completed": "已完成",
-      "empty": "这里还没有内容。"
-    },
     "target_label": "发给",
     "target_department": "部门",
     "target_personal": "我的小队",

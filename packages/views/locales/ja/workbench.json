@@ -35,14 +35,6 @@
     "mention_label": "メンション",
     "mention_agent": "エージェント",
     "mention_squad": "チーム",
-    "filters": {
-      "label": "作業を絞り込む",
-      "all": "すべて",
-      "review": "確認待ち",
-      "active": "進行中",
-      "completed": "完了",
-      "empty": "まだ何もありません。"
-    },
     "target_label": "送信先",
     "target_department": "部署",
     "target_personal": "マイチーム",

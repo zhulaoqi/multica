@@ -35,14 +35,6 @@
     "mention_label": "멘션",
     "mention_agent": "에이전트",
     "mention_squad": "스쿼드",
-    "filters": {
-      "label": "작업 필터",
-      "all": "전체",
-      "review": "검토 필요",
-      "active": "진행 중",
-      "completed": "완료",
-      "empty": "아직 아무것도 없습니다."
-    },
     "target_label": "보내기 대상",
     "target_department": "부서",
     "target_personal": "내 팀",

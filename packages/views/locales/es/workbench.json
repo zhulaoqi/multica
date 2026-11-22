@@ -35,14 +35,6 @@
     "mention_label": "Mencionar",
     "mention_agent": "Agente",
     "mention_squad": "Escuadrón",
-    "filters": {
-      "label": "Filtrar trabajo",
-      "all": "Todo",
-      "review": "Por revisar",
-      "active": "En curso",
-      "completed": "Hecho",
-      "empty": "Aún no hay nada aquí."
-    },
     "target_label": "Enviar a",
     "target_department": "Departamento",
     "target_personal": "Mi equipo",
