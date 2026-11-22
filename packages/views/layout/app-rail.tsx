@@ -76,7 +76,7 @@ function useRailBadges(): Partial<Record<RailSpaceId, RailBadge>> {
   // opening the workbench. Reading the same cached list the page uses costs
   // no extra request once either surface has loaded. A project's workbench
   // entry opens the organization's, so it carries no badge of its own.
-  const { isProject } = useOrganizationContext(wsId ?? "");
+  const { isOrganization, isProject } = useOrganizationContext(wsId ?? "");
   const { dispatches } = useMyDispatches(isProject ? "" : (wsId ?? ""));
   const awaitingReview = dispatches.filter(
     (item) => dispatchPhase(item, undefined) === "in_review",
@@ -85,7 +85,10 @@ function useRailBadges(): Partial<Record<RailSpaceId, RailBadge>> {
   const badges: Partial<Record<RailSpaceId, RailBadge>> = {};
   if (inboxUnread > 0) badges.inbox = { kind: "count", value: inboxUnread, tone: "brand" };
   if (chatUnread > 0) badges.chat = { kind: "count", value: chatUnread, tone: "neutral" };
-  if (awaitingReview > 0) badges.workbench = { kind: "count", value: awaitingReview, tone: "brand" };
+  // The admin shell has no workbench on web, so its review count rides on
+  // Work — where the issue being accepted lives — instead of nowhere.
+  const reviewSpace: RailSpaceId = isOrganization && !isDesktopShell() ? "work" : "workbench";
+  if (awaitingReview > 0) badges[reviewSpace] = { kind: "count", value: awaitingReview, tone: "brand" };
   if (stuck.length > 0) badges.team = { kind: "dot" };
   return badges;
 }
@@ -196,15 +199,11 @@ export function AppRail({
   );
   // Work is dispatched only in the organization, so a project has no
   // workbench. On web the organization's admin side manages departments and
-  // hands out work: workbench, inbox, work and team. Conversation and
-  // autopilots live on the C-end. Desktop has no C-end and keeps every space.
+  // hands out work — inbox, work and team; the workbench and its conversation
+  // belong to the C-end, reached from the account menu. Desktop has no C-end
+  // and keeps every space.
   const desktop = isDesktopShell();
-  const organizationSpaces: readonly RailSpaceId[] = [
-    "workbench",
-    "inbox",
-    "work",
-    "team",
-  ];
+  const organizationSpaces: readonly RailSpaceId[] = ["inbox", "work", "team"];
   const spaces = RAIL_SPACES.filter((id) =>
     isOrganization && !desktop
       ? organizationSpaces.includes(id)

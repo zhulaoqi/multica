@@ -158,6 +158,7 @@
     "trigger": "Account",
     "profile": "Profile",
     "admin": "Admin",
+    "cend": "Personal space",
     "console": "Platform console",
     "theme": "Theme",
     "themes": {

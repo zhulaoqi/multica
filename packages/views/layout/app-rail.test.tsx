@@ -150,6 +150,15 @@ describe("AppRail spaces", () => {
     expect(link("/acme/autopilots")).not.toBeNull();
   });
 
+  it("leaves the workbench to the C-end on an organization's web admin", () => {
+    state.workspaces = [{ id: "ws-1", slug: "acme", is_organization: true }];
+    renderRail();
+    expect(link("/acme/workbench")).toBeNull();
+    for (const href of ["/acme/inbox", "/acme/issues", "/acme/agents"]) {
+      expect(link(href)).not.toBeNull();
+    }
+  });
+
   it("marks Settings in the footer while on a settings route", () => {
     state.pathname = "/acme/settings";
     renderRail();

@@ -68,7 +68,8 @@ const EMPTY_WORKSPACES: Workspace[] = [];
  * `home` is the C-end variant: it never links into the current workspace's
  * settings, and it offers the admin side only to people who manage a
  * workspace — pointing at the organization when they lead one. Everyone else
- * stays on the C-end.
+ * stays on the C-end. The workspace variant mirrors it on web with a link back
+ * to `/home`; desktop has no C-end, so it shows neither.
  */
 export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" | "home" }) {
   const { t } = useT("layout");
@@ -129,10 +130,12 @@ export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" |
             </DropdownMenuItem>
           )}
           {variant === "workspace" ? (
-            <DropdownMenuItem render={<AppLink href={p.issues()} />}>
-              <LayoutDashboard />
-              {t(($) => $.account.admin)}
-            </DropdownMenuItem>
+            isDesktopShell() ? null : (
+              <DropdownMenuItem render={<AppLink href={paths.home()} />}>
+                <LayoutDashboard />
+                {t(($) => $.account.cend)}
+              </DropdownMenuItem>
+            )
           ) : (
             homeAdminHref && (
               <DropdownMenuItem render={<AppLink href={homeAdminHref} />}>
