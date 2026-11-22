@@ -101,6 +101,9 @@ type OrgDispatchResult struct {
 	Issue db.Issue
 	Squad db.Squad
 	Unit  db.ListOrgUnitsRow
+	// Project is the target project when the dispatch was aimed at one; the
+	// work still landed on its owning department.
+	Project *db.Workspace
 	// Personal marks a dispatch to the requester's own squad; Unit is empty
 	// in that case.
 	Personal bool
@@ -173,6 +176,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 
 	var squad db.Squad
 	var unit db.ListOrgUnitsRow
+	var project *db.Workspace
 	personal := p.Personal || p.SquadID.Valid
 	if personal {
 		squad, err = s.resolvePersonalSquad(ctx, p, twin)
@@ -195,7 +199,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 			return OrgDispatchResult{}, fmt.Errorf("list org units: %w", err)
 		}
 		if p.ProjectID.Valid {
-			unit, err = s.projectDispatchUnit(ctx, p, access, units)
+			unit, project, err = s.projectDispatchUnit(ctx, p, access, units)
 			if err != nil {
 				return OrgDispatchResult{}, err
 			}
@@ -259,7 +263,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 	if err := s.recordOrigin(ctx, created.Issue, unit.ID, squad.ID, personal, p); err != nil {
 		return OrgDispatchResult{}, err
 	}
-	return OrgDispatchResult{Issue: created.Issue, Squad: squad, Unit: unit, Personal: personal}, nil
+	return OrgDispatchResult{Issue: created.Issue, Squad: squad, Unit: unit, Project: project, Personal: personal}, nil
 }
 
 type OrgDispatchReassignParams struct {
@@ -510,6 +514,7 @@ func (s *OrgDispatchService) recordOrigin(ctx context.Context, issue db.Issue, u
 		WorkspaceID:     p.WorkspaceID,
 		RequesterID:     p.ActorID,
 		TargetUnitID:    targetUnit,
+		TargetProjectID: p.ProjectID,
 		ChannelType:     channel,
 		InstallationID:  p.Origin.InstallationID,
 		ChatID:          pgtype.Text{String: p.Origin.ChatID, Valid: p.Origin.ChatID != ""},
@@ -843,30 +848,30 @@ func (s *OrgDispatchService) issueIdentifier(ctx context.Context, issue db.Issue
 // department; the project only decides who may ask. A project the caller may
 // not request is reported as a missing unit, so a caller cannot probe which
 // projects exist.
-func (s *OrgDispatchService) projectDispatchUnit(ctx context.Context, p OrgDispatchParams, access workspaceaccess.Access, units []db.ListOrgUnitsRow) (db.ListOrgUnitsRow, error) {
+func (s *OrgDispatchService) projectDispatchUnit(ctx context.Context, p OrgDispatchParams, access workspaceaccess.Access, units []db.ListOrgUnitsRow) (db.ListOrgUnitsRow, *db.Workspace, error) {
 	project, err := s.Queries.GetWorkspace(ctx, p.ProjectID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+		return db.ListOrgUnitsRow{}, nil, ErrOrgUnitNotFound
 	}
 	if err != nil {
-		return db.ListOrgUnitsRow{}, fmt.Errorf("load project: %w", err)
+		return db.ListOrgUnitsRow{}, nil, fmt.Errorf("load project: %w", err)
 	}
 	if project.IsOrganization || !project.OrgUnitID.Valid {
-		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+		return db.ListOrgUnitsRow{}, nil, ErrOrgUnitNotFound
 	}
 	found, ok := findUnit(units, project.OrgUnitID)
 	if !ok {
-		return db.ListOrgUnitsRow{}, ErrOrgUnitNotFound
+		return db.ListOrgUnitsRow{}, nil, ErrOrgUnitNotFound
 	}
 	sources, err := s.Queries.ListWorkspaceIntakeSources(ctx, p.ProjectID)
 	if err != nil {
-		return db.ListOrgUnitsRow{}, fmt.Errorf("list project intake sources: %w", err)
+		return db.ListOrgUnitsRow{}, nil, fmt.Errorf("list project intake sources: %w", err)
 	}
 	var departmentSources []db.ListOrgUnitIntakeSourcesRow
 	if len(sources) == 0 {
 		departmentSources, err = intakeSources(ctx, s.Queries, p.WorkspaceID)
 		if err != nil {
-			return db.ListOrgUnitsRow{}, err
+			return db.ListOrgUnitsRow{}, nil, err
 		}
 	}
 	_, memberErr := s.Queries.GetMemberByUserAndWorkspace(ctx, db.GetMemberByUserAndWorkspaceParams{
@@ -874,12 +879,12 @@ func (s *OrgDispatchService) projectDispatchUnit(ctx context.Context, p OrgDispa
 		WorkspaceID: p.ProjectID,
 	})
 	if memberErr != nil && !errors.Is(memberErr, pgx.ErrNoRows) {
-		return db.ListOrgUnitsRow{}, fmt.Errorf("check project membership: %w", memberErr)
+		return db.ListOrgUnitsRow{}, nil, fmt.Errorf("check project membership: %w", memberErr)
 	}
 	if !ProjectRequestable(access, units, departmentSources, project, sources, memberErr == nil) {
-		return db.ListOrgUnitsRow{}, ErrOrgUnitNoAccess
+		return db.ListOrgUnitsRow{}, nil, ErrOrgUnitNoAccess
 	}
-	return found, nil
+	return found, &project, nil
 }
 
 func findUnit(units []db.ListOrgUnitsRow, unitID pgtype.UUID) (db.ListOrgUnitsRow, bool) {

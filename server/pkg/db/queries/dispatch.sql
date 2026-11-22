@@ -3,11 +3,11 @@
 -- department delivers. The issue is always fresh, so a conflict means a
 -- retry of the same create and the existing row wins.
 INSERT INTO dispatch_origin (
-    issue_id, workspace_id, requester_id, target_unit_id,
+    issue_id, workspace_id, requester_id, target_unit_id, target_project_id,
     channel_type, installation_id, chat_id, thread_id, origin_message_id,
     client_request_id, target_squad_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, sqlc.narg('client_request_id'), sqlc.narg('target_squad_id'))
+VALUES ($1, $2, $3, $4, sqlc.narg('target_project_id'), $5, $6, $7, $8, $9, sqlc.narg('client_request_id'), sqlc.narg('target_squad_id'))
 ON CONFLICT (issue_id) DO NOTHING
 RETURNING *;
 
@@ -27,6 +27,9 @@ SELECT
     d.issue_id,
     d.target_unit_id,
     d.target_squad_id,
+    d.target_project_id,
+    p.name AS project_name,
+    p.slug AS project_slug,
     d.created_at,
     d.notified_at,
     CASE
@@ -36,6 +39,7 @@ SELECT
         ELSE lt.status
     END::text AS leader_state
 FROM dispatch_origin d
+LEFT JOIN workspace p ON p.id = d.target_project_id
 LEFT JOIN LATERAL (
     SELECT id, status, attempt, max_attempts
     FROM agent_task_queue
@@ -245,6 +249,7 @@ RETURNING *;
 UPDATE dispatch_origin
 SET target_unit_id = $2,
     target_squad_id = NULL,
+    target_project_id = NULL,
     notified_at = NULL,
     failure_notified_at = NULL,
     started_notified_at = NULL

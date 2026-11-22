@@ -408,6 +408,123 @@ func TestDispatchWork_ProjectTargetUsesItsOwnList(t *testing.T) {
 	}
 }
 
+// TestDispatchWork_FreeTextRoutesToNamedProject covers the C-end question
+// case: the text names a project under the owning department, the requester
+// may hand that project work, and no project was selected by hand.
+func TestDispatchWork_FreeTextRoutesToNamedProject(t *testing.T) {
+	startDispatchTest(t)
+	markOrganizationWorkspace(t)
+	admin := createOrgTestAdmin(t, "free-text-route-admin@example.com")
+	requester := createPermissionTestMember(t, "free-text-route-requester@example.com")
+	leader := insertRunnableDutyAgent(t, "free-text-route-leader", admin)
+	insertRunnableDutyAgent(t, "free-text-route-requester-agent", requester)
+	unitID := createOrgUnitAs(t, admin, "研发部", "")
+	placeOrgAgent(t, admin, leader, unitID)
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent SET permission_mode = 'public_to', visibility = 'workspace' WHERE id = $1
+	`, leader); err != nil {
+		t.Fatalf("make leader invokable: %v", err)
+	}
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO agent_invocation_target (agent_id, target_type, target_id) VALUES ($1, 'workspace', $2)
+	`, leader, testWorkspaceID); err != nil {
+		t.Fatalf("add leader invocation target: %v", err)
+	}
+	project := createOrganizationProject(t, "AIHUB", unitID)
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM workspace_intake_source WHERE workspace_id = $1`, project)
+		clearDispatchFixtures(t)
+	})
+	// The project list admits the requester; the owning department lists nobody,
+	// so only the project's own rule can route this request.
+	addWorkspaceIntakeSource(t, project, "user", requester)
+
+	status, res, body := postDispatchWork(t, requester, map[string]any{
+		"text":              "AIHUB现在接了哪些模型 dispatch-test",
+		"client_request_id": "44444444-4444-4444-4444-444444444001",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("free-text status = %d, want 201: %s", status, body)
+	}
+	if res.Dispatch.ProjectID != project || res.Dispatch.ProjectName != "AIHUB" {
+		t.Fatalf("dispatch project = %q %q, want %s AIHUB", res.Dispatch.ProjectID, res.Dispatch.ProjectName, project)
+	}
+	if res.Dispatch.UnitID != unitID {
+		t.Fatalf("dispatch unit = %s, want owning unit %s", res.Dispatch.UnitID, unitID)
+	}
+
+	status, items, body := listDispatches(t, requester, "")
+	if status != http.StatusOK {
+		t.Fatalf("list status = %d, want 200: %s", status, body)
+	}
+	for _, item := range items {
+		if item.Issue.ID != res.Issue.ID {
+			continue
+		}
+		if item.ProjectName != "AIHUB" || item.UnitPath != "研发部" {
+			t.Fatalf("history row = project %q unit %q, want AIHUB / 研发部", item.ProjectName, item.UnitPath)
+		}
+		return
+	}
+	t.Fatalf("dispatch %s missing from history: %s", res.Issue.ID, body)
+}
+
+// TestDispatchWork_FreeTextSkipsProjectTheRequesterCannotRequest keeps the
+// project list authoritative: naming a project does not route to it when the
+// requester is not on its list, and a department-only request still works.
+func TestDispatchWork_FreeTextSkipsProjectTheRequesterCannotRequest(t *testing.T) {
+	startDispatchTest(t)
+	markOrganizationWorkspace(t)
+	admin := createOrgTestAdmin(t, "free-text-deny-admin@example.com")
+	requester := createPermissionTestMember(t, "free-text-deny-requester@example.com")
+	leader := insertRunnableDutyAgent(t, "free-text-deny-leader", admin)
+	insertRunnableDutyAgent(t, "free-text-deny-requester-agent", requester)
+	unitID := createOrgUnitAs(t, admin, "研发部", "")
+	placeOrgAgent(t, admin, leader, unitID)
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent SET permission_mode = 'public_to', visibility = 'workspace' WHERE id = $1
+	`, leader); err != nil {
+		t.Fatalf("make leader invokable: %v", err)
+	}
+	if _, err := testPool.Exec(context.Background(), `
+		INSERT INTO agent_invocation_target (agent_id, target_type, target_id) VALUES ($1, 'workspace', $2)
+	`, leader, testWorkspaceID); err != nil {
+		t.Fatalf("add leader invocation target: %v", err)
+	}
+	project := createOrganizationProject(t, "AIHUB", unitID)
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM workspace_intake_source WHERE workspace_id = $1`, project)
+		clearDispatchFixtures(t)
+	})
+	// The department admits the requester; the project's list does not.
+	addOrgIntakeSource(t, unitID, "user", requester)
+	addWorkspaceIntakeSource(t, project, "user", admin)
+
+	status, res, body := postDispatchWork(t, requester, map[string]any{
+		"text":              "AIHUB现在接了哪些模型 dispatch-test-denied",
+		"client_request_id": "55555555-5555-5555-5555-555555555001",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("free-text status = %d, want 201: %s", status, body)
+	}
+	if res.Dispatch.ProjectID != "" || res.Dispatch.UnitID != unitID {
+		t.Fatalf("dispatch = %+v, want owning department without a project", res.Dispatch)
+	}
+
+	// With the department also closed, the same text has nowhere to go: the
+	// denied project must not be offered as a target.
+	testPool.Exec(context.Background(), `
+		DELETE FROM org_unit_intake_source WHERE workspace_id = $1 AND org_unit_id = $2
+	`, testWorkspaceID, unitID)
+	status, _, body = postDispatchWork(t, requester, map[string]any{
+		"text":              "AIHUB现在接了哪些模型 dispatch-test-denied 2",
+		"client_request_id": "55555555-5555-5555-5555-555555555002",
+	})
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, "org_dispatch_unroutable") {
+		t.Fatalf("closed department = %d %s, want 422 org_dispatch_unroutable", status, body)
+	}
+}
+
 // TestDeleteWorkspaceAdministration_ClearsProjectIntakeSources keeps the list
 // from outliving its project: there is no foreign key to cascade it.
 func TestDeleteWorkspaceAdministration_ClearsProjectIntakeSources(t *testing.T) {

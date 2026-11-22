@@ -15,7 +15,7 @@ const claimDispatchCompletion = `-- name: ClaimDispatchCompletion :one
 UPDATE dispatch_origin
 SET notified_at = now()
 WHERE issue_id = $1 AND notified_at IS NULL
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
 `
 
 // Marks the completion notice as sent. The conditional update is the
@@ -39,6 +39,7 @@ func (q *Queries) ClaimDispatchCompletion(ctx context.Context, issueID pgtype.UU
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
@@ -51,7 +52,7 @@ WHERE d.issue_id = $1 AND d.failure_notified_at IS NULL
     SELECT 1 FROM agent_task_queue t
     WHERE t.id = $2 AND t.issue_id = d.issue_id AND t.is_leader_task
   )
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
 `
 
 type ClaimDispatchFailureParams struct {
@@ -82,6 +83,7 @@ func (q *Queries) ClaimDispatchFailure(ctx context.Context, arg ClaimDispatchFai
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
@@ -90,7 +92,7 @@ const claimDispatchStart = `-- name: ClaimDispatchStart :one
 UPDATE dispatch_origin
 SET started_notified_at = now()
 WHERE issue_id = $1 AND started_notified_at IS NULL AND channel_type = 'feishu'
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
 `
 
 // The requester hears once that the department began working. Retries and
@@ -114,19 +116,20 @@ func (q *Queries) ClaimDispatchStart(ctx context.Context, issueID pgtype.UUID) (
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
 
 const createDispatchOrigin = `-- name: CreateDispatchOrigin :one
 INSERT INTO dispatch_origin (
-    issue_id, workspace_id, requester_id, target_unit_id,
+    issue_id, workspace_id, requester_id, target_unit_id, target_project_id,
     channel_type, installation_id, chat_id, thread_id, origin_message_id,
     client_request_id, target_squad_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+VALUES ($1, $2, $3, $4, $10, $5, $6, $7, $8, $9, $11, $12)
 ON CONFLICT (issue_id) DO NOTHING
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
 `
 
 type CreateDispatchOriginParams struct {
@@ -139,6 +142,7 @@ type CreateDispatchOriginParams struct {
 	ChatID          pgtype.Text `json:"chat_id"`
 	ThreadID        pgtype.Text `json:"thread_id"`
 	OriginMessageID pgtype.Text `json:"origin_message_id"`
+	TargetProjectID pgtype.UUID `json:"target_project_id"`
 	ClientRequestID pgtype.Text `json:"client_request_id"`
 	TargetSquadID   pgtype.UUID `json:"target_squad_id"`
 }
@@ -157,6 +161,7 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		arg.ChatID,
 		arg.ThreadID,
 		arg.OriginMessageID,
+		arg.TargetProjectID,
 		arg.ClientRequestID,
 		arg.TargetSquadID,
 	)
@@ -177,12 +182,13 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
 
 const getDispatchByClient = `-- name: GetDispatchByClient :one
-SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id FROM dispatch_origin
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id FROM dispatch_origin
 WHERE workspace_id = $1 AND requester_id = $2 AND client_request_id = $3
 `
 
@@ -212,12 +218,13 @@ func (q *Queries) GetDispatchByClient(ctx context.Context, arg GetDispatchByClie
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
 
 const getDispatchOrigin = `-- name: GetDispatchOrigin :one
-SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id FROM dispatch_origin WHERE issue_id = $1
+SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id FROM dispatch_origin WHERE issue_id = $1
 `
 
 func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (DispatchOrigin, error) {
@@ -239,6 +246,7 @@ func (q *Queries) GetDispatchOrigin(ctx context.Context, issueID pgtype.UUID) (D
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }
@@ -334,6 +342,9 @@ SELECT
     d.issue_id,
     d.target_unit_id,
     d.target_squad_id,
+    d.target_project_id,
+    p.name AS project_name,
+    p.slug AS project_slug,
     d.created_at,
     d.notified_at,
     CASE
@@ -343,6 +354,7 @@ SELECT
         ELSE lt.status
     END::text AS leader_state
 FROM dispatch_origin d
+LEFT JOIN workspace p ON p.id = d.target_project_id
 LEFT JOIN LATERAL (
     SELECT id, status, attempt, max_attempts
     FROM agent_task_queue
@@ -362,12 +374,15 @@ type ListDispatchesByRequesterParams struct {
 }
 
 type ListDispatchesByRequesterRow struct {
-	IssueID       pgtype.UUID        `json:"issue_id"`
-	TargetUnitID  pgtype.UUID        `json:"target_unit_id"`
-	TargetSquadID pgtype.UUID        `json:"target_squad_id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	NotifiedAt    pgtype.Timestamptz `json:"notified_at"`
-	LeaderState   string             `json:"leader_state"`
+	IssueID         pgtype.UUID        `json:"issue_id"`
+	TargetUnitID    pgtype.UUID        `json:"target_unit_id"`
+	TargetSquadID   pgtype.UUID        `json:"target_squad_id"`
+	TargetProjectID pgtype.UUID        `json:"target_project_id"`
+	ProjectName     pgtype.Text        `json:"project_name"`
+	ProjectSlug     pgtype.Text        `json:"project_slug"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	NotifiedAt      pgtype.Timestamptz `json:"notified_at"`
+	LeaderState     string             `json:"leader_state"`
 }
 
 // Workbench history. leader_state summarizes the latest squad-leader run:
@@ -386,6 +401,9 @@ func (q *Queries) ListDispatchesByRequester(ctx context.Context, arg ListDispatc
 			&i.IssueID,
 			&i.TargetUnitID,
 			&i.TargetSquadID,
+			&i.TargetProjectID,
+			&i.ProjectName,
+			&i.ProjectSlug,
 			&i.CreatedAt,
 			&i.NotifiedAt,
 			&i.LeaderState,
@@ -669,11 +687,12 @@ const reassignDispatchOrigin = `-- name: ReassignDispatchOrigin :one
 UPDATE dispatch_origin
 SET target_unit_id = $2,
     target_squad_id = NULL,
+    target_project_id = NULL,
     notified_at = NULL,
     failure_notified_at = NULL,
     started_notified_at = NULL
 WHERE issue_id = $1
-RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
 `
 
 type ReassignDispatchOriginParams struct {
@@ -702,6 +721,7 @@ func (q *Queries) ReassignDispatchOrigin(ctx context.Context, arg ReassignDispat
 		&i.FailureNotifiedAt,
 		&i.StartedNotifiedAt,
 		&i.OriginMessageID,
+		&i.TargetProjectID,
 	)
 	return i, err
 }

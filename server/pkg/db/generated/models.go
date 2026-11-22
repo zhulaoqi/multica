@@ -729,6 +729,7 @@ type DispatchOrigin struct {
 	FailureNotifiedAt pgtype.Timestamptz `json:"failure_notified_at"`
 	StartedNotifiedAt pgtype.Timestamptz `json:"started_notified_at"`
 	OriginMessageID   pgtype.Text        `json:"origin_message_id"`
+	TargetProjectID   pgtype.UUID        `json:"target_project_id"`
 }
 
 type Feedback struct {

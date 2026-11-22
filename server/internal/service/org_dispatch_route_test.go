@@ -35,23 +35,30 @@ func TestDispatchTextTitle(t *testing.T) {
 
 func TestParseDispatchRoute(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		raw  string
-		ok   bool
-		want string
+		name     string
+		raw      string
+		ok       bool
+		wantType string
+		wantID   string
 	}{
-		{"plain json", `{"unit_id":"unit-1"}`, true, "unit-1"},
-		{"fenced json", "```json\n{\"unit_id\":\"unit-1\"}\n```", true, "unit-1"},
-		{"bare fence", "```\n{\"unit_id\":\"unit-2\"}\n```", true, "unit-2"},
-		{"trims the id", `{"unit_id":" unit-3 "}`, true, "unit-3"},
-		{"empty id declines", `{"unit_id":""}`, false, ""},
-		{"missing id declines", `{}`, false, ""},
-		{"prose declines", "I think unit-1 fits", false, ""},
+		{"department", `{"target_type":"department","target_id":"unit-1"}`, true, "department", "unit-1"},
+		{"project", `{"target_type":"project","target_id":"proj-1"}`, true, "project", "proj-1"},
+		{"legacy unit id", `{"unit_id":"unit-1"}`, true, "department", "unit-1"},
+		{"fenced json", "```json\n{\"target_type\":\"project\",\"target_id\":\"proj-1\"}\n```", true, "project", "proj-1"},
+		{"bare fence", "```\n{\"unit_id\":\"unit-2\"}\n```", true, "department", "unit-2"},
+		{"trims the id", `{"target_type":"project","target_id":" proj-3 "}`, true, "project", "proj-3"},
+		{"empty id declines", `{"target_type":"project","target_id":""}`, false, "project", ""},
+		{"empty target declines", `{"target_type":"","target_id":"unit-1"}`, false, "", "unit-1"},
+		{"missing id declines", `{}`, false, "", ""},
+		{"prose declines", "I think unit-1 fits", false, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := parseDispatchRoute(tc.raw)
-			if ok != tc.ok || got.UnitID != tc.want {
-				t.Fatalf("parseDispatchRoute(%q) = (%q, %v), want (%q, %v)", tc.raw, got.UnitID, ok, tc.want, tc.ok)
+			if ok != tc.ok || got.TargetType != tc.wantType || got.TargetID != tc.wantID {
+				t.Fatalf(
+					"parseDispatchRoute(%q) = (%q, %q, %v), want (%q, %q, %v)",
+					tc.raw, got.TargetType, got.TargetID, ok, tc.wantType, tc.wantID, tc.ok,
+				)
 			}
 		})
 	}

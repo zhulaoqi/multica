@@ -43,11 +43,30 @@ type RouteCandidate struct {
 	AgentCount int    `json:"agent_count"`
 }
 
-// RouteResult resolves one natural-language dispatch to a department.
+// RouteProject is a project target Route inferred or matched. The work still
+// lands on the project's owning department; the project says what the request
+// is about and gates who may ask.
+type RouteProject struct {
+	ID   pgtype.UUID
+	Name string
+	Slug string
+}
+
+// RouteResult resolves one natural-language dispatch to a department, or to a
+// project owned by one. Unit is always the department that will do the work.
 type RouteResult struct {
 	Unit       db.ListOrgUnitsRow
 	Path       string
+	Project    *RouteProject
 	Candidates []RouteCandidate
+}
+
+// routeProjectCandidate is a project the requester may hand work, joined with
+// its owning department for matching and display.
+type routeProjectCandidate struct {
+	project db.ListDepartmentProjectsRow
+	unit    db.ListOrgUnitsRow
+	path    string
 }
 
 // DispatchTextTitle derives the root issue title from the request: first
@@ -67,10 +86,12 @@ func DispatchTextTitle(text string) string {
 }
 
 // Route turns a natural-language request into the department that should own
-// it. Explicit targets and exact names win; otherwise a single dispatchable
-// department is used, then the model picks among the candidates, then a
-// deterministic name/path match, then the requester's own department. Anything
-// still ambiguous returns candidate departments for the client to offer.
+// it, and into the project it is about when the requester may hand that project
+// work. Explicit targets and exact names win; otherwise a single dispatchable
+// department is used, then the model picks among the departments and projects,
+// then a deterministic name/path match, then the requester's own department.
+// Anything still ambiguous returns candidate departments for the client to
+// offer.
 func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.UUID, text string, explicitUnitID pgtype.UUID) (RouteResult, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -115,8 +136,32 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 			dispatchable = append(dispatchable, unit)
 		}
 	}
-	if len(dispatchable) == 0 {
+	// A project's owning department need not accept the requester personally:
+	// the project's own list decides that. What it does need is an agent to run
+	// the work, which is the same condition the department branch checks.
+	runnableUnits := make(map[pgtype.UUID]bool, len(units))
+	for _, unit := range units {
+		runnableUnits[unit.ID] = agentCounts[unit.ID] > 0
+	}
+	// Projects the requester may hand work are targets too: a request that
+	// names or describes one belongs to it, not to the department as a whole.
+	projectCandidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, runnableUnits, paths)
+	if err != nil {
+		return RouteResult{}, err
+	}
+	if len(dispatchable) == 0 && len(projectCandidates) == 0 {
 		return RouteResult{}, ErrDispatchUnroutable
+	}
+	projectResult := func(candidate routeProjectCandidate) RouteResult {
+		return RouteResult{
+			Unit: candidate.unit,
+			Path: candidate.path,
+			Project: &RouteProject{
+				ID:   candidate.project.ID,
+				Name: candidate.project.Name,
+				Slug: candidate.project.Slug,
+			},
+		}
 	}
 
 	// 1. Exact department name or full path.
@@ -139,21 +184,40 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		return RouteResult{Candidates: routeCandidates(exact, paths, agentCounts)}, ErrDispatchAmbiguous
 	}
 
-	// 2. Only one department can take work at all.
-	if len(dispatchable) == 1 {
+	// 2. Exact project name. Names are the label people use in a request, so
+	// an exact one outranks the guesses below.
+	if len(projectCandidates) > 0 {
+		exactProjects := make([]routeProjectCandidate, 0, 1)
+		for _, candidate := range projectCandidates {
+			if strings.EqualFold(strings.TrimSpace(candidate.project.Name), needle) {
+				exactProjects = append(exactProjects, candidate)
+			}
+		}
+		if len(exactProjects) == 1 {
+			return projectResult(exactProjects[0]), nil
+		}
+	}
+
+	// 3. Only one department can take work at all. With projects in play the
+	// model still decides whether the request is about one of them.
+	if len(projectCandidates) == 0 && len(dispatchable) == 1 {
 		unit := dispatchable[0]
 		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
 	}
 
-	// 3. Let the model choose among the dispatchable departments.
-	if unit, ok := s.routeWithLLM(ctx, text, dispatchable, paths, agentCounts); ok {
-		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
+	// 4. Let the model choose among the dispatchable departments and projects.
+	if choice, ok := s.routeWithLLM(ctx, text, dispatchable, paths, agentCounts, projectCandidates); ok {
+		if choice.Project != nil {
+			return projectResult(*choice.Project), nil
+		}
+		return RouteResult{Unit: choice.Unit, Path: paths[choice.Unit.ID]}, nil
 	}
 
-	// 4. Deterministic name/path containment. The longest needle wins so
-	// "支付组" does not lose to a parent department also named in the text.
-	bestLen := 0
-	best := make([]db.ListOrgUnitsRow, 0, 1)
+	// 5. Deterministic name/path containment. The longest needle wins so
+	// "支付组" does not lose to a parent department also named in the text,
+	// and a project named in the request outranks a shorter department name.
+	bestUnitLen := 0
+	bestUnits := make([]db.ListOrgUnitsRow, 0, 1)
 	lowerText := strings.ToLower(text)
 	for _, unit := range dispatchable {
 		name := strings.ToLower(strings.TrimSpace(unit.Name))
@@ -171,56 +235,169 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 			continue
 		}
 		switch {
-		case matchLen > bestLen:
-			bestLen = matchLen
-			best = []db.ListOrgUnitsRow{unit}
-		case matchLen == bestLen:
-			best = append(best, unit)
+		case matchLen > bestUnitLen:
+			bestUnitLen = matchLen
+			bestUnits = []db.ListOrgUnitsRow{unit}
+		case matchLen == bestUnitLen:
+			bestUnits = append(bestUnits, unit)
 		}
 	}
-	if len(best) == 1 {
-		return RouteResult{Unit: best[0], Path: paths[best[0].ID]}, nil
+	bestProjectLen := 0
+	bestProjects := make([]routeProjectCandidate, 0, 1)
+	for _, candidate := range projectCandidates {
+		name := strings.ToLower(strings.TrimSpace(candidate.project.Name))
+		if name == "" || !strings.Contains(lowerText, name) {
+			continue
+		}
+		matchLen := len([]rune(name))
+		switch {
+		case matchLen > bestProjectLen:
+			bestProjectLen = matchLen
+			bestProjects = []routeProjectCandidate{candidate}
+		case matchLen == bestProjectLen:
+			bestProjects = append(bestProjects, candidate)
+		}
 	}
-	if len(best) > 1 {
-		return RouteResult{Candidates: routeCandidates(best, paths, agentCounts)}, ErrDispatchAmbiguous
+	if bestProjectLen > bestUnitLen && len(bestProjects) == 1 {
+		return projectResult(bestProjects[0]), nil
+	}
+	if len(bestUnits) == 1 && bestUnitLen >= bestProjectLen {
+		return RouteResult{Unit: bestUnits[0], Path: paths[bestUnits[0].ID]}, nil
+	}
+	if len(bestUnits) > 1 && bestUnitLen >= bestProjectLen {
+		return RouteResult{Candidates: routeCandidates(bestUnits, paths, agentCounts)}, ErrDispatchAmbiguous
 	}
 
-	// 5. The requester's own department.
+	// 6. With projects in the picture the single-department shortcut waits
+	// until no project matched, so a named project is never flattened into its
+	// department.
+	if len(projectCandidates) > 0 && len(dispatchable) == 1 {
+		unit := dispatchable[0]
+		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
+	}
+
+	// 7. The requester's own department.
 	for _, unit := range dispatchable {
 		if access.MemberUnit.Valid && unit.ID == access.MemberUnit {
 			return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
 		}
 	}
 
+	if len(dispatchable) == 0 {
+		return RouteResult{}, ErrDispatchUnroutable
+	}
 	return RouteResult{Candidates: routeCandidates(dispatchable, paths, agentCounts)}, ErrDispatchAmbiguous
 }
 
-// routeWithLLM asks the configured model which candidate id fits the request.
-// A disabled model, an error, a timeout, or an id outside the list all fall
-// through to the deterministic matchers.
+// routeProjectCandidates loads the department-owned projects the requester may
+// hand work and keeps those whose owning department can actually run it.
+func (s *OrgDispatchService) routeProjectCandidates(
+	ctx context.Context,
+	wsUUID pgtype.UUID,
+	access workspaceaccess.Access,
+	units []db.ListOrgUnitsRow,
+	departmentSources []db.ListOrgUnitIntakeSourcesRow,
+	runnable map[pgtype.UUID]bool,
+	paths map[pgtype.UUID]string,
+) ([]routeProjectCandidate, error) {
+	// Projects only name targets inside the organization; a project workspace
+	// dispatches through its department.
+	if err := s.requireOrganizationWorkspace(ctx, wsUUID); err != nil {
+		return nil, nil
+	}
+	projects, err := s.Queries.ListDepartmentProjects(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	if len(projects) == 0 {
+		return nil, nil
+	}
+	projectIDs := make([]pgtype.UUID, len(projects))
+	for i, project := range projects {
+		projectIDs[i] = project.ID
+	}
+	rows, err := s.Queries.ListWorkspaceIntakeSourcesForProjects(ctx, projectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list project intake sources: %w", err)
+	}
+	sourcesByProject := make(map[pgtype.UUID][]db.ListWorkspaceIntakeSourcesRow, len(projects))
+	for _, row := range rows {
+		sourcesByProject[row.WorkspaceID] = append(sourcesByProject[row.WorkspaceID], db.ListWorkspaceIntakeSourcesRow{
+			ID:          row.ID,
+			WorkspaceID: row.WorkspaceID,
+			SourceType:  row.SourceType,
+			SourceID:    row.SourceID,
+		})
+	}
+	memberships, err := s.Queries.ListUserWorkspaceMemberships(ctx, access.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("list project memberships: %w", err)
+	}
+	isMember := make(map[pgtype.UUID]bool, len(memberships))
+	for _, id := range memberships {
+		isMember[id] = true
+	}
+	candidates := make([]routeProjectCandidate, 0, len(projects))
+	for _, project := range projects {
+		unit, ok := findUnit(units, project.OrgUnitID)
+		if !ok || !runnable[unit.ID] {
+			continue
+		}
+		path, ok := paths[unit.ID]
+		if !ok {
+			continue
+		}
+		workspace := db.Workspace{
+			ID:        project.ID,
+			Name:      project.Name,
+			Slug:      project.Slug,
+			OrgUnitID: project.OrgUnitID,
+		}
+		if !ProjectRequestable(access, units, departmentSources, workspace, sourcesByProject[project.ID], isMember[project.ID]) {
+			continue
+		}
+		candidates = append(candidates, routeProjectCandidate{project: project, unit: unit, path: path})
+	}
+	return candidates, nil
+}
+
+// routeChoice is one model answer: a department or a project.
+type routeChoice struct {
+	Unit    db.ListOrgUnitsRow
+	Project *routeProjectCandidate
+}
+
+// routeWithLLM asks the configured model which department or project fits the
+// request. A disabled model, an error, a timeout, or an id outside the list
+// all fall through to the deterministic matchers.
 func (s *OrgDispatchService) routeWithLLM(
 	ctx context.Context,
 	text string,
 	units []db.ListOrgUnitsRow,
 	paths map[pgtype.UUID]string,
 	agentCounts map[pgtype.UUID]int,
-) (db.ListOrgUnitsRow, bool) {
+	projects []routeProjectCandidate,
+) (routeChoice, bool) {
 	if s.LLM == nil {
-		return db.ListOrgUnitsRow{}, false
+		return routeChoice{}, false
 	}
 	candidates := units
 	if len(candidates) > dispatchRouteLLMLimit {
 		candidates = candidates[:dispatchRouteLLMLimit]
 	}
 	var b strings.Builder
-	b.WriteString("可选部门（id\t路径\tAgent 数）：\n")
-	allowed := make(map[string]struct{}, len(candidates))
-	byID := make(map[string]db.ListOrgUnitsRow, len(candidates))
+	b.WriteString("可选目标（类型\tid\t名称/路径\t说明）：\n")
+	unitsByID := make(map[string]db.ListOrgUnitsRow, len(candidates))
 	for _, unit := range candidates {
 		id := uuidString(unit.ID)
-		allowed[id] = struct{}{}
-		byID[id] = unit
-		fmt.Fprintf(&b, "%s\t%s\t%d\n", id, paths[unit.ID], agentCounts[unit.ID])
+		unitsByID[id] = unit
+		fmt.Fprintf(&b, "department\t%s\t%s\tAgent 数 %d\n", id, paths[unit.ID], agentCounts[unit.ID])
+	}
+	projectsByID := make(map[string]routeProjectCandidate, len(projects))
+	for _, candidate := range projects {
+		id := uuidString(candidate.project.ID)
+		projectsByID[id] = candidate
+		fmt.Fprintf(&b, "project\t%s\t%s\t所属部门 %s\n", id, candidate.project.Name, candidate.path)
 	}
 	b.WriteString("\n用户请求：\n")
 	b.WriteString(text)
@@ -229,38 +406,59 @@ func (s *OrgDispatchService) routeWithLLM(
 	defer cancel()
 	raw, err := s.LLM.GenerateText(llmCtx, "", dispatchRouteSystemPrompt, b.String())
 	if err != nil {
-		return db.ListOrgUnitsRow{}, false
+		return routeChoice{}, false
 	}
 	parsed, ok := parseDispatchRoute(raw)
 	if !ok {
-		return db.ListOrgUnitsRow{}, false
+		return routeChoice{}, false
 	}
-	if _, ok := allowed[parsed.UnitID]; !ok {
-		return db.ListOrgUnitsRow{}, false
+	if parsed.TargetType == "project" {
+		candidate, ok := projectsByID[parsed.TargetID]
+		if !ok {
+			return routeChoice{}, false
+		}
+		return routeChoice{Project: &candidate}, true
 	}
-	return byID[parsed.UnitID], true
+	unit, ok := unitsByID[parsed.TargetID]
+	if !ok {
+		return routeChoice{}, false
+	}
+	return routeChoice{Unit: unit}, true
 }
 
-const dispatchRouteSystemPrompt = `你要把一个工作请求分配给最合适的部门。
-只返回 JSON：{"unit_id":"..."}。unit_id 必须来自给定列表；无法判断时返回 {"unit_id":""}。
-按请求涉及的业务领域选择，不要按部门名称的字面相似度。`
+const dispatchRouteSystemPrompt = `你要把一个工作请求分配给最合适的部门或项目。
+只返回 JSON：{"target_type":"department","target_id":"..."} 或 {"target_type":"project","target_id":"..."}。
+target_id 必须来自给定列表；无法判断时返回 {"target_type":"","target_id":""}。
+按请求涉及的业务领域选择，不要按名称的字面相似度；请求明确说到某个项目时优先选该项目。`
 
-func parseDispatchRoute(raw string) (struct {
-	UnitID string `json:"unit_id"`
-}, bool) {
+// dispatchRouteParse is the model's JSON answer. Older answers used unit_id
+// alone; they still parse as a department target.
+type dispatchRouteParse struct {
+	TargetType string `json:"target_type"`
+	TargetID   string `json:"target_id"`
+	UnitID     string `json:"unit_id"`
+}
+
+func parseDispatchRoute(raw string) (dispatchRouteParse, bool) {
 	raw = strings.TrimSpace(raw)
 	raw = strings.TrimPrefix(raw, "```json")
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
 	raw = strings.TrimSpace(raw)
-	var parsed struct {
-		UnitID string `json:"unit_id"`
-	}
+	var parsed dispatchRouteParse
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		return parsed, false
 	}
-	parsed.UnitID = strings.TrimSpace(parsed.UnitID)
-	return parsed, parsed.UnitID != ""
+	parsed.TargetType = strings.TrimSpace(parsed.TargetType)
+	parsed.TargetID = strings.TrimSpace(parsed.TargetID)
+	if parsed.TargetID == "" && parsed.UnitID != "" {
+		parsed.TargetType = "department"
+		parsed.TargetID = strings.TrimSpace(parsed.UnitID)
+	}
+	if parsed.TargetType == "" || parsed.TargetID == "" {
+		return parsed, false
+	}
+	return parsed, true
 }
 
 func unitVisible(visible map[pgtype.UUID]bool, id pgtype.UUID) bool {

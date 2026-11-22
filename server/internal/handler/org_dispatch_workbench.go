@@ -40,6 +40,10 @@ type dispatchWorkRequest struct {
 type dispatchWorkRef struct {
 	UnitID   string `json:"unit_id"`
 	UnitPath string `json:"unit_path"`
+	// ProjectID names the project the request was about; the work still landed
+	// on the project's owning department.
+	ProjectID   string `json:"project_id,omitempty"`
+	ProjectName string `json:"project_name,omitempty"`
 	// SquadID names the personal squad a personal dispatch went to; unit_id
 	// stays empty in that case.
 	SquadID  string `json:"squad_id,omitempty"`
@@ -55,6 +59,8 @@ type dispatchListItem struct {
 	Issue        IssueResponse `json:"issue"`
 	UnitID       string        `json:"unit_id"`
 	UnitPath     string        `json:"unit_path"`
+	ProjectID    string        `json:"project_id,omitempty"`
+	ProjectName  string        `json:"project_name,omitempty"`
 	SquadID      string        `json:"squad_id,omitempty"`
 	Personal     bool          `json:"personal,omitempty"`
 	DispatchedAt string        `json:"dispatched_at"`
@@ -165,9 +171,9 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 		Platform:        func() string { p, _, _ := middleware.ClientMetadataFromContext(r.Context()); return p }(),
 	}
 	unitPath := ""
-	// A project target skips free-text routing: only an explicit project
-	// selection may reach a project, so unmentioned and unauthorised projects
-	// are never inferred.
+	// An explicit project skips free-text routing. Free text is still routed:
+	// Route only ever names a project the caller may hand work, and the
+	// dispatch re-checks that choice.
 	if !personal && !explicitProject.Valid {
 		route, err := h.OrgDispatchService.Route(r.Context(), wsUUID, member.UserID, text, explicitUnit)
 		if err != nil {
@@ -189,7 +195,13 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		params.UnitID = route.Unit.ID
+		if route.Project != nil {
+			// The routed project only picks the department and the intake rule;
+			// Dispatch resolves and re-checks both.
+			params.ProjectID = route.Project.ID
+		} else {
+			params.UnitID = route.Unit.ID
+		}
 		unitPath = route.Path
 	}
 
@@ -215,6 +227,10 @@ func (h *Handler) DispatchWork(w http.ResponseWriter, r *http.Request) {
 	} else if ref.UnitPath == "" {
 		units, _ := h.Queries.ListOrgUnits(r.Context(), wsUUID)
 		ref.UnitPath = dispatchUnitPath(units, result.Unit.ID)
+	}
+	if result.Project != nil {
+		ref.ProjectID = uuidToString(result.Project.ID)
+		ref.ProjectName = result.Project.Name
 	}
 	resp := issueToResponse(result.Issue, h.getIssuePrefix(r.Context(), result.Issue.WorkspaceID))
 	h.fillStatusCategory(r.Context(), result.Issue.WorkspaceID, &resp)
@@ -292,6 +308,12 @@ func (h *Handler) writeExistingDispatch(w http.ResponseWriter, r *http.Request, 
 	}
 	if !origin.TargetUnitID.Valid {
 		ref = dispatchWorkRef{SquadID: uuidToString(origin.TargetSquadID), Personal: true}
+	}
+	if origin.TargetProjectID.Valid {
+		if project, err := h.Queries.GetWorkspace(r.Context(), origin.TargetProjectID); err == nil {
+			ref.ProjectID = uuidToString(project.ID)
+			ref.ProjectName = project.Name
+		}
 	}
 	writeJSON(w, http.StatusOK, dispatchWorkResponse{Issue: resp, Dispatch: ref})
 }
@@ -418,6 +440,8 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 			Issue:        resp,
 			UnitID:       uuidToString(row.TargetUnitID),
 			UnitPath:     dispatchUnitPath(units, row.TargetUnitID),
+			ProjectID:    uuidToString(row.TargetProjectID),
+			ProjectName:  row.ProjectName.String,
 			DispatchedAt: timestampToString(row.CreatedAt),
 			Completed:    row.NotifiedAt.Valid,
 			LeaderState:  row.LeaderState,
