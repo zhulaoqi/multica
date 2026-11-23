@@ -81,11 +81,11 @@ beforeEach(() => {
 });
 
 describe("useDashboardGuard", () => {
-  it("sends an ordinary member without management capability to the C-end", async () => {
+  it("keeps an ordinary member in the organization workspace", async () => {
     state.workspaces = [workspace({ viewer_can_manage: false })];
     state.current = state.workspaces[0]!;
     renderHook(() => useDashboardGuard());
-    await waitFor(() => expect(state.replace).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(state.replace).not.toHaveBeenCalled());
   });
 
   // Older servers omit the field entirely; that must keep the legacy access

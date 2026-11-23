@@ -211,18 +211,9 @@ export function RailWorkspaces() {
   const { openWorkspaceInNewWindow, workspacesInOtherWindows } = useNavigation();
   // Read when the menu opens: other windows switch workspaces independently.
   const [inOtherWindows, setInOtherWindows] = useState(EMPTY_SLUGS);
-  // The organization workspace's admin shell is for department leads and
-  // administrators. Projects stay listed for their members, who work in them.
-  // Desktop has no C-end, so it keeps its previous list.
-  const visibleWorkspaces = useMemo(
-    () =>
-      workspaces.filter(
-        (ws) =>
-          !ws.is_organization || ws.viewer_can_manage !== false || isDesktopShell(),
-      ),
-    [workspaces],
-  );
-  // Web puts the organization on its admin landing; projects open on issues.
+  // Every membership stays listed: organization members need its team page to
+  // create their own agent, and page-level permissions gate what they can do
+  // there. Web puts the organization on its org landing; projects open on issues.
   // Desktop still opens the workbench it always has.
   const landingHref = (ws: Workspace) => {
     const wsPaths = paths.workspace(ws.slug);
@@ -232,7 +223,7 @@ export function RailWorkspaces() {
 
   const current = workspaces.find((ws) => ws.id === wsId) ?? workspace;
   if (!current) return null;
-  const otherUnread = visibleWorkspaces.some((ws) => ws.id !== wsId && unreadIds.has(ws.id));
+  const otherUnread = workspaces.some((ws) => ws.id !== wsId && unreadIds.has(ws.id));
   const label = t(($) => $.rail.switch_workspace);
 
   return (
@@ -263,7 +254,7 @@ export function RailWorkspaces() {
           <DropdownMenuLabel className="text-caption text-muted-foreground">
             {t(($) => $.sidebar.workspaces_label)}
           </DropdownMenuLabel>
-          {visibleWorkspaces.map((ws) => {
+          {workspaces.map((ws) => {
             const isCurrent = ws.id === wsId;
             // A workspace shown by another window is focused there by a
             // plain click, so it offers no new window of its own.

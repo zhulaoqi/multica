@@ -13,6 +13,7 @@ import {
   Shield,
   Sun,
   User,
+  Users,
 } from "@multica/ui/icons";
 import { useAuthStore } from "@multica/core/auth";
 import { paths, useWorkspacePaths } from "@multica/core/paths";
@@ -66,10 +67,10 @@ const EMPTY_WORKSPACES: Workspace[] = [];
  * The signed-in user's menu at the foot of the rail.
  *
  * `home` is the C-end variant: it never links into the current workspace's
- * settings, and it offers the admin side only to people who manage a
- * workspace — pointing at the organization when they lead one. Everyone else
- * stays on the C-end. The workspace variant mirrors it on web with a link back
- * to `/home`; desktop has no C-end, so it shows neither.
+ * settings. Managers reach the admin side through the organization's org page;
+ * everyone else reaches the organization's team page, where they create and
+ * bind their own agent. The workspace variant mirrors it on web with a link
+ * back to `/home`; desktop has no C-end, so it shows neither.
  */
 export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" | "home" }) {
   const { t } = useT("layout");
@@ -79,13 +80,23 @@ export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" |
     ...workspaceListOptions(),
     enabled: variant === "home",
   });
-  const homeAdminHref = useMemo(() => {
+  // The organization is the workspace every member belongs to, so its entry is
+  // the one the C-end offers: managers get its org page, everyone else its
+  // team page to create their own agent.
+  const homeEntry = useMemo(() => {
     if (variant !== "home") return null;
-    const manageable = workspaces.filter((ws) => ws.viewer_can_manage !== false);
-    const target = manageable.find((ws) => ws.is_organization) ?? manageable[0];
+    const organization = workspaces.find((ws) => ws.is_organization);
+    if (organization) {
+      const targetPaths = paths.workspace(organization.slug);
+      return organization.viewer_can_manage !== false
+        ? ({ href: targetPaths.org(), label: "admin" } as const)
+        : ({ href: targetPaths.agents(), label: "my_agent" } as const);
+    }
+    // Legacy data without an organization: keep the old manageable-workspace
+    // fallback.
+    const target = workspaces.find((ws) => ws.viewer_can_manage !== false);
     if (!target) return null;
-    const targetPaths = paths.workspace(target.slug);
-    return target.is_organization ? targetPaths.org() : targetPaths.issues();
+    return { href: paths.workspace(target.slug).issues(), label: "admin" } as const;
   }, [variant, workspaces]);
   const logout = useLogout();
   const { theme, setTheme } = useTheme();
@@ -137,10 +148,12 @@ export function AccountMenu({ variant = "workspace" }: { variant?: "workspace" |
               </DropdownMenuItem>
             )
           ) : (
-            homeAdminHref && (
-              <DropdownMenuItem render={<AppLink href={homeAdminHref} />}>
-                <LayoutDashboard />
-                {t(($) => $.account.admin)}
+            homeEntry && (
+              <DropdownMenuItem render={<AppLink href={homeEntry.href} />}>
+                {homeEntry.label === "admin" ? <LayoutDashboard /> : <Users />}
+                {homeEntry.label === "admin"
+                  ? t(($) => $.account.admin)
+                  : t(($) => $.account.my_agent)}
               </DropdownMenuItem>
             )
           )}

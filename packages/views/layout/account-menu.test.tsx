@@ -141,9 +141,13 @@ describe("AccountMenu", () => {
     expect(screen.queryByRole("link", { name: "Personal space" })).toBeNull();
   });
 
-  it("hides the admin side from C-end users who manage nothing", () => {
+  it("offers an ordinary C-end member the organization's agents instead of the admin side", () => {
     state.workspaces = [{ id: "org", slug: "org", is_organization: true, viewer_can_manage: false }];
     renderMenu("home");
+    expect(screen.getByRole("link", { name: "My agent" })).toHaveAttribute(
+      "href",
+      "/org/agents",
+    );
     expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
   });
 });
