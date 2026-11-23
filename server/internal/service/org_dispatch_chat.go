@@ -386,7 +386,15 @@ func (s *OrgDispatchService) wakeChatDispatchLeader(ctx context.Context, issue d
 	}
 	switch issue.AssigneeType.String {
 	case "agent":
-		if _, err := s.Tasks.EnqueueTaskForDispatchExecutor(ctx, issue, issue.AssigneeID, actorID); err != nil {
+		// A follow-up on a project delivery goes back through the project
+		// routing note, so the executor hands this new turn to the agent whose
+		// responsibilities cover it instead of answering everything itself.
+		note := ""
+		if origin, err := s.Queries.GetDispatchOrigin(ctx, issue.ID); err == nil &&
+			origin.TargetProjectID.Valid && origin.TargetProjectID == issue.WorkspaceID {
+			note = s.projectDispatchRoutingNote(ctx, issue.WorkspaceID, issue.AssigneeID)
+		}
+		if _, err := s.Tasks.EnqueueTaskForDispatchExecutor(ctx, issue, issue.AssigneeID, actorID, note); err != nil {
 			slog.Warn("chat dispatch: wake project executor failed",
 				"issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(issue.AssigneeID), "error", err)
 			return false

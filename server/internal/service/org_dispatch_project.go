@@ -66,7 +66,8 @@ func (s *OrgDispatchService) dispatchToProject(
 		return OrgDispatchResult{}, err
 	}
 	if s.Tasks != nil {
-		if _, err := s.Tasks.EnqueueTaskForDispatchExecutor(ctx, created.Issue, executor, p.ActorID); err != nil {
+		routingNote := s.projectDispatchRoutingNote(ctx, project.ID, executor)
+		if _, err := s.Tasks.EnqueueTaskForDispatchExecutor(ctx, created.Issue, executor, p.ActorID, routingNote); err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("wake the project executor: %w", err)
 		}
 	}

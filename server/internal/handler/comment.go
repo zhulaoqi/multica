@@ -2786,7 +2786,7 @@ func (h *Handler) routeReplyToParentAuthor(ctx context.Context, issue db.Issue, 
 	if err != nil || !agent.RuntimeID.Valid || agent.ArchivedAt.Valid {
 		return commentAgentTrigger{}, false
 	}
-	if !h.canCollaborateWithAgent(ctx, agent, authorType, authorID, opts.OriginatorUserID, uuidToString(issue.WorkspaceID)) {
+	if !h.canCollaborateOnIssue(ctx, agent, issue.ID, authorType, authorID, opts.OriginatorUserID, uuidToString(issue.WorkspaceID)) {
 		return commentAgentTrigger{}, false
 	}
 	hasPending, err := h.hasPendingTaskForIssueAndAgent(ctx, issue.ID, parent.AuthorID, opts)
@@ -3293,7 +3293,9 @@ func (h *Handler) resolveMentionedAgentCommentTriggers(ctx context.Context, issu
 			continue
 		}
 		// Private-agent gate first, before any archived/runtime state is read.
-		if !h.canCollaborateWithAgent(ctx, agent, authorType, authorID, opts.OriginatorUserID, wsID) {
+		// On a project dispatch the requester may hand the work to the project's
+		// agents without holding a member row in the project workspace.
+		if !h.canCollaborateOnIssue(ctx, agent, issue.ID, authorType, authorID, opts.OriginatorUserID, wsID) {
 			blockTarget("agent", m.ID, ReasonInvocationNotAllowed)
 			continue
 		}

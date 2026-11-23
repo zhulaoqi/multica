@@ -120,6 +120,30 @@ func (h *Handler) canCollaborateWithAgent(ctx context.Context, agent db.Agent, a
 	return h.canInvokeAgent(ctx, agent, actorType, actorID, originatorUserID, workspaceID)
 }
 
+// canCollaborateOnIssue is canCollaborateWithAgent plus one dispatch allowance:
+// a dispatch delivered into a project lives in the project workspace, but its
+// requester needs no member row there — routing already admitted the request.
+// When the human at the top of the chain is that requester, a primary twin is
+// open to them exactly as it is to a workspace member. Non-primary agents keep
+// the invoke gate, so this never widens a private agent's allow-list.
+func (h *Handler) canCollaborateOnIssue(ctx context.Context, agent db.Agent, issueID pgtype.UUID, actorType, actorID, originatorUserID, workspaceID string) bool {
+	if h.canCollaborateWithAgent(ctx, agent, actorType, actorID, originatorUserID, workspaceID) {
+		return true
+	}
+	effectiveUser := actorID
+	if actorType != "member" {
+		effectiveUser = originatorUserID
+	}
+	if effectiveUser == "" || !service.IsPrimaryTwin(agent) {
+		return false
+	}
+	origin, err := h.Queries.GetDispatchOrigin(ctx, issueID)
+	if err != nil || !origin.TargetProjectID.Valid {
+		return false
+	}
+	return uuidToString(origin.RequesterID) == effectiveUser
+}
+
 // invocationTargetsAdmit applies a public_to agent's allow-list to the
 // effective invoking user.
 func (h *Handler) invocationTargetsAdmit(ctx context.Context, agent db.Agent, actorType, effectiveUser, workspaceID string) bool {

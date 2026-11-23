@@ -728,6 +728,19 @@ func TestChatDispatch_ProjectDeliveryIsListedAndResumesInItsOwnWorkspace(t *test
 	if commentWorkspace != setup.projectID {
 		t.Fatalf("comment workspace = %s, want project %s", commentWorkspace, setup.projectID)
 	}
+	// The follow-up run routes inside the project the same way the first one
+	// did: the new turn can go to whichever agent covers it now.
+	var followNote string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT handoff_note FROM agent_task_queue
+		WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'
+		ORDER BY created_at DESC LIMIT 1
+	`, rootID, setup.agentID).Scan(&followNote); err != nil {
+		t.Fatalf("load follow-up handoff note: %v", err)
+	}
+	if !strings.Contains(followNote, "## Project Dispatch Routing") {
+		t.Fatalf("follow-up handoff note = %q, want the project routing note", followNote)
+	}
 }
 
 func TestCompleteDispatch_ProjectInboxNoticeHasNoIssueLink(t *testing.T) {
@@ -763,5 +776,169 @@ func TestCompleteDispatch_ProjectInboxNoticeHasNoIssueLink(t *testing.T) {
 	}
 	if !strings.Contains(bodyText.String, `project "通知项目"`) {
 		t.Fatalf("inbox body = %q, want the project name", bodyText.String)
+	}
+}
+
+// TestDispatchWork_HandsTheProjectExecutorARoutingNote checks the project
+// routing protocol actually reaches the executor: the leader run carries the
+// roster of project agents with their declared responsibilities and exact
+// mention links, so the executor can hand the request to the agent whose duties
+// cover it instead of answering everything itself.
+func TestDispatchWork_HandsTheProjectExecutorARoutingNote(t *testing.T) {
+	setup := setupProjectDispatch(t, "project-routing-note", "路由项目", true)
+	workerOwner := createPermissionTestMember(t, "project-routing-note-worker@example.com")
+	workerID := insertProjectAgent(t, setup.projectID, "routing-worker", workerOwner)
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent
+		SET intake_can = $2, intake_cannot = $3, is_primary = true
+		WHERE id = $1
+	`, workerID, "AIHUB BI 项目研发负责人", "基础设施运维"); err != nil {
+		t.Fatalf("declare worker responsibilities: %v", err)
+	}
+	// The executor is its owner's primary twin too, and created first, so the
+	// primary rows do not change who runs the dispatch.
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent SET is_primary = true WHERE id = $1
+	`, setup.agentID); err != nil {
+		t.Fatalf("promote executor to primary: %v", err)
+	}
+	// A secondary agent is not a handover target for this requester, so the
+	// roster must leave it out instead of inviting a refused mention.
+	secondaryID := insertProjectAgent(t, setup.projectID, "routing-secondary", setup.admin)
+
+	status, res, body := postDispatchWork(t, setup.requester, map[string]any{
+		"text":              "dispatch-test 路由项目现在接了哪些模型？",
+		"client_request_id": "66666666-6666-6666-6666-666666666014",
+		"project_id":        setup.projectID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", status, body)
+	}
+
+	var note string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT handoff_note FROM agent_task_queue
+		WHERE issue_id = $1 AND agent_id = $2
+	`, res.Issue.ID, setup.agentID).Scan(&note); err != nil {
+		t.Fatalf("load executor handoff note: %v", err)
+	}
+	wants := []string{
+		"## Project Dispatch Routing",
+		"## Project Roster",
+		"[@routing-worker](mention://agent/" + workerID + ")",
+		"AIHUB BI 项目研发负责人",
+		"not: 基础设施运维",
+		"(none declared)",
+	}
+	for _, want := range wants {
+		if !strings.Contains(note, want) {
+			t.Fatalf("handoff note is missing %q:\n%s", want, note)
+		}
+	}
+	if strings.Contains(note, "routing-secondary") || strings.Contains(note, secondaryID) {
+		t.Fatalf("handoff note lists the secondary agent, which this requester cannot hand work to:\n%s", note)
+	}
+
+	// Exactly the executor's own row is marked as the recipient.
+	var executorRows []string
+	for _, line := range strings.Split(note, "\n") {
+		if strings.Contains(line, "(you)") {
+			executorRows = append(executorRows, line)
+		}
+	}
+	if len(executorRows) != 1 {
+		t.Fatalf("rows marked (you) = %d, want 1:\n%s", len(executorRows), note)
+	}
+	if !strings.Contains(executorRows[0], "routing-note-project-agent") || !strings.Contains(executorRows[0], "(none declared)") {
+		t.Fatalf("executor row = %q, want its own name and an empty duty list", executorRows[0])
+	}
+}
+
+// TestCreateComment_ProjectDispatchMentionWakesTheChosenAgent covers the
+// handover itself: the executor posts an @mention on the dispatch issue, the
+// mention resolves against the dispatch requester (who holds no member row in
+// the project workspace), and the chosen project agent is enqueued. A plain
+// project issue gets no such allowance.
+func TestCreateComment_ProjectDispatchMentionWakesTheChosenAgent(t *testing.T) {
+	setup := setupProjectDispatch(t, "project-routing-handoff", "交接项目", true)
+	workerID := insertProjectAgent(t, setup.projectID, "delegated-worker", setup.admin)
+
+	status, res, body := postDispatchWork(t, setup.requester, map[string]any{
+		"text":              "dispatch-test 交给项目研发负责人",
+		"client_request_id": "66666666-6666-6666-6666-666666666015",
+		"project_id":        setup.projectID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", status, body)
+	}
+	issueID := res.Issue.ID
+	// The primary twin is the collaboration surface: without a member row the
+	// requester reaches it through the dispatch itself, not through a seat.
+	// Promoted after the dispatch so the older agent stays the executor.
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent SET is_primary = true WHERE id = $1
+	`, workerID); err != nil {
+		t.Fatalf("promote worker to primary: %v", err)
+	}
+	var leaderTaskID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT id::text FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2
+	`, issueID, setup.agentID).Scan(&leaderTaskID); err != nil {
+		t.Fatalf("load executor task: %v", err)
+	}
+
+	mentionProjectAgent := func(targetIssueID string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r := newRequest("POST", "/api/issues/"+targetIssueID+"/comments", map[string]any{
+			"content": "[@delegated-worker](mention://agent/" + workerID + ") 请接手：整理 AIHUB 接入模型清单",
+		})
+		r.Header.Set("X-Agent-ID", setup.agentID)
+		r.Header.Set("X-Task-ID", leaderTaskID)
+		r.Header.Set("X-Workspace-ID", setup.projectID)
+		r = withURLParam(r, "id", targetIssueID)
+		testHandler.CreateComment(w, r)
+		return w
+	}
+
+	if w := mentionProjectAgent(issueID); w.Code != http.StatusCreated {
+		t.Fatalf("handoff comment = %d, want 201: %s", w.Code, w.Body.String())
+	}
+	var workerTasks int
+	var workerOriginator string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT count(*), COALESCE(min(originator_user_id::text), '')
+		FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2
+	`, issueID, workerID).Scan(&workerTasks, &workerOriginator); err != nil {
+		t.Fatalf("count worker tasks: %v", err)
+	}
+	if workerTasks != 1 {
+		t.Fatalf("worker tasks = %d, want the handover enqueued once", workerTasks)
+	}
+	if workerOriginator != setup.requester {
+		t.Fatalf("worker originator = %q, want the dispatch requester %q", workerOriginator, setup.requester)
+	}
+
+	// Without a dispatch behind the issue the requester's reach is gone: the
+	// comment lands, but the mention does not wake the private agent.
+	var plainIssueID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO issue (workspace_id, title, status, priority, creator_type, creator_id, number, assignee_type, assignee_id)
+		VALUES ($1, '普通项目问题', 'todo', 'none', 'member', $2,
+		        COALESCE((SELECT MAX(number) FROM issue WHERE workspace_id = $1), 0) + 1, 'agent', $3)
+		RETURNING id::text
+	`, setup.projectID, setup.admin, setup.agentID).Scan(&plainIssueID); err != nil {
+		t.Fatalf("create plain project issue: %v", err)
+	}
+	if w := mentionProjectAgent(plainIssueID); w.Code != http.StatusCreated {
+		t.Fatalf("plain issue comment = %d, want 201: %s", w.Code, w.Body.String())
+	}
+	var plainTasks int
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT count(*) FROM agent_task_queue WHERE issue_id = $1 AND agent_id = $2
+	`, plainIssueID, workerID).Scan(&plainTasks); err != nil {
+		t.Fatalf("count plain issue tasks: %v", err)
+	}
+	if plainTasks != 0 {
+		t.Fatalf("plain issue worker tasks = %d, want none without a dispatch", plainTasks)
 	}
 }
