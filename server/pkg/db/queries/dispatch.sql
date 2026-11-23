@@ -14,6 +14,12 @@ RETURNING *;
 -- name: GetDispatchOrigin :one
 SELECT * FROM dispatch_origin WHERE issue_id = $1;
 
+-- name: DeleteDispatchOrigin :execrows
+-- The requester removing one thread from their history. The issue and the
+-- work in its workspace stay; only the origin row that lists it goes.
+DELETE FROM dispatch_origin
+WHERE issue_id = $1 AND workspace_id = $2 AND requester_id = $3;
+
 -- name: GetDispatchByClient :one
 -- Resolves a retried in-app send to the dispatch the first attempt created.
 SELECT * FROM dispatch_origin

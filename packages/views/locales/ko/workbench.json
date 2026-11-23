@@ -45,7 +45,12 @@
     "personal_squad": "내 팀",
     "blocked": "차단됨: {{missing}}",
     "binding_none": "아직 본인의 Agent가 없습니다. 부서 책임자에게 생성을 요청하세요.",
-    "binding_failed": "에이전트를 연결하지 못했습니다. 다시 시도하세요."
+    "binding_failed": "에이전트를 연결하지 못했습니다. 다시 시도하세요.",
+    "delete": "삭제",
+    "delete_title": "이 요청을 삭제할까요?",
+    "delete_description": "최근 요청에서만 제거되며, 프로젝트나 부서의 이슈와 작업은 그대로 남습니다.",
+    "delete_confirm": "삭제",
+    "cancel": "취소"
   },
   "status": {
     "queued": "부서로 보냈습니다. 책임자가 곧 시작합니다.",
@@ -106,7 +111,8 @@
     "org_dispatch_project_agent_offline": "해당 프로젝트에 온라인 상태인 에이전트가 없습니다. 프로젝트 멤버에게 런타임 실행을 요청한 뒤 다시 보내세요.",
     "dispatch_project_reassign_unsupported": "프로젝트로 보낸 작업은 여기서 재배정할 수 없습니다. 프로젝트에서 직접 처리하세요.",
     "dispatch_not_found": "이 작업은 더 이상 내 요청 기록에 없습니다.",
-    "dispatch_organization_only": "작업은 조직의 워크벤치에서 보냅니다."
+    "dispatch_organization_only": "작업은 조직의 워크벤치에서 보냅니다.",
+    "delete_failed": "요청을 삭제하지 못했습니다. 다시 시도하세요."
   },
   "plan": {
     "title": "계획"

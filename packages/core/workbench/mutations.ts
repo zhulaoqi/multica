@@ -166,3 +166,23 @@ export function useReassignDispatch(wsId: string) {
     },
   });
 }
+
+/**
+ * Removes one thread from the requester's history. The server waits before
+ * answering, so the row stays visible with the dialog's pending state until
+ * the list invalidation drops it.
+ */
+export function useDeleteDispatch(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, string>({
+    mutationFn: (issueId) => api.deleteDispatch(issueId),
+    onSuccess: (_data, issueId) => {
+      qc.setQueryData<DispatchListItem[]>(
+        workbenchKeys.dispatches(wsId),
+        (previous) => previous?.filter((item) => item.issue.id !== issueId),
+      );
+      qc.removeQueries({ queryKey: workbenchKeys.trail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: workbenchKeys.dispatches(wsId) });
+    },
+  });
+}

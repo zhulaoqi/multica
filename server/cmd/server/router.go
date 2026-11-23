@@ -2647,6 +2647,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/request-projects", h.ListRequestableProjects)
 				r.Get("/dispatches", h.ListMyDispatches)
 				r.Get("/dispatch-queue", h.ListDepartmentDispatches)
+				r.Delete("/dispatches/{issueId}", h.DeleteDispatch)
 				r.Get("/dispatches/{issueId}/trail", h.GetDispatchTrail)
 				r.Post("/dispatches/{issueId}/messages", h.CommentDispatch)
 				r.Post("/dispatches/{issueId}/status", h.SetDispatchStatus)

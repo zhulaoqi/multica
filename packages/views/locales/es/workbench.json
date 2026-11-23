@@ -45,7 +45,12 @@
     "personal_squad": "Mi equipo",
     "blocked": "Bloqueado: {{missing}}",
     "binding_none": "Todavía no tienes un agente. Pide a tu responsable de departamento que cree uno.",
-    "binding_failed": "No se pudo vincular el agente. Inténtalo de nuevo."
+    "binding_failed": "No se pudo vincular el agente. Inténtalo de nuevo.",
+    "delete": "Eliminar",
+    "delete_title": "¿Eliminar este envío?",
+    "delete_description": "Solo se quita de Envíos recientes. La incidencia y el trabajo en su proyecto o departamento se mantienen.",
+    "delete_confirm": "Eliminar",
+    "cancel": "Cancelar"
   },
   "status": {
     "queued": "Enviado al departamento. Su responsable lo retomará en breve.",
@@ -107,7 +112,8 @@
     "org_dispatch_project_agent_offline": "Ningún agente de ese proyecto está en línea. Pide a un miembro del proyecto que inicie un runtime y vuelve a enviarlo.",
     "dispatch_project_reassign_unsupported": "El trabajo enviado a un proyecto no se puede reasignar aquí. Gestiónalo dentro del proyecto.",
     "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos.",
-    "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización."
+    "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización.",
+    "delete_failed": "No se pudo eliminar el envío. Inténtalo de nuevo."
   },
   "plan": {
     "title": "Plan"

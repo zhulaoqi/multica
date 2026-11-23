@@ -6114,6 +6114,16 @@ export class ApiClient {
   }
 
   /**
+   * Drops one thread from the requester's history. The issue and the work in
+   * its workspace stay; only the history entry goes.
+   */
+  async deleteDispatch(issueId: string): Promise<void> {
+    await this.fetch<unknown>(`/api/org/dispatches/${encodeURIComponent(issueId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
    * Open dispatches aimed at the departments the caller leads, split into
    * waiting / in progress / review. Workspace managers receive every unit.
    */

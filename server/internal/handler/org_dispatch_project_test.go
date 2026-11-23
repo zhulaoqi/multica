@@ -559,6 +559,64 @@ func TestReassignDispatch_ProjectDeliveryIsUnsupported(t *testing.T) {
 	}
 }
 
+// TestDeleteDispatch_ClearsTheHistoryButKeepsTheProjectIssue lets the requester
+// drop one thread from the C-end history without deleting the work that the
+// project already owns.
+func TestDeleteDispatch_ClearsTheHistoryButKeepsTheProjectIssue(t *testing.T) {
+	setup := setupProjectDispatch(t, "project-delete", "删除项目", true)
+
+	status, res, body := postDispatchWork(t, setup.requester, map[string]any{
+		"text":              "dispatch-test 删除项目的需求",
+		"client_request_id": "66666666-6666-6666-6666-666666666011",
+		"project_id":        setup.projectID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("dispatch status = %d, want 201: %s", status, body)
+	}
+	rootID := res.Issue.ID
+
+	deleteDispatch := func(userID string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		testHandler.DeleteDispatch(rec, orgRequestWithParam(userID, "DELETE", "/api/org/dispatches/x", "issueId", rootID, nil))
+		return rec
+	}
+
+	otherID := createPermissionTestMember(t, "project-delete-other@example.com")
+	if rec := deleteDispatch(otherID); rec.Code != http.StatusNotFound {
+		t.Fatalf("foreign delete = %d, want 404: %s", rec.Code, rec.Body.String())
+	}
+	if _, dispatches, _ := listDispatches(t, setup.requester, ""); len(dispatches) != 1 {
+		t.Fatalf("history before delete = %d rows, want 1", len(dispatches))
+	}
+
+	if rec := deleteDispatch(setup.requester); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	if _, dispatches, _ := listDispatches(t, setup.requester, ""); len(dispatches) != 0 {
+		t.Fatalf("history after delete = %d rows, want 0", len(dispatches))
+	}
+	var origins, issues int
+	if err := testPool.QueryRow(context.Background(), `SELECT count(*) FROM dispatch_origin WHERE issue_id = $1`, rootID).Scan(&origins); err != nil {
+		t.Fatalf("count origin: %v", err)
+	}
+	if origins != 0 {
+		t.Fatalf("origin rows after delete = %d, want 0", origins)
+	}
+	if err := testPool.QueryRow(context.Background(), `SELECT count(*) FROM issue WHERE id = $1`, rootID).Scan(&issues); err != nil {
+		t.Fatalf("count issue: %v", err)
+	}
+	if issues != 1 {
+		t.Fatalf("project issue after delete = %d, want 1", issues)
+	}
+
+	rec := httptest.NewRecorder()
+	testHandler.GetDispatchTrail(rec, orgRequestWithParam(setup.requester, "GET", "/api/org/dispatches/x/trail", "issueId", rootID, nil))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "dispatch_not_found") {
+		t.Fatalf("trail after delete = %d %s, want 404 dispatch_not_found", rec.Code, rec.Body.String())
+	}
+}
+
 // TestChatDispatch_ProjectDeliveryIsListedAndResumesInItsOwnWorkspace keeps
 // the Feishu surface working after the move: the conversation lists the
 // dispatch against the project workspace it lives in, an in-thread reply finds

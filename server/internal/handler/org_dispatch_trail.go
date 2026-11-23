@@ -223,6 +223,43 @@ func (h *Handler) dispatchOriginForRequester(w http.ResponseWriter, r *http.Requ
 	return origin, true
 }
 
+// DeleteDispatch removes one thread from the requester's history. The issue,
+// its comments and the work delivered in its workspace are untouched; only the
+// origin row that lists the thread goes, so follow-ups and notices stop too.
+func (h *Handler) DeleteDispatch(w http.ResponseWriter, r *http.Request) {
+	workspaceID := h.resolveWorkspaceID(r)
+	member, ok := h.workspaceMember(w, r, workspaceID)
+	if !ok {
+		return
+	}
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
+	if !ok {
+		return
+	}
+	issueUUID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "issueId"), "issue_id")
+	if !ok {
+		return
+	}
+	if _, ok := h.dispatchOriginForRequester(w, r, wsUUID, member.UserID, issueUUID); !ok {
+		return
+	}
+	deleted, err := h.Queries.DeleteDispatchOrigin(r.Context(), db.DeleteDispatchOriginParams{
+		IssueID:     issueUUID,
+		WorkspaceID: wsUUID,
+		RequesterID: member.UserID,
+	})
+	if err != nil {
+		slog.Error("delete dispatch: remove origin failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "could not delete the dispatch")
+		return
+	}
+	if deleted == 0 {
+		writeErrorCode(w, http.StatusNotFound, "dispatch_not_found", "dispatch not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // dispatchStatusLabels reads the catalog once so custom statuses resolve to the
 // workspace's own name. Archived entries stay in the map because old issues may
 // still carry them.

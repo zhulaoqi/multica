@@ -45,7 +45,12 @@
     "personal_squad": "Mon équipe",
     "blocked": "Bloqué : {{missing}}",
     "binding_none": "Vous n'avez pas encore d'agent. Demandez à votre responsable de département d'en créer un.",
-    "binding_failed": "Impossible de lier cet agent. Réessayez."
+    "binding_failed": "Impossible de lier cet agent. Réessayez.",
+    "delete": "Supprimer",
+    "delete_title": "Supprimer cet envoi ?",
+    "delete_description": "Le retire seulement des Envois récents. Le ticket et le travail dans son projet ou service restent.",
+    "delete_confirm": "Supprimer",
+    "cancel": "Annuler"
   },
   "status": {
     "queued": "Envoyé au département. Son responsable s'en saisit bientôt.",
@@ -107,7 +112,8 @@
     "org_dispatch_project_agent_offline": "Aucun agent de ce projet n'est en ligne. Demandez à un membre du projet de démarrer un runtime, puis renvoyez la demande.",
     "dispatch_project_reassign_unsupported": "Le travail envoyé à un projet ne peut pas être réaffecté ici. Traitez-le dans le projet.",
     "dispatch_not_found": "Ce travail ne figure plus dans votre historique d'envois.",
-    "dispatch_organization_only": "Le travail s'envoie depuis l'atelier de l'organisation."
+    "dispatch_organization_only": "Le travail s'envoie depuis l'atelier de l'organisation.",
+    "delete_failed": "Impossible de supprimer cet envoi. Réessayez."
   },
   "plan": {
     "title": "Plan"

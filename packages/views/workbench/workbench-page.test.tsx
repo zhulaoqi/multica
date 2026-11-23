@@ -41,6 +41,7 @@ const apiState = vi.hoisted(() => ({
   getDispatchTrail: vi.fn(),
   commentDispatch: vi.fn(),
   setDispatchStatus: vi.fn(),
+  deleteDispatch: vi.fn(),
 }));
 
 vi.mock("@multica/core/api", async (importOriginal) => {
@@ -657,6 +658,34 @@ describe("WorkbenchPage", () => {
   it("shows an empty history message when no work has been sent", () => {
     renderPage();
     expect(screen.getByText("Work you send will appear here.")).toBeInTheDocument();
+  });
+
+  it("deletes a history entry only after the requester confirms", async () => {
+    apiState.deleteDispatch.mockResolvedValueOnce(undefined);
+    state.dispatches = [
+      dispatchItem(),
+      dispatchItem({
+        issue: {
+          ...dispatchItem().issue,
+          id: "issue-2",
+          identifier: "ACM-2",
+          title: "Audit the billing export",
+        },
+      }),
+    ];
+    renderPage();
+
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    expect(deleteButtons).toHaveLength(2);
+    await userEvent.click(deleteButtons[0]!);
+    const dialog = await screen.findByRole("dialog");
+    expect(apiState.deleteDispatch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(apiState.deleteDispatch).toHaveBeenCalledWith("issue-1"),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("drops a stale dispatch selection from the URL", async () => {
