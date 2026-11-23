@@ -5,6 +5,7 @@ dist
 .envrc
 
 # build outputs
+.cache/
 .turbo
 .next
 out
