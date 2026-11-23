@@ -15,7 +15,7 @@ import { closeHistory } from "@tiptap/pm/history";
 import { useAuthStore } from "@multica/core/auth";
 import { useChatStore } from "@multica/core/chat";
 import { getCurrentWsId } from "@multica/core/platform";
-import { canAssignAgentToIssue } from "@multica/core/permissions";
+import { canChatWithAgent } from "@multica/core/permissions";
 import { isImeComposing } from "@multica/core/utils";
 import { workspaceKeys } from "@multica/core/workspace/queries";
 import type { Agent, MemberWithUser } from "@multica/core/types";
@@ -209,7 +209,7 @@ function buildItems(qc: QueryClient, query: string): SlashCommandItem[] {
   const availableAgents = agents.filter(
     (a) =>
       !a.archived_at &&
-      canAssignAgentToIssue(a, { userId, role: memberRole }).allowed,
+      canChatWithAgent(a, { userId, role: memberRole }).allowed,
   );
   const activeAgent =
     availableAgents.find((a) => a.id === selectedAgentId) ??

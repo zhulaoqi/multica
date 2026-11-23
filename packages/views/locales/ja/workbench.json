@@ -93,7 +93,7 @@
     "org_dispatch_forbidden": "その部署へのアクセス権がありません。",
     "agent_binding_required": "部門に仕事を依頼する前にエージェントを連携してください。",
     "org_dispatch_no_agents": "その部署にはまだエージェントがいません。組織ページで追加してください。",
-    "org_dispatch_leader_unavailable": "部署の責任者に現在連絡できません。しばらくしてから再試行してください。",
+    "org_dispatch_leader_unavailable": "この部署のオンラインのエージェントはどれもあなたに公開されていません。部署の責任者に連絡してください。",
     "org_dispatch_leader_offline": "その部署にオンラインのエージェントがありません。責任者にランタイムの起動を依頼してから、もう一度送信してください。",
     "org_dispatch_unroutable": "どの部署に渡すか判断できませんでした。部署名を指定するか、詳細を追加してください。",
     "org_dispatch_failed": "部署に作業を渡せませんでした。",

@@ -167,6 +167,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   // removed (archived) or restored, so those follow `canArchive`.
   const {
     canAssign,
+    canChat,
     canEdit,
     canArchive: archiveDecision,
     isLoading: permissionsLoading,
@@ -455,7 +456,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
       e.preventDefault();
       return;
     }
-    if (!canAssign.allowed) {
+    if (!canChat.allowed) {
       e.preventDefault();
       toast.error(t(($) => $.detail.dm_no_permission_toast));
       return;

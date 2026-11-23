@@ -93,7 +93,7 @@
     "org_dispatch_forbidden": "你没有该部门的权限。",
     "agent_binding_required": "请先绑定智能体，再把工作发给部门。",
     "org_dispatch_no_agents": "该部门还没有 Agent，请先到组织页添加。",
-    "org_dispatch_leader_unavailable": "暂时联系不上部门负责人，请稍后再试。",
+    "org_dispatch_leader_unavailable": "该部门在线的智能体都没有对你开放，请联系部门负责人。",
     "org_dispatch_leader_offline": "该部门的 Agent 都不在线，请让部门负责人启动 Runtime 后再派活。",
     "org_dispatch_unroutable": "无法判断该交给哪个部门，请点名部门或补充说明。",
     "org_dispatch_failed": "没能把这项工作交给部门。",

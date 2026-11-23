@@ -869,6 +869,7 @@
   },
   "access": {
     "section_title": "Quién puede ejecutar este agente",
+    "primary_twin_hint": "Este es tu agente principal. Los miembros del espacio de trabajo siempre pueden encargarle trabajo, asignarle incidencias y @mencionarlo; este ajuste solo decide quién puede chatear con él.",
     "tooltip": "Acceso: quién puede ejecutar este agente",
     "trigger_private": "Solo yo",
     "trigger_workspace": "Espacio de trabajo",

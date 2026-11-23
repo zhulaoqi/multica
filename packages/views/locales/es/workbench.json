@@ -94,7 +94,7 @@
     "org_dispatch_forbidden": "No tienes acceso a ese departamento.",
     "agent_binding_required": "Vincula un agente antes de enviar trabajo a un departamento.",
     "org_dispatch_no_agents": "Ese departamento aún no tiene agentes. Añade uno en la página de organización.",
-    "org_dispatch_leader_unavailable": "No se puede contactar con el responsable del departamento ahora mismo. Inténtalo más tarde.",
+    "org_dispatch_leader_unavailable": "Ninguno de los agentes en línea de este departamento está abierto para ti. Contacta con el responsable del departamento.",
     "org_dispatch_leader_offline": "Ningún agente de ese departamento está en línea. Pide a su responsable que inicie un runtime y vuelve a enviarlo.",
     "org_dispatch_unroutable": "No se pudo determinar qué departamento debe encargarse. Nombra uno o añade más detalles.",
     "org_dispatch_failed": "No se pudo enviar el trabajo al departamento.",

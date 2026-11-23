@@ -6,7 +6,11 @@ import type { Agent, IssueAssigneeType, UpdateIssueRequest } from "@multica/core
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
 import { isAgentRuntimeBound } from "@multica/core/agents";
-import { canAssignAgentToIssue } from "@multica/core/permissions";
+import {
+  canAssignAgentToIssue,
+  canChatWithAgent,
+  type PermissionContext,
+} from "@multica/core/permissions";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions, agentListOptions, squadListOptions, assigneeFrequencyOptions } from "@multica/core/workspace/queries";
@@ -33,12 +37,28 @@ export function canAssignAgent(
   userId: string | undefined,
   memberRole: string | undefined,
 ): boolean {
-  return canAssignAgentToIssue(agent, {
+  return canAssignAgentToIssue(agent, legacyPermissionContext(userId, memberRole)).allowed;
+}
+
+/** Boolean shape of `canChatWithAgent`, for the chat surfaces. */
+export function canChatAgent(
+  agent: Agent,
+  userId: string | undefined,
+  memberRole: string | undefined,
+): boolean {
+  return canChatWithAgent(agent, legacyPermissionContext(userId, memberRole)).allowed;
+}
+
+function legacyPermissionContext(
+  userId: string | undefined,
+  memberRole: string | undefined,
+): PermissionContext {
+  return {
     userId: userId ?? null,
     role: memberRole === "owner" || memberRole === "admin" || memberRole === "member"
       ? memberRole
       : null,
-  }).allowed;
+  };
 }
 
 interface AssigneePickerProps {

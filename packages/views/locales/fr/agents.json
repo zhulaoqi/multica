@@ -887,6 +887,7 @@
   },
   "access": {
     "section_title": "Qui peut exécuter cet agent",
+    "primary_twin_hint": "C'est votre agent principal. Les membres de l'espace de travail peuvent toujours lui confier du travail, lui assigner des tickets et le @mentionner ; ce réglage décide seulement qui peut discuter avec lui.",
     "tooltip": "Accès · qui peut exécuter cet agent",
     "trigger_private": "Moi uniquement",
     "trigger_workspace": "Espace de travail",

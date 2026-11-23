@@ -7,7 +7,7 @@ import { DRAFT_NEW_SESSION, useChatStore } from "@multica/core/chat";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
-import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
+import { canChatAgent } from "../issues/components/pickers/assignee-picker";
 import { useNavigation } from "../navigation";
 
 /**
@@ -25,7 +25,7 @@ export function useStartChatWithDraft(): ((draft: string) => void) | null {
   const { push } = useNavigation();
 
   const role = members.find((m) => m.user_id === userId)?.role;
-  const available = agents.filter((a) => !a.archived_at && canAssignAgent(a, userId, role));
+  const available = agents.filter((a) => !a.archived_at && canChatAgent(a, userId, role));
   const agentId = (available.find((a) => a.id === selectedAgentId) ?? available[0])?.id;
 
   const start = useCallback(

@@ -94,7 +94,7 @@
     "org_dispatch_forbidden": "You don't have access to that department.",
     "agent_binding_required": "Bind an agent before sending work to a department.",
     "org_dispatch_no_agents": "That department has no agents yet. Add one on the organization page.",
-    "org_dispatch_leader_unavailable": "The department lead can't be reached right now. Try again later.",
+    "org_dispatch_leader_unavailable": "None of this department's online agents are open to you. Ask the department lead.",
     "org_dispatch_leader_offline": "No agent in that department is online. Ask its lead to start a runtime, then send this again.",
     "org_dispatch_unroutable": "Couldn't tell which department should take this. Name a department or add more detail.",
     "org_dispatch_failed": "The work couldn't be sent to the department.",

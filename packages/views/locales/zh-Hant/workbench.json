@@ -93,7 +93,7 @@
     "org_dispatch_forbidden": "你沒有該部門的權限。",
     "agent_binding_required": "請先綁定智慧體，再把工作發給部門。",
     "org_dispatch_no_agents": "該部門還沒有 Agent，請先到組織頁新增。",
-    "org_dispatch_leader_unavailable": "暫時聯絡不上部門負責人，請稍後再試。",
+    "org_dispatch_leader_unavailable": "該部門線上的 AI 代理都沒有對你開放，請聯絡部門負責人。",
     "org_dispatch_leader_offline": "該部門的 Agent 都不在線，請讓部門負責人啟動 Runtime 後再派活。",
     "org_dispatch_unroutable": "無法判斷該交給哪個部門，請點名部門或補充說明。",
     "org_dispatch_failed": "沒能把這項工作交給部門。",

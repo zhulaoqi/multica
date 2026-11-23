@@ -3,6 +3,7 @@ import type { Agent, Comment, Member, RuntimeDevice, Skill } from "../types";
 import {
   canAssignAgentToIssue,
   canChangeMemberRole,
+  canChatWithAgent,
   canDeleteComment,
   canDeleteRuntime,
   canDeleteSkill,
@@ -153,6 +154,44 @@ describe("canEditAgent", () => {
     expect(canEditAgent(orphan, { userId: BOB, role: "admin" }).allowed).toBe(
       true,
     );
+  });
+});
+
+describe("primary twin", () => {
+  const twin = makeAgent({
+    visibility: "private",
+    permission_mode: "private",
+    invocation_targets: [],
+    owner_id: ALICE,
+    is_primary: true,
+  });
+
+  it("lets any member hand a private primary twin work", () => {
+    expect(canAssignAgentToIssue(twin, { userId: BOB, role: "member" }).allowed).toBe(true);
+  });
+
+  it("still requires workspace access", () => {
+    expect(canAssignAgentToIssue(twin, { userId: BOB, role: null }).allowed).toBe(false);
+    expect(canAssignAgentToIssue(twin, { userId: null, role: "member" }).allowed).toBe(false);
+  });
+
+  it("keeps private chat on the access setting", () => {
+    const d = canChatWithAgent(twin, { userId: BOB, role: "member" });
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toBe("private_visibility");
+    expect(canChatWithAgent(twin, { userId: ALICE, role: "member" }).allowed).toBe(true);
+  });
+
+  it("does not open a private non-primary or archived agent", () => {
+    expect(
+      canAssignAgentToIssue({ ...twin, is_primary: false }, { userId: BOB, role: "member" }).allowed,
+    ).toBe(false);
+    expect(
+      canAssignAgentToIssue(
+        { ...twin, archived_at: "2026-01-01T00:00:00Z" },
+        { userId: BOB, role: "member" },
+      ).allowed,
+    ).toBe(false);
   });
 });
 

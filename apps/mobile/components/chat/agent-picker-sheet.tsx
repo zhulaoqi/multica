@@ -1,11 +1,11 @@
 /**
- * Agent picker — bottom Modal listing agents the current user can assign /
+ * Agent picker — bottom Modal listing agents the current user can
  * chat with. Shown when the user taps `+ New Chat` and the workspace has
  * more than one usable agent; with exactly one, the chat screen skips this
  * sheet and goes straight to the blank state for that agent.
  *
  * Filtering is delegated to the caller (the screen passes a pre-filtered
- * `agents` list) so the same filter logic — archived + canAssignAgentToIssue
+ * `agents` list) so the same filter logic — archived + canChatWithAgent
  * + order — stays in one place.
  *
  * Layout mirrors `components/issue/my-issues-filter-sheet.tsx`: transparent

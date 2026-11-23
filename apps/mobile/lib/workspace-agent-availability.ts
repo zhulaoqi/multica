@@ -11,7 +11,7 @@
  * mount.
  */
 import { useQuery } from "@tanstack/react-query";
-import { canAssignAgentToIssue } from "@multica/core/permissions";
+import { canChatWithAgent } from "@multica/core/permissions";
 import { useAuthStore } from "@/data/auth-store";
 import { useWorkspaceStore } from "@/data/workspace-store";
 import { agentListOptions } from "@/data/queries/agents";
@@ -37,7 +37,7 @@ export function useWorkspaceAgentAvailability(): WorkspaceAgentAvailability {
   const hasVisibleAgent = (agents ?? []).some(
     (a) =>
       !a.archived_at &&
-      canAssignAgentToIssue(a, { userId: userId ?? null, role }).allowed,
+      canChatWithAgent(a, { userId: userId ?? null, role }).allowed,
   );
 
   return hasVisibleAgent ? "available" : "none";

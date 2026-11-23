@@ -94,7 +94,7 @@
     "org_dispatch_forbidden": "Vous n'avez pas accès à ce département.",
     "agent_binding_required": "Liez un agent avant d'envoyer du travail à un service.",
     "org_dispatch_no_agents": "Ce département n'a pas encore d'agents. Ajoutez-en un depuis la page organisation.",
-    "org_dispatch_leader_unavailable": "Le responsable du département est injoignable pour le moment. Réessayez plus tard.",
+    "org_dispatch_leader_unavailable": "Aucun des agents en ligne de ce département ne vous est ouvert. Contactez le responsable du département.",
     "org_dispatch_leader_offline": "Aucun agent de ce département n'est en ligne. Demandez à son responsable de démarrer un runtime, puis renvoyez la demande.",
     "org_dispatch_unroutable": "Impossible de déterminer quel département doit s'en charger. Nommez-en un ou ajoutez des détails.",
     "org_dispatch_failed": "Le travail n'a pas pu être envoyé au département.",

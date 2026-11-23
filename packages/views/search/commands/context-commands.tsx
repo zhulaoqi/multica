@@ -28,7 +28,11 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { openCreateIssueWithPreference } from "@multica/core/issues/stores";
 import { useModalStore } from "@multica/core/modals";
 import { useWorkspacePaths } from "@multica/core/paths";
-import { canAssignAgentToIssue, useCurrentMember } from "@multica/core/permissions";
+import {
+  canAssignAgentToIssue,
+  canChatWithAgent,
+  useCurrentMember,
+} from "@multica/core/permissions";
 import { pinListOptions, useCreatePin, useDeletePin } from "@multica/core/pins";
 import { getShortcut } from "@multica/core/shortcuts";
 import { copyText } from "@multica/ui/lib/clipboard";
@@ -126,11 +130,12 @@ export function useAgentCommandGroup(context: ContextOf<"agent"> | null): Palett
     if (!context) return null;
     const { agent } = context;
     if (agent.archived_at) return null;
-    const allowed = canAssignAgentToIssue(agent, { userId, role }).allowed;
+    const canChat = canChatWithAgent(agent, { userId, role }).allowed;
+    const canAssign = canAssignAgentToIssue(agent, { userId, role }).allowed;
     const runtimeBound = isAgentRuntimeBound(agent);
     // Same gate as the agent page's own buttons: say why instead of opening
     // a chat or a form that cannot start a run.
-    const guard = (proceed: () => void) => () => {
+    const guard = (allowed: boolean, proceed: () => void) => () => {
       if (!allowed) {
         toast.error(tAgents(($) => $.detail.dm_no_permission_toast));
         return;
@@ -148,7 +153,7 @@ export function useAgentCommandGroup(context: ContextOf<"agent"> | null): Palett
         label: t(($) => $.agent.chat, { name: agent.name }),
         icon: MessageSquare,
         keywords: ["chat", "dm", "message", "talk", "对话", "聊天"],
-        run: guard(() => navigation.push(p.chatWithAgent(agent.id))),
+        run: guard(canChat, () => navigation.push(p.chatWithAgent(agent.id))),
         primary: true,
       },
       {
@@ -156,9 +161,9 @@ export function useAgentCommandGroup(context: ContextOf<"agent"> | null): Palett
         label: t(($) => $.agent.assign_issue, { name: agent.name }),
         icon: UserPlus,
         keywords: ["assign", "issue", "指派", "任务"],
-        page: allowed && runtimeBound ? { type: "agent-assign-issue", agent } : undefined,
+        page: canAssign && runtimeBound ? { type: "agent-assign-issue", agent } : undefined,
         crumb: agent.name,
-        run: guard(() => {}),
+        run: guard(canAssign, () => {}),
         primary: true,
       },
       {
@@ -166,7 +171,7 @@ export function useAgentCommandGroup(context: ContextOf<"agent"> | null): Palett
         label: t(($) => $.agent.new_issue, { name: agent.name }),
         icon: SquarePen,
         keywords: ["new", "issue", "create", "新建", "任务"],
-        run: guard(() =>
+        run: guard(canAssign, () =>
           useModalStore.getState().open("quick-create-issue", { agent_id: agent.id }),
         ),
       },

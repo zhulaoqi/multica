@@ -5,6 +5,7 @@ import { useCurrentMember } from "./use-current-member";
 import {
   canArchiveAgent,
   canAssignAgentToIssue,
+  canChatWithAgent,
   canDeleteSkill,
   canEditAgent,
   canEditSkill,
@@ -36,6 +37,7 @@ export function useAgentPermissions(
   canEdit: Decision;
   canArchive: Decision;
   canAssign: Decision;
+  canChat: Decision;
   isLoading: boolean;
 } {
   const { userId, effectiveRole, isLoading } = useCurrentMember(wsId);
@@ -45,12 +47,19 @@ export function useAgentPermissions(
   // public_to+workspace agent). Callers with always-clickable affordances
   // must treat `isLoading` as "undetermined", not as a deny.
   if (agent === null) {
-    return { canEdit: PENDING, canArchive: PENDING, canAssign: PENDING, isLoading };
+    return {
+      canEdit: PENDING,
+      canArchive: PENDING,
+      canAssign: PENDING,
+      canChat: PENDING,
+      isLoading,
+    };
   }
   return {
     canEdit: canEditAgent(agent, ctx),
     canArchive: canArchiveAgent(agent, ctx),
     canAssign: canAssignAgentToIssue(agent, ctx),
+    canChat: canChatWithAgent(agent, ctx),
     isLoading,
   };
 }
