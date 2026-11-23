@@ -234,7 +234,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		}
 	}
 	if s.Tasks != nil {
-		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
+		allowed, err := s.Tasks.MemberMayCollaborateWithAgent(ctx, squad.LeaderID, p.ActorID)
 		if err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("check leader invocation: %w", err)
 		}
@@ -338,7 +338,7 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 		return OrgDispatchResult{}, err
 	}
 	if s.Tasks != nil {
-		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
+		allowed, err := s.Tasks.MemberMayCollaborateWithAgent(ctx, squad.LeaderID, p.ActorID)
 		if err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("check leader invocation: %w", err)
 		}
@@ -1051,7 +1051,7 @@ func (s *OrgDispatchService) leaderPickState(ctx context.Context, agentID, actor
 	if s.Tasks == nil {
 		return pickReady, nil
 	}
-	allowed, err := memberMayInvokeAgent(ctx, s.Queries, agent, actorID, wsUUID)
+	allowed, err := memberMayCollaborateWithAgent(ctx, s.Queries, agent, actorID, wsUUID)
 	if err != nil {
 		return pickNotReady, fmt.Errorf("check leader invocation: %w", err)
 	}

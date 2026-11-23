@@ -4302,12 +4302,13 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 
 // validateAssigneePair verifies the (assignee_type, assignee_id) pair refers
 // to an existing entity in the workspace. For agent and squad assignees it
-// also rejects archived targets and runs the INVOKE gate — canInvokeAgent, not
-// the softer canAccessPrivateAgent view gate: assigning an issue produces a
-// run, so it must clear the same predicate as chat / @-mention (MUL-3963).
-// That means owner-only for a private agent, with NO workspace-admin bypass
-// and NO unconditional agent-to-agent bypass — an agent caller (X-Agent-ID) is
-// judged by the top-of-chain human originator like everywhere else.
+// also rejects archived targets and runs the INVOKE gate — canCollaborateWithAgent,
+// not the softer canAccessPrivateAgent view gate: assigning an issue produces a
+// run, so it must clear the same predicate as an @-mention (MUL-3963).
+// That means owner-only for a private agent unless it is a primary twin, with
+// NO workspace-admin bypass and NO unconditional agent-to-agent bypass — an
+// agent caller (X-Agent-ID) is judged by the top-of-chain human originator
+// like everywhere else.
 // An autopilot run needs no special case here: since MUL-6951 a scheduled run
 // carries its trigger owner's originator, so it is judged by exactly the same
 // predicate as that human acting directly.
@@ -4359,7 +4360,7 @@ func (h *Handler) validateAssigneePair(ctx context.Context, r *http.Request, wor
 		}
 		actorType, actorID := h.resolveActor(r, requestUserID(r), workspaceID)
 		effectiveInvoker := h.invokeOriginatorFromRequest(r, actorType, actorID)
-		if !h.canInvokeAgent(ctx, agent, actorType, actorID, effectiveInvoker, workspaceID) {
+		if !h.canCollaborateWithAgent(ctx, agent, actorType, actorID, effectiveInvoker, workspaceID) {
 			// Names the missing permission, not the target's configuration: the
 			// old "private agent" wording both disclosed the agent's permission
 			// mode and was simply wrong for a `public_to` agent scoped to
@@ -4393,7 +4394,7 @@ func (h *Handler) validateAssigneePair(ctx context.Context, r *http.Request, wor
 		}
 		actorType, actorID := h.resolveActor(r, requestUserID(r), workspaceID)
 		effectiveInvoker := h.invokeOriginatorFromRequest(r, actorType, actorID)
-		if !h.canInvokeAgent(ctx, leader, actorType, actorID, effectiveInvoker, workspaceID) {
+		if !h.canCollaborateWithAgent(ctx, leader, actorType, actorID, effectiveInvoker, workspaceID) {
 			// Same wording rule as the agent branch above; "this squad"
 			// avoids disclosing the leader agent's permission mode.
 			return http.StatusForbidden, "you do not have permission to assign work to this squad"
@@ -4442,7 +4443,7 @@ func (h *Handler) assigneeFallbackAgent(ctx context.Context, issue db.Issue, act
 	if err != nil || !agent.RuntimeID.Valid || agent.ArchivedAt.Valid {
 		return db.Agent{}, false, false
 	}
-	if !h.canInvokeAgent(ctx, agent, actorType, actorID, opts.OriginatorUserID, uuidToString(issue.WorkspaceID)) {
+	if !h.canCollaborateWithAgent(ctx, agent, actorType, actorID, opts.OriginatorUserID, uuidToString(issue.WorkspaceID)) {
 		return db.Agent{}, false, false
 	}
 	// Coalescing queue: pending is still a valid route target, but callers

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -31,6 +32,10 @@ import (
 //       * team target       -> reserved, inert in V1.
 //   - either mode -> a department lead may invoke the agents owned by anyone
 //     placed in a department they lead, descendants included.
+//
+// A member's primary twin is open on collaboration paths (canCollaborateWithAgent)
+// and visible to every workspace member; permission_mode then only decides who
+// may chat with it privately.
 //
 // A2A is judged by the top-of-chain human originator, never by the immediate
 // agent actor: if user U triggers agent A and A @-mentions agent B, B is only
@@ -96,6 +101,25 @@ func (h *Handler) invokeAgentDecision(ctx context.Context, agent db.Agent, actor
 	return h.leadsAgentOwner(ctx, agent, workspaceID, effectiveUser)
 }
 
+// canCollaborateWithAgent is canInvokeAgent for collaboration paths: assigning
+// work, @mentions and comment routing, squad delegation, reruns. A member's
+// primary twin represents them in the workspace, so any resolved human with
+// access to the workspace may hand it work whatever its permission_mode.
+// Private chat, automations and configuration keep canInvokeAgent. An
+// agent/system trigger with no human originator gets no primary-twin reach.
+func (h *Handler) canCollaborateWithAgent(ctx context.Context, agent db.Agent, actorType, actorID, originatorUserID, workspaceID string) bool {
+	effectiveUser := actorID
+	if actorType != "member" {
+		effectiveUser = originatorUserID
+	}
+	if effectiveUser != "" && service.IsPrimaryTwin(agent) {
+		if access, err := h.getWorkspaceAccess(ctx, effectiveUser, workspaceID); err == nil && access.Allowed() {
+			return true
+		}
+	}
+	return h.canInvokeAgent(ctx, agent, actorType, actorID, originatorUserID, workspaceID)
+}
+
 // invocationTargetsAdmit applies a public_to agent's allow-list to the
 // effective invoking user.
 func (h *Handler) invocationTargetsAdmit(ctx context.Context, agent db.Agent, actorType, effectiveUser, workspaceID string) bool {
@@ -151,6 +175,7 @@ func (h *Handler) invocationTargetsAdmit(ctx context.Context, agent db.Agent, ac
 //   - the agent owner always passes.
 //   - workspace owner/admin pass (governance / inventory visibility retained).
 //   - a department lead passes for every agent owned by their team.
+//   - any member passes for a primary twin, which they may hand work to.
 //   - any other member passes for a public_to agent only when they hit a
 //     workspace or member target; private agents stay hidden.
 func (h *Handler) canAccessPrivateAgent(ctx context.Context, agent db.Agent, actorType, actorID, workspaceID string) bool {
@@ -164,7 +189,7 @@ func (h *Handler) canAccessPrivateAgent(ctx context.Context, agent db.Agent, act
 	if err != nil || !access.Allowed() {
 		return false
 	}
-	if access.IsAdmin() {
+	if access.IsAdmin() || service.IsPrimaryTwin(agent) {
 		return true
 	}
 	if agent.PermissionMode == "public_to" {
@@ -233,10 +258,11 @@ func memberHitsInvocationTargets(targets []db.AgentInvocationTarget, userID stri
 // Caller supplies the agent's already-batch-loaded invocation targets and the
 // viewer's orgTeamOwnerSet so the list endpoint avoids an N+1. Workspace
 // owner/admin and the agent owner see everything; a department lead sees every
-// agent owned by their team; any other member sees a public_to agent only when
-// on its allow-list, and never sees other members' private agents.
+// agent owned by their team; every member sees primary twins; any other member
+// sees a public_to agent only when on its allow-list, and never sees other
+// members' other private agents.
 func memberAllowedToViewAgent(agent db.Agent, targets []db.AgentInvocationTarget, userID, role string, teamOwners map[string]bool) bool {
-	if roleAllowed(role, "owner", "admin") {
+	if roleAllowed(role, "owner", "admin") || service.IsPrimaryTwin(agent) {
 		return true
 	}
 	if uuidToString(agent.OwnerID) == userID {
@@ -458,14 +484,15 @@ func (h *Handler) loadInvocationTargetsByAgent(ctx context.Context, agents []db.
 
 // canEnqueueSquadLeader returns true when the given actor is allowed to
 // trigger the squad's private leader. It loads the leader agent and delegates
-// to canInvokeAgent so the leader-trigger path honours invocation permission
-// exactly like a direct assignment/mention. Non-public leaders require owner /
-// allow-list; system-initiated triggers (e.g. github webhooks) are judged as
-// system principals (workspace target only).
+// to canCollaborateWithAgent so the leader-trigger path honours invocation
+// permission exactly like a direct assignment/mention. Non-public leaders
+// require owner / allow-list unless they are a primary twin; system-initiated
+// triggers (e.g. github webhooks) are judged as system principals (workspace
+// target only).
 func (h *Handler) canEnqueueSquadLeader(ctx context.Context, leaderID pgtype.UUID, actorType, actorID, originatorUserID, workspaceID string) bool {
 	agent, err := h.Queries.GetAgent(ctx, leaderID)
 	if err != nil {
 		return false
 	}
-	return h.canInvokeAgent(ctx, agent, actorType, actorID, originatorUserID, workspaceID)
+	return h.canCollaborateWithAgent(ctx, agent, actorType, actorID, originatorUserID, workspaceID)
 }

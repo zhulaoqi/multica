@@ -352,7 +352,7 @@ func (s *OrgDispatchService) wakeChatDispatchLeader(ctx context.Context, issue d
 	if err != nil {
 		return false
 	}
-	allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, actorID)
+	allowed, err := s.Tasks.MemberMayCollaborateWithAgent(ctx, squad.LeaderID, actorID)
 	if err != nil || !allowed {
 		return false
 	}

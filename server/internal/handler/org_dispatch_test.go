@@ -303,17 +303,31 @@ func TestDispatchToOrgUnit_EnforcesVisibilityAndLeaderAccess(t *testing.T) {
 
 	// Being placed in a department does not by itself let a member hand it
 	// work; the department's lead decides who may. With the member configured
-	// as a source the request reaches the agent gate, and the department's only
-	// agent belongs to the admin and is not shared, so the dispatch is refused
-	// rather than waking a private agent.
+	// as a source the request reaches the agent gate. The department's only
+	// agent is the admin's private primary twin, which every workspace member
+	// may hand work to.
 	leaderUnit := createOrgUnitAs(t, admin, "管理员私有人部门", "")
 	placeOrgMember(t, member, leaderUnit)
 	placeOrgAgent(t, admin, adminAgent, leaderUnit)
 	addOrgIntakeSource(t, leaderUnit, "user", member)
 	if status, _, body := dispatchToOrgUnit(t, member, leaderUnit, map[string]any{
+		"title": "dispatch-test 主分身", "description": "x",
+	}); status != http.StatusCreated {
+		t.Fatalf("primary twin leader status = %d, want 201: %s", status, body)
+	}
+
+	// A private agent that is not its owner's primary twin keeps its access
+	// setting, so the dispatch is refused rather than waking it.
+	if _, err := testPool.Exec(context.Background(), `UPDATE agent SET is_primary = false WHERE id = $1`, adminAgent); err != nil {
+		t.Fatalf("demote admin agent: %v", err)
+	}
+	if status, _, body := dispatchToOrgUnit(t, member, leaderUnit, map[string]any{
 		"title": "dispatch-test 私有人", "description": "x",
 	}); status != http.StatusForbidden {
 		t.Fatalf("private leader status = %d, want 403: %s", status, body)
+	}
+	if _, err := testPool.Exec(context.Background(), `UPDATE agent SET is_primary = true WHERE id = $1`, adminAgent); err != nil {
+		t.Fatalf("restore admin primary twin: %v", err)
 	}
 
 	// A department with no agent cannot lead the work.

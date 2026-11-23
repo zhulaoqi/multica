@@ -49,7 +49,7 @@ func (h *Handler) issueTriggerPreviewProbe(r *http.Request, actorType, actorID, 
 	originatorUserID := h.invokeOriginatorFromRequest(r, actorType, actorID)
 	return service.IssueTriggerProbe{
 		CanAccessAgent: func(agent db.Agent) bool {
-			return h.canInvokeAgent(r.Context(), agent, actorType, actorID, originatorUserID, workspaceID)
+			return h.canCollaborateWithAgent(r.Context(), agent, actorType, actorID, originatorUserID, workspaceID)
 		},
 		IsSelfLoop: func() bool {
 			return h.isAgentRunningOnIssue(r, actorType, issue)

@@ -1910,6 +1910,20 @@ func (s *TaskService) MemberMayInvokeAgent(ctx context.Context, agentID, userID 
 	return memberMayInvokeAgent(ctx, s.Queries, agent, userID, agent.WorkspaceID)
 }
 
+// MemberMayCollaborateWithAgent is MemberMayInvokeAgent for collaboration
+// paths (department dispatch and its follow-ups), where a primary twin is open
+// to every member of its workspace. Same verdict/error split.
+func (s *TaskService) MemberMayCollaborateWithAgent(ctx context.Context, agentID, userID pgtype.UUID) (bool, error) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load agent: %w", err)
+	}
+	return memberMayCollaborateWithAgent(ctx, s.Queries, agent, userID, agent.WorkspaceID)
+}
+
 // PrepareChatTaskEnqueue performs reads and optional external integration work
 // before the caller opens a transaction. BuildTaskOverlay may perform network
 // I/O and must never run while /new holds route-rotation locks.

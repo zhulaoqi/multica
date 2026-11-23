@@ -240,7 +240,7 @@ func (h *Handler) rerunIssue(w http.ResponseWriter, r *http.Request, issue db.Is
 	// historical agent, not the (possibly reassigned) current assignee.
 	originatorUserID := h.invokeOriginatorFromRequest(r, actorType, actorID)
 	canInvoke := func(agent db.Agent) bool {
-		return h.canInvokeAgent(r.Context(), agent, actorType, actorID, originatorUserID, workspaceID)
+		return h.canCollaborateWithAgent(r.Context(), agent, actorType, actorID, originatorUserID, workspaceID)
 	}
 
 	task, err := h.TaskService.RerunIssue(r.Context(), issue.ID, sourceTaskID, pgtype.UUID{}, actorUserID, fresh, canInvoke)
@@ -287,7 +287,7 @@ func (h *Handler) RetrySourceContextQuickCreate(w http.ResponseWriter, r *http.R
 		return
 	}
 	canInvoke := func(agent db.Agent) bool {
-		return h.canInvokeAgent(r.Context(), agent, "member", userID, userID, uuidToString(workspaceID))
+		return h.canCollaborateWithAgent(r.Context(), agent, "member", userID, userID, uuidToString(workspaceID))
 	}
 	task, err := h.TaskService.RetrySourceContextQuickCreate(r.Context(), workspaceID, requesterID, taskID, canInvoke)
 	if writeIssueLimitReached(w, err) {
