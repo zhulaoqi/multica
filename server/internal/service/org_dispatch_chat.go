@@ -25,11 +25,12 @@ import (
 // for the work is the one who can change its course.
 
 var (
-	ErrChatDispatchNotFound   = errors.New("dispatch not found")
-	ErrChatDispatchAmbiguous  = errors.New("dispatch reference is ambiguous")
-	ErrChatDispatchNotOwner   = errors.New("only the requester can control this dispatch")
-	ErrChatDispatchClosed     = errors.New("dispatch is already closed")
-	ErrChatDispatchNoTransfer = errors.New("dispatch has no squad leader to hand work to")
+	ErrChatDispatchNotFound      = errors.New("dispatch not found")
+	ErrChatDispatchAmbiguous     = errors.New("dispatch reference is ambiguous")
+	ErrChatDispatchNotOwner      = errors.New("only the requester can control this dispatch")
+	ErrChatDispatchClosed        = errors.New("dispatch is already closed")
+	ErrChatDispatchNoTransfer    = errors.New("dispatch has no squad leader to hand work to")
+	ErrChatDispatchInvalidStatus = errors.New("dispatch status must be done or in_progress")
 )
 
 // ChatDispatch is one open dispatch as a chat conversation sees it.
@@ -257,6 +258,44 @@ func (s *OrgDispatchService) FollowUpChatDispatch(ctx context.Context, actorID, 
 	return s.postChatDispatchComment(ctx, actorID, issue, text)
 }
 
+// CommentChatDispatch posts the requester's follow-up from the web workbench.
+// It shares the chat surface's requester check and wakes whichever agent holds
+// the issue, so the C-end and Feishu drive the same conversation.
+func (s *OrgDispatchService) CommentChatDispatch(ctx context.Context, actorID, issueID pgtype.UUID, text string) (ChatDispatchReply, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ChatDispatchReply{}, ErrDispatchTextRequired
+	}
+	_, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
+	if err != nil {
+		return ChatDispatchReply{}, err
+	}
+	return s.postChatDispatchComment(ctx, actorID, issue, text)
+}
+
+// UpdateChatDispatchStatus applies the two verdicts the web workbench offers:
+// accept the delivered work (done) and send it back for another round
+// (in_progress). Other statuses stay with the department's own workflow.
+func (s *OrgDispatchService) UpdateChatDispatchStatus(ctx context.Context, actorID, issueID pgtype.UUID, status string) (db.Issue, error) {
+	if status != "done" && status != "in_progress" {
+		return db.Issue{}, ErrChatDispatchInvalidStatus
+	}
+	_, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
+	if err != nil {
+		return db.Issue{}, err
+	}
+	if issue.Status == "cancelled" {
+		return db.Issue{}, ErrChatDispatchClosed
+	}
+	// Repeated acks and repeated send-backs are no-ops rather than errors, so a
+	// double-click or a retried request settles on the state the caller asked
+	// for.
+	if issue.Status == status {
+		return issue, nil
+	}
+	return s.setChatDispatchStatus(ctx, issue, status, actorID)
+}
+
 // StartDispatch reports a department's first run once, before the completion
 // or failure notice. Non-feishu origins and repeated events return nil.
 func (s *OrgDispatchService) StartDispatch(ctx context.Context, issue db.Issue) (*ChatDispatchStartNotice, error) {
@@ -289,10 +328,9 @@ func (s *OrgDispatchService) chatDispatchTarget(ctx context.Context, actorID, is
 	if origin.RequesterID != actorID {
 		return db.DispatchOrigin{}, db.Issue{}, ErrChatDispatchNotOwner
 	}
-	issue, err := s.Queries.GetIssueInWorkspace(ctx, db.GetIssueInWorkspaceParams{
-		ID:          issueID,
-		WorkspaceID: origin.WorkspaceID,
-	})
+	// The issue lives in the workspace it was delivered to, which for a project
+	// dispatch is the project workspace, not the origin's.
+	issue, err := s.Queries.GetIssue(ctx, issueID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.DispatchOrigin{}, db.Issue{}, ErrChatDispatchNotFound
 	}
@@ -340,9 +378,22 @@ func (s *OrgDispatchService) postChatDispatchComment(ctx context.Context, actorI
 
 // wakeChatDispatchLeader enqueues a leader run for a follow-up. A failure here
 // does not undo the comment: the message is recorded and the leader sees it on
-// its next run.
+// its next run. The requester's control over the dispatch is the authorization,
+// so a project executor (an agent in the project workspace) is woken directly.
 func (s *OrgDispatchService) wakeChatDispatchLeader(ctx context.Context, issue db.Issue, actorID pgtype.UUID) bool {
-	if s.Tasks == nil || !issue.AssigneeID.Valid || issue.AssigneeType.String != "squad" {
+	if s.Tasks == nil || !issue.AssigneeID.Valid {
+		return false
+	}
+	switch issue.AssigneeType.String {
+	case "agent":
+		if _, err := s.Tasks.EnqueueTaskForDispatchExecutor(ctx, issue, issue.AssigneeID, actorID); err != nil {
+			slog.Warn("chat dispatch: wake project executor failed",
+				"issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(issue.AssigneeID), "error", err)
+			return false
+		}
+		return true
+	case "squad":
+	default:
 		return false
 	}
 	squad, err := s.Queries.GetSquadByAssignee(ctx, db.GetSquadByAssigneeParams{

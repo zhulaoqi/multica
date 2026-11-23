@@ -62,10 +62,12 @@ export function useWorkbenchConversation(wsId: string) {
   return useMemo(() => {
     const map = progressMap ?? new Map<string, ChildProgress>();
     return {
-      progressFor: (issueId: string): ChildProgress | undefined =>
-        map.get(issueId),
+      // A dispatch delivered into another workspace carries its own progress:
+      // the org-wide child map only covers issues in this workspace.
+      progressFor: (item: DispatchListItem): ChildProgress | undefined =>
+        item.progress ?? map.get(item.issue.id),
       phaseFor: (item: DispatchListItem): DispatchPhase =>
-        dispatchPhase(item, map.get(item.issue.id)),
+        dispatchPhase(item, item.progress ?? map.get(item.issue.id)),
     };
   }, [progressMap]);
 }

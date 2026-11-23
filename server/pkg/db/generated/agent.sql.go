@@ -5961,6 +5961,43 @@ func (q *Queries) ListChatFinalizeDeferredExpired(ctx context.Context, arg ListC
 	return items, nil
 }
 
+const listLatestTaskTimesByIssues = `-- name: ListLatestTaskTimesByIssues :many
+SELECT issue_id,
+       MAX(started_at)::timestamptz AS started_at,
+       MAX(completed_at)::timestamptz AS completed_at
+FROM agent_task_queue
+WHERE issue_id = ANY($1::uuid[])
+GROUP BY issue_id
+`
+
+type ListLatestTaskTimesByIssuesRow struct {
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+// When each issue in a dispatched tree was last worked. The trail shows one
+// timing per child, so a single grouped read replaces a per-child fan-out.
+func (q *Queries) ListLatestTaskTimesByIssues(ctx context.Context, issueIds []pgtype.UUID) ([]ListLatestTaskTimesByIssuesRow, error) {
+	rows, err := q.db.Query(ctx, listLatestTaskTimesByIssues, issueIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLatestTaskTimesByIssuesRow{}
+	for rows.Next() {
+		var i ListLatestTaskTimesByIssuesRow
+		if err := rows.Scan(&i.IssueID, &i.StartedAt, &i.CompletedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNonOwnerAgentsByRuntime = `-- name: ListNonOwnerAgentsByRuntime :many
 SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, intake_can, intake_cannot, org_unit_id, is_primary, source_agent_id FROM agent
 WHERE runtime_id = $1

@@ -1245,6 +1245,43 @@ func (q *Queries) LockAttachmentsForIssueLink(ctx context.Context, arg LockAttac
 	return items, nil
 }
 
+const rehomeDispatchAttachments = `-- name: RehomeDispatchAttachments :execrows
+UPDATE attachment
+SET workspace_id = $1
+WHERE workspace_id = $2
+  AND issue_id IS NULL
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = $3
+  AND id = ANY($4::uuid[])
+`
+
+type RehomeDispatchAttachmentsParams struct {
+	ToWorkspaceID   pgtype.UUID   `json:"to_workspace_id"`
+	FromWorkspaceID pgtype.UUID   `json:"from_workspace_id"`
+	UploaderID      pgtype.UUID   `json:"uploader_id"`
+	AttachmentIds   []pgtype.UUID `json:"attachment_ids"`
+}
+
+// Moves a requester's still-unbound uploads into the workspace the work is
+// delivered to, so the create there can bind them. Only the caller's own,
+// unattached, non-snapshot rows qualify; the caller compares the row count to
+// the requested set and refuses a partial move.
+func (q *Queries) RehomeDispatchAttachments(ctx context.Context, arg RehomeDispatchAttachmentsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rehomeDispatchAttachments,
+		arg.ToWorkspaceID,
+		arg.FromWorkspaceID,
+		arg.UploaderID,
+		arg.AttachmentIds,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const replaceCommentAttachments = `-- name: ReplaceCommentAttachments :execrows
 UPDATE attachment
 SET comment_id = CASE

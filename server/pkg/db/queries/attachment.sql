@@ -301,3 +301,19 @@ ORDER BY id;
 DELETE FROM attachment
 WHERE workspace_id = sqlc.arg(workspace_id)
   AND source_context_id IS NOT NULL;
+
+-- name: RehomeDispatchAttachments :execrows
+-- Moves a requester's still-unbound uploads into the workspace the work is
+-- delivered to, so the create there can bind them. Only the caller's own,
+-- unattached, non-snapshot rows qualify; the caller compares the row count to
+-- the requested set and refuses a partial move.
+UPDATE attachment
+SET workspace_id = sqlc.arg(to_workspace_id)
+WHERE workspace_id = sqlc.arg(from_workspace_id)
+  AND issue_id IS NULL
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = sqlc.arg(uploader_id)
+  AND id = ANY(sqlc.arg(attachment_ids)::uuid[]);

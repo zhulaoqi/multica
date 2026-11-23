@@ -103,6 +103,8 @@
     "personal_squad_not_found": "这个个人小队已不存在，重新发送即可新建。",
     "org_dispatch_target_conflict": "部门和我的小队只能选一个。",
     "org_dispatch_reassign_forbidden": "只有发起人可以改派这项工作。",
+    "org_dispatch_project_agent_offline": "该项目暂时没有在线的 Agent，请让项目成员启动 Runtime 后再派活。",
+    "dispatch_project_reassign_unsupported": "派到项目的活暂不支持改派，请在项目里直接处理。",
     "dispatch_not_found": "这项工作已不在你的派活记录中。",
     "dispatch_organization_only": "请到组织的工作台派活。"
   },

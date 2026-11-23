@@ -103,6 +103,8 @@
     "personal_squad_not_found": "この個人チームは存在しません。もう一度送信すると新しく作成されます。",
     "org_dispatch_target_conflict": "部署かマイチームのどちらかを選んでください。",
     "org_dispatch_reassign_forbidden": "この作業を割り当て直せるのは依頼者だけです。",
+    "org_dispatch_project_agent_offline": "そのプロジェクトにオンラインのエージェントがありません。プロジェクトのメンバーにランタイムの起動を依頼してから、もう一度送信してください。",
+    "dispatch_project_reassign_unsupported": "プロジェクトに送った作業はここでは割り当て変更できません。プロジェクト内で対応してください。",
     "dispatch_not_found": "この作業は依頼履歴にありません。",
     "dispatch_organization_only": "仕事は組織のワークベンチから依頼します。"
   },

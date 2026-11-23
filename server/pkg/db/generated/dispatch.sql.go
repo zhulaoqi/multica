@@ -271,11 +271,11 @@ SELECT
     COALESCE(st.category, 'started')::text AS status_category,
     'none'::text AS leader_state
 FROM dispatch_origin d
-JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
-JOIN workspace w ON w.id = d.workspace_id
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = i.workspace_id
 LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
-LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+LEFT JOIN issue_status st ON st.workspace_id = i.workspace_id AND st.key = i.status
 WHERE d.requester_id = $1
   AND d.chat_id = $2
   AND d.thread_id = $3
@@ -545,11 +545,11 @@ SELECT
         ELSE lt.status
     END::text AS leader_state
 FROM dispatch_origin d
-JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
-JOIN workspace w ON w.id = d.workspace_id
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = i.workspace_id
 LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
-LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+LEFT JOIN issue_status st ON st.workspace_id = i.workspace_id AND st.key = i.status
 LEFT JOIN LATERAL (
     SELECT id, status, attempt, max_attempts
     FROM agent_task_queue

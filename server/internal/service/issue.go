@@ -140,6 +140,11 @@ type IssueCreateOpts struct {
 	// still resolving, then promotes the returned task after attachment binding.
 	// Zero preserves the ordinary immediate enqueue path.
 	AssignedAgentRunFireAt time.Time
+
+	// SkipAssignedTaskEnqueue suppresses the automatic task an assigned create
+	// would otherwise queue. Project dispatch uses it because it enqueues its
+	// own leader-flagged run, and a second ordinary task would double the work.
+	SkipAssignedTaskEnqueue bool
 }
 
 // ErrActiveDuplicate signals that the duplicate guard found an active
@@ -558,7 +563,7 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 
 	s.publishIssueCreated(issue, attachments, labels, p.CreatorType, actorID, opts)
 	s.captureCreatedAnalytics(issue, p.CreatorType, actorID, opts)
-	if opts.AssignedAgentRunFireAt.IsZero() {
+	if opts.AssignedAgentRunFireAt.IsZero() && !opts.SkipAssignedTaskEnqueue {
 		assignedTaskID = s.maybeEnqueueOnAssign(ctx, issue, p.CreatorType, actorID, opts.AssignedAgentRunFireAt)
 	}
 	// Creating an issue already assigned to an agent is the member delegating

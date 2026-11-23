@@ -104,6 +104,8 @@
     "personal_squad_not_found": "Ese equipo personal ya no existe. Vuelve a enviar para crear uno nuevo.",
     "org_dispatch_target_conflict": "Elige un departamento o tu equipo, no ambos.",
     "org_dispatch_reassign_forbidden": "Solo quien solicitó el trabajo puede reasignarlo.",
+    "org_dispatch_project_agent_offline": "Ningún agente de ese proyecto está en línea. Pide a un miembro del proyecto que inicie un runtime y vuelve a enviarlo.",
+    "dispatch_project_reassign_unsupported": "El trabajo enviado a un proyecto no se puede reasignar aquí. Gestiónalo dentro del proyecto.",
     "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos.",
     "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización."
   },

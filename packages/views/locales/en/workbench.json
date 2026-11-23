@@ -104,6 +104,8 @@
     "personal_squad_not_found": "That personal squad no longer exists. Send again to start a new one.",
     "org_dispatch_target_conflict": "Choose either a department or your squad.",
     "org_dispatch_reassign_forbidden": "Only the requester can reassign this work.",
+    "org_dispatch_project_agent_offline": "No agent in that project is online. Ask a project member to start a runtime, then send this again.",
+    "dispatch_project_reassign_unsupported": "Work sent to a project can't be reassigned here. Handle it inside the project.",
     "dispatch_not_found": "This work is no longer in your dispatch history.",
     "dispatch_organization_only": "Work is sent from the organization's workbench."
   },

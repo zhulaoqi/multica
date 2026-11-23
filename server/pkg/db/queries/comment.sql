@@ -918,3 +918,17 @@ FROM comment c
 JOIN ancestor_ids path ON path.id = c.id
 ORDER BY c.id
 FOR UPDATE OF c;
+
+-- name: ListCommentsForIssueTree :many
+-- Every live comment in a dispatched issue tree (the root plus its children).
+-- The requester-facing trail folds the files uploaded here into deliverables;
+-- the message bodies stay server-side, so callers read only the attachment
+-- metadata. Bounded by row_limit because a long-running tree can accumulate
+-- more comments than a summary view needs.
+SELECT * FROM comment
+WHERE issue_id = ANY(sqlc.arg(issue_ids)::uuid[])
+  AND workspace_id = sqlc.arg(workspace_id)
+  AND deleted_at IS NULL
+  AND type = 'comment'
+ORDER BY created_at ASC, id ASC
+LIMIT sqlc.arg(row_limit);

@@ -11,6 +11,8 @@ export const workbenchKeys = {
   all: (wsId: string) => ["workbench", wsId] as const,
   dispatches: (wsId: string) => [...workbenchKeys.all(wsId), "dispatches"] as const,
   departmentQueue: (wsId: string) => [...workbenchKeys.all(wsId), "department-queue"] as const,
+  trail: (wsId: string, issueId: string) =>
+    [...workbenchKeys.all(wsId), "trail", issueId] as const,
   requestableProjects: (wsId: string) =>
     [...workbenchKeys.all(wsId), "requestable-projects"] as const,
 };
@@ -37,6 +39,36 @@ export function myDispatchesOptions(wsId: string) {
     enabled: wsId.length > 0,
     staleTime: 15_000,
     refetchOnWindowFocus: true,
+    // A dispatch delivered into a project workspace does not push its events
+    // to the organization socket, so the history polls instead of fanning out
+    // across workspaces.
+    refetchInterval: 15_000,
+  });
+}
+
+/** A dispatched root is still moving until a terminal status category lands. */
+function dispatchTrailActive(status?: string, category?: string): boolean {
+  if (!status) return true;
+  if (status === "done" || status === "cancelled") return false;
+  return category !== "done" && category !== "closed";
+}
+
+/**
+ * The requester's trail for one dispatch. The root may live in another
+ * workspace, so it is re-read with a light poll until the work settles; once
+ * terminal, polling stops and the cached answer stays.
+ */
+export function dispatchTrailOptions(wsId: string, issueId: string) {
+  return queryOptions({
+    queryKey: workbenchKeys.trail(wsId, issueId),
+    queryFn: () => api.getDispatchTrail(issueId),
+    enabled: wsId.length > 0 && issueId.length > 0,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const issue = query.state.data?.issue;
+      return dispatchTrailActive(issue?.status, issue?.status_category) ? 10_000 : false;
+    },
   });
 }
 

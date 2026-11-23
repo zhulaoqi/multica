@@ -46,8 +46,10 @@ import { useCreateComment } from "@multica/core/issues/mutations";
 import { useActorName, useOrganizationContext } from "@multica/core/workspace/hooks";
 import { paths, useWorkspacePaths } from "@multica/core/paths";
 import {
+  dispatchTrailOptions,
   parseDispatchCandidates,
   requestableProjectsOptions,
+  useCommentDispatch,
   useDispatchWork,
   useMyDispatches,
   type DispatchCandidate,
@@ -339,6 +341,17 @@ function DispatchWorkbench() {
   const [uploadFailed, setUploadFailed] = useState(false);
   const { upload, uploading } = useFileUpload(api);
   const followUp = useCreateComment(selected?.issue.id ?? "");
+  // A dispatch delivered into another workspace cannot be commented on with
+  // this workspace's issue mutations; the server-side control surface writes
+  // into the issue's own workspace instead.
+  const crossWorkspace = !!selected && selected.issue.workspace_id !== wsId;
+  const commentDispatch = useCommentDispatch(wsId, selected?.issue.id ?? "");
+  // The project agent is absent from this workspace's agent list, so its name
+  // comes from the trail. Same query key as the trail card, so no extra read.
+  const { data: trail } = useQuery({
+    ...dispatchTrailOptions(wsId, selected?.issue.id ?? ""),
+    enabled: crossWorkspace,
+  });
   const { getActorName } = useActorName();
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const {
@@ -415,8 +428,9 @@ function DispatchWorkbench() {
     setFollowUpPending(true);
     setFollowUpError(null);
     try {
-      const assigneeName =
-        selected.issue.assignee_type && selected.issue.assignee_id
+      const assigneeName = crossWorkspace
+        ? trail?.assignee_name || t(($) => $.page.unknown_department)
+        : selected.issue.assignee_type && selected.issue.assignee_id
           ? getActorName(selected.issue.assignee_type, selected.issue.assignee_id)
           : selected.unit_path || t(($) => $.page.unknown_department);
       const mention = subjectMention(
@@ -424,10 +438,16 @@ function DispatchWorkbench() {
         selected.issue.assignee_id,
         assigneeName,
       );
-      await followUp.mutateAsync({
-        content: followUpComment(mention, raw),
-        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
+      if (crossWorkspace) {
+        await commentDispatch.mutateAsync({
+          content: followUpComment(mention, raw),
+        });
+      } else {
+        await followUp.mutateAsync({
+          content: followUpComment(mention, raw),
+          attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+        });
+      }
       setText("");
       setAttachments([]);
     } catch (err) {
@@ -589,7 +609,7 @@ function DispatchWorkbench() {
       wsId={wsId}
       item={selected}
       phase={phaseFor(selected)}
-      progress={progressFor(selected.issue.id)}
+      progress={progressFor(selected)}
       onRetry={() =>
         void submitDispatch(
           selected.issue.description ?? selected.issue.title,
@@ -818,8 +838,8 @@ function DispatchWorkbench() {
                 id: entry.id,
                 filename: entry.filename,
               }))}
-              onAttachFiles={attachFiles}
-              onRemoveAttachment={removeAttachment}
+              onAttachFiles={crossWorkspace ? undefined : attachFiles}
+              onRemoveAttachment={crossWorkspace ? undefined : removeAttachment}
               uploading={uploading}
               mentions={mentions}
               focusToken={focusToken}

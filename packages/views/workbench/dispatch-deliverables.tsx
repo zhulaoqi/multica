@@ -8,6 +8,7 @@ import {
 } from "@multica/core/attachments/deliverables";
 import { childIssuesOptions, issueTimelineOptions } from "@multica/core/issues/queries";
 import type { TimelineEntry } from "@multica/core/types";
+import type { DispatchDeliverable } from "@multica/core/workbench";
 import { useT } from "../i18n";
 import { formatBytes } from "../common/format-bytes";
 
@@ -18,12 +19,27 @@ import { formatBytes } from "../common/format-bytes";
  * find the deck.
  *
  * The same rules as the issue's own deliverables apply: only files posted in
- * comments count, and a re-upload under the same name is a new version.
+ * comments count, and a re-upload under the same name is a new version. A
+ * dispatch delivered into another workspace receives the server's folded list
+ * (`deliverables`) instead of querying issues this workspace cannot read.
  */
-export function DispatchDeliverables({ wsId, issueId }: { wsId: string; issueId: string }) {
+export function DispatchDeliverables({
+  wsId,
+  issueId,
+  deliverables,
+}: {
+  wsId: string;
+  issueId: string;
+  /** Pre-folded files from the cross-workspace trail, when there are any. */
+  deliverables?: DispatchDeliverable[];
+}) {
   const { t } = useT("workbench");
-  const { data: children = [] } = useQuery(childIssuesOptions(wsId, issueId));
-  const issueIds = [issueId, ...children.map((child) => child.id)];
+  const external = deliverables !== undefined;
+  const { data: children = [] } = useQuery({
+    ...childIssuesOptions(wsId, issueId),
+    enabled: !external,
+  });
+  const issueIds = external ? [] : [issueId, ...children.map((child) => child.id)];
 
   const timelines = useQueries({
     queries: issueIds.map((id) => issueTimelineOptions(id)),
@@ -31,9 +47,17 @@ export function DispatchDeliverables({ wsId, issueId }: { wsId: string; issueId:
       results.flatMap((result) => (result.data ?? []) as TimelineEntry[]),
   });
 
-  const files = collectDeliverableFiles(
-    timelines.filter((entry) => entry.type === "comment"),
-  );
+  const files: DeliverableRow[] = external
+    ? (deliverables ?? []).map((file) => ({
+        key: file.key,
+        filename: file.filename,
+        href: file.download_url,
+        sizeBytes: file.size_bytes,
+        versionCount: file.version_count,
+      }))
+    : collectDeliverableFiles(
+        timelines.filter((entry) => entry.type === "comment"),
+      ).map(fileRow);
   if (files.length === 0) return null;
 
   return (
@@ -48,7 +72,7 @@ export function DispatchDeliverables({ wsId, issueId }: { wsId: string; issueId:
       <ul className="flex flex-col gap-1">
         {files.map((file) => (
           <li key={file.key}>
-            <DeliverableRow file={file} />
+            <DeliverableRowView file={file} />
           </li>
         ))}
       </ul>
@@ -56,28 +80,48 @@ export function DispatchDeliverables({ wsId, issueId }: { wsId: string; issueId:
   );
 }
 
-function DeliverableRow({ file }: { file: DeliverableFile }) {
-  const { t } = useT("workbench");
+interface DeliverableRow {
+  key: string;
+  filename: string;
+  href: string;
+  sizeBytes: number;
+  versionCount: number;
+}
+
+function fileRow(file: DeliverableFile): DeliverableRow {
   const attachment = file.latest;
-  const href = attachment.attachment_download_url ?? attachment.download_url ?? attachment.url;
+  return {
+    key: file.key,
+    filename: attachment.filename,
+    href:
+      attachment.attachment_download_url ??
+      attachment.download_url ??
+      attachment.url,
+    sizeBytes: attachment.size_bytes,
+    versionCount: file.versions.length,
+  };
+}
+
+function DeliverableRowView({ file }: { file: DeliverableRow }) {
+  const { t } = useT("workbench");
   return (
     <a
-      href={href}
+      href={file.href}
       target="_blank"
       rel="noreferrer"
       className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-caption text-foreground transition-colors hover:bg-muted"
     >
       <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{attachment.filename}</span>
-      {file.versions.length > 1 ? (
+      <span className="min-w-0 flex-1 truncate">{file.filename}</span>
+      {file.versionCount > 1 ? (
         <span className="shrink-0 text-muted-foreground">
           {t(($) => $.deliverables.version_count, {
-            count: file.versions.length,
+            count: file.versionCount,
           })}
         </span>
       ) : null}
       <span className="shrink-0 text-muted-foreground">
-        {formatBytes(attachment.size_bytes)}
+        {formatBytes(file.sizeBytes)}
       </span>
     </a>
   );

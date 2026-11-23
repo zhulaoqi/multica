@@ -537,11 +537,17 @@ import {
   ProjectionCandidateListSchema,
 } from "./schemas";
 import {
+  DispatchCommentResponseSchema,
   DispatchListResponseSchema,
   DispatchQueueResponseSchema,
+  DispatchStatusResponseSchema,
+  DispatchTrailSchema,
   DispatchWorkResponseSchema,
+  type DispatchCommentResponse,
   type DispatchListItem,
   type DispatchQueueItem,
+  type DispatchStatusResponse,
+  type DispatchTrail,
   type DispatchWorkInput,
   type DispatchWorkResponse,
 } from "../workbench/schemas";
@@ -6051,6 +6057,60 @@ export class ApiClient {
       endpoint: "GET /api/org/dispatches",
     });
     return parsed.dispatches;
+  }
+
+  /**
+   * The requester's follow-up view of one dispatch: its tree, the agent's
+   * final answer and the files it produced. The root may live in another
+   * workspace, so this endpoint re-reads it server-side.
+   */
+  async getDispatchTrail(issueId: string): Promise<DispatchTrail> {
+    const raw = await this.fetch<unknown>(
+      `/api/org/dispatches/${encodeURIComponent(issueId)}/trail`,
+    );
+    const parsed = parseWithFallback<DispatchTrail | null>(raw, DispatchTrailSchema, null, {
+      endpoint: "GET /api/org/dispatches/{issueId}/trail",
+    });
+    if (!parsed) throw new Error("could not read the dispatch trail");
+    return parsed;
+  }
+
+  /** Posts the requester's follow-up and asks the executor to run again. */
+  async commentDispatch(issueId: string, content: string): Promise<DispatchCommentResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/org/dispatches/${encodeURIComponent(issueId)}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      },
+    );
+    const parsed = parseWithFallback<DispatchCommentResponse | null>(
+      raw,
+      DispatchCommentResponseSchema,
+      null,
+      { endpoint: "POST /api/org/dispatches/{issueId}/messages" },
+    );
+    if (!parsed) throw new Error("could not send the follow-up");
+    return parsed;
+  }
+
+  /** Accepts (done) or sends back (in_progress) a delivered dispatch. */
+  async setDispatchStatus(issueId: string, status: "done" | "in_progress"): Promise<DispatchStatusResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/org/dispatches/${encodeURIComponent(issueId)}/status`,
+      {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      },
+    );
+    const parsed = parseWithFallback<DispatchStatusResponse | null>(
+      raw,
+      DispatchStatusResponseSchema,
+      null,
+      { endpoint: "POST /api/org/dispatches/{issueId}/status" },
+    );
+    if (!parsed) throw new Error("could not update the dispatch");
+    return parsed;
   }
 
   /**

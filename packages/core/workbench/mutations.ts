@@ -4,7 +4,9 @@ import { issueKeys } from "../issues/queries";
 import { createSafeId } from "../utils";
 import { workbenchKeys } from "./queries";
 import type {
+  DispatchCommentResponse,
   DispatchListItem,
+  DispatchStatusResponse,
   DispatchWorkInput,
   DispatchWorkResponse,
 } from "./schemas";
@@ -12,7 +14,7 @@ import type {
 export interface DispatchWorkVariables {
   text: string;
   unitId?: string;
-  /** Target a project; the server resolves its owning department. */
+  /** Target a project: the work is created and run inside that project's workspace. */
   projectId?: string;
   personal?: boolean;
   clientRequestId?: string;
@@ -60,6 +62,61 @@ export function useDispatchWork(wsId: string) {
       );
       qc.invalidateQueries({ queryKey: workbenchKeys.all(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
+    },
+  });
+}
+
+export interface CommentDispatchVariables {
+  content: string;
+}
+
+/**
+ * Posts the requester's follow-up into the dispatch's own workspace. The
+ * server writes the comment there and wakes the executor, so the response
+ * carries the updated issue rather than the whole trail.
+ */
+export function useCommentDispatch(wsId: string, issueId: string) {
+  const qc = useQueryClient();
+  return useMutation<DispatchCommentResponse, unknown, CommentDispatchVariables>({
+    mutationFn: ({ content }) => api.commentDispatch(issueId, content),
+    onSuccess: (data) => {
+      qc.setQueryData<DispatchListItem[]>(
+        workbenchKeys.dispatches(wsId),
+        (previous) =>
+          previous?.map((item) =>
+            item.issue.id === data.issue.id ? { ...item, issue: data.issue } : item,
+          ),
+      );
+      qc.invalidateQueries({ queryKey: workbenchKeys.trail(wsId, issueId) });
+      qc.invalidateQueries({ queryKey: workbenchKeys.dispatches(wsId) });
+    },
+  });
+}
+
+export interface SetDispatchStatusVariables {
+  issueId: string;
+  status: "done" | "in_progress";
+}
+
+/**
+ * The requester's verdict: accepting closes the root, sending it back returns
+ * it to in progress. Both wait for the server so a failed write keeps the
+ * requester on the same screen with the error shown.
+ */
+export function useSetDispatchStatus(wsId: string) {
+  const qc = useQueryClient();
+  return useMutation<DispatchStatusResponse, unknown, SetDispatchStatusVariables>({
+    mutationFn: ({ issueId, status }) => api.setDispatchStatus(issueId, status),
+    onSuccess: (data, variables) => {
+      qc.setQueryData<DispatchListItem[]>(
+        workbenchKeys.dispatches(wsId),
+        (previous) =>
+          previous?.map((item) =>
+            item.issue.id === data.issue.id ? { ...item, issue: data.issue } : item,
+          ),
+      );
+      qc.invalidateQueries({ queryKey: workbenchKeys.trail(wsId, variables.issueId) });
+      qc.invalidateQueries({ queryKey: workbenchKeys.dispatches(wsId) });
     },
   });
 }

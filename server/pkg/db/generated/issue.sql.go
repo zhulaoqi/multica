@@ -1210,6 +1210,38 @@ func (q *Queries) ListChildIssues(ctx context.Context, parentIssueID pgtype.UUID
 	return items, nil
 }
 
+const listChildStatusesByParents = `-- name: ListChildStatusesByParents :many
+SELECT parent_issue_id, status FROM issue
+WHERE parent_issue_id = ANY($1::uuid[])
+`
+
+type ListChildStatusesByParentsRow struct {
+	ParentIssueID pgtype.UUID `json:"parent_issue_id"`
+	Status        string      `json:"status"`
+}
+
+// Progress for a batch of dispatches that may live in different workspaces.
+// The caller buckets terminal vs open with each parent's own status catalog.
+func (q *Queries) ListChildStatusesByParents(ctx context.Context, parentIds []pgtype.UUID) ([]ListChildStatusesByParentsRow, error) {
+	rows, err := q.db.Query(ctx, listChildStatusesByParents, parentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChildStatusesByParentsRow{}
+	for rows.Next() {
+		var i ListChildStatusesByParentsRow
+		if err := rows.Scan(&i.ParentIssueID, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChildrenByParents = `-- name: ListChildrenByParents :many
 SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, stage, properties, revision, last_activity_at, triage_state, duplicate_of_issue_id, org_unit_id FROM issue
 WHERE workspace_id = $1
@@ -1609,6 +1641,67 @@ type ListIssuesByIDsParams struct {
 // history). A missing or cross-workspace id is simply absent from the result.
 func (q *Queries) ListIssuesByIDs(ctx context.Context, arg ListIssuesByIDsParams) ([]Issue, error) {
 	rows, err := q.db.Query(ctx, listIssuesByIDs, arg.WorkspaceID, arg.IssueIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Priority,
+			&i.AssigneeType,
+			&i.AssigneeID,
+			&i.CreatorType,
+			&i.CreatorID,
+			&i.ParentIssueID,
+			&i.AcceptanceCriteria,
+			&i.ContextRefs,
+			&i.Position,
+			&i.DueDate,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Number,
+			&i.ProjectID,
+			&i.OriginType,
+			&i.OriginID,
+			&i.FirstExecutedAt,
+			&i.StartDate,
+			&i.Metadata,
+			&i.Stage,
+			&i.Properties,
+			&i.Revision,
+			&i.LastActivityAt,
+			&i.TriageState,
+			&i.DuplicateOfIssueID,
+			&i.OrgUnitID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIssuesByIDsAnyWorkspace = `-- name: ListIssuesByIDsAnyWorkspace :many
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, stage, properties, revision, last_activity_at, triage_state, duplicate_of_issue_id, org_unit_id FROM issue
+WHERE id = ANY($1::uuid[])
+`
+
+// Batch read for workbench history, whose dispatches may have been delivered
+// into a project workspace rather than the organization workspace the origin
+// row lives in. Authorization is the dispatch_origin requester check upstream;
+// a missing id is simply absent from the result.
+func (q *Queries) ListIssuesByIDsAnyWorkspace(ctx context.Context, issueIds []pgtype.UUID) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, listIssuesByIDsAnyWorkspace, issueIds)
 	if err != nil {
 		return nil, err
 	}

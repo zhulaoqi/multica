@@ -8,17 +8,19 @@ import { renderWithI18n } from "../test/i18n";
 import { DispatchTrail } from "./dispatch-trail";
 import type { DispatchPhase } from "./use-workbench-conversation";
 
+const apiState = vi.hoisted(() => ({
+  listChildIssues: vi.fn().mockResolvedValue({ issues: [] }),
+  listTasksByIssue: vi.fn().mockResolvedValue([]),
+  listMembers: vi.fn().mockResolvedValue([]),
+  listAgents: vi.fn().mockResolvedValue([]),
+  listSquads: vi.fn().mockResolvedValue([]),
+  listIssueStatuses: vi.fn().mockResolvedValue([]),
+  getDispatchTrail: vi.fn(),
+}));
+
 vi.mock("@multica/core/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@multica/core/api")>();
-  const api = {
-    listChildIssues: vi.fn().mockResolvedValue({ issues: [] }),
-    listTasksByIssue: vi.fn().mockResolvedValue([]),
-    listMembers: vi.fn().mockResolvedValue([]),
-    listAgents: vi.fn().mockResolvedValue([]),
-    listSquads: vi.fn().mockResolvedValue([]),
-    listIssueStatuses: vi.fn().mockResolvedValue([]),
-  };
-  return { ...actual, api, getApi: () => api };
+  return { ...actual, api: apiState, getApi: () => apiState };
 });
 
 vi.mock("@multica/core/workspace/hooks", async (importOriginal) => ({
@@ -37,10 +39,22 @@ vi.mock("../issues/utils/status-label", () => ({
 // components with their own tests, so this suite only checks that delivery
 // shows them.
 vi.mock("./dispatch-result-block", () => ({
-  DispatchResultBlock: () => <p>result body</p>,
+  DispatchResultBlock: ({ result }: { result?: { content: string } | null }) => (
+    <p>{result ? `trail result: ${result.content}` : "result body"}</p>
+  ),
 }));
 vi.mock("./dispatch-deliverables", () => ({
-  DispatchDeliverables: () => <p>delivered files</p>,
+  DispatchDeliverables: ({
+    deliverables,
+  }: {
+    deliverables?: { filename: string }[];
+  }) => (
+    <p>
+      {deliverables
+        ? `trail files: ${deliverables.map((file) => file.filename).join(", ")}`
+        : "delivered files"}
+    </p>
+  ),
 }));
 
 const WS = "ws-test";
@@ -50,6 +64,7 @@ const LATER = "2026-11-12T09:00:00Z";
 const item: DispatchListItem = {
   issue: {
     id: "issue-1",
+    workspace_id: WS,
     identifier: "ACM-1",
     title: "Prepare onboarding materials",
     status: "in_progress",
@@ -125,6 +140,56 @@ function renderTrail({
   );
 }
 
+const remoteItem: DispatchListItem = {
+  ...item,
+  issue: { ...item.issue, workspace_id: "ws-project", identifier: "AIHUB-7" },
+};
+
+function trailChild(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "child-1",
+    title: "Task child-1",
+    status: "in_progress",
+    status_category: "started",
+    status_label: "In progress",
+    assignee_type: "agent",
+    assignee_id: "agent-1",
+    assignee_name: "Mika",
+    created_at: NOW,
+    started_at: NOW,
+    completed_at: null,
+    ...overrides,
+  };
+}
+
+function trail(overrides: Record<string, unknown> = {}) {
+  return {
+    issue: {
+      id: "issue-1",
+      workspace_id: "ws-project",
+      identifier: "AIHUB-7",
+      title: "Which models does AIHUB serve?",
+      status: "in_progress",
+      status_category: "started",
+      created_at: NOW,
+    },
+    assignee_name: "AIHUB agent",
+    children: [],
+    progress: { done: 0, total: 0 },
+    result: null,
+    deliverables: [],
+    ...overrides,
+  };
+}
+
+function renderRemoteTrail(phase: DispatchPhase) {
+  renderWithI18n(
+    <QueryClientProvider client={qc}>
+      <DispatchTrail wsId={WS} item={remoteItem} phase={phase} />
+    </QueryClientProvider>,
+  );
+}
+
 describe("DispatchTrail", () => {
   it("shows where the request went, the plan, and who is on each task", () => {
     renderTrail({
@@ -186,5 +251,66 @@ describe("DispatchTrail", () => {
 
     const trail = screen.getByRole("region", { name: "How it's going" });
     expect(trail).toHaveTextContent("Stopped before it started");
+  });
+
+  it("does not read a dispatch delivered here through the trail endpoint", () => {
+    renderTrail({ phase: "progress", children: [child("child-1")], tasks: [task()] });
+
+    expect(screen.getByText("Task child-1")).toBeInTheDocument();
+    expect(apiState.getDispatchTrail).not.toHaveBeenCalled();
+  });
+
+  it("reads a dispatch delivered into another workspace through the trail", async () => {
+    apiState.getDispatchTrail.mockResolvedValue(
+      trail({
+        children: [
+          trailChild({
+            id: "child-9",
+            title: "Check the gateway config",
+            status: "done",
+            status_category: "done",
+            status_label: "Shipped",
+            assignee_name: "Mika",
+            started_at: NOW,
+            completed_at: LATER,
+          }),
+        ],
+        progress: { done: 1, total: 3 },
+      }),
+    );
+    renderRemoteTrail("progress");
+
+    const trailRegion = screen.getByRole("region", { name: "How it's going" });
+    expect(await screen.findByText("Check the gateway config")).toBeInTheDocument();
+    expect(trailRegion).toHaveTextContent("Mika");
+    // The label comes from the issue's own workspace, not this one's catalog.
+    expect(trailRegion).toHaveTextContent("Shipped");
+    expect(trailRegion).toHaveTextContent("1 of 3 tasks done");
+    expect(apiState.getDispatchTrail).toHaveBeenCalledWith("issue-1");
+    // The project workspace's issues are unreadable from here.
+    expect(apiState.listChildIssues).not.toHaveBeenCalled();
+    expect(apiState.listTasksByIssue).not.toHaveBeenCalled();
+  });
+
+  it("shows the project's result and files once the trail reports delivery", async () => {
+    apiState.getDispatchTrail.mockResolvedValue(
+      trail({
+        result: {
+          actor_name: "Mika",
+          content: "AIHUB routes to Claude and GPT.",
+          created_at: LATER,
+          attachments: [],
+        },
+        deliverables: [{ key: "k1", filename: "models.csv" }],
+      }),
+    );
+    renderRemoteTrail("in_review");
+
+    expect(
+      await screen.findByText("trail result: AIHUB routes to Claude and GPT."),
+    ).toBeInTheDocument();
+    const trailRegion = screen.getByRole("region", { name: "How it's going" });
+    expect(trailRegion).toHaveTextContent("trail files: models.csv");
+    expect(trailRegion).not.toHaveTextContent("No result was posted");
   });
 });

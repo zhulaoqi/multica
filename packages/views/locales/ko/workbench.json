@@ -103,6 +103,8 @@
     "personal_squad_not_found": "이 개인 팀은 더 이상 존재하지 않습니다. 다시 보내면 새로 만들어집니다.",
     "org_dispatch_target_conflict": "부서와 내 팀 중 하나만 선택하세요.",
     "org_dispatch_reassign_forbidden": "이 작업을 다시 배정할 수 있는 사람은 요청자뿐입니다.",
+    "org_dispatch_project_agent_offline": "해당 프로젝트에 온라인 상태인 에이전트가 없습니다. 프로젝트 멤버에게 런타임 실행을 요청한 뒤 다시 보내세요.",
+    "dispatch_project_reassign_unsupported": "프로젝트로 보낸 작업은 여기서 재배정할 수 없습니다. 프로젝트에서 직접 처리하세요.",
     "dispatch_not_found": "이 작업은 더 이상 내 요청 기록에 없습니다.",
     "dispatch_organization_only": "작업은 조직의 워크벤치에서 보냅니다."
   },

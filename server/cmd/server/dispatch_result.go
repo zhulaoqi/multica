@@ -219,7 +219,7 @@ func sendDispatchCompletionNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Origin, queries)
+	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch completion", client, queries, installs, func() string {
 		return dispatchCompletionText(notice, workspaceSlug, appURL)
 	})
@@ -232,7 +232,7 @@ func sendDispatchFailureNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Origin, queries)
+	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch failure", client, queries, installs, func() string {
 		return dispatchFailureText(notice, workspaceSlug, appURL)
 	})
@@ -245,7 +245,7 @@ func sendDispatchStartNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Origin, queries)
+	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch start", client, queries, installs, func() string {
 		return dispatchStartText(notice, workspaceSlug, appURL)
 	})
@@ -305,10 +305,13 @@ func dispatchOriginReplyTarget(origin db.DispatchOrigin) lark.ReplyTarget {
 	}
 }
 
-func dispatchWorkspaceSlug(origin db.DispatchOrigin, queries *db.Queries) string {
+// dispatchWorkspaceSlug resolves the workspace that hosts the delivered issue,
+// not the origin's. A project dispatch is delivered into the project
+// workspace, so the notice link must point there.
+func dispatchWorkspaceSlug(workspaceID pgtype.UUID, queries *db.Queries) string {
 	ctx, cancel := context.WithTimeout(context.Background(), dispatchResultLookupTimeout)
 	defer cancel()
-	ws, err := queries.GetWorkspace(ctx, origin.WorkspaceID)
+	ws, err := queries.GetWorkspace(ctx, workspaceID)
 	if err != nil {
 		return ""
 	}

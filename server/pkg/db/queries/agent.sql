@@ -2779,3 +2779,13 @@ UPDATE agent
 SET is_primary = true, updated_at = now()
 WHERE id = (SELECT id FROM candidate)
 RETURNING *;
+
+-- name: ListLatestTaskTimesByIssues :many
+-- When each issue in a dispatched tree was last worked. The trail shows one
+-- timing per child, so a single grouped read replaces a per-child fan-out.
+SELECT issue_id,
+       MAX(started_at)::timestamptz AS started_at,
+       MAX(completed_at)::timestamptz AS completed_at
+FROM agent_task_queue
+WHERE issue_id = ANY(sqlc.arg(issue_ids)::uuid[])
+GROUP BY issue_id;

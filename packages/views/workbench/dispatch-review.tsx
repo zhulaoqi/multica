@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, RotateCcw, X } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import { Spinner } from "@multica/ui/components/ui/spinner";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { useCreateComment, useUpdateIssue } from "@multica/core/issues/mutations";
 import type { DispatchListItem } from "@multica/core/workbench";
-import { workbenchKeys } from "@multica/core/workbench";
+import {
+  dispatchTrailOptions,
+  useCommentDispatch,
+  useSetDispatchStatus,
+  workbenchKeys,
+} from "@multica/core/workbench";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { useT } from "../i18n";
@@ -31,14 +36,25 @@ export function DispatchReview({ item }: { item: DispatchListItem }) {
   const qc = useQueryClient();
   const updateIssue = useUpdateIssue();
   const createComment = useCreateComment(item.issue.id);
+  // A dispatch delivered into another workspace cannot be edited with this
+  // workspace's issue mutations; the requester control surface writes into
+  // the issue's own workspace and wakes its executor.
+  const crossWorkspace = item.issue.workspace_id !== wsId;
+  const commentDispatch = useCommentDispatch(wsId, item.issue.id);
+  const setStatus = useSetDispatchStatus(wsId);
+  const trailQuery = useQuery({
+    ...dispatchTrailOptions(wsId, item.issue.id),
+    enabled: crossWorkspace,
+  });
   const { getActorName } = useActorName();
 
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<unknown>(null);
 
-  const assigneeName =
-    item.issue.assignee_type && item.issue.assignee_id
+  const assigneeName = crossWorkspace
+    ? trailQuery.data?.assignee_name || t(($) => $.page.unknown_department)
+    : item.issue.assignee_type && item.issue.assignee_id
       ? getActorName(item.issue.assignee_type, item.issue.assignee_id)
       : (item.unit_path || t(($) => $.page.unknown_department));
   const mention = subjectMention(
@@ -47,7 +63,11 @@ export function DispatchReview({ item }: { item: DispatchListItem }) {
     assigneeName,
   );
 
-  const pending = updateIssue.isPending || createComment.isPending;
+  const pending =
+    updateIssue.isPending ||
+    createComment.isPending ||
+    commentDispatch.isPending ||
+    setStatus.isPending;
   const trimmed = reason.trim();
 
   const refresh = () => {
@@ -57,7 +77,11 @@ export function DispatchReview({ item }: { item: DispatchListItem }) {
   const accept = async () => {
     setError(null);
     try {
-      await updateIssue.mutateAsync({ id: item.issue.id, status: "done" });
+      if (crossWorkspace) {
+        await setStatus.mutateAsync({ issueId: item.issue.id, status: "done" });
+      } else {
+        await updateIssue.mutateAsync({ id: item.issue.id, status: "done" });
+      }
       refresh();
     } catch (err) {
       setError(err);
@@ -68,10 +92,22 @@ export function DispatchReview({ item }: { item: DispatchListItem }) {
     if (!trimmed) return;
     setError(null);
     try {
-      await createComment.mutateAsync({
-        content: rejectionComment(mention, trimmed),
-      });
-      await updateIssue.mutateAsync({ id: item.issue.id, status: "in_progress" });
+      if (crossWorkspace) {
+        // The message is what wakes the executor; the status write only
+        // records that the work is open again.
+        await commentDispatch.mutateAsync({
+          content: rejectionComment(mention, trimmed),
+        });
+        await setStatus.mutateAsync({
+          issueId: item.issue.id,
+          status: "in_progress",
+        });
+      } else {
+        await createComment.mutateAsync({
+          content: rejectionComment(mention, trimmed),
+        });
+        await updateIssue.mutateAsync({ id: item.issue.id, status: "in_progress" });
+      }
       setReason("");
       setOpen(false);
       refresh();
