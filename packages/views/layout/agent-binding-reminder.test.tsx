@@ -55,26 +55,35 @@ function agent(overrides: Partial<Agent>): Agent {
   } as unknown as Agent;
 }
 
+function workspace(id: string, slug: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    name: slug,
+    slug,
+    description: null,
+    context: null,
+    settings: {},
+    repos: [],
+    issue_prefix: "ACM",
+    avatar_url: null,
+    created_at: NOW,
+    updated_at: NOW,
+    ...overrides,
+  };
+}
+
 // The reminder fires once per workspace per session, so each case uses its
-// own workspace id.
-function renderReminder(wsId: string, agents: Agent[]) {
+// own workspace id. `organization` adds the org workspace next to it, which
+// makes the current workspace a project.
+function renderReminder(wsId: string, agents: Agent[], organization = false) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   qc.setQueryData(workspaceListOptions().queryKey, [
-    {
-      id: wsId,
-      name: "Acme",
-      slug: "acme",
-      description: null,
-      context: null,
-      settings: {},
-      repos: [],
-      issue_prefix: "ACM",
-      avatar_url: null,
-      created_at: NOW,
-      updated_at: NOW,
-    },
+    workspace(wsId, "acme"),
+    ...(organization
+      ? [workspace("ws-org", "company", { is_organization: true })]
+      : []),
   ]);
   qc.setQueryData(agentListOptions(wsId).queryKey, agents);
   return renderWithI18n(
@@ -95,7 +104,7 @@ describe("AgentBindingReminder", () => {
     signIn("user-1");
   });
 
-  it("reminds an unbound member once and links to the org page", async () => {
+  it("reminds an unbound member once and links to the agents page", async () => {
     const view = renderReminder("ws-unbound", [agent({ owner_id: "someone-else" })]);
 
     await waitFor(() => expect(mocks.warning).toHaveBeenCalledTimes(1));
@@ -103,12 +112,21 @@ describe("AgentBindingReminder", () => {
     expect(title).toBe("Bind your agent first");
     expect(options.action.label).toBe("Bind an agent");
     options.action.onClick();
-    expect(mocks.push).toHaveBeenCalledWith("/acme/org");
+    expect(mocks.push).toHaveBeenCalledWith("/acme/agents");
 
     view.unmount();
     renderReminder("ws-unbound", []);
     await Promise.resolve();
     expect(mocks.warning).toHaveBeenCalledTimes(1);
+  });
+
+  it("links a project member to the organization's agents page", async () => {
+    renderReminder("ws-project", [agent({ owner_id: "someone-else" })], true);
+
+    await waitFor(() => expect(mocks.warning).toHaveBeenCalledTimes(1));
+    const [, options] = mocks.warning.mock.calls[0]!;
+    options.action.onClick();
+    expect(mocks.push).toHaveBeenCalledWith("/company/agents");
   });
 
   it("treats an archived twin as unbound", async () => {

@@ -19,9 +19,10 @@ const remindedWorkspaces = new Set<string>();
 /**
  * Reminds a member without a primary twin to bind one, once per workspace per
  * session. Unbound members can browse and review but cannot dispatch work or
- * be assigned issues, so the reminder points them at the org page where they
- * bind their agent. A project's twins are projections of organization agents,
- * so there the reminder points at the organization's org page. Mount inside a resolved workspace (DashboardLayout on web,
+ * be assigned issues, so the reminder points them at the agents page where
+ * they create and bind their agent. A project's twins are projections of
+ * organization agents, so there the reminder points at the organization's
+ * agents page. Mount inside a resolved workspace (DashboardLayout on web,
  * WorkspaceRouteLayout on desktop).
  */
 export function AgentBindingReminder() {
@@ -29,7 +30,8 @@ export function AgentBindingReminder() {
   const wsId = useWorkspaceId();
   const p = useWorkspacePaths();
   const { organization, isProject } = useOrganizationContext(wsId);
-  const orgPage = isProject && organization ? paths.workspace(organization.slug).org() : p.org();
+  const agentsPage =
+    isProject && organization ? paths.workspace(organization.slug).agents() : p.agents();
   const { push } = useNavigation();
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const { data: agents, isSuccess } = useQuery(agentListOptions(wsId));
@@ -51,10 +53,10 @@ export function AgentBindingReminder() {
       duration: 10_000,
       action: {
         label: t(($) => $.page.binding_required_action),
-        onClick: () => push(orgPage),
+        onClick: () => push(agentsPage),
       },
     });
-  }, [unbound, wsId, t, push, orgPage]);
+  }, [unbound, wsId, t, push, agentsPage]);
 
   return null;
 }

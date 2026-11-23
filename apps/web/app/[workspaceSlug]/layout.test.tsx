@@ -3,14 +3,21 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type TestWorkspace = {
+  id: string;
+  slug: string;
+  is_organization?: boolean;
+  viewer_can_manage?: boolean;
+};
+
 const state = vi.hoisted(() => ({
   user: {
     id: "user-1",
     onboarded_at: "2026-01-01T00:00:00Z",
   } as { id: string; onboarded_at: string | null } | null,
   isAuthLoading: false,
-  workspace: null as { id: string; slug: string } | null,
-  workspacesBySlug: {} as Record<string, { id: string; slug: string } | null>,
+  workspace: null as TestWorkspace | null,
+  workspacesBySlug: {} as Record<string, TestWorkspace | null>,
   workspaceError: false,
   hasBeenSeen: false,
   pathname: "/acme/issues",
@@ -135,6 +142,22 @@ describe("WorkspaceLayout", () => {
 
     expect(await screen.findByTestId("no-access")).toBeInTheDocument();
     expect(screen.queryByTestId("workspace-loading")).toBeNull();
+  });
+
+  it("renders the organization shell for an ordinary member", async () => {
+    state.workspacesBySlug = {
+      acme: {
+        id: "ws-acme",
+        slug: "acme",
+        is_organization: true,
+        viewer_can_manage: false,
+      },
+    };
+
+    renderLayout("acme");
+
+    expect(await screen.findByTestId("workspace-content")).toBeInTheDocument();
+    expect(state.replace).not.toHaveBeenCalled();
   });
 });
 

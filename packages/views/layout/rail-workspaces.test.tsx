@@ -133,7 +133,7 @@ describe("RailWorkspaces", () => {
     expect(within(menu).getByRole("menuitem", { name: /WS 3$/ })).toHaveAttribute("href", "/ws3/issues");
   });
 
-  it("puts the organization on its org page and hides it from members who cannot manage it", async () => {
+  it("puts the organization on its org page and lists it for members too", async () => {
     state.workspaces = [
       ws(1),
       { ...ws(2), slug: "company", is_organization: true, viewer_can_manage: true },
@@ -146,7 +146,10 @@ describe("RailWorkspaces", () => {
       "href",
       "/company/org",
     );
-    expect(within(menu).queryByRole("menuitem", { name: /WS 3$/ })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /WS 3$/ })).toHaveAttribute(
+      "href",
+      "/other/org",
+    );
   });
 
   it("dots the switcher while another workspace has unread inbox items", async () => {

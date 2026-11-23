@@ -20,9 +20,6 @@ import { isDesktopShell } from "../platform";
  *  - Logged in but URL slug doesn't resolve to any workspace →
  *    `/home` for onboarded members on web (the C-end is the default surface);
  *    desktop, which has no C-end, opens its first workspace
- *  - Organization workspace without management capability on web → `/home`.
- *    The organization admin is for department leads and administrators;
- *    ordinary members work in the C-end and in their project workspaces.
  *
  * This guard only redirects when the URL slug doesn't resolve. Onboarding
  * itself marks the user onboarded before navigating into a workspace, so
@@ -63,16 +60,6 @@ export function useDashboardGuard() {
       else if (workspaces.length === 0) replace(paths.newWorkspace());
       else if (desktop) replace(paths.workspace(workspaces[0]!.slug).workbench());
       else replace(paths.home());
-      return;
-    }
-    // The organization workspace is the department-management surface. A
-    // member without the capability keeps content access for the C-end but
-    // must not land in its admin shell. Older servers omit the field, so only
-    // an explicit false blocks. Desktop keeps its previous behaviour because
-    // it has no C-end to send the member to.
-    const resolved = workspaces.find((w) => w.id === workspace.id);
-    if (!desktop && resolved?.is_organization && resolved.viewer_can_manage === false) {
-      replace(paths.home());
     }
   }, [user, isLoading, workspaceListReady, workspace, workspaces, hasOnboarded, replace]);
 
