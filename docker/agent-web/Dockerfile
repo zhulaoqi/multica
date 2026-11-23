@@ -9,6 +9,10 @@ WORKDIR $DEPLOY_DIR
 COPY apps/web/.next/standalone/ ./
 COPY apps/web/.next/static ./apps/web/.next/static
 COPY apps/web/public ./apps/web/public
+# install.ps1 and install.sh fetch this path from the deployment origin.
+# Fail the image build when the archives were not published first.
+RUN test -s ./apps/web/public/releases/latest/download/checksums.txt \
+  || { echo "CLI archives missing. Run scripts/build-cli-assets.sh before building this image."; exit 1; }
 COPY docker/agent-web/start.sh ./start.sh
 COPY docker/runtime-limits.sh ./runtime-limits.sh
 COPY docker/company-log.sh ./company-log.sh

@@ -1,6 +1,13 @@
 #!/bin/bash
 cd "$(dirname "$0")/../.."
 echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') build agent-web"
+# Installers download /releases/latest/download from this same image. The
+# archives are build inputs, so publish them before the image is assembled.
+echo "[INFO] $(date '+%Y-%m-%d %H:%M:%S') publish CLI archives"
+if ! ./scripts/build-cli-assets.sh; then
+  echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') CLI archives were not published. The web image would 404 /releases/latest/download/checksums.txt."
+  exit 1
+fi
 # The shared compile image is Node 22.6. Its corepack only has the old pnpm
 # signing key, so `corepack prepare pnpm@10.28.2` exits with
 # "Cannot find matching keyid". Newer corepack accepts COREPACK_INTEGRITY_KEYS=0.
