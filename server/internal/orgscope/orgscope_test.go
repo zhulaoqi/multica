@@ -91,6 +91,33 @@ func TestLeads(t *testing.T) {
 	}
 }
 
+func TestLeadDepth(t *testing.T) {
+	units := append(fixtures(t), unit(t, "66666666-6666-6666-6666-666666666666", leafID, otherID))
+	cases := []struct {
+		name  string
+		user  string
+		unit  string
+		depth int
+		ok    bool
+	}{
+		{name: "direct lead", user: leadID, unit: rootID, depth: 0, ok: true},
+		{name: "one ancestor up", user: leadID, unit: childID, depth: 1, ok: true},
+		{name: "two ancestors up", user: leadID, unit: leafID, depth: 2, ok: true},
+		{name: "closer lead wins on depth", user: otherID, unit: "66666666-6666-6666-6666-666666666666", depth: 0, ok: true},
+		{name: "not a lead", user: otherID, unit: rootID, depth: 0, ok: false},
+		{name: "missing unit", user: leadID, unit: missing, depth: 0, ok: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			depth, ok := LeadDepth(units, uuid(t, tc.user), uuid(t, tc.unit))
+			if ok != tc.ok || depth != tc.depth {
+				t.Fatalf("LeadDepth(%s, %s) = (%d, %v), want (%d, %v)",
+					tc.user, tc.unit, depth, ok, tc.depth, tc.ok)
+			}
+		})
+	}
+}
+
 func TestLeadsAny(t *testing.T) {
 	units := fixtures(t)
 	if !LeadsAny(units, uuid(t, leadID)) {

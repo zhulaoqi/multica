@@ -74,10 +74,11 @@ func (s *OrgDispatchService) dispatchToProject(
 }
 
 // pickProjectExecutor chooses the agent in the project workspace that runs the
-// dispatch. Candidates are online user agents; the owner who leads the owning
-// department or one of its ancestors goes first, then the primary twin, then
-// the oldest agent. No ready candidate is an explicit refusal: the work
-// belongs to the project, so it must not be pushed back onto the department.
+// dispatch. Candidates are online user agents; an owner who leads the owning
+// department goes before an ancestor's lead (the direct lead knows the project
+// best), then the primary twin, then the oldest agent. No ready candidate is an
+// explicit refusal: the work belongs to the project, so it must not be pushed
+// back onto the department.
 func (s *OrgDispatchService) pickProjectExecutor(ctx context.Context, projectID, owningUnitID pgtype.UUID, units []db.ListOrgUnitsRow) (pgtype.UUID, error) {
 	agents, err := s.Queries.ListProjectDispatchAgents(ctx, projectID)
 	if err != nil {
@@ -89,9 +90,12 @@ func (s *OrgDispatchService) pickProjectExecutor(ctx context.Context, projectID,
 	ordered := make([]db.ListProjectDispatchAgentsRow, len(agents))
 	copy(ordered, agents)
 	sort.SliceStable(ordered, func(i, j int) bool {
-		leftLead := ordered[i].OwnerID.Valid && orgscope.Leads(units, ordered[i].OwnerID, owningUnitID)
-		rightLead := ordered[j].OwnerID.Valid && orgscope.Leads(units, ordered[j].OwnerID, owningUnitID)
-		return leftLead && !rightLead
+		leftDepth, leftLead := orgscope.LeadDepth(units, ordered[i].OwnerID, owningUnitID)
+		rightDepth, rightLead := orgscope.LeadDepth(units, ordered[j].OwnerID, owningUnitID)
+		if leftLead != rightLead {
+			return leftLead
+		}
+		return leftLead && leftDepth < rightDepth
 	})
 	for _, candidate := range ordered {
 		agent, err := s.Queries.GetAgent(ctx, candidate.ID)

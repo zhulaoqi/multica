@@ -138,6 +138,39 @@ func TestDispatchWork_ProjectTargetDeliversIntoTheProjectWorkspace(t *testing.T)
 	}
 }
 
+// TestDispatchWork_PrefersTheOwningDepartmentsDirectLead keeps an ancestor's
+// lead from taking the work: the department's own lead knows the project best,
+// so their agent runs it even when an ancestor lead's agent was created first.
+func TestDispatchWork_PrefersTheOwningDepartmentsDirectLead(t *testing.T) {
+	setup := setupProjectDispatch(t, "project-lead-depth", "负责人项目", false)
+	parentID := createOrgUnitAs(t, setup.admin, "负责人项目上级部", "")
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE org_unit SET parent_id = $2 WHERE id = $1
+	`, setup.unitID, parentID); err != nil {
+		t.Fatalf("move project unit under its parent: %v", err)
+	}
+	directLead := createPermissionTestMember(t, "project-lead-depth-direct@example.com")
+	ancestorLead := createPermissionTestMember(t, "project-lead-depth-ancestor@example.com")
+	setOrgUnitLead(t, setup.unitID, directLead)
+	setOrgUnitLead(t, parentID, ancestorLead)
+	// The ancestor's agent exists first, so only the lead-depth rule can keep it
+	// from being picked.
+	insertProjectAgent(t, setup.projectID, "project-lead-depth-ancestor-agent", ancestorLead)
+	directAgent := insertProjectAgent(t, setup.projectID, "project-lead-depth-direct-agent", directLead)
+
+	status, res, body := postDispatchWork(t, setup.requester, map[string]any{
+		"text":              "dispatch-test 负责人项目的问题",
+		"client_request_id": "66666666-6666-6666-6666-666666666013",
+		"project_id":        setup.projectID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", status, body)
+	}
+	if res.Issue.AssigneeID == nil || *res.Issue.AssigneeID != directAgent {
+		t.Fatalf("assignee = %v, want the direct lead's agent %s", res.Issue.AssigneeID, directAgent)
+	}
+}
+
 // TestDispatchWork_FreeTextNamesProjectBeforeTheModel covers the original
 // report: "AIHUB now serves which models?" names the project, so the project
 // runs it even though the owning department has no organization agent, and the
