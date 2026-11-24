@@ -282,68 +282,35 @@ func orgBotStatusLabel(status string) string {
 }
 
 func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons []orgBotCardButton, openLabel, openURL string) (string, error) {
-	elements := make([]any, 0, len(fields)+len(buttons)+1)
+	fieldRows := make([]any, 0, len(fields))
 	for _, field := range fields {
 		value := cardPlain(field.Value)
 		if value == "" {
 			continue
 		}
+		fieldRows = append(fieldRows, orgBotFieldRow(field.Label, value))
+	}
+	elements := make([]any, 0, 2)
+	if len(fieldRows) > 0 {
 		elements = append(elements, map[string]any{
 			"tag":                "column_set",
 			"flex_mode":          "none",
-			"background_style":   "default",
-			"horizontal_spacing": "8px",
+			"horizontal_spacing": "0px",
+			"margin":             "0px 0px 0px 0px",
 			"columns": []any{
 				map[string]any{
-					"tag":            "column",
-					"width":          "weighted",
-					"weight":         1,
-					"vertical_align": "center",
-					"elements": []any{
-						map[string]any{"tag": "markdown", "content": "**" + field.Label + "**"},
-					},
-				},
-				map[string]any{
-					"tag":            "column",
-					"width":          "weighted",
-					"weight":         3,
-					"vertical_align": "center",
-					"elements": []any{
-						map[string]any{"tag": "markdown", "content": value},
-					},
+					"tag":              "column",
+					"width":            "weighted",
+					"weight":           1,
+					"padding":          "0px 0px 0px 0px",
+					"vertical_spacing": "8px",
+					"elements":         fieldRows,
 				},
 			},
 		})
 	}
-	for i, button := range buttons {
-		kind := "default"
-		if i == 0 && strings.TrimSpace(openURL) == "" {
-			kind = "primary"
-		}
-		action := map[string]string{"action": button.Action}
-		elements = append(elements, map[string]any{
-			"tag":   "button",
-			"text":  map[string]any{"tag": "plain_text", "content": trimCardButton(button.Label)},
-			"type":  kind,
-			"value": action,
-			"behaviors": []any{
-				map[string]any{"type": "callback", "value": action},
-			},
-		})
-	}
-	if url := strings.TrimSpace(openURL); url != "" {
-		label := strings.TrimSpace(openLabel)
-		if label == "" {
-			label = "打开"
-		}
-		elements = append(elements, map[string]any{
-			"tag":  "button",
-			"text": map[string]any{"tag": "plain_text", "content": label},
-			"type": "primary",
-			"behaviors": []any{
-				map[string]any{"type": "open_url", "default_url": url},
-			},
-		})
+	if actions := orgBotActionRow(buttons, openLabel, openURL, len(fieldRows) > 0); actions != nil {
+		elements = append(elements, actions)
 	}
 	if len(elements) == 0 {
 		return "", nil
@@ -362,6 +329,130 @@ func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons 
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func orgBotFieldRow(label, value string) map[string]any {
+	return map[string]any{
+		"tag":                "column_set",
+		"flex_mode":          "none",
+		"horizontal_spacing": "12px",
+		"margin":             "0px 0px 0px 0px",
+		"columns": []any{
+			map[string]any{
+				"tag":            "column",
+				"width":          "weighted",
+				"weight":         2,
+				"vertical_align": "top",
+				"padding":        "0px 0px 0px 0px",
+				"elements": []any{
+					map[string]any{"tag": "markdown", "content": "<font color='grey'>" + cardPlain(label) + "</font>"},
+				},
+			},
+			map[string]any{
+				"tag":            "column",
+				"width":          "weighted",
+				"weight":         5,
+				"vertical_align": "top",
+				"padding":        "0px 0px 0px 0px",
+				"elements": []any{
+					map[string]any{"tag": "markdown", "content": value},
+				},
+			},
+		},
+	}
+}
+
+// orgBotActionRow places the open-task button and the switch on one row.
+// A choice list stays a full-width stack, since those labels are the content.
+func orgBotActionRow(buttons []orgBotCardButton, openLabel, openURL string, afterFields bool) any {
+	url := strings.TrimSpace(openURL)
+	callbacks := make([]map[string]any, 0, len(buttons))
+	for _, button := range buttons {
+		action := map[string]string{"action": button.Action}
+		callbacks = append(callbacks, orgBotButton(button.Label, "default", action, map[string]any{
+			"type": "callback", "value": action,
+		}))
+	}
+	var open map[string]any
+	if url != "" {
+		label := strings.TrimSpace(openLabel)
+		if label == "" {
+			label = "打开"
+		}
+		open = orgBotButton(label, "primary_filled", nil, map[string]any{
+			"type": "open_url", "default_url": url,
+		})
+	}
+	margin := "0px 0px 0px 0px"
+	if afterFields {
+		margin = "12px 0px 0px 0px"
+	}
+	if open != nil && len(callbacks) <= 1 {
+		columns := []any{orgBotButtonColumn(open, 3)}
+		if len(callbacks) == 1 {
+			columns = append(columns, orgBotButtonColumn(callbacks[0], 2))
+		}
+		return map[string]any{
+			"tag":                "column_set",
+			"flex_mode":          "none",
+			"horizontal_spacing": "8px",
+			"margin":             margin,
+			"columns":            columns,
+		}
+	}
+	stacked := callbacks
+	if open != nil {
+		stacked = append([]map[string]any{open}, callbacks...)
+	}
+	if len(stacked) == 0 {
+		return nil
+	}
+	if len(stacked) == 1 {
+		stacked[0]["margin"] = margin
+		return stacked[0]
+	}
+	return map[string]any{
+		"tag":                "column_set",
+		"flex_mode":          "none",
+		"horizontal_spacing": "0px",
+		"margin":             margin,
+		"columns": []any{
+			map[string]any{
+				"tag":              "column",
+				"width":            "weighted",
+				"weight":           1,
+				"padding":          "0px 0px 0px 0px",
+				"vertical_spacing": "8px",
+				"elements":         stacked,
+			},
+		},
+	}
+}
+
+func orgBotButton(label, kind string, value map[string]string, behavior map[string]any) map[string]any {
+	button := map[string]any{
+		"tag":       "button",
+		"text":      map[string]any{"tag": "plain_text", "content": trimCardButton(label)},
+		"type":      kind,
+		"width":     "fill",
+		"size":      "medium",
+		"behaviors": []any{behavior},
+	}
+	if value != nil {
+		button["value"] = value
+	}
+	return button
+}
+
+func orgBotButtonColumn(button map[string]any, weight int) map[string]any {
+	return map[string]any{
+		"tag":            "column",
+		"width":          "weighted",
+		"weight":         weight,
+		"vertical_align": "center",
+		"padding":        "0px 0px 0px 0px",
+		"elements":       []any{button},
+	}
 }
 
 func trimCardTitle(title string) string {

@@ -10,9 +10,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/testutil"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 func dispatchToOrgUnit(t *testing.T, userID, unitID string, body map[string]any) (int, orgDispatchResponse, string) {
@@ -782,5 +784,66 @@ func TestDispatchToOrgUnit_IntakeSourcesGateRequests(t *testing.T) {
 	testPool.Exec(context.Background(), `DELETE FROM org_unit_intake_source WHERE workspace_id = $1 AND org_unit_id = $2`, testWorkspaceID, target)
 	if status := dispatch("dispatch-test 已撤销"); status != http.StatusNotFound {
 		t.Fatalf("revoked status = %d, want 404", status)
+	}
+}
+
+// TestDispatch_SquadAndDepartmentCreatedEventCarriesTheRequester keeps the
+// person who handed the work subscribed. The subscriber listener reads the
+// creator from the created event. Project dispatch already sends that payload;
+// a squad or department issue is created on the other path and used to omit it,
+// so comments and status changes never reached the requester's Feishu chat.
+func TestDispatch_SquadAndDepartmentCreatedEventCarriesTheRequester(t *testing.T) {
+	startDispatchTest(t)
+	admin := createOrgTestAdmin(t, "dispatch-receipt-admin@example.com")
+	leader := insertRunnableDutyAgent(t, "dispatch-receipt-leader", admin)
+	unitID := createOrgUnitAs(t, admin, "回执订阅部", "")
+	placeOrgAgent(t, admin, leader, unitID)
+	t.Cleanup(func() { clearDispatchFixtures(t) })
+
+	created := map[string]map[string]any{}
+	testHandler.Bus.Subscribe(protocol.EventIssueCreated, func(e events.Event) {
+		if e.WorkspaceID != testWorkspaceID {
+			return
+		}
+		payload, _ := e.Payload.(map[string]any)
+		issue, _ := payload["issue"].(map[string]any)
+		id, _ := issue["id"].(string)
+		if id == "" {
+			return
+		}
+		created[id] = issue
+	})
+
+	status, dept, body := dispatchToOrgUnit(t, admin, unitID, map[string]any{
+		"title": "dispatch-test 部门回执", "description": "x",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("department status = %d, want 201: %s", status, body)
+	}
+	assertDispatchCreatorEvent(t, created[dept.Issue.ID], dept.Issue.ID, admin)
+
+	status, personal, body := postDispatchWork(t, admin, map[string]any{
+		"text":              "dispatch-test 小队回执",
+		"client_request_id": "77777777-7777-7777-7777-777777777017",
+		"personal":          true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("personal status = %d, want 201: %s", status, body)
+	}
+	assertDispatchCreatorEvent(t, created[personal.Issue.ID], personal.Issue.ID, admin)
+}
+
+func assertDispatchCreatorEvent(t *testing.T, issue map[string]any, issueID, creatorID string) {
+	t.Helper()
+	if issue == nil {
+		t.Fatalf("issue %s was created without an issue payload", issueID)
+	}
+	if issue["id"] != issueID || issue["creator_type"] != "member" || issue["creator_id"] != creatorID {
+		t.Fatalf("event issue = %v/%v/%v, want %s created by member %s",
+			issue["id"], issue["creator_type"], issue["creator_id"], issueID, creatorID)
+	}
+	assigneeType, _ := issue["assignee_type"].(*string)
+	if assigneeType == nil || *assigneeType != "squad" {
+		t.Fatalf("event assignee type = %v, want squad", issue["assignee_type"])
 	}
 }

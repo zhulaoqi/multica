@@ -271,7 +271,24 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		CreatorID:     p.ActorID,
 		AttachmentIDs: p.AttachmentIDs,
 		OrgUnitID:     unit.ID,
-	}, IssueCreateOpts{Platform: p.Platform})
+	}, IssueCreateOpts{
+		Platform: p.Platform,
+		// Squad and department issues are created here, not in dispatchToProject.
+		// The subscriber listener reads the creator from this payload; without
+		// it nobody is subscribed, so comments and status changes never become
+		// inbox items and the Feishu bot has nothing to relay.
+		BroadcastPayload: func(issue db.Issue, _ []db.Attachment, _ []db.IssueLabel) map[string]any {
+			prefix := ""
+			ws, err := s.Queries.GetWorkspace(ctx, issue.WorkspaceID)
+			if err != nil {
+				slog.Warn("dispatch: load workspace for created event failed",
+					"issue_id", util.UUIDToString(issue.ID), "error", err)
+			} else {
+				prefix = ws.IssuePrefix
+			}
+			return map[string]any{"issue": IssueToMapResolved(ctx, s.Queries, issue, prefix)}
+		},
+	})
 	if err != nil {
 		return OrgDispatchResult{}, err
 	}
