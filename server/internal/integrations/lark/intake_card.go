@@ -26,7 +26,7 @@ func IntakeCard(template, title, body, button, url string) (string, error) {
 				map[string]any{
 					"tag":  "button",
 					"text": map[string]any{"tag": "plain_text", "content": button},
-					"type": "primary",
+					"type": "primary_filled",
 					"behaviors": []any{
 						map[string]any{"type": "open_url", "default_url": url},
 					},

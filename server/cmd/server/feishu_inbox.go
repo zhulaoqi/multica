@@ -151,7 +151,7 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 	change := feishuInboxChange(ctx, queries, kind, item)
 	var lines []string
 	if subject != "" {
-		lines = append(lines, "**任务**　"+subject)
+		lines = append(lines, feishuInboxField("任务", subject))
 	}
 	if change != "" {
 		lines = append(lines, change)
@@ -212,14 +212,20 @@ func feishuChangeLine(label, from, to string) string {
 	to = strings.TrimSpace(to)
 	switch {
 	case from != "" && to != "" && from != to:
-		return "**" + label + "**　" + from + " → " + to
+		return feishuInboxField(label, from+" → "+to)
 	case to != "":
-		return "**" + label + "**　" + to
+		return feishuInboxField(label, to)
 	case from != "":
-		return "**" + label + "**　" + from
+		return feishuInboxField(label, from)
 	default:
 		return ""
 	}
+}
+
+// feishuInboxField mutes the label so the value reads first, the same way the
+// dispatch cards show their fields.
+func feishuInboxField(label, value string) string {
+	return "<font color='grey'>" + label + "</font>　" + value
 }
 
 func feishuStatusLabel(status string) string {

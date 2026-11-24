@@ -188,8 +188,13 @@ type orgBotCardField struct {
 
 // orgBotChoiceCard is the tap list. The header is the only title; the numbered
 // text reply stays outside the card for clients that cannot click buttons.
+// The options are the content, so each one spans the card.
 func orgBotChoiceCard(title string, buttons []orgBotCardButton) (string, error) {
-	return orgBotNoticeCard("blue", title, nil, buttons, "", "")
+	elements := make([]any, 0, len(buttons))
+	for _, button := range buttons {
+		elements = append(elements, orgBotCallbackButton(button, "fill"))
+	}
+	return orgBotCardJSON("blue", title, elements)
 }
 
 func orgBotSelectedCard(state OrgBotChatContext, allowSwitch bool) (string, error) {
@@ -281,37 +286,26 @@ func orgBotStatusLabel(status string) string {
 	}
 }
 
+// orgBotFieldLabelWidth fits a four-character label, so values start on one
+// line down the card whatever the label length.
+const orgBotFieldLabelWidth = "56px"
+
 func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons []orgBotCardButton, openLabel, openURL string) (string, error) {
-	fieldRows := make([]any, 0, len(fields))
+	elements := make([]any, 0, len(fields)+1)
 	for _, field := range fields {
 		value := cardPlain(field.Value)
 		if value == "" {
 			continue
 		}
-		fieldRows = append(fieldRows, orgBotFieldRow(field.Label, value))
+		elements = append(elements, orgBotFieldRow(field.Label, value))
 	}
-	elements := make([]any, 0, 2)
-	if len(fieldRows) > 0 {
-		elements = append(elements, map[string]any{
-			"tag":                "column_set",
-			"flex_mode":          "none",
-			"horizontal_spacing": "0px",
-			"margin":             "0px 0px 0px 0px",
-			"columns": []any{
-				map[string]any{
-					"tag":              "column",
-					"width":            "weighted",
-					"weight":           1,
-					"padding":          "0px 0px 0px 0px",
-					"vertical_spacing": "8px",
-					"elements":         fieldRows,
-				},
-			},
-		})
-	}
-	if actions := orgBotActionRow(buttons, openLabel, openURL, len(fieldRows) > 0); actions != nil {
+	if actions := orgBotActionRow(buttons, openLabel, openURL, len(elements) > 0); actions != nil {
 		elements = append(elements, actions)
 	}
+	return orgBotCardJSON(template, title, elements)
+}
+
+func orgBotCardJSON(template, title string, elements []any) (string, error) {
 	if len(elements) == 0 {
 		return "", nil
 	}
@@ -322,7 +316,10 @@ func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons 
 			"template": template,
 			"title":    map[string]any{"tag": "plain_text", "content": trimCardTitle(title)},
 		},
-		"body": map[string]any{"elements": elements},
+		"body": map[string]any{
+			"vertical_spacing": "8px",
+			"elements":         elements,
+		},
 	}
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -335,15 +332,12 @@ func orgBotFieldRow(label, value string) map[string]any {
 	return map[string]any{
 		"tag":                "column_set",
 		"flex_mode":          "none",
-		"horizontal_spacing": "12px",
-		"margin":             "0px 0px 0px 0px",
+		"horizontal_spacing": "8px",
 		"columns": []any{
 			map[string]any{
 				"tag":            "column",
-				"width":          "weighted",
-				"weight":         2,
+				"width":          orgBotFieldLabelWidth,
 				"vertical_align": "top",
-				"padding":        "0px 0px 0px 0px",
 				"elements": []any{
 					map[string]any{"tag": "markdown", "content": "<font color='grey'>" + cardPlain(label) + "</font>"},
 				},
@@ -351,9 +345,8 @@ func orgBotFieldRow(label, value string) map[string]any {
 			map[string]any{
 				"tag":            "column",
 				"width":          "weighted",
-				"weight":         5,
+				"weight":         1,
 				"vertical_align": "top",
-				"padding":        "0px 0px 0px 0px",
 				"elements": []any{
 					map[string]any{"tag": "markdown", "content": value},
 				},
@@ -362,79 +355,53 @@ func orgBotFieldRow(label, value string) map[string]any {
 	}
 }
 
-// orgBotActionRow places the open-task button and the switch on one row.
-// A choice list stays a full-width stack, since those labels are the content.
+// orgBotActionRow is the footer: the open-task button is the one filled
+// action and the callbacks follow it as outlined buttons. Each button keeps
+// its content width, and the row wraps on a narrow screen.
 func orgBotActionRow(buttons []orgBotCardButton, openLabel, openURL string, afterFields bool) any {
-	url := strings.TrimSpace(openURL)
-	callbacks := make([]map[string]any, 0, len(buttons))
-	for _, button := range buttons {
-		action := map[string]string{"action": button.Action}
-		callbacks = append(callbacks, orgBotButton(button.Label, "default", action, map[string]any{
-			"type": "callback", "value": action,
-		}))
-	}
-	var open map[string]any
-	if url != "" {
+	columns := make([]any, 0, len(buttons)+1)
+	if url := strings.TrimSpace(openURL); url != "" {
 		label := strings.TrimSpace(openLabel)
 		if label == "" {
 			label = "打开"
 		}
-		open = orgBotButton(label, "primary_filled", nil, map[string]any{
+		columns = append(columns, orgBotButtonColumn(orgBotButton(label, "primary_filled", "default", nil, map[string]any{
 			"type": "open_url", "default_url": url,
-		})
+		})))
 	}
-	margin := "0px 0px 0px 0px"
-	if afterFields {
-		margin = "12px 0px 0px 0px"
+	for _, button := range buttons {
+		columns = append(columns, orgBotButtonColumn(orgBotCallbackButton(button, "default")))
 	}
-	if open != nil && len(callbacks) <= 1 {
-		columns := []any{orgBotButtonColumn(open, 3)}
-		if len(callbacks) == 1 {
-			columns = append(columns, orgBotButtonColumn(callbacks[0], 2))
-		}
-		return map[string]any{
-			"tag":                "column_set",
-			"flex_mode":          "none",
-			"horizontal_spacing": "8px",
-			"margin":             margin,
-			"columns":            columns,
-		}
-	}
-	stacked := callbacks
-	if open != nil {
-		stacked = append([]map[string]any{open}, callbacks...)
-	}
-	if len(stacked) == 0 {
+	if len(columns) == 0 {
 		return nil
 	}
-	if len(stacked) == 1 {
-		stacked[0]["margin"] = margin
-		return stacked[0]
-	}
-	return map[string]any{
+	row := map[string]any{
 		"tag":                "column_set",
-		"flex_mode":          "none",
-		"horizontal_spacing": "0px",
-		"margin":             margin,
-		"columns": []any{
-			map[string]any{
-				"tag":              "column",
-				"width":            "weighted",
-				"weight":           1,
-				"padding":          "0px 0px 0px 0px",
-				"vertical_spacing": "8px",
-				"elements":         stacked,
-			},
-		},
+		"flex_mode":          "flow",
+		"horizontal_spacing": "8px",
+		"horizontal_align":   "left",
+		"columns":            columns,
 	}
+	if afterFields {
+		// Body spacing is 8px; the extra 8px sets the actions apart from the fields.
+		row["margin"] = "8px 0px 0px 0px"
+	}
+	return row
 }
 
-func orgBotButton(label, kind string, value map[string]string, behavior map[string]any) map[string]any {
+func orgBotCallbackButton(button orgBotCardButton, width string) map[string]any {
+	action := map[string]string{"action": button.Action}
+	return orgBotButton(button.Label, "default", width, action, map[string]any{
+		"type": "callback", "value": action,
+	})
+}
+
+func orgBotButton(label, kind, width string, value map[string]string, behavior map[string]any) map[string]any {
 	button := map[string]any{
 		"tag":       "button",
 		"text":      map[string]any{"tag": "plain_text", "content": trimCardButton(label)},
 		"type":      kind,
-		"width":     "fill",
+		"width":     width,
 		"size":      "medium",
 		"behaviors": []any{behavior},
 	}
@@ -444,13 +411,11 @@ func orgBotButton(label, kind string, value map[string]string, behavior map[stri
 	return button
 }
 
-func orgBotButtonColumn(button map[string]any, weight int) map[string]any {
+func orgBotButtonColumn(button map[string]any) map[string]any {
 	return map[string]any{
 		"tag":            "column",
-		"width":          "weighted",
-		"weight":         weight,
+		"width":          "auto",
 		"vertical_align": "center",
-		"padding":        "0px 0px 0px 0px",
 		"elements":       []any{button},
 	}
 }
