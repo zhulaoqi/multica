@@ -282,10 +282,27 @@ RETURNING id;
 -- name: ListDepartmentProjects :many
 -- Every department-owned project in the company. Who may request each one is
 -- decided in Go against the caller's access, so this query is access-neutral.
-SELECT id, name, slug, org_unit_id
+-- Description and context let the router match a request by what the project
+-- does, not only by its name.
+SELECT id, name, slug, org_unit_id,
+       COALESCE(description, '')::text AS description,
+       COALESCE(context, '')::text AS context
 FROM workspace
 WHERE NOT is_organization AND org_unit_id IS NOT NULL
 ORDER BY name;
+
+-- name: ListProjectAgentDuties :many
+-- The primary twins of several project workspaces with what each declared it
+-- takes on, so the router can match a request against a project's people and a
+-- department leader can name the agent a transferred request goes to.
+SELECT id, workspace_id, owner_id, name, description, COALESCE(intake_can, '')::text AS intake_can
+FROM agent
+WHERE workspace_id = ANY(sqlc.arg(workspace_ids)::uuid[])
+  AND archived_at IS NULL
+  AND kind = 'user'
+  AND is_primary
+  AND owner_id IS NOT NULL
+ORDER BY workspace_id, created_at;
 
 -- name: ListProjectDispatchAgents :many
 -- Agents in one project workspace that can execute a dispatch right now: user

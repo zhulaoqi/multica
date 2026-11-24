@@ -48,6 +48,17 @@
 //     caller's project module catalog (id, product, module, scope) and the
 //     utterance. Agent names are not included. A disabled client or a failed
 //     call creates no issue.
+//   - Dispatch routing — server/internal/service/org_dispatch_route.go. Only
+//     when no department or project name matched: sends the request text (at
+//     most 4000 runes) and the catalog of targets the requester may hand work —
+//     department names, paths and descriptions; project names, descriptions,
+//     context and the declared duties of each project's primary agents, each
+//     capped. When MULTICA_ROUTE_DECISION_MODEL is set, the same text and
+//     catalog first go to that decision model through Decider (decision.go,
+//     POST {base}/decision); an answer below 0.5 confidence, a failure or a
+//     disabled Decider falls through to the chat model. A disabled client or a
+//     failed call falls back to name matching and the requester's own
+//     department.
 //
 // Request shape beyond the prompts is deployment-controlled and lives in
 // Config: MaxRetries (transport budget) and DisableThinking, which appends
@@ -57,15 +68,14 @@
 // reject unknown body fields, so the knob is opt-in per deployment and off by
 // default.
 //
-// Both consumers send private chat content, which is why an unconfigured
+// Every consumer sends private content, which is why an unconfigured
 // deployment making zero upstream requests is a contract rather than a side
 // effect: New with no API key and no base URL returns a disabled client whose
-// every call fails with ErrNotConfigured before an HTTP request is ever built,
-// and both consumers check Enabled() before doing any work
+// every call fails with ErrNotConfigured before an HTTP request is ever built
 // (TestUnconfiguredClientMakesZeroUpstreamRequests). An operator who must not
 // let THIS layer send chat content leaves MULTICA_LLM_API_KEY and
 // MULTICA_LLM_BASE_URL empty; the product stays whole (client-derived chat
-// titles, no follow-up question buttons).
+// titles, no follow-up question buttons, name-only dispatch routing).
 //
 // The wrapper is intentionally small:
 //

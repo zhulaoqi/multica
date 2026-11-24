@@ -161,6 +161,10 @@ type OrgDispatchService struct {
 	// LLM routes natural-language workbench requests between departments.
 	// Nil or disabled falls back to deterministic matching.
 	LLM TextGenerator
+	// Decider is asked before LLM when routing: a decision model picks one
+	// target from the catalog and reports its confidence. Nil, disabled, a
+	// failure or a low-confidence answer falls through to LLM.
+	Decider RouteDecider
 }
 
 // Dispatch creates the root issue for one department. The squad leader is the

@@ -451,6 +451,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		LLMDefaultModel:                strings.TrimSpace(os.Getenv("MULTICA_LLM_DEFAULT_MODEL")),
 		LLMMaxRetries:                  opts.LLMMaxRetries,
 		LLMDisableThinking:             opts.LLMDisableThinking,
+		RouteDecisionModel:             strings.TrimSpace(os.Getenv("MULTICA_ROUTE_DECISION_MODEL")),
+		RouteDecisionBaseURL:           strings.TrimSpace(os.Getenv("MULTICA_ROUTE_DECISION_BASE_URL")),
+		RouteDecisionAPIKey:            strings.TrimSpace(os.Getenv("MULTICA_ROUTE_DECISION_API_KEY")),
 		ServerVersion:                  normalizeServerVersion(version),
 		GitExtraCACerts:                gitca.Load(slog.Default()),
 	}

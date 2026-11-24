@@ -162,6 +162,18 @@ type Config struct {
 	// cmd/server validates the raw value before the boot continues, so a
 	// non-boolean never reaches this struct.
 	LLMDisableThinking bool
+	// RouteDecision* configure the decision model dispatch routing asks before
+	// the chat model (llm.Decider, POST {base}/decision). An empty model turns
+	// it off.
+	//   - RouteDecisionModel   -> MULTICA_ROUTE_DECISION_MODEL (e.g. jev-latest)
+	//   - RouteDecisionBaseURL -> MULTICA_ROUTE_DECISION_BASE_URL, defaulting to
+	//     LLMBaseURL
+	//   - RouteDecisionAPIKey  -> MULTICA_ROUTE_DECISION_API_KEY, defaulting to
+	//     LLMAPIKey only when the base URL is the LLM one too, so the chat key
+	//     never travels to a different host
+	RouteDecisionModel   string
+	RouteDecisionBaseURL string
+	RouteDecisionAPIKey  string
 	// ServerVersion is the build version of the running API binary (the same
 	// value main.go stamps via -X main.version and reports on /metrics).
 	// Surfaced through /api/config so self-hosted operators can confirm which
@@ -512,6 +524,12 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		"disable_thinking", llmClient.DisableThinking(),
 	)
 
+	routeDecider := llm.NewDecider(routeDecisionConfig(cfg))
+	slog.Info("dispatch route decision model",
+		"enabled", routeDecider.Enabled(),
+		"model", routeDecider.Model(),
+	)
+
 	taskSvc := service.NewTaskService(queries, txStarter, hub, bus, daemonHub)
 	issueSvc := service.NewIssueService(queries, txStarter, bus, analyticsClient, taskSvc)
 	taskSvc.Analytics = analyticsClient
@@ -536,6 +554,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		IssueService:           issueSvc,
 		OrgDispatchService: &service.OrgDispatchService{
 			Queries: queries, TxStarter: txStarter, Issues: issueSvc, Tasks: taskSvc, Bus: bus, LLM: llmClient,
+			Decider: routeDecider,
 		},
 		AutopilotService:             service.NewAutopilotService(queries, txStarter, bus, taskSvc),
 		EmailService:                 emailService,
@@ -1450,4 +1469,18 @@ func (h *Handler) loadInboxItemForUser(w http.ResponseWriter, r *http.Request, i
 		return db.InboxItem{}, false
 	}
 	return item, true
+}
+
+// routeDecisionConfig resolves the routing decision model's endpoint. The base
+// URL defaults to the chat layer's; the chat key is reused only with it.
+func routeDecisionConfig(cfg Config) llm.DecisionConfig {
+	baseURL := strings.TrimSpace(cfg.RouteDecisionBaseURL)
+	apiKey := strings.TrimSpace(cfg.RouteDecisionAPIKey)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(cfg.LLMBaseURL)
+		if apiKey == "" {
+			apiKey = strings.TrimSpace(cfg.LLMAPIKey)
+		}
+	}
+	return llm.DecisionConfig{APIKey: apiKey, BaseURL: baseURL, Model: cfg.RouteDecisionModel}
 }

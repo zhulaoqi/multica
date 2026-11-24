@@ -389,21 +389,27 @@ func (q *Queries) ListAgentsInOrgUnits(ctx context.Context, workspaceID pgtype.U
 }
 
 const listDepartmentProjects = `-- name: ListDepartmentProjects :many
-SELECT id, name, slug, org_unit_id
+SELECT id, name, slug, org_unit_id,
+       COALESCE(description, '')::text AS description,
+       COALESCE(context, '')::text AS context
 FROM workspace
 WHERE NOT is_organization AND org_unit_id IS NOT NULL
 ORDER BY name
 `
 
 type ListDepartmentProjectsRow struct {
-	ID        pgtype.UUID `json:"id"`
-	Name      string      `json:"name"`
-	Slug      string      `json:"slug"`
-	OrgUnitID pgtype.UUID `json:"org_unit_id"`
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	Slug        string      `json:"slug"`
+	OrgUnitID   pgtype.UUID `json:"org_unit_id"`
+	Description string      `json:"description"`
+	Context     string      `json:"context"`
 }
 
 // Every department-owned project in the company. Who may request each one is
 // decided in Go against the caller's access, so this query is access-neutral.
+// Description and context let the router match a request by what the project
+// does, not only by its name.
 func (q *Queries) ListDepartmentProjects(ctx context.Context) ([]ListDepartmentProjectsRow, error) {
 	rows, err := q.db.Query(ctx, listDepartmentProjects)
 	if err != nil {
@@ -418,6 +424,8 @@ func (q *Queries) ListDepartmentProjects(ctx context.Context) ([]ListDepartmentP
 			&i.Name,
 			&i.Slug,
 			&i.OrgUnitID,
+			&i.Description,
+			&i.Context,
 		); err != nil {
 			return nil, err
 		}
@@ -596,6 +604,56 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 			&i.LeadUserID,
 			&i.Description,
 			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectAgentDuties = `-- name: ListProjectAgentDuties :many
+SELECT id, workspace_id, owner_id, name, description, COALESCE(intake_can, '')::text AS intake_can
+FROM agent
+WHERE workspace_id = ANY($1::uuid[])
+  AND archived_at IS NULL
+  AND kind = 'user'
+  AND is_primary
+  AND owner_id IS NOT NULL
+ORDER BY workspace_id, created_at
+`
+
+type ListProjectAgentDutiesRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	OwnerID     pgtype.UUID `json:"owner_id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	IntakeCan   string      `json:"intake_can"`
+}
+
+// The primary twins of several project workspaces with what each declared it
+// takes on, so the router can match a request against a project's people and a
+// department leader can name the agent a transferred request goes to.
+func (q *Queries) ListProjectAgentDuties(ctx context.Context, workspaceIds []pgtype.UUID) ([]ListProjectAgentDutiesRow, error) {
+	rows, err := q.db.Query(ctx, listProjectAgentDuties, workspaceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProjectAgentDutiesRow{}
+	for rows.Next() {
+		var i ListProjectAgentDutiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.OwnerID,
+			&i.Name,
+			&i.Description,
+			&i.IntakeCan,
 		); err != nil {
 			return nil, err
 		}

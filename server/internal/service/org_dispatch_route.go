@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/orgscope"
 	"github.com/multica-ai/multica/server/internal/workspaceaccess"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/llm"
 )
 
 const (
@@ -24,9 +26,17 @@ const (
 	dispatchTitleLimit = 80
 	// dispatchRouteLLMLimit bounds the candidate list sent to the model.
 	dispatchRouteLLMLimit = 60
+	// Per-field caps on the catalog the model reads.
+	dispatchRouteDescLimit    = 200
+	dispatchRouteContextLimit = 300
+	dispatchRouteDutyLimit    = 120
+	dispatchRouteDutyCount    = 8
 	// dispatchRouteTimeout keeps a slow model from stalling the send. The
 	// deterministic fallbacks run after a timeout.
 	dispatchRouteTimeout = 12 * time.Second
+	// dispatchRouteMinConfidence is the lowest decision-model confidence routing
+	// acts on; a less certain answer falls through to the chat model.
+	dispatchRouteMinConfidence = 0.5
 )
 
 var (
@@ -77,6 +87,11 @@ type routeProjectCandidate struct {
 	project db.ListDepartmentProjectsRow
 	unit    db.ListOrgUnitsRow
 	path    string
+	// duties are what the project's primary twins declared they take on.
+	duties []string
+	// agents are those primary twins, so a department leader can name the one
+	// a transferred request goes to.
+	agents []db.ListProjectAgentDutiesRow
 }
 
 // DispatchTextTitle derives the root issue title from the request: first
@@ -368,6 +383,35 @@ func (s *OrgDispatchService) routeProjectCandidates(
 		}
 		candidates = append(candidates, routeProjectCandidate{project: project, unit: unit, path: path})
 	}
+	if len(candidates) == 0 {
+		return candidates, nil
+	}
+	// The model matches a request by what a project's people take on, so each
+	// candidate carries its primary twins' declared duties. A failed read only
+	// thins the catalog; routing by name still works.
+	candidateIDs := make([]pgtype.UUID, len(candidates))
+	for i, candidate := range candidates {
+		candidateIDs[i] = candidate.project.ID
+	}
+	duties, err := s.Queries.ListProjectAgentDuties(ctx, candidateIDs)
+	if err != nil {
+		slog.Warn("dispatch route: list project agent duties failed", "error", err)
+		return candidates, nil
+	}
+	byProject := make(map[pgtype.UUID][]string, len(candidates))
+	agentsByProject := make(map[pgtype.UUID][]db.ListProjectAgentDutiesRow, len(candidates))
+	for _, row := range duties {
+		agentsByProject[row.WorkspaceID] = append(agentsByProject[row.WorkspaceID], row)
+		duty := dutyRowText(row)
+		if strings.TrimSpace(duty) == "" {
+			continue
+		}
+		byProject[row.WorkspaceID] = append(byProject[row.WorkspaceID], duty)
+	}
+	for i := range candidates {
+		candidates[i].duties = byProject[candidates[i].project.ID]
+		candidates[i].agents = agentsByProject[candidates[i].project.ID]
+	}
 	return candidates, nil
 }
 
@@ -448,9 +492,79 @@ type routeChoice struct {
 	Project *routeProjectCandidate
 }
 
-// routeWithLLM asks the configured model which department or project fits the
-// request. A disabled model, an error, a timeout, or an id outside the list
-// all fall through to the deterministic matchers.
+// RouteDecider is a decision-model client: it picks one key of options for the
+// request in state and reports its confidence (0..1). *llm.Decider satisfies it.
+type RouteDecider interface {
+	Choose(ctx context.Context, state map[string]any, instructions string, options map[string]string) (string, float64, error)
+}
+
+// routeCatalog is the target list both models read, keyed by target id.
+type routeCatalog struct {
+	units    map[string]db.ListOrgUnitsRow
+	projects map[string]routeProjectCandidate
+	// lines is the tab-separated catalog the chat model reads.
+	lines string
+	// options maps each target id to the description a decision model judges.
+	options map[string]string
+}
+
+func buildRouteCatalog(
+	units []db.ListOrgUnitsRow,
+	paths map[pgtype.UUID]string,
+	agentCounts map[pgtype.UUID]int,
+	projects []routeProjectCandidate,
+) routeCatalog {
+	if len(units) > dispatchRouteLLMLimit {
+		units = units[:dispatchRouteLLMLimit]
+	}
+	catalog := routeCatalog{
+		units:    make(map[string]db.ListOrgUnitsRow, len(units)),
+		projects: make(map[string]routeProjectCandidate, len(projects)),
+		options:  make(map[string]string, len(units)+len(projects)),
+	}
+	var b strings.Builder
+	b.WriteString("可选目标（类型\tid\t名称/路径\t说明）：\n")
+	for _, unit := range units {
+		id := uuidString(unit.ID)
+		catalog.units[id] = unit
+		note := fmt.Sprintf("Agent 数 %d", agentCounts[unit.ID])
+		if desc := routeCatalogText(unit.Description, dispatchRouteDescLimit); desc != "" {
+			note += "；简介：" + desc
+		}
+		fmt.Fprintf(&b, "department\t%s\t%s\t%s\n", id, paths[unit.ID], note)
+		catalog.options[id] = "部门 " + paths[unit.ID] + "：" + note
+	}
+	for _, candidate := range projects {
+		id := uuidString(candidate.project.ID)
+		catalog.projects[id] = candidate
+		note := routeProjectNote(candidate)
+		fmt.Fprintf(&b, "project\t%s\t%s\t%s\n", id, candidate.project.Name, note)
+		catalog.options[id] = "项目 " + candidate.project.Name + "：" + note
+	}
+	catalog.lines = b.String()
+	return catalog
+}
+
+// choice resolves a target id the model returned. kind narrows the lookup when
+// the model said which kind it meant.
+func (c routeCatalog) choice(kind, id string) (routeChoice, bool) {
+	if kind != "department" {
+		if candidate, ok := c.projects[id]; ok {
+			return routeChoice{Project: &candidate}, true
+		}
+	}
+	if kind != "project" {
+		if unit, ok := c.units[id]; ok {
+			return routeChoice{Unit: unit}, true
+		}
+	}
+	return routeChoice{}, false
+}
+
+// routeWithLLM asks the configured models which department or project fits the
+// request: the decision model first, then the chat model. A disabled model, an
+// error, a timeout, a low-confidence decision or an id outside the list all
+// fall through, finally to the deterministic matchers.
 func (s *OrgDispatchService) routeWithLLM(
 	ctx context.Context,
 	text string,
@@ -459,33 +573,20 @@ func (s *OrgDispatchService) routeWithLLM(
 	agentCounts map[pgtype.UUID]int,
 	projects []routeProjectCandidate,
 ) (routeChoice, bool) {
+	if s.Decider == nil && s.LLM == nil {
+		return routeChoice{}, false
+	}
+	catalog := buildRouteCatalog(units, paths, agentCounts, projects)
+	if choice, ok := s.routeWithDecider(ctx, text, catalog); ok {
+		return choice, true
+	}
 	if s.LLM == nil {
 		return routeChoice{}, false
 	}
-	candidates := units
-	if len(candidates) > dispatchRouteLLMLimit {
-		candidates = candidates[:dispatchRouteLLMLimit]
-	}
-	var b strings.Builder
-	b.WriteString("可选目标（类型\tid\t名称/路径\t说明）：\n")
-	unitsByID := make(map[string]db.ListOrgUnitsRow, len(candidates))
-	for _, unit := range candidates {
-		id := uuidString(unit.ID)
-		unitsByID[id] = unit
-		fmt.Fprintf(&b, "department\t%s\t%s\tAgent 数 %d\n", id, paths[unit.ID], agentCounts[unit.ID])
-	}
-	projectsByID := make(map[string]routeProjectCandidate, len(projects))
-	for _, candidate := range projects {
-		id := uuidString(candidate.project.ID)
-		projectsByID[id] = candidate
-		fmt.Fprintf(&b, "project\t%s\t%s\t所属部门 %s\n", id, candidate.project.Name, candidate.path)
-	}
-	b.WriteString("\n用户请求：\n")
-	b.WriteString(text)
 
 	llmCtx, cancel := context.WithTimeout(ctx, dispatchRouteTimeout)
 	defer cancel()
-	raw, err := s.LLM.GenerateText(llmCtx, "", dispatchRouteSystemPrompt, b.String())
+	raw, err := s.LLM.GenerateText(llmCtx, "", dispatchRouteSystemPrompt, catalog.lines+"\n用户请求：\n"+text)
 	if err != nil {
 		return routeChoice{}, false
 	}
@@ -493,24 +594,83 @@ func (s *OrgDispatchService) routeWithLLM(
 	if !ok {
 		return routeChoice{}, false
 	}
-	if parsed.TargetType == "project" {
-		candidate, ok := projectsByID[parsed.TargetID]
-		if !ok {
-			return routeChoice{}, false
-		}
-		return routeChoice{Project: &candidate}, true
+	if parsed.TargetType != "project" {
+		parsed.TargetType = "department"
 	}
-	unit, ok := unitsByID[parsed.TargetID]
-	if !ok {
+	return catalog.choice(parsed.TargetType, parsed.TargetID)
+}
+
+// routeWithDecider asks the decision model for one target. An answer below
+// dispatchRouteMinConfidence counts as no answer.
+func (s *OrgDispatchService) routeWithDecider(ctx context.Context, text string, catalog routeCatalog) (routeChoice, bool) {
+	if s.Decider == nil || len(catalog.options) == 0 {
 		return routeChoice{}, false
 	}
-	return routeChoice{Unit: unit}, true
+	decideCtx, cancel := context.WithTimeout(ctx, dispatchRouteTimeout)
+	defer cancel()
+	id, confidence, err := s.Decider.Choose(decideCtx, map[string]any{"request": text}, dispatchRouteDecisionInstructions, catalog.options)
+	if err != nil {
+		if !errors.Is(err, llm.ErrNotConfigured) {
+			slog.Warn("dispatch route: decision model failed", "error", err)
+		}
+		return routeChoice{}, false
+	}
+	if confidence < dispatchRouteMinConfidence {
+		slog.Info("dispatch route: decision below confidence floor", "target_id", id, "confidence", confidence)
+		return routeChoice{}, false
+	}
+	return catalog.choice("", id)
 }
+
+// dutyRowText reads a duty row the way agentDuty reads an agent.
+func dutyRowText(row db.ListProjectAgentDutiesRow) string {
+	return agentDuty(db.Agent{IntakeCan: pgtype.Text{String: row.IntakeCan, Valid: true}, Description: row.Description})
+}
+
+// routeProjectNote is the description column of one project row: owning
+// department, what the project is, and what its people take on.
+func routeProjectNote(candidate routeProjectCandidate) string {
+	parts := []string{"所属部门 " + candidate.path}
+	if desc := routeCatalogText(candidate.project.Description, dispatchRouteDescLimit); desc != "" {
+		parts = append(parts, "简介："+desc)
+	}
+	if background := routeCatalogText(candidate.project.Context, dispatchRouteContextLimit); background != "" {
+		parts = append(parts, "背景："+background)
+	}
+	duties := make([]string, 0, len(candidate.duties))
+	for _, duty := range candidate.duties {
+		if text := routeCatalogText(duty, dispatchRouteDutyLimit); text != "" {
+			duties = append(duties, text)
+		}
+		if len(duties) == dispatchRouteDutyCount {
+			break
+		}
+	}
+	if len(duties) > 0 {
+		parts = append(parts, "成员职责："+strings.Join(duties, " / "))
+	}
+	return strings.Join(parts, "；")
+}
+
+// routeCatalogText flattens free text onto one catalog line and caps it, so a
+// long project context cannot crowd out the other candidates.
+func routeCatalogText(text string, limit int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if runes := []rune(text); len(runes) > limit {
+		text = string(runes[:limit]) + "…"
+	}
+	return text
+}
+
+const dispatchRouteDecisionInstructions = `选出最能接住 request 这件工作请求的部门或项目。
+按请求涉及的业务领域选择，不要按名称的字面相似度：对照每个选项的简介、背景和成员职责。
+请求明确说到某个项目，或某个项目的简介、背景或成员职责覆盖了请求时，选该项目，而不是它的所属部门。`
 
 const dispatchRouteSystemPrompt = `你要把一个工作请求分配给最合适的部门或项目。
 只返回 JSON：{"target_type":"department","target_id":"..."} 或 {"target_type":"project","target_id":"..."}。
 target_id 必须来自给定列表；无法判断时返回 {"target_type":"","target_id":""}。
-按请求涉及的业务领域选择，不要按名称的字面相似度；请求明确说到某个项目时优先选该项目。`
+按请求涉及的业务领域选择，不要按名称的字面相似度：对照每个目标的简介、背景和成员职责，选最能接住这件事的目标。
+请求明确说到某个项目，或某个项目的简介、背景或成员职责覆盖了请求时，优先选该项目，而不是它的所属部门。`
 
 // dispatchRouteParse is the model's JSON answer. Older answers used unit_id
 // alone; they still parse as a department target.
