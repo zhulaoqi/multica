@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +51,14 @@ type RouteProject struct {
 	ID   pgtype.UUID
 	Name string
 	Slug string
+}
+
+// RequestableProject is a department-owned project the caller may hand work.
+// Path is the owning department, which is where the work runs.
+type RequestableProject struct {
+	ID   pgtype.UUID
+	Name string
+	Path string
 }
 
 // RouteResult resolves one natural-language dispatch to a department, or to a
@@ -359,6 +368,47 @@ func (s *OrgDispatchService) routeProjectCandidates(
 		candidates = append(candidates, routeProjectCandidate{project: project, unit: unit, path: path})
 	}
 	return candidates, nil
+}
+
+// ListRequestableProjects returns the projects this person may hand work,
+// the same set the workbench offers. The bot's project picker uses it so a
+// hidden project is never named.
+func (s *OrgDispatchService) ListRequestableProjects(ctx context.Context, wsUUID, actorID pgtype.UUID) ([]RequestableProject, error) {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, wsUUID, actorID, false)
+	if err != nil || !access.Allowed() {
+		return nil, ErrDispatchRequesterNotInTeam
+	}
+	units, err := orgUnitsForUser(ctx, s.Queries, wsUUID, access)
+	if err != nil {
+		return nil, fmt.Errorf("list org units: %w", err)
+	}
+	paths := orgscope.Paths(units)
+	sources, err := intakeSources(ctx, s.Queries, wsUUID)
+	if err != nil {
+		return nil, err
+	}
+	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, wsUUID)
+	if err != nil {
+		return nil, fmt.Errorf("list org agents: %w", err)
+	}
+	runnable := make(map[pgtype.UUID]bool, len(units))
+	for id, count := range unitAgentCounts(units, agents) {
+		runnable[id] = count > 0
+	}
+	candidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, runnable, paths)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RequestableProject, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, RequestableProject{
+			ID:   candidate.project.ID,
+			Name: candidate.project.Name,
+			Path: candidate.path,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
 }
 
 // routeChoice is one model answer: a department or a project.

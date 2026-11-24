@@ -88,6 +88,19 @@ func (f *orgBotDispatcherFake) ResolveUnits(context.Context, pgtype.UUID, pgtype
 	return f.matches, f.resolveErr
 }
 
+type orgBotRouterFake struct {
+	result service.RouteResult
+	err    error
+	text   string
+	calls  int
+}
+
+func (f *orgBotRouterFake) Route(_ context.Context, _, _ pgtype.UUID, text string, _ pgtype.UUID) (service.RouteResult, error) {
+	f.calls++
+	f.text = text
+	return f.result, f.err
+}
+
 func testUUID(b byte) pgtype.UUID {
 	var u pgtype.UUID
 	u.Valid = true
@@ -207,8 +220,84 @@ func TestOrgBot_EmptyP2PMessageGetsReply(t *testing.T) {
 	if len(h.client.textSent) != 1 {
 		t.Fatalf("sent %d messages, want 1", len(h.client.textSent))
 	}
-	if text := h.client.textSent[0].Text; !strings.Contains(text, "/dispatch") {
-		t.Fatalf("sticker reply missing dispatch hint: %q", text)
+	if text := h.client.textSent[0].Text; !strings.Contains(text, "直接把要做的事发给我") {
+		t.Fatalf("sticker reply missing private-chat hint: %q", text)
+	}
+}
+
+func TestOrgBot_P2PPlainTextDispatchesLikeWorkbench(t *testing.T) {
+	dispatcher := &orgBotDispatcherFake{
+		dispatch: service.OrgDispatchResult{
+			Issue: db.Issue{ID: testUUID(0x42), Number: 7, Title: "看一下对账差异"},
+			Unit:  db.ListOrgUnitsRow{Name: "支付组"},
+		},
+	}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = &orgBotRouterFake{
+		result: service.RouteResult{
+			Path: "财务/支付组",
+			Unit: db.ListOrgUnitsRow{ID: testUUID(0x21), Name: "支付组"},
+		},
+	}
+
+	msg := InboundMessage{
+		ChatID:       "oc_dm",
+		ChatType:     ChatTypeP2P,
+		MessageID:    "om_dm_1",
+		SenderOpenID: "ou_user",
+		MessageType:  "text",
+		CommandBody:  "帮支付组看一下对账差异",
+	}
+	res, err := h.bot.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if res.Outcome != OutcomeDispatchCreated {
+		t.Fatalf("outcome = %q", res.Outcome)
+	}
+	if len(dispatcher.calls) != 1 || dispatcher.calls[0].Description != "帮支付组看一下对账差异" {
+		t.Fatalf("dispatch = %+v", dispatcher.calls)
+	}
+	if dispatcher.calls[0].UnitID != testUUID(0x21) {
+		t.Fatalf("unit = %+v", dispatcher.calls[0].UnitID)
+	}
+	if len(h.client.textSent) != 1 || !strings.Contains(h.client.textSent[0].Text, "ORG-7") {
+		t.Fatalf("reply = %+v", h.client.textSent)
+	}
+}
+
+func TestOrgBot_P2PAmbiguousDepartmentRepliesWithChoices(t *testing.T) {
+	dispatcher := &orgBotDispatcherFake{}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = &orgBotRouterFake{
+		err: service.ErrDispatchAmbiguous,
+		result: service.RouteResult{Candidates: []service.RouteCandidate{
+			{Path: "财务/支付组"},
+			{Path: "财务/结算组"},
+		}},
+	}
+
+	msg := InboundMessage{
+		ChatID:       "oc_dm",
+		ChatType:     ChatTypeP2P,
+		MessageID:    "om_dm_2",
+		SenderOpenID: "ou_user",
+		MessageType:  "text",
+		CommandBody:  "帮我看一下账单",
+	}
+	res, err := h.bot.Handle(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if res.Outcome != OutcomeDispatchAmbiguous {
+		t.Fatalf("outcome = %q", res.Outcome)
+	}
+	if len(dispatcher.calls) != 0 {
+		t.Fatalf("dispatched %d times", len(dispatcher.calls))
+	}
+	text := h.client.textSent[0].Text
+	if !strings.Contains(text, "财务/支付组") || !strings.Contains(text, "财务/结算组") {
+		t.Fatalf("reply = %q", text)
 	}
 }
 

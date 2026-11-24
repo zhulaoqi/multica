@@ -17,6 +17,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/integrations/channel"
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
+	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -48,6 +49,7 @@ const (
 type feishuOrgBotWorker struct {
 	queries     *db.Queries
 	dispatcher  engine.OrgDispatcher
+	router      lark.OrgBotRouter
 	chat        lark.OrgBotChatStore
 	attachments lark.OrgBotAttachmentStore
 	client      lark.APIClient
@@ -59,6 +61,8 @@ type feishuOrgBotWorker struct {
 	bot            *lark.OrgBot
 	installationID pgtype.UUID
 }
+
+var _ lark.OrgBotProjects = (*service.OrgDispatchService)(nil)
 
 // registerFeishuOrgBot wires the organization bot when the Feishu login app is
 // configured. Returns nil (and logs why) otherwise.
@@ -91,6 +95,7 @@ func registerFeishuOrgBot(h *handler.Handler, queries *db.Queries, appURL string
 	return &feishuOrgBotWorker{
 		queries:     queries,
 		dispatcher:  h.OrgDispatchService,
+		router:      h.OrgDispatchService,
 		chat:        h.OrgDispatchService,
 		attachments: orgBotAttachmentStore{handler: h},
 		client:      client,
@@ -118,7 +123,7 @@ func buildOrgBotConnector(creds lark.InstallationCredentials) (lark.EventConnect
 	return lark.NewWSLongConnConnector(lark.WSConnectorConfig{
 		Dialer:          dialer,
 		EndpointFetcher: fetcher,
-		FrameDecoder:    lark.NewLarkJSONFrameDecoder(),
+		FrameDecoder:    lark.NewOrgBotFrameDecoder(),
 		CredentialsProvider: lark.CredentialsProviderFunc(func(context.Context, lark.Installation) (lark.InstallationCredentials, error) {
 			return creds, nil
 		}),
@@ -213,6 +218,10 @@ func (w *feishuOrgBotWorker) ensure(ctx context.Context) error {
 		return err
 	}
 
+	var projects lark.OrgBotProjects
+	if catalog, ok := w.router.(lark.OrgBotProjects); ok {
+		projects = catalog
+	}
 	bot, err := lark.NewOrgBot(lark.OrgBotConfig{
 		InstallationID: row.ID,
 		BotOpenID:      string(info.OpenID),
@@ -223,6 +232,9 @@ func (w *feishuOrgBotWorker) ensure(ctx context.Context) error {
 		Organization:   w.queries,
 		Dedup:          w.queries,
 		Dispatcher:     w.dispatcher,
+		Router:         w.router,
+		Projects:       projects,
+		Context:        lark.NewDBOrgBotContext(w.queries),
 		Chat:           w.chat,
 		Attachments:    w.attachments,
 		AppURL:         w.appURL,

@@ -325,7 +325,7 @@ func TestOrgBot_ThreadFollowUpWithoutDispatchUsesGuidance(t *testing.T) {
 	}
 }
 
-func TestOrgBot_PlainGroupMessageWithoutThreadShowsUsage(t *testing.T) {
+func TestOrgBot_AddressedGroupPlainTextUsesWorkbench(t *testing.T) {
 	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), &orgBotDispatcherFake{})
 
 	res, err := h.bot.Handle(context.Background(), groupDispatchMessage("你好"))
@@ -335,8 +335,8 @@ func TestOrgBot_PlainGroupMessageWithoutThreadShowsUsage(t *testing.T) {
 	if res.Outcome != OutcomeDispatchUsage {
 		t.Fatalf("outcome = %q", res.Outcome)
 	}
-	if !strings.Contains(orgBotUsageCopy, "/status") || !strings.Contains(orgBotUsageCopy, "/reassign") {
-		t.Fatalf("usage copy does not mention the control commands")
+	if !strings.Contains(h.client.textSent[0].Text, "直接把要做的事发给我") {
+		t.Fatalf("reply = %q", h.client.textSent[0].Text)
 	}
 }
 

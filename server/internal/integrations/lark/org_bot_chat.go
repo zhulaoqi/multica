@@ -294,25 +294,55 @@ func (b *OrgBot) mediaReply(ctx context.Context, msg InboundMessage) (string, Di
 	if unbound {
 		return b.loginPromptReply(), DispatchResult{Outcome: OutcomeNeedsBinding}, nil
 	}
+	// A file outside a topic waits for the sentence that creates the task.
+	// Feishu sends the file as its own event, often before the text.
+	if msg.ThreadID == "" {
+		return b.keepInboundMedia(ctx, msg, userID)
+	}
 	dispatch, err := b.threadDispatch(ctx, userID, msg)
 	if err != nil {
 		return orgBotNoThreadCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 	}
+	media, reply, result, err := b.downloadInboundMedia(ctx, msg)
+	if err != nil || reply != "" {
+		return reply, result, err
+	}
+	stored, err := b.cfg.Attachments.AttachToIssue(ctx, OrgBotAttachment{
+		ActorID:     userID,
+		WorkspaceID: dispatch.WorkspaceID,
+		IssueID:     dispatch.IssueID,
+		Filename:    media.Filename,
+		ContentType: media.ContentType,
+		Data:        media.Data,
+	})
+	if err != nil {
+		return "", DispatchResult{}, fmt.Errorf("attach inbound media: %w", err)
+	}
+	return fmt.Sprintf("已把 %s 附加到 %s。", stored.Filename, dispatch.Identifier),
+		DispatchResult{Outcome: OutcomeIngested}, nil
+}
+
+type inboundMediaFile struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+func (b *OrgBot) downloadInboundMedia(ctx context.Context, msg InboundMessage) (inboundMediaFile, string, DispatchResult, error) {
 	fileKey, filename, ok := orgMediaResource(msg)
 	if !ok {
-		return orgBotMediaUnsupportedCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+		return inboundMediaFile{}, orgBotMediaUnsupportedCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 	}
-
 	resource, err := b.cfg.Client.DownloadMessageResource(ctx, b.cfg.Credentials, DownloadResourceParams{
 		MessageID: msg.MessageID,
 		FileKey:   fileKey,
 		Type:      msg.MessageType,
 	})
 	if err != nil {
-		return "", DispatchResult{}, fmt.Errorf("download inbound media: %w", err)
+		return inboundMediaFile{}, "", DispatchResult{}, fmt.Errorf("download inbound media: %w", err)
 	}
 	if int64(len(resource.Data)) > orgBotAttachmentMaxBytes {
-		return orgBotAttachmentTooLargeCopy, DispatchResult{Outcome: OutcomeIngested}, nil
+		return inboundMediaFile{}, orgBotAttachmentTooLargeCopy, DispatchResult{Outcome: OutcomeIngested}, nil
 	}
 	if name := strings.TrimSpace(resource.Filename); name != "" {
 		filename = name
@@ -320,20 +350,7 @@ func (b *OrgBot) mediaReply(ctx context.Context, msg InboundMessage) (string, Di
 	if filename == "" {
 		filename = "attachment"
 	}
-
-	stored, err := b.cfg.Attachments.AttachToIssue(ctx, OrgBotAttachment{
-		ActorID:     userID,
-		WorkspaceID: dispatch.WorkspaceID,
-		IssueID:     dispatch.IssueID,
-		Filename:    filename,
-		ContentType: resource.ContentType,
-		Data:        resource.Data,
-	})
-	if err != nil {
-		return "", DispatchResult{}, fmt.Errorf("attach inbound media: %w", err)
-	}
-	return fmt.Sprintf("已把 %s 附加到 %s。", stored.Filename, dispatch.Identifier),
-		DispatchResult{Outcome: OutcomeIngested}, nil
+	return inboundMediaFile{Filename: filename, ContentType: resource.ContentType, Data: resource.Data}, "", DispatchResult{}, nil
 }
 
 func (b *OrgBot) threadDispatch(ctx context.Context, userID pgtype.UUID, msg InboundMessage) (service.ChatDispatch, error) {

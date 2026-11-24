@@ -27,7 +27,8 @@ const OrgBotChannelType = "feishu_org"
 // through the same OrgDispatchService as the in-app dialog, so department
 // visibility, squad leadership and the requester's twin gate stay identical.
 type OrgBot struct {
-	cfg OrgBotConfig
+	cfg   OrgBotConfig
+	files orgBotFileBuffer
 }
 
 // OrgBotIdentityStore resolves a Feishu sender to a Multica user. It reads
@@ -41,6 +42,12 @@ type OrgBotIdentityStore interface {
 // OrgBotOrganizationStore finds the organization workspace dispatches land in.
 type OrgBotOrganizationStore interface {
 	GetOrganizationWorkspace(ctx context.Context) (db.Workspace, error)
+}
+
+// OrgBotRouter is the workbench's natural-language routing. A private
+// message uses it so the sender does not have to write a /dispatch command.
+type OrgBotRouter interface {
+	Route(ctx context.Context, wsUUID, actorID pgtype.UUID, text string, explicitUnitID pgtype.UUID) (service.RouteResult, error)
 }
 
 // OrgBotDedupStore drops replayed events after a reconnect. It reuses the
@@ -65,8 +72,18 @@ type OrgBotConfig struct {
 	Organization OrgBotOrganizationStore
 	Dedup        OrgBotDedupStore
 	Dispatcher   engine.OrgDispatcher
-	Chat         OrgBotChatStore
-	Attachments  OrgBotAttachmentStore
+	// Router turns a plain private message into the same department or
+	// project choice the in-app workbench makes. Commands still use
+	// Dispatcher directly.
+	Router OrgBotRouter
+	// Projects lists projects this person may hand work. Nil means the
+	// picker only accepts a typed project name.
+	Projects OrgBotProjects
+	// Context remembers the target chosen in this chat. Nil means each
+	// message is routed on its own.
+	Context     OrgBotContextStore
+	Chat        OrgBotChatStore
+	Attachments OrgBotAttachmentStore
 
 	AppURL string
 	Logger *slog.Logger
@@ -189,7 +206,8 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 		// Stickers, voice and video carry no dispatchable text. Answering beats
 		// silence: a person who just sent something must see that the bot is
 		// alive and what it accepts.
-		return orgBotEmptyMessageCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+		b.sendChoiceCard(ctx, msg, orgBotMenuCard())
+		return orgBotP2PHintCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 	}
 	if chatCommand, ok := parseOrgChatCommand(command); ok {
 		return b.chatCommandReply(ctx, msg, chatCommand)
@@ -197,12 +215,13 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 
 	cmd, ok := engine.ParseDispatchCommand(command)
 	if !ok {
-		// A plain message in a dispatch topic (or the bot's p2p chat) is a
-		// follow-up on the work that thread belongs to.
-		if msg.ThreadID != "" || msg.ChatType == ChatTypeP2P {
+		// A reply inside a dispatch topic continues that piece of work.
+		// Anything else addressed to the bot — a private chat, or an @ in a
+		// group — is a new request, the same as the in-app composer.
+		if msg.ThreadID != "" {
 			return b.followUpReply(ctx, msg, command)
 		}
-		return orgBotUsageCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+		return b.workbenchReply(ctx, msg, command)
 	}
 	if !cmd.Valid() {
 		return orgBotUsageCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
@@ -275,16 +294,26 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 	}
 
 	identifier := service.IssueIdentifier(org.IssuePrefix, result.Issue.Number)
-	return orgDispatchCreatedText(org.Slug, matches[0].Path, identifier, result.Issue.Title, b.cfg.AppURL),
-		DispatchResult{
-			Outcome:            OutcomeDispatchCreated,
-			IssueID:            result.Issue.ID,
-			IssueNumber:        result.Issue.Number,
-			IssueIdentifier:    identifier,
-			IssueWorkspaceSlug: org.Slug,
-			IssueTitle:         result.Issue.Title,
-			DispatchUnitName:   result.Unit.Name,
-		}, nil
+	reply := prefixTarget(matches[0].Path, orgDispatchCreatedText(org.Slug, matches[0].Path, identifier, result.Issue.Title, b.cfg.AppURL))
+	if note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID); note != "" {
+		reply += "\n" + note
+	}
+	b.saveTarget(ctx, msg, userID, OrgBotChatContext{
+		Kind:                orgBotTargetDepartment,
+		UnitID:              matches[0].Unit.ID,
+		UnitPath:            matches[0].Path,
+		LastIssueID:         result.Issue.ID,
+		LastIssueIdentifier: identifier,
+	})
+	return reply, DispatchResult{
+		Outcome:            OutcomeDispatchCreated,
+		IssueID:            result.Issue.ID,
+		IssueNumber:        result.Issue.Number,
+		IssueIdentifier:    identifier,
+		IssueWorkspaceSlug: org.Slug,
+		IssueTitle:         result.Issue.Title,
+		DispatchUnitName:   result.Unit.Name,
+	}, nil
 }
 
 // senderUser resolves the Feishu sender. unbound is true when the sender has
@@ -335,7 +364,10 @@ const (
 		"`/accept 编号` 验收通过；`/reject 编号 <原因>` 驳回返工。"
 	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
-	orgBotEmptyMessageCopy   = "这条消息里没有文字。派活请用 `/dispatch <部门名或完整路径>`；在派活的话题里可以直接用文字追问，或发送图片、文件。"
+	orgBotP2PHintCopy        = "直接把要做的事发给我，和在易研里发一样。例如：帮支付组看一下对账差异。回复「换目标」可以选择部门、我的小队或项目。"
+	orgBotP2PAmbiguousCopy   = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
+	orgBotP2PUnroutableCopy  = "没能判断该交给哪个部门。在这句话里写上部门名称后再发一次。"
+	orgBotP2PTooLongCopy     = "这条消息太长了，请缩短后再发。"
 )
 
 // orgDispatchCreatedText links into the organization workspace, where every

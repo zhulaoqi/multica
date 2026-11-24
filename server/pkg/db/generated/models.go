@@ -1341,6 +1341,23 @@ type NotificationPreference struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OrgBotChatContext struct {
+	InstallationID      pgtype.UUID        `json:"installation_id"`
+	ChatID              string             `json:"chat_id"`
+	UserID              pgtype.UUID        `json:"user_id"`
+	TargetKind          string             `json:"target_kind"`
+	UnitID              pgtype.UUID        `json:"unit_id"`
+	UnitPath            string             `json:"unit_path"`
+	ProjectID           pgtype.UUID        `json:"project_id"`
+	ProjectName         string             `json:"project_name"`
+	Awaiting            string             `json:"awaiting"`
+	PendingText         string             `json:"pending_text"`
+	PendingCandidates   string             `json:"pending_candidates"`
+	LastIssueID         pgtype.UUID        `json:"last_issue_id"`
+	LastIssueIdentifier string             `json:"last_issue_identifier"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OrgChannelInstallation struct {
 	ID               pgtype.UUID        `json:"id"`
 	ChannelType      string             `json:"channel_type"`
