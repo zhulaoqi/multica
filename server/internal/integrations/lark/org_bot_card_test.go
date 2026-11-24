@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/multica-ai/multica/server/internal/service"
 )
 
 func TestOrgBotFrameDecoderCardAction(t *testing.T) {
@@ -65,7 +67,7 @@ func TestOrgBotCardsStayCompact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dispatched: %v", err)
 	}
-	start, err := OrgDispatchStartCard("AIHU-6", "把登录失败的提示改清楚", "开发二组", "https://yiyan.example/aihub/issues/AIHU-6")
+	start, err := OrgDispatchStartCard("AIHU-6", "把登录失败的提示改清楚", projectWorker(), "https://yiyan.example/aihub/issues/AIHU-6")
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -80,7 +82,7 @@ func TestOrgBotCardsStayCompact(t *testing.T) {
 	if !strings.Contains(dispatched, "AIHU-6") || !strings.Contains(dispatched, "把登录失败的提示改清楚") || strings.Contains(dispatched, "ECLI-") {
 		t.Fatalf("dispatched=%s", dispatched)
 	}
-	if !strings.Contains(start, "部门开始处理") || !strings.Contains(start, "AIHU-6") {
+	if !strings.Contains(start, "项目开始处理") || !strings.Contains(start, "AIHU-6") {
 		t.Fatalf("start=%s", start)
 	}
 }
@@ -122,15 +124,15 @@ func TestOrgBotCardActionsShareOneRow(t *testing.T) {
 }
 
 func TestOrgBotCardFieldsAlignOnAFixedLabelColumn(t *testing.T) {
-	card, err := OrgDispatchStartCard("AIHU-6", "把登录失败的提示改清楚", "开发二组", "https://yiyan.example/aihub/issues/AIHU-6")
+	card, err := OrgDispatchStartCard("AIHU-6", "把登录失败的提示改清楚", projectWorker(), "https://yiyan.example/aihub/issues/AIHU-6")
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	elements := cardBodyElements(t, card)
-	if len(elements) != 4 {
-		t.Fatalf("elements = %d, want three fields plus one action row", len(elements))
+	if len(elements) != 5 {
+		t.Fatalf("elements = %d, want four fields plus one action row", len(elements))
 	}
-	for _, row := range elements[:3] {
+	for _, row := range elements[:4] {
 		columns, _ := row["columns"].([]any)
 		if len(columns) != 2 {
 			t.Fatalf("field columns = %#v", row["columns"])
@@ -144,6 +146,113 @@ func TestOrgBotCardFieldsAlignOnAFixedLabelColumn(t *testing.T) {
 	if !strings.Contains(card, "color='grey'") {
 		t.Fatalf("labels are not muted: %s", card)
 	}
+}
+
+func projectWorker() OrgDispatchWorker {
+	return NewOrgDispatchWorker(service.DispatchHandoff{Kind: service.DispatchHandoffProject, Name: "AIHUB"}, true, "hzg的cursor")
+}
+
+// Every receipt after 已交给 names who is doing the work, and the start card
+// is titled after the kind of target instead of always saying 部门.
+func TestOrgDispatchReceiptsNameWhoIsDoingTheWork(t *testing.T) {
+	cases := []struct {
+		name     string
+		handoff  service.DispatchHandoff
+		title    string
+		handedTo string
+	}{
+		{"project", service.DispatchHandoff{Kind: service.DispatchHandoffProject, Name: "AIHUB"}, "项目开始处理", "项目 AIHUB"},
+		{"personal squad", service.DispatchHandoff{Kind: service.DispatchHandoffSquad, Name: "hzg的cursor"}, "小队开始处理", "我的小队"},
+		{"department", service.DispatchHandoff{Kind: service.DispatchHandoffDepartment, Name: "开发二组"}, "部门开始处理", "开发二组"},
+		{"unknown target", service.DispatchHandoff{}, "开始处理", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			worker := NewOrgDispatchWorker(tc.handoff, true, "hzg的cursor")
+			start, err := OrgDispatchStartCard("AIHU-6", "对账", worker, "https://yiyan.example/aihub/issues/AIHU-6")
+			if err != nil {
+				t.Fatalf("start: %v", err)
+			}
+			done, err := OrgDispatchDoneCard("AIHU-6", "对账", "in_review", worker, "https://yiyan.example/aihub/issues/AIHU-6")
+			if err != nil {
+				t.Fatalf("done: %v", err)
+			}
+			failed, err := OrgDispatchFailedCard("AIHU-6", "对账", worker, "runtime offline", "https://yiyan.example/aihub/issues/AIHU-6")
+			if err != nil {
+				t.Fatalf("failed: %v", err)
+			}
+			if got := cardTitle(t, start); got != tc.title {
+				t.Fatalf("start title = %q, want %q", got, tc.title)
+			}
+			for name, card := range map[string]string{"start": start, "done": done, "failed": failed} {
+				fields := cardFields(t, card)
+				if fields["交给"] != tc.handedTo || fields["智能体"] != "hzg的cursor" {
+					t.Fatalf("%s fields = %#v, want 交给 %q and the agent", name, fields, tc.handedTo)
+				}
+				if _, ok := fields["部门"]; ok {
+					t.Fatalf("%s still has a 部门 field: %#v", name, fields)
+				}
+			}
+			if fields := cardFields(t, done); fields["状态"] != "待验收" {
+				t.Fatalf("done fields = %#v", fields)
+			}
+			if fields := cardFields(t, failed); fields["原因"] != "runtime offline" {
+				t.Fatalf("failed fields = %#v", fields)
+			}
+		})
+	}
+}
+
+// Someone else reading about a personal squad must not be told it is theirs.
+func TestOrgDispatchWorkerNamesAnotherPersonsSquad(t *testing.T) {
+	handoff := service.DispatchHandoff{Kind: service.DispatchHandoffSquad, Name: "hzg的cursor"}
+	if got := NewOrgDispatchWorker(handoff, false, "").HandedTo; got != "小队 hzg的cursor" {
+		t.Fatalf("handed to = %q", got)
+	}
+	if got := NewOrgDispatchWorker(handoff, true, "").HandedTo; got != "我的小队" {
+		t.Fatalf("handed to = %q", got)
+	}
+}
+
+func cardTitle(t *testing.T, card string) string {
+	t.Helper()
+	var doc struct {
+		Header struct {
+			Title struct {
+				Content string `json:"content"`
+			} `json:"title"`
+		} `json:"header"`
+	}
+	if err := json.Unmarshal([]byte(card), &doc); err != nil {
+		t.Fatalf("card json: %v", err)
+	}
+	return doc.Header.Title.Content
+}
+
+// cardFields reads the label/value rows of a notice card.
+func cardFields(t *testing.T, card string) map[string]string {
+	t.Helper()
+	fields := map[string]string{}
+	for _, row := range cardBodyElements(t, card) {
+		columns, _ := row["columns"].([]any)
+		if row["flex_mode"] != "none" || len(columns) != 2 {
+			continue
+		}
+		label := strings.TrimSuffix(strings.TrimPrefix(columnMarkdown(columns[0]), "<font color='grey'>"), "</font>")
+		fields[label] = columnMarkdown(columns[1])
+	}
+	return fields
+}
+
+func columnMarkdown(column any) string {
+	col, _ := column.(map[string]any)
+	elements, _ := col["elements"].([]any)
+	if len(elements) != 1 {
+		return ""
+	}
+	element, _ := elements[0].(map[string]any)
+	content, _ := element["content"].(string)
+	return content
 }
 
 func footerButtons(t *testing.T, card string) (open, switchBtn map[string]any) {

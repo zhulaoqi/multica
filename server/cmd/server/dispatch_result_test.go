@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
+	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -49,12 +50,13 @@ func TestDispatchOriginReplyTarget(t *testing.T) {
 	}
 }
 
-func TestDispatchStartCardNamesDepartmentAndLink(t *testing.T) {
-	card, err := lark.OrgDispatchStartCard("PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7")
+func TestDispatchStartCardNamesWhoStartedAndLink(t *testing.T) {
+	worker := lark.NewOrgDispatchWorker(service.DispatchHandoff{Kind: service.DispatchHandoffDepartment, Name: "支付组"}, true, "支付组队长")
+	card, err := lark.OrgDispatchStartCard("PAY-7", "对账", worker, "https://app.example.com/pay/issues/PAY-7")
 	if err != nil {
 		t.Fatalf("card: %v", err)
 	}
-	for _, want := range []string{"部门开始处理", "PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7", "切换"} {
+	for _, want := range []string{"部门开始处理", "PAY-7", "对账", "支付组", "支付组队长", "https://app.example.com/pay/issues/PAY-7", "切换"} {
 		if !strings.Contains(card, want) {
 			t.Fatalf("start card missing %q: %s", want, card)
 		}
