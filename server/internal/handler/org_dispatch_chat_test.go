@@ -204,7 +204,7 @@ func TestChatDispatch_StartNoticeClaimsOnce(t *testing.T) {
 	if notice == nil {
 		t.Fatal("first start produced no notice")
 	}
-	if notice.Identifier == "" || notice.UnitName != "聊天开始组" {
+	if notice.Identifier == "" {
 		t.Fatalf("notice = %+v", notice)
 	}
 	if notice.Origin.OriginMessageID.String != "om_root" || notice.Origin.ThreadID.String != "omt_thread" {

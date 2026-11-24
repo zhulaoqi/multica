@@ -81,7 +81,7 @@ func registerDispatchCompletionListener(
 		if notice == nil || notice.Origin.ChannelType != service.DispatchChannelFeishu {
 			return
 		}
-		go sendDispatchCompletionNotice(notice, queries, client, installs, appURL)
+		go sendDispatchCompletionNotice(notice, queries, dispatcher, client, installs, appURL)
 	})
 }
 
@@ -137,7 +137,7 @@ func registerDispatchFailureListener(
 		if notice == nil || notice.Origin.ChannelType != service.DispatchChannelFeishu {
 			return
 		}
-		go sendDispatchFailureNotice(notice, queries, client, installs, appURL)
+		go sendDispatchFailureNotice(notice, queries, dispatcher, client, installs, appURL)
 	})
 }
 
@@ -193,7 +193,7 @@ func registerDispatchStartListener(
 		if notice == nil || notice.Origin.ChannelType != service.DispatchChannelFeishu {
 			return
 		}
-		go sendDispatchStartNotice(notice, queries, client, installs, appURL)
+		go sendDispatchStartNotice(notice, queries, dispatcher, client, installs, appURL)
 	})
 }
 
@@ -215,13 +215,15 @@ func issueEventIdentity(payload map[string]any) (issueID, workspaceID, status st
 func sendDispatchCompletionNotice(
 	notice *service.OrgDispatchNotice,
 	queries *db.Queries,
+	dispatcher *service.OrgDispatchService,
 	client lark.APIClient,
 	installs *lark.InstallationService,
 	appURL string,
 ) {
 	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
+	worker := dispatchNoticeWorker(dispatcher, notice.Origin, notice.Issue)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch completion", client, queries, installs, func() string {
-		card, err := lark.OrgDispatchDoneCard(notice.Identifier, notice.Issue.Title, notice.Issue.Status, link)
+		card, err := lark.OrgDispatchDoneCard(notice.Identifier, notice.Issue.Title, notice.Issue.Status, worker, link)
 		if err != nil {
 			return ""
 		}
@@ -232,13 +234,15 @@ func sendDispatchCompletionNotice(
 func sendDispatchFailureNotice(
 	notice *service.OrgDispatchFailureNotice,
 	queries *db.Queries,
+	dispatcher *service.OrgDispatchService,
 	client lark.APIClient,
 	installs *lark.InstallationService,
 	appURL string,
 ) {
 	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
+	worker := dispatchNoticeWorker(dispatcher, notice.Origin, notice.Issue)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch failure", client, queries, installs, func() string {
-		card, err := lark.OrgDispatchFailedCard(notice.Identifier, notice.Issue.Title, notice.UnitName, notice.Reason, link)
+		card, err := lark.OrgDispatchFailedCard(notice.Identifier, notice.Issue.Title, worker, notice.Reason, link)
 		if err != nil {
 			return ""
 		}
@@ -249,18 +253,29 @@ func sendDispatchFailureNotice(
 func sendDispatchStartNotice(
 	notice *service.ChatDispatchStartNotice,
 	queries *db.Queries,
+	dispatcher *service.OrgDispatchService,
 	client lark.APIClient,
 	installs *lark.InstallationService,
 	appURL string,
 ) {
 	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
+	worker := dispatchNoticeWorker(dispatcher, notice.Origin, notice.Issue)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch start", client, queries, installs, func() string {
-		card, err := lark.OrgDispatchStartCard(notice.Identifier, notice.Issue.Title, notice.UnitName, link)
+		card, err := lark.OrgDispatchStartCard(notice.Identifier, notice.Issue.Title, worker, link)
 		if err != nil {
 			return ""
 		}
 		return card
 	})
+}
+
+// dispatchNoticeWorker names who is doing the dispatch on its lifecycle cards.
+// Those cards answer the requester's own message, so a personal squad reads
+// as theirs.
+func dispatchNoticeWorker(dispatcher *service.OrgDispatchService, origin db.DispatchOrigin, issue db.Issue) lark.OrgDispatchWorker {
+	ctx, cancel := context.WithTimeout(context.Background(), dispatchResultLookupTimeout)
+	defer cancel()
+	return lark.NewOrgDispatchWorker(dispatcher.HandoffOf(ctx, origin), true, dispatcher.DispatchLeadAgentName(ctx, issue))
 }
 
 // sendDispatchNotice posts one dispatch card into its origin conversation.

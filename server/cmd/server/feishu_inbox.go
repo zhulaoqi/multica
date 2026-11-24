@@ -11,6 +11,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/integrations/lark"
+	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -65,11 +66,11 @@ func registerFeishuInboxMirror(bus *events.Bus, queries *db.Queries, h *handler.
 		if !ok {
 			return
 		}
-		go deliverFeishuInbox(context.Background(), queries, h.LarkInstallations, client, appID, appSecret, item)
+		go deliverFeishuInbox(context.Background(), queries, h.OrgDispatchService, h.LarkInstallations, client, appID, appSecret, item)
 	})
 }
 
-func deliverFeishuInbox(ctx context.Context, queries *db.Queries, installations *lark.InstallationService, client lark.APIClient, appID, appSecret string, item map[string]any) {
+func deliverFeishuInbox(ctx context.Context, queries *db.Queries, dispatcher *service.OrgDispatchService, installations *lark.InstallationService, client lark.APIClient, appID, appSecret string, item map[string]any) {
 	if client == nil {
 		return
 	}
@@ -79,7 +80,7 @@ func deliverFeishuInbox(ctx context.Context, queries *db.Queries, installations 
 	if !ok {
 		return
 	}
-	card, err := feishuInboxCard(ctx, queries, item)
+	card, err := feishuInboxCard(ctx, queries, item, feishuInboxWorker(ctx, queries, dispatcher, item))
 	if err != nil || card == "" {
 		return
 	}
@@ -140,7 +141,27 @@ func resolveFeishuInboxTarget(ctx context.Context, queries *db.Queries, installa
 	}, true
 }
 
-func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]any) (string, error) {
+// feishuInboxWorker names who is doing the work an inbox item reports: the
+// agent that acted, and where the dispatch behind the issue was handed. An
+// issue nobody dispatched has no handoff, and a person's action no agent.
+func feishuInboxWorker(ctx context.Context, queries *db.Queries, dispatcher *service.OrgDispatchService, item map[string]any) lark.OrgDispatchWorker {
+	agent := ""
+	if mapString(item, "actor_type") == "agent" {
+		agent = feishuAssigneeName(ctx, queries, "agent", mapString(item, "actor_id"))
+	}
+	var handoff service.DispatchHandoff
+	forRequester := false
+	if issueID, err := util.ParseUUID(mapString(item, "issue_id")); err == nil && dispatcher != nil {
+		if origin, ok := dispatcher.DispatchOriginForIssue(ctx, issueID); ok {
+			handoff = dispatcher.HandoffOf(ctx, origin)
+			recipient, err := util.ParseUUID(mapString(item, "recipient_id"))
+			forRequester = err == nil && recipient == origin.RequesterID
+		}
+	}
+	return lark.NewOrgDispatchWorker(handoff, forRequester, agent)
+}
+
+func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]any, worker lark.OrgDispatchWorker) (string, error) {
 	kind := mapString(item, "type")
 	title := feishuInboxLabel[kind]
 	if title == "" {
@@ -152,6 +173,12 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 	var lines []string
 	if subject != "" {
 		lines = append(lines, feishuInboxField("任务", subject))
+	}
+	if worker.HandedTo != "" {
+		lines = append(lines, feishuInboxField("交给", worker.HandedTo))
+	}
+	if worker.Agent != "" {
+		lines = append(lines, feishuInboxField("智能体", worker.Agent))
 	}
 	if change != "" {
 		lines = append(lines, change)

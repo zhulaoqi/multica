@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/multica-ai/multica/server/internal/service"
 )
 
 const orgBotChoiceButtonLimit = 8
@@ -232,32 +234,98 @@ func orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attach
 	return orgBotNoticeCard("green", title, fields, orgBotSwitchButtons(allowSwitch), "打开任务", link)
 }
 
-// OrgDispatchStartCard is the notice sent when a department begins the work.
-func OrgDispatchStartCard(identifier, title, unit, link string) (string, error) {
-	return orgBotNoticeCard("blue", "部门开始处理", []orgBotCardField{
+// OrgDispatchWorker is who is doing a dispatched task, as the receipt cards
+// show it: where the request was handed and the agent running it. Empty parts
+// are left off the card.
+type OrgDispatchWorker struct {
+	// Kind is one of the service.DispatchHandoff* kinds.
+	Kind     string
+	HandedTo string
+	Agent    string
+}
+
+// NewOrgDispatchWorker words a handoff for one reader. forRequester is true
+// when the card goes to the person who asked for the work.
+func NewOrgDispatchWorker(handoff service.DispatchHandoff, forRequester bool, agent string) OrgDispatchWorker {
+	return OrgDispatchWorker{
+		Kind:     handoff.Kind,
+		HandedTo: orgDispatchHandedTo(handoff, forRequester),
+		Agent:    strings.TrimSpace(agent),
+	}
+}
+
+func (w OrgDispatchWorker) fields() []orgBotCardField {
+	return []orgBotCardField{
+		{Label: "交给", Value: w.HandedTo},
+		{Label: "智能体", Value: w.Agent},
+	}
+}
+
+// orgDispatchHandedTo words a handoff the way the 已交给 card does. A personal
+// squad reads 我的小队 only to the person who owns it.
+func orgDispatchHandedTo(handoff service.DispatchHandoff, forRequester bool) string {
+	name := strings.TrimSpace(handoff.Name)
+	switch handoff.Kind {
+	case service.DispatchHandoffProject:
+		if name == "" {
+			return "项目"
+		}
+		return "项目 " + name
+	case service.DispatchHandoffSquad:
+		if forRequester || name == "" {
+			return "我的小队"
+		}
+		return "小队 " + name
+	case service.DispatchHandoffDepartment:
+		if name == "" {
+			return "部门"
+		}
+		return name
+	default:
+		return ""
+	}
+}
+
+func orgDispatchStartTitle(kind string) string {
+	switch kind {
+	case service.DispatchHandoffProject:
+		return "项目开始处理"
+	case service.DispatchHandoffSquad:
+		return "小队开始处理"
+	case service.DispatchHandoffDepartment:
+		return "部门开始处理"
+	default:
+		return "开始处理"
+	}
+}
+
+// OrgDispatchStartCard is the notice sent when the work is picked up.
+func OrgDispatchStartCard(identifier, title string, worker OrgDispatchWorker, link string) (string, error) {
+	fields := append([]orgBotCardField{
 		{Label: "需求", Value: title},
 		{Label: "编号", Value: identifier},
-		{Label: "部门", Value: unit},
-	}, orgBotSwitchButtons(true), "打开任务", link)
+	}, worker.fields()...)
+	return orgBotNoticeCard("blue", orgDispatchStartTitle(worker.Kind), fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
 // OrgDispatchDoneCard is the notice sent when that work is finished.
-func OrgDispatchDoneCard(identifier, title, status, link string) (string, error) {
-	return orgBotNoticeCard("green", "已完成", []orgBotCardField{
+func OrgDispatchDoneCard(identifier, title, status string, worker OrgDispatchWorker, link string) (string, error) {
+	fields := append([]orgBotCardField{
 		{Label: "需求", Value: title},
 		{Label: "编号", Value: identifier},
-		{Label: "状态", Value: orgBotStatusLabel(status)},
-	}, orgBotSwitchButtons(true), "打开任务", link)
+	}, worker.fields()...)
+	fields = append(fields, orgBotCardField{Label: "状态", Value: orgBotStatusLabel(status)})
+	return orgBotNoticeCard("green", "已完成", fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
-// OrgDispatchFailedCard is the notice sent when the department could not run it.
-func OrgDispatchFailedCard(identifier, title, unit, reason, link string) (string, error) {
-	return orgBotNoticeCard("red", "派活失败", []orgBotCardField{
+// OrgDispatchFailedCard is the notice sent when the leader run failed for good.
+func OrgDispatchFailedCard(identifier, title string, worker OrgDispatchWorker, reason, link string) (string, error) {
+	fields := append([]orgBotCardField{
 		{Label: "需求", Value: title},
 		{Label: "编号", Value: identifier},
-		{Label: "部门", Value: unit},
-		{Label: "原因", Value: reason},
-	}, orgBotSwitchButtons(true), "打开任务", link)
+	}, worker.fields()...)
+	fields = append(fields, orgBotCardField{Label: "原因", Value: reason})
+	return orgBotNoticeCard("red", "派活失败", fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
 func orgBotSwitchButtons(allow bool) []orgBotCardButton {

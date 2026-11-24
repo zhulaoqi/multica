@@ -59,11 +59,10 @@ type ChatDispatchReply struct {
 	Delivered bool
 }
 
-// ChatDispatchStartNotice announces that the department began working.
+// ChatDispatchStartNotice announces that the work was picked up.
 type ChatDispatchStartNotice struct {
 	Origin     db.DispatchOrigin
 	Issue      db.Issue
-	UnitName   string
 	Identifier string
 }
 
@@ -309,7 +308,6 @@ func (s *OrgDispatchService) StartDispatch(ctx context.Context, issue db.Issue) 
 	return &ChatDispatchStartNotice{
 		Origin:     origin,
 		Issue:      issue,
-		UnitName:   s.unitName(ctx, origin.WorkspaceID, origin.TargetUnitID),
 		Identifier: s.issueIdentifier(ctx, issue),
 	}, nil
 }

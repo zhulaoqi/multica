@@ -3,8 +3,9 @@ package lark
 import "encoding/json"
 
 // IntakeCard is one personal interactive card. The button opens the chat.
-// Requester cards must not include an agent name or a machine name; callers
-// put only the progress text in body.
+// Intake requester cards must not include an agent name or a machine name;
+// those callers put only the progress text in body. The inbox mirror is a
+// receipt for work the reader follows, and names who is doing it.
 //
 // The body is Markdown: inbox cards mirror agent comments, which carry headings
 // and tables. Schema 2.0's `markdown` element renders those; the legacy
