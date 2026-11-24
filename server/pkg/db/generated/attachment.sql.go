@@ -1245,6 +1245,41 @@ func (q *Queries) LockAttachmentsForIssueLink(ctx context.Context, arg LockAttac
 	return items, nil
 }
 
+const moveIssueAttachmentsToIssue = `-- name: MoveIssueAttachmentsToIssue :execrows
+UPDATE attachment
+SET workspace_id = $1,
+    issue_id = $2
+WHERE issue_id = $3
+  AND workspace_id = $4
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL
+`
+
+type MoveIssueAttachmentsToIssueParams struct {
+	ToWorkspaceID   pgtype.UUID `json:"to_workspace_id"`
+	ToIssueID       pgtype.UUID `json:"to_issue_id"`
+	FromIssueID     pgtype.UUID `json:"from_issue_id"`
+	FromWorkspaceID pgtype.UUID `json:"from_workspace_id"`
+}
+
+// Carries the files bound to an issue itself (not to its comments) over to the
+// issue that replaces it in another workspace. The rows move rather than being
+// copied, so deleting either issue later never removes a blob the other still
+// links to.
+func (q *Queries) MoveIssueAttachmentsToIssue(ctx context.Context, arg MoveIssueAttachmentsToIssueParams) (int64, error) {
+	result, err := q.db.Exec(ctx, moveIssueAttachmentsToIssue,
+		arg.ToWorkspaceID,
+		arg.ToIssueID,
+		arg.FromIssueID,
+		arg.FromWorkspaceID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const rehomeDispatchAttachments = `-- name: RehomeDispatchAttachments :execrows
 UPDATE attachment
 SET workspace_id = $1

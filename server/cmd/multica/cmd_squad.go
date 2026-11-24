@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -502,6 +503,66 @@ func runSquadActivity(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// ── Transfer ────────────────────────────────────────────────────────────────
+
+var squadTransferCmd = &cobra.Command{
+	Use:   "transfer-to-project <issue-id>",
+	Short: "Hand a department dispatch over to a project",
+	Long: `Move a request routed to your department into one of the projects listed
+in the "Project Handoff" section of your briefing.
+
+The project gets a new issue with the same title, description and attachments,
+run by the agent named with --agent, or by the project's default agent. The
+requester keeps following the same request, and this issue is closed as
+transferred. Only the department squad leader's own run may call it.`,
+	Args: exactArgs(1),
+	RunE: runSquadTransfer,
+}
+
+func runSquadTransfer(cmd *cobra.Command, args []string) error {
+	project, _ := cmd.Flags().GetString("project")
+	if strings.TrimSpace(project) == "" {
+		return fmt.Errorf("--project is required")
+	}
+	agentID, _ := cmd.Flags().GetString("agent")
+	note, _ := cmd.Flags().GetString("note")
+
+	client, err := newAPIClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := cli.APIContext(context.Background())
+	defer cancel()
+
+	issueRef, err := resolveIssueRef(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve issue: %w", err)
+	}
+
+	body := map[string]any{
+		"project":  strings.TrimSpace(project),
+		"agent_id": strings.TrimSpace(agentID),
+		"note":     note,
+	}
+	var result map[string]any
+	if err := client.PostJSON(ctx, "/api/org/dispatches/"+issueRef.ID+"/transfer-to-project", body, &result); err != nil {
+		return fmt.Errorf("transfer dispatch: %w", err)
+	}
+
+	projectInfo, _ := result["project"].(map[string]any)
+	issueInfo, _ := result["issue"].(map[string]any)
+	projectName := strVal(projectInfo, "name")
+	identifier := strVal(issueInfo, "identifier")
+	fmt.Fprintf(os.Stderr, "Dispatch transferred to project %s: %s\n", projectName, identifier)
+
+	output, _ := cmd.Flags().GetString("output")
+	if output == "json" {
+		return cli.PrintJSON(os.Stdout, result)
+	}
+	return nil
+}
+
 // ── Init ────────────────────────────────────────────────────────────────────
 
 func init() {
@@ -552,6 +613,12 @@ func init() {
 	squadActivityCmd.Flags().String("reason", "", "Short explanation of the decision")
 	squadActivityCmd.Flags().String("output", "table", "Output format: table or json")
 
+	// transfer-to-project
+	squadTransferCmd.Flags().String("project", "", "Target project id or slug (required)")
+	squadTransferCmd.Flags().String("agent", "", "Project agent id that should run the work")
+	squadTransferCmd.Flags().String("note", "", "Why the request belongs to the project")
+	squadTransferCmd.Flags().String("output", "table", "Output format: table or json")
+
 	squadMemberCmd.AddCommand(squadMemberListCmd)
 	squadMemberCmd.AddCommand(squadMemberAddCmd)
 	squadMemberCmd.AddCommand(squadMemberRemoveCmd)
@@ -564,4 +631,5 @@ func init() {
 	squadCmd.AddCommand(squadDeleteCmd)
 	squadCmd.AddCommand(squadMemberCmd)
 	squadCmd.AddCommand(squadActivityCmd)
+	squadCmd.AddCommand(squadTransferCmd)
 }

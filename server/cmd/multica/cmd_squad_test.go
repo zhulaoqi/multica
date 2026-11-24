@@ -90,3 +90,68 @@ func TestRunSquadMemberSetRoleValidatesRequiredFlags(t *testing.T) {
 		t.Fatal("expected missing --role error")
 	}
 }
+
+func newSquadTransferTestCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "transfer-to-project"}
+	cmd.Flags().String("server-url", "", "")
+	cmd.Flags().String("workspace-id", "", "")
+	cmd.Flags().String("profile", "", "")
+	cmd.Flags().String("project", "", "")
+	cmd.Flags().String("agent", "", "")
+	cmd.Flags().String("note", "", "")
+	cmd.Flags().String("output", "json", "")
+	return cmd
+}
+
+func TestRunSquadTransferPostsToDispatchEndpoint(t *testing.T) {
+	redirectTestHome(t, t.TempDir())
+	t.Setenv("MULTICA_TOKEN", "test-token")
+	t.Setenv("MULTICA_WORKSPACE_ID", "workspace-123")
+
+	const issueID = "0193f1a2-0000-7000-8000-000000000001"
+	var gotMethod, gotPath string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"issue":       map[string]any{"identifier": "AIHUB-7"},
+			"project":     map[string]any{"name": "AIHUB"},
+			"executor_id": "agent-9",
+		})
+	}))
+	defer srv.Close()
+	t.Setenv("MULTICA_SERVER_URL", srv.URL)
+
+	cmd := newSquadTransferTestCmd()
+	_ = cmd.Flags().Set("project", "aihub")
+	_ = cmd.Flags().Set("agent", "agent-9")
+	_ = cmd.Flags().Set("note", "asks about AIHUB models")
+
+	if err := runSquadTransfer(cmd, []string{issueID}); err != nil {
+		t.Fatalf("runSquadTransfer: %v", err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Fatalf("method = %s, want POST", gotMethod)
+	}
+	if want := "/api/org/dispatches/" + issueID + "/transfer-to-project"; gotPath != want {
+		t.Fatalf("path = %q, want %q", gotPath, want)
+	}
+	wantBody := map[string]any{"project": "aihub", "agent_id": "agent-9", "note": "asks about AIHUB models"}
+	for k, want := range wantBody {
+		if gotBody[k] != want {
+			t.Fatalf("body[%s] = %v, want %v (full body: %#v)", k, gotBody[k], want, gotBody)
+		}
+	}
+}
+
+func TestRunSquadTransferRequiresProject(t *testing.T) {
+	cmd := newSquadTransferTestCmd()
+	if err := runSquadTransfer(cmd, []string{"0193f1a2-0000-7000-8000-000000000001"}); err == nil {
+		t.Fatal("expected missing --project error")
+	}
+}

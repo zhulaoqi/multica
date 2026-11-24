@@ -773,6 +773,55 @@ func (q *Queries) SetIssueTreeOrgUnit(ctx context.Context, arg SetIssueTreeOrgUn
 	return err
 }
 
+const transferDispatchOriginToProject = `-- name: TransferDispatchOriginToProject :one
+UPDATE dispatch_origin
+SET issue_id = $1,
+    target_project_id = $2,
+    target_squad_id = NULL,
+    notified_at = NULL,
+    failure_notified_at = NULL,
+    started_notified_at = NULL
+WHERE issue_id = $3
+  AND target_unit_id IS NOT NULL
+  AND target_project_id IS NULL
+RETURNING issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id
+`
+
+type TransferDispatchOriginToProjectParams struct {
+	ToIssueID   pgtype.UUID `json:"to_issue_id"`
+	ProjectID   pgtype.UUID `json:"project_id"`
+	FromIssueID pgtype.UUID `json:"from_issue_id"`
+}
+
+// A department leader handed the request to a project: the origin now follows
+// the project issue, so history, notices and chat threads track the work where
+// it runs. Only an untransferred department dispatch qualifies, which also
+// makes a repeated transfer a no-row result instead of a second hop. The
+// notice claims restart because they described the department's delivery.
+func (q *Queries) TransferDispatchOriginToProject(ctx context.Context, arg TransferDispatchOriginToProjectParams) (DispatchOrigin, error) {
+	row := q.db.QueryRow(ctx, transferDispatchOriginToProject, arg.ToIssueID, arg.ProjectID, arg.FromIssueID)
+	var i DispatchOrigin
+	err := row.Scan(
+		&i.IssueID,
+		&i.WorkspaceID,
+		&i.RequesterID,
+		&i.TargetUnitID,
+		&i.ChannelType,
+		&i.InstallationID,
+		&i.ChatID,
+		&i.ThreadID,
+		&i.CreatedAt,
+		&i.NotifiedAt,
+		&i.ClientRequestID,
+		&i.TargetSquadID,
+		&i.FailureNotifiedAt,
+		&i.StartedNotifiedAt,
+		&i.OriginMessageID,
+		&i.TargetProjectID,
+	)
+	return i, err
+}
+
 const updateIssueAssignee = `-- name: UpdateIssueAssignee :one
 UPDATE issue
 SET assignee_type = 'squad',

@@ -655,6 +655,18 @@ WHERE issue_id = $1 AND agent_id = $2
   AND comment_thread_id IS NOT DISTINCT FROM comment_thread_root_id(sqlc.narg('thread_comment_id')::uuid)
 RETURNING *;
 
+-- name: CancelAgentTasksByIssueExcept :many
+-- Cancels every active task on the issue except one. A department leader that
+-- transfers its dispatch to a project runs the transfer from its own task,
+-- which must finish its turn; everything else queued on the old issue stops.
+UPDATE agent_task_queue
+SET status = 'cancelled', completed_at = now(), prepare_lease_expires_at = NULL,
+    cancelled_by_type = 'system', cancelled_by_id = NULL, cancelled_by_name = NULL
+WHERE issue_id = sqlc.arg(issue_id)
+  AND id IS DISTINCT FROM sqlc.narg(keep_task_id)::uuid
+  AND status IN ('queued', 'dispatched', 'running', 'waiting_local_directory', 'deferred')
+RETURNING *;
+
 -- name: CancelAgentTasksByAgent :many
 -- Bulk-cancel every active (queued/dispatched/running) task for an agent.
 -- Returns the affected rows so callers can broadcast task:cancelled events.

@@ -2693,6 +2693,25 @@ func (s *TaskService) OpenMikaOnboardingChat(ctx context.Context, session db.Cha
 // `multica agent update <id> --status idle` to unwedge. It now reconciles agent
 // status and broadcasts task:cancelled, matching CancelTask and RerunIssue.
 func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UUID) error {
+	return s.cancelIssueTasks(ctx, func(qtx *db.Queries) ([]db.AgentTaskQueue, error) {
+		return qtx.CancelAgentTasksByIssue(ctx, issueID)
+	})
+}
+
+// CancelTasksForIssueExcept is CancelTasksForIssue minus one task. A department
+// leader that transfers its dispatch to a project calls the transfer from its
+// own running task; that task finishes its turn while the rest of the issue's
+// queue stops.
+func (s *TaskService) CancelTasksForIssueExcept(ctx context.Context, issueID, keepTaskID pgtype.UUID) error {
+	return s.cancelIssueTasks(ctx, func(qtx *db.Queries) ([]db.AgentTaskQueue, error) {
+		return qtx.CancelAgentTasksByIssueExcept(ctx, db.CancelAgentTasksByIssueExceptParams{
+			IssueID:    issueID,
+			KeepTaskID: keepTaskID,
+		})
+	})
+}
+
+func (s *TaskService) cancelIssueTasks(ctx context.Context, cancel func(*db.Queries) ([]db.AgentTaskQueue, error)) error {
 	var cancelled []db.AgentTaskQueue
 	// The cancel and its settlement commit together: a settlement that failed
 	// after the cancel committed could never be repaired, because the outbox
@@ -2701,7 +2720,7 @@ func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UU
 	// partial index forever.
 	if err := s.runInTx(ctx, func(qtx *db.Queries) error {
 		var err error
-		cancelled, err = qtx.CancelAgentTasksByIssue(ctx, issueID)
+		cancelled, err = cancel(qtx)
 		if err != nil {
 			return err
 		}

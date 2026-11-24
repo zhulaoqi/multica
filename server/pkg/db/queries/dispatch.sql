@@ -262,6 +262,24 @@ SET target_unit_id = $2,
 WHERE issue_id = $1
 RETURNING *;
 
+-- name: TransferDispatchOriginToProject :one
+-- A department leader handed the request to a project: the origin now follows
+-- the project issue, so history, notices and chat threads track the work where
+-- it runs. Only an untransferred department dispatch qualifies, which also
+-- makes a repeated transfer a no-row result instead of a second hop. The
+-- notice claims restart because they described the department's delivery.
+UPDATE dispatch_origin
+SET issue_id = sqlc.arg(to_issue_id),
+    target_project_id = sqlc.arg(project_id),
+    target_squad_id = NULL,
+    notified_at = NULL,
+    failure_notified_at = NULL,
+    started_notified_at = NULL
+WHERE issue_id = sqlc.arg(from_issue_id)
+  AND target_unit_id IS NOT NULL
+  AND target_project_id IS NULL
+RETURNING *;
+
 -- name: SetIssueTreeOrgUnit :exec
 -- A reassigned dispatch moves its whole issue tree to the new department, so
 -- sub-issues the old squad already created follow the root's visibility.

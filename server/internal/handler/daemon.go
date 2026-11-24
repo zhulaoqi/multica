@@ -3246,6 +3246,15 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 						issue.AssigneeType.String == "squad" &&
 						uuidToString(issue.AssigneeID) == uuidToString(squad.ID)
 					briefing := buildSquadLeaderBriefing(r.Context(), h.Queries, squad, ownsIssueStatus, leaderWorkflow, requestHasClientCapability(r, protocol.DaemonCapabilityCLICommentSteerV1))
+					// A department squad holding a dispatch may hand it to one
+					// of the requester's projects; only a CLI that has the
+					// command is told about it.
+					if ownsIssueStatus && squad.OrgManaged && h.OrgDispatchService != nil &&
+						requestHasClientCapability(r, protocol.DaemonCapabilityCLIDispatchTransferV1) {
+						if handoff := h.OrgDispatchService.DispatchTransferBriefing(r.Context(), issue.ID); handoff != "" {
+							briefing += "\n\n" + handoff
+						}
+					}
 					if strings.TrimSpace(resp.Agent.Instructions) == "" {
 						resp.Agent.Instructions = briefing
 					} else {

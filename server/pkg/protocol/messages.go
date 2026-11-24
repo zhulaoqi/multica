@@ -87,6 +87,10 @@ const (
 	// daemon puts on the agent's PATH has `issue comment add --steer`. The
 	// server tells a squad leader about steering only then.
 	DaemonCapabilityCLICommentSteerV1 = "cli-comment-steer-v1"
+	// DaemonCapabilityCLIDispatchTransferV1 advertises that the multica CLI
+	// this daemon puts on the agent's PATH has `squad transfer-to-project`.
+	// The server offers a department leader the project handoff only then.
+	DaemonCapabilityCLIDispatchTransferV1 = "cli-dispatch-transfer-v1"
 
 	TaskSupplementFailureTurnNotStarted   = "turn_not_started"
 	TaskSupplementFailureProviderRejected = "provider_rejected"

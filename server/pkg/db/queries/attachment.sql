@@ -317,3 +317,17 @@ WHERE workspace_id = sqlc.arg(from_workspace_id)
   AND uploader_type = 'member'
   AND uploader_id = sqlc.arg(uploader_id)
   AND id = ANY(sqlc.arg(attachment_ids)::uuid[]);
+
+-- name: MoveIssueAttachmentsToIssue :execrows
+-- Carries the files bound to an issue itself (not to its comments) over to the
+-- issue that replaces it in another workspace. The rows move rather than being
+-- copied, so deleting either issue later never removes a blob the other still
+-- links to.
+UPDATE attachment
+SET workspace_id = sqlc.arg(to_workspace_id),
+    issue_id = sqlc.arg(to_issue_id)
+WHERE issue_id = sqlc.arg(from_issue_id)
+  AND workspace_id = sqlc.arg(from_workspace_id)
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL;

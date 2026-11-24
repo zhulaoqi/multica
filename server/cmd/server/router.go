@@ -2655,6 +2655,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/dispatches/{issueId}/messages", h.CommentDispatch)
 				r.Post("/dispatches/{issueId}/status", h.SetDispatchStatus)
 				r.Post("/dispatches/{issueId}/reassign", h.ReassignDispatch)
+				r.Post("/dispatches/{issueId}/transfer-to-project", h.TransferDispatchToProject)
 				r.Get("/units", h.ListOrgUnits)
 				r.Post("/units", h.CreateOrgUnit)
 				r.Post("/units/import", h.ImportOrgUnits)
