@@ -555,7 +555,7 @@ func (r *RedisRelay) sweepLegacyStreams(ctx context.Context) {
 }
 
 func (r *RedisRelay) maintainLegacyStream(ctx context.Context, stream, minID string) {
-	if trimmed, err := r.writeRDB.XTrimMinID(ctx, stream, minID).Result(); err != nil && !errors.Is(err, redis.Nil) {
+	if trimmed, err := trimStreamBefore(ctx, r.writeRDB, stream, minID); err != nil {
 		r.recordRetentionError("XTRIM MINID failed", err, "stream", stream, "min_id", minID)
 	} else if trimmed > 0 {
 		M.RedisRelayStreamTrimmedTotal.Add(trimmed)

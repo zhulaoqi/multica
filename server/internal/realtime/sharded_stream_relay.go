@@ -373,8 +373,8 @@ func (r *ShardedStreamRelay) maintainStreams(ctx context.Context) {
 		}
 		r.updateStreamPresence(shard, true)
 
-		trimmed, err := r.writeRDB.XTrimMinID(maintCtx, stream, minID).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
+		trimmed, err := trimStreamBefore(maintCtx, r.writeRDB, stream, minID)
+		if err != nil {
 			r.recordRetentionError("XTRIM MINID failed", err, "stream", stream, "min_id", minID)
 		} else if trimmed > 0 {
 			M.RedisRelayStreamTrimmedTotal.Add(trimmed)

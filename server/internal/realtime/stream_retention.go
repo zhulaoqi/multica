@@ -2,10 +2,13 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -191,6 +194,114 @@ func streamMinID(now time.Time, horizon time.Duration) string {
 		millis = 0
 	}
 	return fmt.Sprintf("%d-0", millis)
+}
+
+// streamTrimDeleteBatch is the page size for the pre-6.2 trim path. It must
+// stay at least 2: the next page repeats the previous last id, and a batch of
+// one would only ever see that cursor again.
+var streamTrimDeleteBatch int64 = 256
+
+// streamTrimMinIDUnsupported is set after this process sees Redis reject
+// XTRIM MINID. Redis 6.2 added that strategy; older servers answer
+// "ERR syntax error" and would otherwise fail every maintenance pass.
+var streamTrimMinIDUnsupported atomic.Bool
+
+type streamTrimmer interface {
+	XTrimMinID(ctx context.Context, key string, minID string) *redis.IntCmd
+	XRangeN(ctx context.Context, stream, start, stop string, count int64) *redis.XMessageSliceCmd
+	XDel(ctx context.Context, stream string, ids ...string) *redis.IntCmd
+}
+
+// trimStreamBefore removes entries whose id is strictly older than minID.
+// Redis 6.2 and newer do this in one XTRIM MINID. Older servers keep the
+// same horizon by reading the old ids and deleting them.
+func trimStreamBefore(ctx context.Context, client streamTrimmer, stream, minID string) (int64, error) {
+	if !streamTrimMinIDUnsupported.Load() {
+		trimmed, err := client.XTrimMinID(ctx, stream, minID).Result()
+		if err == nil || errors.Is(err, redis.Nil) {
+			return trimmed, nil
+		}
+		if !redisSyntaxError(err) {
+			return 0, err
+		}
+		if streamTrimMinIDUnsupported.CompareAndSwap(false, true) {
+			slog.Warn("realtime: Redis rejected XTRIM MINID; trimming expired relay entries with XRANGE and XDEL", "error", err)
+		}
+	}
+	return deleteStreamEntriesBefore(ctx, client, stream, minID)
+}
+
+func deleteStreamEntriesBefore(ctx context.Context, client streamTrimmer, stream, minID string) (int64, error) {
+	var trimmed int64
+	start := "-"
+	for {
+		if err := ctx.Err(); err != nil {
+			return trimmed, err
+		}
+		messages, err := client.XRangeN(ctx, stream, start, minID, streamTrimDeleteBatch).Result()
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				return trimmed, nil
+			}
+			return trimmed, err
+		}
+		if len(messages) == 0 {
+			return trimmed, nil
+		}
+		ids := make([]string, 0, len(messages))
+		last := messages[len(messages)-1].ID
+		for _, message := range messages {
+			if message.ID == start || !streamIDLess(message.ID, minID) {
+				continue
+			}
+			ids = append(ids, message.ID)
+		}
+		if len(ids) == 0 {
+			return trimmed, nil
+		}
+		deleted, err := client.XDel(ctx, stream, ids...).Result()
+		if err != nil {
+			return trimmed, err
+		}
+		trimmed += deleted
+		if int64(len(messages)) < streamTrimDeleteBatch {
+			return trimmed, nil
+		}
+		start = last
+	}
+}
+
+func redisSyntaxError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "syntax error")
+}
+
+func streamIDLess(id, bound string) bool {
+	idMS, idSeq, idOK := parseStreamID(id)
+	boundMS, boundSeq, boundOK := parseStreamID(bound)
+	if !idOK || !boundOK {
+		return id < bound
+	}
+	if idMS != boundMS {
+		return idMS < boundMS
+	}
+	return idSeq < boundSeq
+}
+
+func parseStreamID(id string) (ms, seq int64, ok bool) {
+	msPart, seqPart, found := strings.Cut(id, "-")
+	if !found {
+		seqPart = "0"
+	}
+	var err error
+	ms, err = strconv.ParseInt(msPart, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	seq, err = strconv.ParseInt(seqPart, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	return ms, seq, true
 }
 
 func redisTTLMillis(ttl time.Duration) int64 {
