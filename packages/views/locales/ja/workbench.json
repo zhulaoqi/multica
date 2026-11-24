@@ -45,7 +45,12 @@
     "personal_squad": "マイチーム",
     "blocked": "ブロック中: {{missing}}",
     "binding_none": "まだ自分の Agent がありません。部門の責任者に作成を依頼してください。",
-    "binding_failed": "エージェントを紐付けできませんでした。もう一度お試しください。"
+    "binding_failed": "エージェントを紐付けできませんでした。もう一度お試しください。",
+    "delete": "削除",
+    "delete_title": "この依頼を削除しますか？",
+    "delete_description": "「最近の依頼」から外すだけで、プロジェクトや部門のチケットと成果物は残ります。",
+    "delete_confirm": "削除",
+    "cancel": "キャンセル"
   },
   "status": {
     "queued": "部署に送りました。責任者がまもなく着手します。",
@@ -93,7 +98,7 @@
     "org_dispatch_forbidden": "その部署へのアクセス権がありません。",
     "agent_binding_required": "部門に仕事を依頼する前にエージェントを連携してください。",
     "org_dispatch_no_agents": "その部署にはまだエージェントがいません。組織ページで追加してください。",
-    "org_dispatch_leader_unavailable": "部署の責任者に現在連絡できません。しばらくしてから再試行してください。",
+    "org_dispatch_leader_unavailable": "この部署のオンラインのエージェントはどれもあなたに公開されていません。部署の責任者に連絡してください。",
     "org_dispatch_leader_offline": "その部署にオンラインのエージェントがありません。責任者にランタイムの起動を依頼してから、もう一度送信してください。",
     "org_dispatch_unroutable": "どの部署に渡すか判断できませんでした。部署名を指定するか、詳細を追加してください。",
     "org_dispatch_failed": "部署に作業を渡せませんでした。",
@@ -103,8 +108,11 @@
     "personal_squad_not_found": "この個人チームは存在しません。もう一度送信すると新しく作成されます。",
     "org_dispatch_target_conflict": "部署かマイチームのどちらかを選んでください。",
     "org_dispatch_reassign_forbidden": "この作業を割り当て直せるのは依頼者だけです。",
+    "org_dispatch_project_agent_offline": "そのプロジェクトにオンラインのエージェントがありません。プロジェクトのメンバーにランタイムの起動を依頼してから、もう一度送信してください。",
+    "dispatch_project_reassign_unsupported": "プロジェクトに送った作業はここでは割り当て変更できません。プロジェクト内で対応してください。",
     "dispatch_not_found": "この作業は依頼履歴にありません。",
-    "dispatch_organization_only": "仕事は組織のワークベンチから依頼します。"
+    "dispatch_organization_only": "仕事は組織のワークベンチから依頼します。",
+    "delete_failed": "依頼を削除できませんでした。もう一度お試しください。"
   },
   "plan": {
     "title": "計画"

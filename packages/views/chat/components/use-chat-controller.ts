@@ -12,7 +12,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { getCurrentWsId } from "@multica/core/platform";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { projectListOptions } from "@multica/core/projects/queries";
-import { canAssignAgent } from "../../issues/components/pickers/assignee-picker";
+import { canChatAgent } from "../../issues/components/pickers/assignee-picker";
 import { api, dispatchReasonCode } from "@multica/core/api";
 import {
   isAgentRuntimeBound as hasAgentRuntime,
@@ -332,7 +332,7 @@ export function useChatController(opts?: { isActive?: boolean }) {
   const currentMember = members.find((m) => m.user_id === user?.id);
   const memberRole = currentMember?.role;
   const availableAgents = agents.filter(
-    (a) => !a.archived_at && canAssignAgent(a, user?.id, memberRole),
+    (a) => !a.archived_at && canChatAgent(a, user?.id, memberRole),
   );
   // `availableAgents` is only trustworthy once BOTH queries above succeeded:
   // the permission filter reads the member role, so agents-without-members
@@ -372,7 +372,7 @@ export function useChatController(opts?: { isActive?: boolean }) {
   // composer goes read-only up front instead of after the user types
   // (MUL-6380). Same rule the server enforces, via the shared predicate.
   const isAgentAccessRevoked =
-    !!activeAgent && !canAssignAgent(activeAgent, user?.id, memberRole);
+    !!activeAgent && !canChatAgent(activeAgent, user?.id, memberRole);
 
   // "Customize" under the starter buttons in the empty state — the only place
   // that admits those buttons are configuration. Resolved here so the full

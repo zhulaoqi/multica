@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -28,8 +29,8 @@ const (
 type dispatchWorkRequest struct {
 	Text   string `json:"text"`
 	UnitID string `json:"unit_id"`
-	// ProjectID names a project the caller may request work for. The work
-	// still lands on the project's owning department.
+	// ProjectID names a project the caller may request work for. The work is
+	// created and run inside that project's workspace.
 	ProjectID       string   `json:"project_id"`
 	Personal        bool     `json:"personal"`
 	SquadID         string   `json:"squad_id"`
@@ -40,8 +41,7 @@ type dispatchWorkRequest struct {
 type dispatchWorkRef struct {
 	UnitID   string `json:"unit_id"`
 	UnitPath string `json:"unit_path"`
-	// ProjectID names the project the request was about; the work still landed
-	// on the project's owning department.
+	// ProjectID names the project workspace the work was delivered into.
 	ProjectID   string `json:"project_id,omitempty"`
 	ProjectName string `json:"project_name,omitempty"`
 	// SquadID names the personal squad a personal dispatch went to; unit_id
@@ -70,6 +70,14 @@ type dispatchListItem struct {
 	// Blocker is the open intake blocker, when there is one: it is why the
 	// work is parked, so both the requester and the department see it.
 	Blocker *dispatchBlocker `json:"blocker,omitempty"`
+	// Progress counts the root's sub-issues, resolved in the issue's own
+	// workspace so a project dispatch reports the project's progress.
+	Progress *dispatchProgress `json:"progress,omitempty"`
+}
+
+type dispatchProgress struct {
+	Done  int64 `json:"done"`
+	Total int64 `json:"total"`
 }
 
 type dispatchBlocker struct {
@@ -291,9 +299,7 @@ func (h *Handler) ReassignDispatch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) writeExistingDispatch(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, origin db.DispatchOrigin) {
-	issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
-		ID: origin.IssueID, WorkspaceID: wsUUID,
-	})
+	issue, err := h.Queries.GetIssue(r.Context(), origin.IssueID)
 	if err != nil {
 		slog.Error("load existing dispatch issue failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "could not load dispatch")
@@ -338,10 +344,16 @@ func (h *Handler) writeDispatchError(w http.ResponseWriter, r *http.Request, err
 		writeErrorCode(w, http.StatusForbidden, "org_dispatch_leader_unavailable", "you cannot use this department's squad leader")
 	case errors.Is(err, service.ErrDispatchLeaderOffline):
 		writeErrorCode(w, http.StatusConflict, "org_dispatch_leader_offline", "no agent in this department is online to take the work")
+	case errors.Is(err, service.ErrProjectAgentOffline):
+		writeErrorCode(w, http.StatusConflict, "org_dispatch_project_agent_offline", "no agent in this project is online to take the work")
+	case errors.Is(err, service.ErrDispatchAttachmentNotFound):
+		writeErrorCode(w, http.StatusBadRequest, "attachment_not_found", "some attachments are not available to this request")
 	case errors.Is(err, service.ErrDispatchNotFound):
 		writeErrorCode(w, http.StatusNotFound, "dispatch_not_found", "dispatch not found")
 	case errors.Is(err, service.ErrDispatchReassignForbidden):
 		writeErrorCode(w, http.StatusForbidden, "org_dispatch_reassign_forbidden", "only the requester can reassign this dispatch")
+	case errors.Is(err, service.ErrDispatchProjectReassignUnsupported):
+		writeErrorCode(w, http.StatusConflict, "dispatch_project_reassign_unsupported", "a dispatch delivered to a project cannot be reassigned")
 	default:
 		slog.Error("dispatch work failed", append(logger.RequestAttrs(r), "error", err, "unit_id", unitID)...)
 		writeErrorCode(w, http.StatusInternalServerError, "org_dispatch_failed", "failed to dispatch work")
@@ -381,15 +393,16 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not list dispatches")
 		return
 	}
+	ctx := r.Context()
+	// Dispatches delivered into a project live in the project workspace, so the
+	// batch read cannot be scoped to the origin workspace.
+	ids := make([]pgtype.UUID, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.IssueID)
+	}
 	issuesByID := make(map[pgtype.UUID]db.Issue, len(rows))
-	if len(rows) > 0 {
-		ids := make([]pgtype.UUID, 0, len(rows))
-		for _, row := range rows {
-			ids = append(ids, row.IssueID)
-		}
-		issues, err := h.Queries.ListIssuesByIDs(r.Context(), db.ListIssuesByIDsParams{
-			WorkspaceID: wsUUID, IssueIds: ids,
-		})
+	if len(ids) > 0 {
+		issues, err := h.Queries.ListIssuesByIDsAnyWorkspace(ctx, ids)
 		if err != nil {
 			slog.Error("load dispatch issues failed", append(logger.RequestAttrs(r), "error", err)...)
 			writeError(w, http.StatusInternalServerError, "could not list dispatches")
@@ -399,15 +412,19 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 			issuesByID[issue.ID] = issue
 		}
 	}
-	blockersByIssue := make(map[pgtype.UUID]dispatchBlocker, len(rows))
-	if len(rows) > 0 {
-		ids := make([]pgtype.UUID, 0, len(rows))
-		for _, row := range rows {
-			ids = append(ids, row.IssueID)
+	// Blockers are recorded in the workspace that owns the issue, and only an
+	// organization-workspace issue can be opened from this inbox.
+	var orgIssueIDs []pgtype.UUID
+	for _, issue := range issuesByID {
+		if issue.WorkspaceID == wsUUID {
+			orgIssueIDs = append(orgIssueIDs, issue.ID)
 		}
-		blockers, err := h.Queries.ListOpenIntakeBlockersByIssue(r.Context(), db.ListOpenIntakeBlockersByIssueParams{
+	}
+	blockersByIssue := make(map[pgtype.UUID]dispatchBlocker, len(orgIssueIDs))
+	if len(orgIssueIDs) > 0 {
+		blockers, err := h.Queries.ListOpenIntakeBlockersByIssue(ctx, db.ListOpenIntakeBlockersByIssueParams{
 			WorkspaceID: wsUUID,
-			IssueIds:    ids,
+			IssueIds:    orgIssueIDs,
 		})
 		if err != nil {
 			// The history stays useful without blockers; log and continue.
@@ -421,12 +438,29 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	units, err := h.Queries.ListOrgUnits(r.Context(), wsUUID)
+	progressByIssue := h.dispatchProgress(ctx, issuesByID)
+	units, err := h.Queries.ListOrgUnits(ctx, wsUUID)
 	if err != nil {
 		slog.Error("load dispatch units failed", append(logger.RequestAttrs(r), "error", err)...)
 	}
-	prefix := h.getIssuePrefix(r.Context(), wsUUID)
-	fill := h.newStatusCategoryFiller(r.Context(), wsUUID)
+	prefixByWorkspace := make(map[pgtype.UUID]string, 1)
+	fillsByWorkspace := make(map[pgtype.UUID]func(*IssueResponse), 1)
+	prefixFor := func(workspaceID pgtype.UUID) string {
+		if prefix, ok := prefixByWorkspace[workspaceID]; ok {
+			return prefix
+		}
+		prefix := h.getIssuePrefix(ctx, workspaceID)
+		prefixByWorkspace[workspaceID] = prefix
+		return prefix
+	}
+	fillFor := func(workspaceID pgtype.UUID) func(*IssueResponse) {
+		if fill, ok := fillsByWorkspace[workspaceID]; ok {
+			return fill
+		}
+		fill := h.newStatusCategoryFiller(ctx, workspaceID)
+		fillsByWorkspace[workspaceID] = fill
+		return fill
+	}
 
 	items := make([]dispatchListItem, 0, len(rows))
 	for _, row := range rows {
@@ -434,8 +468,8 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		resp := issueToResponse(issue, prefix)
-		fill(&resp)
+		resp := issueToResponse(issue, prefixFor(issue.WorkspaceID))
+		fillFor(issue.WorkspaceID)(&resp)
 		item := dispatchListItem{
 			Issue:        resp,
 			UnitID:       uuidToString(row.TargetUnitID),
@@ -445,6 +479,7 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 			DispatchedAt: timestampToString(row.CreatedAt),
 			Completed:    row.NotifiedAt.Valid,
 			LeaderState:  row.LeaderState,
+			Progress:     progressByIssue[row.IssueID],
 		}
 		if blocker, ok := blockersByIssue[row.IssueID]; ok {
 			item.Blocker = &blocker
@@ -460,6 +495,57 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"dispatches": items})
+}
+
+// dispatchProgress counts each root issue's sub-issues with the status catalog
+// of the workspace the issue lives in.
+func (h *Handler) dispatchProgress(ctx context.Context, issuesByID map[pgtype.UUID]db.Issue) map[pgtype.UUID]*dispatchProgress {
+	progressByIssue := make(map[pgtype.UUID]*dispatchProgress, len(issuesByID))
+	if len(issuesByID) == 0 {
+		return progressByIssue
+	}
+	parentIDs := make([]pgtype.UUID, 0, len(issuesByID))
+	for id := range issuesByID {
+		parentIDs = append(parentIDs, id)
+	}
+	children, err := h.Queries.ListChildStatusesByParents(ctx, parentIDs)
+	if err != nil {
+		// Progress is a hint; history stays useful without it.
+		slog.Warn("load dispatch child progress failed", "error", err)
+		return progressByIssue
+	}
+	terminalByWorkspace := make(map[pgtype.UUID]map[string]bool)
+	terminalFor := func(workspaceID pgtype.UUID) map[string]bool {
+		if keys, ok := terminalByWorkspace[workspaceID]; ok {
+			return keys
+		}
+		keys := make(map[string]bool)
+		list, err := h.terminalIssueStatusKeys(ctx, workspaceID)
+		if err != nil {
+			slog.Warn("load terminal status keys failed", "workspace_id", uuidToString(workspaceID), "error", err)
+		}
+		for _, key := range list {
+			keys[key] = true
+		}
+		terminalByWorkspace[workspaceID] = keys
+		return keys
+	}
+	for _, child := range children {
+		parent, ok := issuesByID[child.ParentIssueID]
+		if !ok {
+			continue
+		}
+		entry := progressByIssue[child.ParentIssueID]
+		if entry == nil {
+			entry = &dispatchProgress{}
+			progressByIssue[child.ParentIssueID] = entry
+		}
+		entry.Total++
+		if terminalFor(parent.WorkspaceID)[child.Status] {
+			entry.Done++
+		}
+	}
+	return progressByIssue
 }
 
 // dispatchQueueItem is a department-side view of one dispatch: who asked, what

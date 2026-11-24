@@ -82,6 +82,10 @@ export function DispatchErrorText({ error }: { error: unknown }) {
       return <>{t(($) => $.errors.org_dispatch_target_conflict)}</>;
     case "org_dispatch_reassign_forbidden":
       return <>{t(($) => $.errors.org_dispatch_reassign_forbidden)}</>;
+    case "org_dispatch_project_agent_offline":
+      return <>{t(($) => $.errors.org_dispatch_project_agent_offline)}</>;
+    case "dispatch_project_reassign_unsupported":
+      return <>{t(($) => $.errors.dispatch_project_reassign_unsupported)}</>;
     case "dispatch_not_found":
       return <>{t(($) => $.errors.dispatch_not_found)}</>;
     case "dispatch_organization_only":
@@ -162,6 +166,10 @@ export function DispatchConversation({
   const timeAgo = useTimeAgo();
   const homeMode = useHomeMode();
   const [reassignOpen, setReassignOpen] = useState(false);
+  // A dispatch delivered into a project workspace lives outside this
+  // workspace: its issues, children and comments are only readable through the
+  // trail DTO, and it cannot be reassigned across workspaces.
+  const crossWorkspace = item.issue.workspace_id !== wsId;
   const issueHref = p.issueDetail(item.issue.id);
   const percent =
     progress && progress.total > 0
@@ -192,9 +200,11 @@ export function DispatchConversation({
               total: progress.total,
             })} />
           ) : null}
-          {homeMode ? (
+          {homeMode || crossWorkspace ? (
             // The C-end follows the whole journey: who decomposed the work,
-            // which agent did what and when, and what came back.
+            // which agent did what and when, and what came back. A dispatch
+            // delivered into another workspace has to read it the same way,
+            // because this workspace's issue queries cannot see it.
             <DispatchTrail wsId={wsId} item={item} phase={phase} progress={progress} />
           ) : (
             <>
@@ -234,7 +244,7 @@ export function DispatchConversation({
               </span>
             ) : null}
             <span>{t(($) => $.status.dispatched_at, { time: timeAgo(item.dispatched_at) })}</span>
-            {homeMode ? (
+            {homeMode || crossWorkspace ? (
               <span className="font-medium text-foreground">{item.issue.identifier}</span>
             ) : (
               <AppLink
@@ -246,7 +256,7 @@ export function DispatchConversation({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!homeMode && (
+            {!homeMode && !crossWorkspace && (
               <Button
                 variant="outline"
                 size="sm"
@@ -262,7 +272,7 @@ export function DispatchConversation({
                 {t(($) => $.card.retry)}
               </Button>
             ) : null}
-            {!item.personal && phase !== "completed" && phase !== "cancelled" ? (
+            {!item.personal && !crossWorkspace && phase !== "completed" && phase !== "cancelled" ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -273,7 +283,7 @@ export function DispatchConversation({
               </Button>
             ) : null}
           </div>
-          {!item.personal && phase !== "completed" && phase !== "cancelled" ? (
+          {!item.personal && !crossWorkspace && phase !== "completed" && phase !== "cancelled" ? (
             <ReassignDispatchDialog
               wsId={wsId}
               item={item}

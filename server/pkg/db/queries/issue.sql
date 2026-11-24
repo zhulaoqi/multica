@@ -788,3 +788,17 @@ FROM (
     WHERE workspace_id = $1
     LIMIT sqlc.arg('limit')::bigint
 ) bounded_issues;
+
+-- name: ListIssuesByIDsAnyWorkspace :many
+-- Batch read for workbench history, whose dispatches may have been delivered
+-- into a project workspace rather than the organization workspace the origin
+-- row lives in. Authorization is the dispatch_origin requester check upstream;
+-- a missing id is simply absent from the result.
+SELECT * FROM issue
+WHERE id = ANY(sqlc.arg('issue_ids')::uuid[]);
+
+-- name: ListChildStatusesByParents :many
+-- Progress for a batch of dispatches that may live in different workspaces.
+-- The caller buckets terminal vs open with each parent's own status catalog.
+SELECT parent_issue_id, status FROM issue
+WHERE parent_issue_id = ANY(sqlc.arg('parent_ids')::uuid[]);

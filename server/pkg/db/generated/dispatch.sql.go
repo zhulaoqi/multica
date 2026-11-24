@@ -187,6 +187,27 @@ func (q *Queries) CreateDispatchOrigin(ctx context.Context, arg CreateDispatchOr
 	return i, err
 }
 
+const deleteDispatchOrigin = `-- name: DeleteDispatchOrigin :execrows
+DELETE FROM dispatch_origin
+WHERE issue_id = $1 AND workspace_id = $2 AND requester_id = $3
+`
+
+type DeleteDispatchOriginParams struct {
+	IssueID     pgtype.UUID `json:"issue_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	RequesterID pgtype.UUID `json:"requester_id"`
+}
+
+// The requester removing one thread from their history. The issue and the
+// work in its workspace stay; only the origin row that lists it goes.
+func (q *Queries) DeleteDispatchOrigin(ctx context.Context, arg DeleteDispatchOriginParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDispatchOrigin, arg.IssueID, arg.WorkspaceID, arg.RequesterID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getDispatchByClient = `-- name: GetDispatchByClient :one
 SELECT issue_id, workspace_id, requester_id, target_unit_id, channel_type, installation_id, chat_id, thread_id, created_at, notified_at, client_request_id, target_squad_id, failure_notified_at, started_notified_at, origin_message_id, target_project_id FROM dispatch_origin
 WHERE workspace_id = $1 AND requester_id = $2 AND client_request_id = $3
@@ -271,11 +292,11 @@ SELECT
     COALESCE(st.category, 'started')::text AS status_category,
     'none'::text AS leader_state
 FROM dispatch_origin d
-JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
-JOIN workspace w ON w.id = d.workspace_id
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = i.workspace_id
 LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
-LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+LEFT JOIN issue_status st ON st.workspace_id = i.workspace_id AND st.key = i.status
 WHERE d.requester_id = $1
   AND d.chat_id = $2
   AND d.thread_id = $3
@@ -545,11 +566,11 @@ SELECT
         ELSE lt.status
     END::text AS leader_state
 FROM dispatch_origin d
-JOIN issue i ON i.id = d.issue_id AND i.workspace_id = d.workspace_id
-JOIN workspace w ON w.id = d.workspace_id
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = i.workspace_id
 LEFT JOIN org_unit u ON u.id = d.target_unit_id
 LEFT JOIN squad s ON s.id = d.target_squad_id AND s.workspace_id = d.workspace_id
-LEFT JOIN issue_status st ON st.workspace_id = d.workspace_id AND st.key = i.status
+LEFT JOIN issue_status st ON st.workspace_id = i.workspace_id AND st.key = i.status
 LEFT JOIN LATERAL (
     SELECT id, status, attempt, max_attempts
     FROM agent_task_queue

@@ -866,6 +866,7 @@
   },
   "access": {
     "section_title": "谁可以运行该智能体",
+    "primary_twin_hint": "这是你的主分身：工作区成员总能给它派活、指派工单或 @ 它。这里只决定谁能和它私聊。",
     "tooltip": "访问权限 · 谁可以运行该智能体",
     "trigger_private": "仅自己",
     "trigger_workspace": "工作区",

@@ -887,6 +887,7 @@
   },
   "access": {
     "section_title": "Who can run this agent",
+    "primary_twin_hint": "This is your primary agent. Workspace members can always dispatch work to it, assign it issues and @mention it; this setting only decides who can chat with it.",
     "tooltip": "Access · who may run this agent",
     "trigger_private": "Only me",
     "trigger_workspace": "Workspace",

@@ -26,6 +26,11 @@ export function AgentAccessSettings({
   return (
     <SettingsSection
       title={t(($) => $.access.section_title)}
+      description={
+        agent.is_primary === true && agent.owner_id === currentUserId
+          ? t(($) => $.access.primary_twin_hint)
+          : undefined
+      }
     >
       <SettingsCard>
         <AccessPicker

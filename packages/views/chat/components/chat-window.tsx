@@ -17,7 +17,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useAuthStore } from "@multica/core/auth";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { projectListOptions } from "@multica/core/projects/queries";
-import { canAssignAgent } from "../../issues/components/pickers/assignee-picker";
+import { canChatAgent } from "../../issues/components/pickers/assignee-picker";
 import { api, dispatchReasonCode } from "@multica/core/api";
 import {
   isAgentRuntimeBound,
@@ -211,7 +211,7 @@ export function ChatWindow() {
   const currentMember = members.find((m) => m.user_id === user?.id);
   const memberRole = currentMember?.role;
   const availableAgents = agents.filter(
-    (a) => !a.archived_at && canAssignAgent(a, user?.id, memberRole),
+    (a) => !a.archived_at && canChatAgent(a, user?.id, memberRole),
   );
 
   // The agent bound to the OPEN session, resolved from the full agent list
@@ -242,7 +242,7 @@ export function ChatWindow() {
   // picker list, so the composer goes read-only up front rather than after the
   // user types (MUL-6380). Mirrors use-chat-controller.ts.
   const isAgentAccessRevoked =
-    !!activeAgent && !canAssignAgent(activeAgent, user?.id, memberRole);
+    !!activeAgent && !canChatAgent(activeAgent, user?.id, memberRole);
 
   // "Customize" under the starter buttons — the only place the empty state
   // admits that those buttons are configuration at all.

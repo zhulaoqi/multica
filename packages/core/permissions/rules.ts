@@ -58,8 +58,30 @@ export function canArchiveAgent(agent: Agent, ctx: PermissionContext): Decision 
 }
 
 /**
- * Invoke an agent — assign it to an issue, @mention it, chat with it, or
- * otherwise trigger a run. Mirrors the MUL-3963 backend invocation gate,
+ * Hand an agent work: assign it an issue, @mention it, or otherwise trigger a
+ * run from a collaboration path. A member's primary twin represents them in
+ * the workspace, so any member may hand it work whatever its permission mode
+ * (backend `canCollaborateWithAgent`). Every other agent follows
+ * `canChatWithAgent`.
+ */
+export function canAssignAgentToIssue(
+  agent: Agent,
+  ctx: PermissionContext,
+): Decision {
+  if (
+    ctx.userId !== null &&
+    ctx.role !== null &&
+    agent.is_primary === true &&
+    agent.owner_id !== null &&
+    !agent.archived_at
+  ) {
+    return ALLOW;
+  }
+  return canChatWithAgent(agent, ctx);
+}
+
+/**
+ * Chat with an agent privately. Mirrors the MUL-3963 backend invocation gate,
  * which reads `permission_mode` + `invocation_targets` (NOT the derived
  * `visibility` field):
  *
@@ -71,7 +93,7 @@ export function canArchiveAgent(agent: Agent, ctx: PermissionContext): Decision 
  *   - team target: reserved, INERT in v1 (never grants)
  *   - either mode: a department lead over the owner (`viewer_leads_owner`)
  */
-export function canAssignAgentToIssue(
+export function canChatWithAgent(
   agent: Agent,
   ctx: PermissionContext,
 ): Decision {

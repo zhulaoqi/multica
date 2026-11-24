@@ -186,6 +186,11 @@ func TestCanInvokeAgent_PublicToMemberWhitelist(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	t.Cleanup(func() { testPool.Exec(context.Background(), `DELETE FROM agent WHERE id = $1`, agent.ID) })
+	// A primary twin is assignable by every member regardless of its
+	// targets; this test is about the whitelist itself.
+	if _, err := testPool.Exec(context.Background(), `UPDATE agent SET is_primary = false WHERE id = $1`, agent.ID); err != nil {
+		t.Fatalf("demote agent: %v", err)
+	}
 
 	// Derived legacy visibility for a member-only public_to agent must be
 	// "private" so old clients never treat it as workspace-wide.

@@ -45,7 +45,12 @@
     "personal_squad": "My squad",
     "blocked": "Blocked: {{missing}}",
     "binding_none": "You don't own an agent yet. Ask your department lead to set one up.",
-    "binding_failed": "Couldn't bind that agent. Try again."
+    "binding_failed": "Couldn't bind that agent. Try again.",
+    "delete": "Delete",
+    "delete_title": "Delete this dispatch?",
+    "delete_description": "Removes it from Recent work only. The issue and the work in its project or department stay.",
+    "delete_confirm": "Delete",
+    "cancel": "Cancel"
   },
   "status": {
     "queued": "Sent to the department. Its lead will pick it up shortly.",
@@ -94,7 +99,7 @@
     "org_dispatch_forbidden": "You don't have access to that department.",
     "agent_binding_required": "Bind an agent before sending work to a department.",
     "org_dispatch_no_agents": "That department has no agents yet. Add one on the organization page.",
-    "org_dispatch_leader_unavailable": "The department lead can't be reached right now. Try again later.",
+    "org_dispatch_leader_unavailable": "None of this department's online agents are open to you. Ask the department lead.",
     "org_dispatch_leader_offline": "No agent in that department is online. Ask its lead to start a runtime, then send this again.",
     "org_dispatch_unroutable": "Couldn't tell which department should take this. Name a department or add more detail.",
     "org_dispatch_failed": "The work couldn't be sent to the department.",
@@ -104,8 +109,11 @@
     "personal_squad_not_found": "That personal squad no longer exists. Send again to start a new one.",
     "org_dispatch_target_conflict": "Choose either a department or your squad.",
     "org_dispatch_reassign_forbidden": "Only the requester can reassign this work.",
+    "org_dispatch_project_agent_offline": "No agent in that project is online. Ask a project member to start a runtime, then send this again.",
+    "dispatch_project_reassign_unsupported": "Work sent to a project can't be reassigned here. Handle it inside the project.",
     "dispatch_not_found": "This work is no longer in your dispatch history.",
-    "dispatch_organization_only": "Work is sent from the organization's workbench."
+    "dispatch_organization_only": "Work is sent from the organization's workbench.",
+    "delete_failed": "Couldn't delete that dispatch. Try again."
   },
   "plan": {
     "title": "Plan"

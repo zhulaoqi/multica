@@ -44,9 +44,9 @@ type RouteCandidate struct {
 	AgentCount int    `json:"agent_count"`
 }
 
-// RouteProject is a project target Route inferred or matched. The work still
-// lands on the project's owning department; the project says what the request
-// is about and gates who may ask.
+// RouteProject is a project target Route inferred or matched. The work is
+// delivered into the project workspace; the owning department only appears as
+// its parent and gates who may ask.
 type RouteProject struct {
 	ID   pgtype.UUID
 	Name string
@@ -62,7 +62,8 @@ type RequestableProject struct {
 }
 
 // RouteResult resolves one natural-language dispatch to a department, or to a
-// project owned by one. Unit is always the department that will do the work.
+// project owned by one. Unit is the target department, or the project's owning
+// department when Project is set; project work runs in the project workspace.
 type RouteResult struct {
 	Unit       db.ListOrgUnitsRow
 	Path       string
@@ -96,11 +97,11 @@ func DispatchTextTitle(text string) string {
 
 // Route turns a natural-language request into the department that should own
 // it, and into the project it is about when the requester may hand that project
-// work. Explicit targets and exact names win; otherwise a single dispatchable
-// department is used, then the model picks among the departments and projects,
-// then a deterministic name/path match, then the requester's own department.
-// Anything still ambiguous returns candidate departments for the client to
-// offer.
+// work. Explicit targets and exact names win, then a deterministically named
+// project, then a single dispatchable department, then the model picks among
+// the departments and projects, then the remaining name/path matches, then the
+// requester's own department. Anything still ambiguous returns candidate
+// departments for the client to offer.
 func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.UUID, text string, explicitUnitID pgtype.UUID) (RouteResult, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -145,16 +146,11 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 			dispatchable = append(dispatchable, unit)
 		}
 	}
-	// A project's owning department need not accept the requester personally:
-	// the project's own list decides that. What it does need is an agent to run
-	// the work, which is the same condition the department branch checks.
-	runnableUnits := make(map[pgtype.UUID]bool, len(units))
-	for _, unit := range units {
-		runnableUnits[unit.ID] = agentCounts[unit.ID] > 0
-	}
 	// Projects the requester may hand work are targets too: a request that
 	// names or describes one belongs to it, not to the department as a whole.
-	projectCandidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, runnableUnits, paths)
+	// A project runs on its own workspace agents, so its owning department does
+	// not need an organization agent for the project to be routable.
+	projectCandidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, paths)
 	if err != nil {
 		return RouteResult{}, err
 	}
@@ -207,24 +203,11 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		}
 	}
 
-	// 3. Only one department can take work at all. With projects in play the
-	// model still decides whether the request is about one of them.
-	if len(projectCandidates) == 0 && len(dispatchable) == 1 {
-		unit := dispatchable[0]
-		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
-	}
-
-	// 4. Let the model choose among the dispatchable departments and projects.
-	if choice, ok := s.routeWithLLM(ctx, text, dispatchable, paths, agentCounts, projectCandidates); ok {
-		if choice.Project != nil {
-			return projectResult(*choice.Project), nil
-		}
-		return RouteResult{Unit: choice.Unit, Path: paths[choice.Unit.ID]}, nil
-	}
-
-	// 5. Deterministic name/path containment. The longest needle wins so
-	// "支付组" does not lose to a parent department also named in the text,
-	// and a project named in the request outranks a shorter department name.
+	// 3. Deterministic name containment, resolved before the model. A project
+	// named in the request is authoritative: the model must not talk it back
+	// into the owning department. The longest needle wins so "支付组" does not
+	// lose to a parent department also named in the text, and on a tie the
+	// project wins because its name is the label the requester used.
 	bestUnitLen := 0
 	bestUnits := make([]db.ListOrgUnitsRow, 0, 1)
 	lowerText := strings.ToLower(text)
@@ -267,9 +250,27 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 			bestProjects = append(bestProjects, candidate)
 		}
 	}
-	if bestProjectLen > bestUnitLen && len(bestProjects) == 1 {
+	if bestProjectLen > 0 && bestProjectLen >= bestUnitLen && len(bestProjects) == 1 {
 		return projectResult(bestProjects[0]), nil
 	}
+
+	// 4. Only one department can take work at all. With projects in play the
+	// model still decides whether the request is about one of them.
+	if len(projectCandidates) == 0 && len(dispatchable) == 1 {
+		unit := dispatchable[0]
+		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
+	}
+
+	// 5. Let the model choose among the dispatchable departments and projects.
+	if choice, ok := s.routeWithLLM(ctx, text, dispatchable, paths, agentCounts, projectCandidates); ok {
+		if choice.Project != nil {
+			return projectResult(*choice.Project), nil
+		}
+		return RouteResult{Unit: choice.Unit, Path: paths[choice.Unit.ID]}, nil
+	}
+
+	// 6. The remaining deterministic fallbacks reuse the containment match
+	// computed before the model.
 	if len(bestUnits) == 1 && bestUnitLen >= bestProjectLen {
 		return RouteResult{Unit: bestUnits[0], Path: paths[bestUnits[0].ID]}, nil
 	}
@@ -277,7 +278,7 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		return RouteResult{Candidates: routeCandidates(bestUnits, paths, agentCounts)}, ErrDispatchAmbiguous
 	}
 
-	// 6. With projects in the picture the single-department shortcut waits
+	// 7. With projects in the picture the single-department shortcut waits
 	// until no project matched, so a named project is never flattened into its
 	// department.
 	if len(projectCandidates) > 0 && len(dispatchable) == 1 {
@@ -285,7 +286,7 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 		return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
 	}
 
-	// 7. The requester's own department.
+	// 8. The requester's own department.
 	for _, unit := range dispatchable {
 		if access.MemberUnit.Valid && unit.ID == access.MemberUnit {
 			return RouteResult{Unit: unit, Path: paths[unit.ID]}, nil
@@ -298,15 +299,15 @@ func (s *OrgDispatchService) Route(ctx context.Context, wsUUID, actorID pgtype.U
 	return RouteResult{Candidates: routeCandidates(dispatchable, paths, agentCounts)}, ErrDispatchAmbiguous
 }
 
-// routeProjectCandidates loads the department-owned projects the requester may
-// hand work and keeps those whose owning department can actually run it.
+// routeProjectCandidates loads the department-owned projects the requester is
+// allowed to hand work. The project runs on its own workspace agents, so the
+// owning department's organization agents play no part in the match.
 func (s *OrgDispatchService) routeProjectCandidates(
 	ctx context.Context,
 	wsUUID pgtype.UUID,
 	access workspaceaccess.Access,
 	units []db.ListOrgUnitsRow,
 	departmentSources []db.ListOrgUnitIntakeSourcesRow,
-	runnable map[pgtype.UUID]bool,
 	paths map[pgtype.UUID]string,
 ) ([]routeProjectCandidate, error) {
 	// Projects only name targets inside the organization; a project workspace
@@ -349,7 +350,7 @@ func (s *OrgDispatchService) routeProjectCandidates(
 	candidates := make([]routeProjectCandidate, 0, len(projects))
 	for _, project := range projects {
 		unit, ok := findUnit(units, project.OrgUnitID)
-		if !ok || !runnable[unit.ID] {
+		if !ok {
 			continue
 		}
 		path, ok := paths[unit.ID]

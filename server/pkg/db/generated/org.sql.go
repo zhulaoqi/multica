@@ -607,6 +607,54 @@ func (q *Queries) ListOrgUnits(ctx context.Context, workspaceID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listProjectDispatchAgents = `-- name: ListProjectDispatchAgents :many
+SELECT a.id, a.owner_id, a.is_primary, a.created_at
+FROM agent a
+JOIN agent_runtime r ON r.id = a.runtime_id
+WHERE a.workspace_id = $1
+  AND a.archived_at IS NULL
+  AND a.kind = 'user'
+  AND a.runtime_id IS NOT NULL
+  AND r.status = 'online'
+ORDER BY a.is_primary DESC, a.created_at ASC
+`
+
+type ListProjectDispatchAgentsRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	OwnerID   pgtype.UUID        `json:"owner_id"`
+	IsPrimary bool               `json:"is_primary"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Agents in one project workspace that can execute a dispatch right now: user
+// agents (organization projections included) whose runtime is online.
+// Preference — an owner who leads the owning department or an ancestor first —
+// is resolved in Go so the query stays stable.
+func (q *Queries) ListProjectDispatchAgents(ctx context.Context, workspaceID pgtype.UUID) ([]ListProjectDispatchAgentsRow, error) {
+	rows, err := q.db.Query(ctx, listProjectDispatchAgents, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProjectDispatchAgentsRow{}
+	for rows.Next() {
+		var i ListProjectDispatchAgentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.IsPrimary,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRunnableLeaderAgents = `-- name: ListRunnableLeaderAgents :many
 SELECT a.id, a.owner_id, a.org_unit_id, a.is_primary
 FROM agent a

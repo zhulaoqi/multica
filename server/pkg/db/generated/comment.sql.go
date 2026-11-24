@@ -1138,6 +1138,68 @@ func (q *Queries) ListCommentsForIssue(ctx context.Context, arg ListCommentsForI
 	return items, nil
 }
 
+const listCommentsForIssueTree = `-- name: ListCommentsForIssueTree :many
+SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, resolved_at, resolved_by_type, resolved_by_id, source_task_id, quick_action_id, via_plugin_id, revision, recovery_settled_at, deleted_at, suppressed_agent_ids FROM comment
+WHERE issue_id = ANY($1::uuid[])
+  AND workspace_id = $2
+  AND deleted_at IS NULL
+  AND type = 'comment'
+ORDER BY created_at ASC, id ASC
+LIMIT $3
+`
+
+type ListCommentsForIssueTreeParams struct {
+	IssueIds    []pgtype.UUID `json:"issue_ids"`
+	WorkspaceID pgtype.UUID   `json:"workspace_id"`
+	RowLimit    int32         `json:"row_limit"`
+}
+
+// Every live comment in a dispatched issue tree (the root plus its children).
+// The requester-facing trail folds the files uploaded here into deliverables;
+// the message bodies stay server-side, so callers read only the attachment
+// metadata. Bounded by row_limit because a long-running tree can accumulate
+// more comments than a summary view needs.
+func (q *Queries) ListCommentsForIssueTree(ctx context.Context, arg ListCommentsForIssueTreeParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listCommentsForIssueTree, arg.IssueIds, arg.WorkspaceID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Comment{}
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.IssueID,
+			&i.AuthorType,
+			&i.AuthorID,
+			&i.Content,
+			&i.Type,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParentID,
+			&i.WorkspaceID,
+			&i.ResolvedAt,
+			&i.ResolvedByType,
+			&i.ResolvedByID,
+			&i.SourceTaskID,
+			&i.QuickActionID,
+			&i.ViaPluginID,
+			&i.Revision,
+			&i.RecoverySettledAt,
+			&i.DeletedAt,
+			&i.SuppressedAgentIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCommentsSinceForIssue = `-- name: ListCommentsSinceForIssue :many
 SELECT id, issue_id, author_type, author_id, content, type, created_at, updated_at, parent_id, workspace_id, resolved_at, resolved_by_type, resolved_by_id, source_task_id, quick_action_id, via_plugin_id, revision, recovery_settled_at, deleted_at, suppressed_agent_ids FROM comment
 WHERE issue_id = $1 AND workspace_id = $2 AND created_at > $3

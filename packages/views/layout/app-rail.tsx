@@ -78,16 +78,20 @@ function useRailBadges(): Partial<Record<RailSpaceId, RailBadge>> {
   // entry opens the organization's, so it carries no badge of its own.
   const { isOrganization, isProject } = useOrganizationContext(wsId ?? "");
   const { dispatches } = useMyDispatches(isProject ? "" : (wsId ?? ""));
+  // The admin shell has no workbench on web, so its review count rides on
+  // Work instead of nowhere. Work only lists this workspace's issues, so a
+  // dispatch delivered into a project is left to the C-end there.
+  const reviewOnWork = isOrganization && !isDesktopShell();
   const awaitingReview = dispatches.filter(
-    (item) => dispatchPhase(item, undefined) === "in_review",
+    (item) =>
+      dispatchPhase(item, undefined) === "in_review" &&
+      (!reviewOnWork || item.issue.workspace_id === wsId),
   ).length;
 
   const badges: Partial<Record<RailSpaceId, RailBadge>> = {};
   if (inboxUnread > 0) badges.inbox = { kind: "count", value: inboxUnread, tone: "brand" };
   if (chatUnread > 0) badges.chat = { kind: "count", value: chatUnread, tone: "neutral" };
-  // The admin shell has no workbench on web, so its review count rides on
-  // Work — where the issue being accepted lives — instead of nowhere.
-  const reviewSpace: RailSpaceId = isOrganization && !isDesktopShell() ? "work" : "workbench";
+  const reviewSpace: RailSpaceId = reviewOnWork ? "work" : "workbench";
   if (awaitingReview > 0) badges[reviewSpace] = { kind: "count", value: awaitingReview, tone: "brand" };
   if (stuck.length > 0) badges.team = { kind: "dot" };
   return badges;

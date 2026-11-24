@@ -866,6 +866,7 @@
   },
   "access": {
     "section_title": "誰可以執行該 AI 代理",
+    "primary_twin_hint": "這是你的主分身：工作區成員總能給它派工作、指派工單或 @ 它。這裡只決定誰能和它私聊。",
     "tooltip": "訪問權限 · 誰可以執行該 AI 代理",
     "trigger_private": "僅自己",
     "trigger_workspace": "工作區",

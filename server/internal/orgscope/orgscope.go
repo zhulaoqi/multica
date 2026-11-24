@@ -12,24 +12,33 @@ import (
 // Leads reports whether userID leads unitID or one of its ancestors, i.e. the
 // caller may administer that department. Missing units are not led.
 func Leads(units []db.ListOrgUnitsRow, userID, unitID pgtype.UUID) bool {
+	_, ok := LeadDepth(units, userID, unitID)
+	return ok
+}
+
+// LeadDepth reports how far above unitID the caller's lead role starts: 0 when
+// they lead the unit itself, 1 for its parent, and so on. ok is false when the
+// caller leads neither the unit nor any ancestor.
+func LeadDepth(units []db.ListOrgUnitsRow, userID, unitID pgtype.UUID) (int, bool) {
 	if !userID.Valid || !unitID.Valid {
-		return false
+		return 0, false
 	}
 	byID := make(map[pgtype.UUID]db.ListOrgUnitsRow, len(units))
 	for _, unit := range units {
 		byID[unit.ID] = unit
 	}
-	for current, guard := unitID, 0; current.Valid && guard <= len(units); guard++ {
+	current := unitID
+	for depth := 0; current.Valid && depth <= len(units); depth++ {
 		unit, ok := byID[current]
 		if !ok {
-			return false
+			return 0, false
 		}
 		if unit.LeadUserID == userID {
-			return true
+			return depth, true
 		}
 		current = unit.ParentID
 	}
-	return false
+	return 0, false
 }
 
 // LeadsAny reports whether the caller leads at least one unit.

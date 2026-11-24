@@ -3,7 +3,11 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api";
 import { parseDispatchCandidates } from "./queries";
-import { DispatchListItemSchema, DispatchWorkResponseSchema } from "./schemas";
+import {
+  DispatchListItemSchema,
+  DispatchTrailSchema,
+  DispatchWorkResponseSchema,
+} from "./schemas";
 
 describe("parseDispatchCandidates", () => {
   it("reads candidates from an ambiguous routing error", () => {
@@ -69,4 +73,58 @@ describe("workbench schemas", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("defaults a dispatch row from a server that predates projects and progress", () => {
+    const parsed = DispatchListItemSchema.parse({
+      issue: issueFixture,
+      dispatched_at: "2026-11-12T08:00:00Z",
+    });
+
+    expect(parsed.project_id).toBe("");
+    expect(parsed.progress).toBeUndefined();
+    expect(parsed.personal).toBe(false);
+  });
+
+  it("reads the progress a cross-workspace dispatch carries", () => {
+    const parsed = DispatchListItemSchema.parse({
+      issue: { ...issueFixture, workspace_id: "ws-project" },
+      dispatched_at: "2026-11-12T08:00:00Z",
+      progress: { done: 1, total: 3 },
+    });
+
+    expect(parsed.progress).toEqual({ done: 1, total: 3 });
+  });
+
+  it("fills a thin trail response with empty defaults", () => {
+    const parsed = DispatchTrailSchema.parse({ issue: issueFixture });
+
+    expect(parsed.children).toEqual([]);
+    expect(parsed.progress).toEqual({ done: 0, total: 0 });
+    expect(parsed.result).toBeUndefined();
+    expect(parsed.deliverables).toEqual([]);
+  });
 });
+
+const issueFixture = {
+  id: "issue-1",
+  workspace_id: "ws-project",
+  number: 7,
+  identifier: "AIHUB-7",
+  title: "Which models does AIHUB serve?",
+  description: null,
+  status: "in_progress",
+  priority: "medium",
+  assignee_type: "agent",
+  assignee_id: "agent-1",
+  creator_type: "member",
+  creator_id: "user-1",
+  parent_issue_id: null,
+  project_id: null,
+  position: 0,
+  start_date: null,
+  due_date: null,
+  metadata: {},
+  properties: {},
+  created_at: "2026-11-12T08:00:00Z",
+  updated_at: "2026-11-12T08:00:00Z",
+};

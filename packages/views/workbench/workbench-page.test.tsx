@@ -6,7 +6,11 @@ import { ApiError } from "@multica/core/api";
 import { createAuthStore, registerAuthStore } from "@multica/core/auth";
 import { issueTimelineOptions } from "@multica/core/issues/queries";
 import type { MemberWithUser, TimelineEntry } from "@multica/core/types";
-import type { DispatchListItem, DispatchWorkResponse } from "@multica/core/workbench";
+import {
+  dispatchTrailOptions,
+  type DispatchListItem,
+  type DispatchWorkResponse,
+} from "@multica/core/workbench";
 import {
   agentListOptions,
   orgTreeOptions,
@@ -34,6 +38,10 @@ const apiState = vi.hoisted(() => ({
   listSquads: vi.fn().mockResolvedValue([]),
   listPlugins: vi.fn().mockResolvedValue({ plugins: [] }),
   listRequestableProjects: vi.fn().mockResolvedValue([]),
+  getDispatchTrail: vi.fn(),
+  commentDispatch: vi.fn(),
+  setDispatchStatus: vi.fn(),
+  deleteDispatch: vi.fn(),
 }));
 
 vi.mock("@multica/core/api", async (importOriginal) => {
@@ -85,6 +93,7 @@ function dispatchItem(overrides: Partial<DispatchListItem> = {}): DispatchListIt
   return {
     issue: {
       id: "issue-1",
+      workspace_id: WS,
       identifier: "ACM-1",
       title: "Prepare onboarding materials",
       description: "Prepare onboarding materials for next week",
@@ -101,10 +110,48 @@ function dispatchItem(overrides: Partial<DispatchListItem> = {}): DispatchListIt
   } as unknown as DispatchListItem;
 }
 
+function remoteReviewItem(overrides: Partial<DispatchListItem> = {}): DispatchListItem {
+  const item = dispatchItem({
+    project_id: "project-1",
+    project_name: "AIHUB",
+    ...overrides,
+  });
+  return {
+    ...item,
+    issue: {
+      ...item.issue,
+      workspace_id: "ws-project",
+      identifier: "AIHUB-7",
+      assignee_type: "agent",
+      assignee_id: "agent-9",
+    },
+  };
+}
+
+function trailResponse() {
+  return {
+    issue: remoteReviewItem().issue,
+    assignee_name: "AIHUB agent",
+    children: [],
+    progress: { done: 0, total: 0 },
+    result: null,
+    deliverables: [],
+  };
+}
+
+function renderRemoteThread(item: DispatchListItem = remoteReviewItem()) {
+  state.dispatches = [item];
+  state.searchParams = new URLSearchParams("dispatch=issue-1");
+  qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+  qc.setQueryData(dispatchTrailOptions(WS, "issue-1").queryKey, trailResponse());
+  renderPage();
+}
+
 function dispatchResponse(issueId = "issue-2"): DispatchWorkResponse {
   return {
     issue: {
       id: issueId,
+      workspace_id: WS,
       identifier: "ACM-2",
       title: "Investigate checkout failures",
       description: "Investigate checkout failures from yesterday",
@@ -135,6 +182,7 @@ beforeEach(() => {
   state.isLoading = false;
   state.error = null;
   state.searchParams = new URLSearchParams();
+  apiState.getDispatchTrail.mockResolvedValue(trailResponse());
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   const auth = createAuthStore({
     api: apiState as never,
@@ -612,6 +660,34 @@ describe("WorkbenchPage", () => {
     expect(screen.getByText("Work you send will appear here.")).toBeInTheDocument();
   });
 
+  it("deletes a history entry only after the requester confirms", async () => {
+    apiState.deleteDispatch.mockResolvedValueOnce(undefined);
+    state.dispatches = [
+      dispatchItem(),
+      dispatchItem({
+        issue: {
+          ...dispatchItem().issue,
+          id: "issue-2",
+          identifier: "ACM-2",
+          title: "Audit the billing export",
+        },
+      }),
+    ];
+    renderPage();
+
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    expect(deleteButtons).toHaveLength(2);
+    await userEvent.click(deleteButtons[0]!);
+    const dialog = await screen.findByRole("dialog");
+    expect(apiState.deleteDispatch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(apiState.deleteDispatch).toHaveBeenCalledWith("issue-1"),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("drops a stale dispatch selection from the URL", async () => {
     state.searchParams = new URLSearchParams("dispatch=deleted-issue");
     renderPage();
@@ -733,6 +809,75 @@ describe("WorkbenchPage", () => {
     );
     expect(state.mutateAsync).not.toHaveBeenCalled();
     expect(screen.getByRole("textbox", { name: "What needs doing?" })).toHaveValue("");
+  });
+
+  it("sends a follow-up to a project workspace through the dispatch control", async () => {
+    apiState.commentDispatch.mockResolvedValue({
+      issue: { ...remoteReviewItem().issue, status: "in_progress" },
+      delivered: true,
+    });
+    renderRemoteThread();
+
+    expect(screen.getByText("AIHUB-7")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "AIHUB-7" })).not.toBeInTheDocument();
+    await submitText("Also add the screenshots");
+
+    await waitFor(() =>
+      expect(apiState.commentDispatch).toHaveBeenCalledWith(
+        "issue-1",
+        "[@AIHUB agent](mention://agent/agent-9)\n\nAlso add the screenshots",
+      ),
+    );
+    // The project issue is not writable with this workspace's issue client.
+    expect(apiState.createComment).not.toHaveBeenCalled();
+  });
+
+  it("hides the attachment control on a project follow-up", () => {
+    renderRemoteThread();
+
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach files" })).not.toBeInTheDocument();
+  });
+
+  it("accepts a project result through the dispatch control", async () => {
+    apiState.setDispatchStatus.mockResolvedValue({
+      issue: { ...remoteReviewItem().issue, status: "done", status_category: "done" },
+    });
+    renderRemoteThread();
+
+    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() =>
+      expect(apiState.setDispatchStatus).toHaveBeenCalledWith("issue-1", "done"),
+    );
+    expect(apiState.updateIssue).not.toHaveBeenCalled();
+  });
+
+  it("sends a project result back through the dispatch control", async () => {
+    apiState.commentDispatch.mockResolvedValue({
+      issue: remoteReviewItem().issue,
+      delivered: true,
+    });
+    apiState.setDispatchStatus.mockResolvedValue({ issue: remoteReviewItem().issue });
+    renderRemoteThread();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send back" }));
+    await userEvent.type(screen.getByLabelText("What needs fixing"), "Add the pricing table");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send back with this note" }),
+    );
+
+    await waitFor(() =>
+      expect(apiState.commentDispatch).toHaveBeenCalledWith(
+        "issue-1",
+        "[@AIHUB agent](mention://agent/agent-9)\n\nAdd the pricing table",
+      ),
+    );
+    await waitFor(() =>
+      expect(apiState.setDispatchStatus).toHaveBeenCalledWith("issue-1", "in_progress"),
+    );
+    expect(apiState.createComment).not.toHaveBeenCalled();
+    expect(apiState.updateIssue).not.toHaveBeenCalled();
   });
 
   it("lists recent work regardless of its status", () => {

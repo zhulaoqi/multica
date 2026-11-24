@@ -46,7 +46,19 @@ var (
 	// ErrDispatchLeaderOffline means the department has agents, but none of them
 	// can take work now: their runtimes are missing or offline. Dispatch refuses
 	// instead of creating an issue no leader task will ever pick up.
-	ErrDispatchLeaderOffline      = errors.New("no agent in this department can run work right now")
+	ErrDispatchLeaderOffline = errors.New("no agent in this department can run work right now")
+	// ErrProjectAgentOffline means the target project has no agent that can run
+	// work right now. The work belongs to the project, so it is refused rather
+	// than silently flattened into the owning department.
+	ErrProjectAgentOffline = errors.New("no agent in this project can run work right now")
+	// ErrDispatchProjectReassignUnsupported means the caller tried to move a
+	// dispatch that was delivered into a project workspace. That work belongs
+	// to the project and is not moved between departments.
+	ErrDispatchProjectReassignUnsupported = errors.New("a dispatch delivered to a project cannot be reassigned")
+	// ErrDispatchAttachmentNotFound means some requested attachments did not
+	// belong to the requester as unbound uploads, so they cannot follow the
+	// work into the project workspace.
+	ErrDispatchAttachmentNotFound = errors.New("dispatch attachment not found")
 	ErrDispatchRequesterNotInTeam = errors.New("requester is not a member of this workspace")
 	ErrDispatchRequesterUnbound   = errors.New("requester has not bound an agent in this workspace")
 	ErrPersonalSquadNotFound      = errors.New("personal squad not found")
@@ -75,9 +87,9 @@ type OrgDispatchParams struct {
 	WorkspaceID pgtype.UUID
 	ActorID     pgtype.UUID
 	UnitID      pgtype.UUID
-	// ProjectID targets a project the caller may request work for. The work
-	// still lands on the project's owning department; the project only gates
-	// who may ask.
+	// ProjectID targets a project the caller may request work for. The work is
+	// created and run in the project workspace; the owning department only
+	// gates who may ask and stays on the origin row.
 	ProjectID pgtype.UUID
 	// Personal targets the requester's own private squad instead of a
 	// department. SquadID selects one of the caller's private squads; leaving
@@ -203,6 +215,10 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 			if err != nil {
 				return OrgDispatchResult{}, err
 			}
+			// Project work is delivered into the project workspace itself,
+			// assigned to an agent that runs there. The owning department keeps
+			// the origin row for reporting but is not asked to run the work.
+			return s.dispatchToProject(ctx, p, units, unit, *project)
 		} else {
 			found, ok := findUnit(units, p.UnitID)
 			if !ok {
@@ -234,7 +250,7 @@ func (s *OrgDispatchService) Dispatch(ctx context.Context, p OrgDispatchParams) 
 		}
 	}
 	if s.Tasks != nil {
-		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
+		allowed, err := s.Tasks.MemberMayCollaborateWithAgent(ctx, squad.LeaderID, p.ActorID)
 		if err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("check leader invocation: %w", err)
 		}
@@ -299,6 +315,11 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 	if origin.RequesterID != p.ActorID {
 		return OrgDispatchResult{}, ErrDispatchReassignForbidden
 	}
+	// Work delivered into a project workspace lives on the project's board and
+	// is run by its agents; moving it to a department would cross workspaces.
+	if origin.TargetProjectID.Valid {
+		return OrgDispatchResult{}, ErrDispatchProjectReassignUnsupported
+	}
 	issue, err := s.Queries.GetIssueInWorkspace(ctx, db.GetIssueInWorkspaceParams{
 		ID:          p.IssueID,
 		WorkspaceID: p.WorkspaceID,
@@ -338,7 +359,7 @@ func (s *OrgDispatchService) Reassign(ctx context.Context, p OrgDispatchReassign
 		return OrgDispatchResult{}, err
 	}
 	if s.Tasks != nil {
-		allowed, err := s.Tasks.MemberMayInvokeAgent(ctx, squad.LeaderID, p.ActorID)
+		allowed, err := s.Tasks.MemberMayCollaborateWithAgent(ctx, squad.LeaderID, p.ActorID)
 		if err != nil {
 			return OrgDispatchResult{}, fmt.Errorf("check leader invocation: %w", err)
 		}
@@ -720,16 +741,32 @@ func IsDispatchCompleted(ctx context.Context, q *db.Queries, workspaceID pgtype.
 }
 
 func (s *OrgDispatchService) notifyInbox(ctx context.Context, notice *OrgDispatchNotice) error {
-	details, _ := json.Marshal(map[string]any{
+	detailsMap := map[string]any{
 		"dispatch_unit_id":   util.UUIDToString(notice.Origin.TargetUnitID),
 		"dispatch_unit_name": notice.UnitName,
 		"identifier":         notice.Identifier,
 		"status":             notice.Issue.Status,
-	})
+	}
+	// A project dispatch's issue lives in the project workspace. The inbox item
+	// belongs to the requester in the organization, where opening that issue
+	// would 404, so the notice names the project and carries no issue link.
+	issueID := notice.Issue.ID
 	body := fmt.Sprintf("%s delivered your dispatch to %s.", notice.Identifier, notice.UnitName)
 	if notice.UnitName == "" {
 		body = fmt.Sprintf("%s delivered your dispatch.", notice.Identifier)
 	}
+	if notice.Issue.WorkspaceID != notice.Origin.WorkspaceID {
+		projectName := s.projectName(ctx, notice.Origin.TargetProjectID)
+		detailsMap["dispatch_project_id"] = util.UUIDToString(notice.Origin.TargetProjectID)
+		detailsMap["dispatch_project_name"] = projectName
+		issueID = pgtype.UUID{}
+		if projectName != "" {
+			body = fmt.Sprintf("%s delivered your dispatch to project %q.", notice.Identifier, projectName)
+		} else {
+			body = fmt.Sprintf("%s delivered your dispatch to its project.", notice.Identifier)
+		}
+	}
+	details, _ := json.Marshal(detailsMap)
 	item, inserted, err := inbox.CreateIfEligible(ctx, s.Queries, db.CreateInboxItemParams{
 		ID:            dbid.NewV7(),
 		WorkspaceID:   notice.Origin.WorkspaceID,
@@ -737,7 +774,7 @@ func (s *OrgDispatchService) notifyInbox(ctx context.Context, notice *OrgDispatc
 		RecipientID:   notice.Origin.RequesterID,
 		Type:          inboxTypeDispatchCompleted,
 		Severity:      "info",
-		IssueID:       notice.Issue.ID,
+		IssueID:       issueID,
 		Title:         notice.Issue.Title,
 		Body:          pgtype.Text{String: body, Valid: true},
 		ActorType:     pgtype.Text{String: "system", Valid: true},
@@ -754,20 +791,33 @@ func (s *OrgDispatchService) notifyInbox(ctx context.Context, notice *OrgDispatc
 }
 
 func (s *OrgDispatchService) notifyFailureInbox(ctx context.Context, notice *OrgDispatchFailureNotice) error {
-	details, _ := json.Marshal(map[string]any{
+	detailsMap := map[string]any{
 		"dispatch_unit_id":   util.UUIDToString(notice.Origin.TargetUnitID),
 		"dispatch_unit_name": notice.UnitName,
 		"identifier":         notice.Identifier,
 		"status":             notice.Issue.Status,
 		"failure_reason":     notice.Reason,
-	})
+	}
+	issueID := notice.Issue.ID
 	body := fmt.Sprintf("%s failed in %s.", notice.Identifier, notice.UnitName)
 	if notice.UnitName == "" {
 		body = fmt.Sprintf("%s failed.", notice.Identifier)
 	}
+	if notice.Issue.WorkspaceID != notice.Origin.WorkspaceID {
+		projectName := s.projectName(ctx, notice.Origin.TargetProjectID)
+		detailsMap["dispatch_project_id"] = util.UUIDToString(notice.Origin.TargetProjectID)
+		detailsMap["dispatch_project_name"] = projectName
+		issueID = pgtype.UUID{}
+		if projectName != "" {
+			body = fmt.Sprintf("%s failed in project %q.", notice.Identifier, projectName)
+		} else {
+			body = fmt.Sprintf("%s failed in its project.", notice.Identifier)
+		}
+	}
 	if notice.Reason != "" {
 		body += " " + notice.Reason
 	}
+	details, _ := json.Marshal(detailsMap)
 	item, inserted, err := inbox.CreateIfEligible(ctx, s.Queries, db.CreateInboxItemParams{
 		ID:            dbid.NewV7(),
 		WorkspaceID:   notice.Origin.WorkspaceID,
@@ -775,7 +825,7 @@ func (s *OrgDispatchService) notifyFailureInbox(ctx context.Context, notice *Org
 		RecipientID:   notice.Origin.RequesterID,
 		Type:          inboxTypeDispatchFailed,
 		Severity:      "action_required",
-		IssueID:       notice.Issue.ID,
+		IssueID:       issueID,
 		Title:         notice.Issue.Title,
 		Body:          pgtype.Text{String: body, Valid: true},
 		ActorType:     pgtype.Text{String: "system", Valid: true},
@@ -833,6 +883,18 @@ func (s *OrgDispatchService) unitName(ctx context.Context, wsUUID, unitID pgtype
 		return unit.Name
 	}
 	return ""
+}
+
+func (s *OrgDispatchService) projectName(ctx context.Context, projectID pgtype.UUID) string {
+	if !projectID.Valid {
+		return ""
+	}
+	project, err := s.Queries.GetWorkspace(ctx, projectID)
+	if err != nil {
+		slog.Warn("dispatch notice: load project failed", "project_id", util.UUIDToString(projectID), "error", err)
+		return ""
+	}
+	return project.Name
 }
 
 func (s *OrgDispatchService) issueIdentifier(ctx context.Context, issue db.Issue) string {
@@ -1051,7 +1113,7 @@ func (s *OrgDispatchService) leaderPickState(ctx context.Context, agentID, actor
 	if s.Tasks == nil {
 		return pickReady, nil
 	}
-	allowed, err := memberMayInvokeAgent(ctx, s.Queries, agent, actorID, wsUUID)
+	allowed, err := memberMayCollaborateWithAgent(ctx, s.Queries, agent, actorID, wsUUID)
 	if err != nil {
 		return pickNotReady, fmt.Errorf("check leader invocation: %w", err)
 	}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Clock, FolderKanban, Plus, Sparkles } from "@multica/ui/icons";
+import { ArrowLeft, Clock, FolderKanban, Plus, Sparkles, Trash2 } from "@multica/ui/icons";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Dialog,
@@ -46,8 +46,11 @@ import { useCreateComment } from "@multica/core/issues/mutations";
 import { useActorName, useOrganizationContext } from "@multica/core/workspace/hooks";
 import { paths, useWorkspacePaths } from "@multica/core/paths";
 import {
+  dispatchTrailOptions,
   parseDispatchCandidates,
   requestableProjectsOptions,
+  useCommentDispatch,
+  useDeleteDispatch,
   useDispatchWork,
   useMyDispatches,
   type DispatchCandidate,
@@ -106,6 +109,7 @@ function HistoryList({
   error,
   phaseFor,
   onSelect,
+  onDelete,
 }: {
   dispatches: DispatchListItem[];
   selectedId: string | null;
@@ -113,6 +117,7 @@ function HistoryList({
   error: Error | null;
   phaseFor: (item: DispatchListItem) => DispatchPhase;
   onSelect: (item: DispatchListItem) => void;
+  onDelete: (item: DispatchListItem) => void;
 }) {
   const { t } = useT("workbench");
   const timeAgo = useTimeAgo();
@@ -145,13 +150,13 @@ function HistoryList({
       {dispatches.map((item) => {
         const selected = item.issue.id === selectedId;
         return (
-          <li key={item.issue.id}>
+          <li key={item.issue.id} className="group relative">
             <button
               type="button"
               aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(item)}
               className={cn(
-                "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
+                "flex w-full flex-col gap-1 rounded-md py-2 pr-9 pl-2 text-left transition-colors hover:bg-muted",
                 selected && "bg-muted",
               )}
             >
@@ -181,6 +186,15 @@ function HistoryList({
                 </span>
               ) : null}
             </button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t(($) => $.page.delete)}
+              className="absolute top-1.5 right-1 text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 />
+            </Button>
           </li>
         );
       })}
@@ -300,8 +314,23 @@ function DispatchWorkbench() {
   const { dispatches, isLoading, error } = useMyDispatches(wsId);
   const { phaseFor, progressFor } = useWorkbenchConversation(wsId);
   const dispatch = useDispatchWork(wsId);
-
   const selectedId = searchParams.get("dispatch");
+  const deleteDispatch = useDeleteDispatch(wsId);
+  const [deleteTarget, setDeleteTarget] = useState<DispatchListItem | null>(null);
+  const [deleteError, setDeleteError] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteError(false);
+    try {
+      await deleteDispatch.mutateAsync(deleteTarget.issue.id);
+      if (selectedId === deleteTarget.issue.id) push(workbenchPath);
+      setDeleteTarget(null);
+    } catch {
+      setDeleteError(true);
+    }
+  };
+
   const presetUnitId = searchParams.get("unit");
   const selected = useMemo(
     () =>
@@ -339,6 +368,17 @@ function DispatchWorkbench() {
   const [uploadFailed, setUploadFailed] = useState(false);
   const { upload, uploading } = useFileUpload(api);
   const followUp = useCreateComment(selected?.issue.id ?? "");
+  // A dispatch delivered into another workspace cannot be commented on with
+  // this workspace's issue mutations; the server-side control surface writes
+  // into the issue's own workspace instead.
+  const crossWorkspace = !!selected && selected.issue.workspace_id !== wsId;
+  const commentDispatch = useCommentDispatch(wsId, selected?.issue.id ?? "");
+  // The project agent is absent from this workspace's agent list, so its name
+  // comes from the trail. Same query key as the trail card, so no extra read.
+  const { data: trail } = useQuery({
+    ...dispatchTrailOptions(wsId, selected?.issue.id ?? ""),
+    enabled: crossWorkspace,
+  });
   const { getActorName } = useActorName();
   const userId = useAuthStore((state) => state.user?.id ?? "");
   const {
@@ -415,8 +455,9 @@ function DispatchWorkbench() {
     setFollowUpPending(true);
     setFollowUpError(null);
     try {
-      const assigneeName =
-        selected.issue.assignee_type && selected.issue.assignee_id
+      const assigneeName = crossWorkspace
+        ? trail?.assignee_name || t(($) => $.page.unknown_department)
+        : selected.issue.assignee_type && selected.issue.assignee_id
           ? getActorName(selected.issue.assignee_type, selected.issue.assignee_id)
           : selected.unit_path || t(($) => $.page.unknown_department);
       const mention = subjectMention(
@@ -424,10 +465,16 @@ function DispatchWorkbench() {
         selected.issue.assignee_id,
         assigneeName,
       );
-      await followUp.mutateAsync({
-        content: followUpComment(mention, raw),
-        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
+      if (crossWorkspace) {
+        await commentDispatch.mutateAsync({
+          content: followUpComment(mention, raw),
+        });
+      } else {
+        await followUp.mutateAsync({
+          content: followUpComment(mention, raw),
+          attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+        });
+      }
       setText("");
       setAttachments([]);
     } catch (err) {
@@ -572,6 +619,11 @@ function DispatchWorkbench() {
           error={error}
           phaseFor={phaseFor}
           onSelect={selectDispatch}
+          onDelete={(item) => {
+            setDeleteError(false);
+            setHistoryOpen(false);
+            setDeleteTarget(item);
+          }}
         />
       </div>
     </div>
@@ -589,7 +641,7 @@ function DispatchWorkbench() {
       wsId={wsId}
       item={selected}
       phase={phaseFor(selected)}
-      progress={progressFor(selected.issue.id)}
+      progress={progressFor(selected)}
       onRetry={() =>
         void submitDispatch(
           selected.issue.description ?? selected.issue.title,
@@ -818,8 +870,8 @@ function DispatchWorkbench() {
                 id: entry.id,
                 filename: entry.filename,
               }))}
-              onAttachFiles={attachFiles}
-              onRemoveAttachment={removeAttachment}
+              onAttachFiles={crossWorkspace ? undefined : attachFiles}
+              onRemoveAttachment={crossWorkspace ? undefined : removeAttachment}
               uploading={uploading}
               mentions={mentions}
               focusToken={focusToken}
@@ -887,6 +939,45 @@ function DispatchWorkbench() {
           </SheetContent>
         </Sheet>
       ) : null}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (open || deleteDispatch.isPending) return;
+          setDeleteTarget(null);
+          setDeleteError(false);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t(($) => $.page.delete_title)}</DialogTitle>
+            <DialogDescription>{t(($) => $.page.delete_description)}</DialogDescription>
+          </DialogHeader>
+          {deleteError ? (
+            <p role="alert" className="text-caption text-destructive">
+              {t(($) => $.errors.delete_failed)}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={deleteDispatch.isPending}
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(false);
+              }}
+            >
+              {t(($) => $.page.cancel)}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteDispatch.isPending}
+              onClick={() => void confirmDelete()}
+            >
+              {t(($) => $.page.delete_confirm)}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

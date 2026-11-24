@@ -681,6 +681,7 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
   max_concurrent_tasks: z.number().default(1),
   model: z.string().default(""),
   owner_id: z.string().nullable().default(null),
+  is_primary: z.boolean().optional().default(false),
   skills: z.array(z.unknown()).default([]) as unknown as z.ZodType<
     Agent["skills"]
   >,

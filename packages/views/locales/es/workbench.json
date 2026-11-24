@@ -45,7 +45,12 @@
     "personal_squad": "Mi equipo",
     "blocked": "Bloqueado: {{missing}}",
     "binding_none": "Todavía no tienes un agente. Pide a tu responsable de departamento que cree uno.",
-    "binding_failed": "No se pudo vincular el agente. Inténtalo de nuevo."
+    "binding_failed": "No se pudo vincular el agente. Inténtalo de nuevo.",
+    "delete": "Eliminar",
+    "delete_title": "¿Eliminar este envío?",
+    "delete_description": "Solo se quita de Envíos recientes. La incidencia y el trabajo en su proyecto o departamento se mantienen.",
+    "delete_confirm": "Eliminar",
+    "cancel": "Cancelar"
   },
   "status": {
     "queued": "Enviado al departamento. Su responsable lo retomará en breve.",
@@ -94,7 +99,7 @@
     "org_dispatch_forbidden": "No tienes acceso a ese departamento.",
     "agent_binding_required": "Vincula un agente antes de enviar trabajo a un departamento.",
     "org_dispatch_no_agents": "Ese departamento aún no tiene agentes. Añade uno en la página de organización.",
-    "org_dispatch_leader_unavailable": "No se puede contactar con el responsable del departamento ahora mismo. Inténtalo más tarde.",
+    "org_dispatch_leader_unavailable": "Ninguno de los agentes en línea de este departamento está abierto para ti. Contacta con el responsable del departamento.",
     "org_dispatch_leader_offline": "Ningún agente de ese departamento está en línea. Pide a su responsable que inicie un runtime y vuelve a enviarlo.",
     "org_dispatch_unroutable": "No se pudo determinar qué departamento debe encargarse. Nombra uno o añade más detalles.",
     "org_dispatch_failed": "No se pudo enviar el trabajo al departamento.",
@@ -104,8 +109,11 @@
     "personal_squad_not_found": "Ese equipo personal ya no existe. Vuelve a enviar para crear uno nuevo.",
     "org_dispatch_target_conflict": "Elige un departamento o tu equipo, no ambos.",
     "org_dispatch_reassign_forbidden": "Solo quien solicitó el trabajo puede reasignarlo.",
+    "org_dispatch_project_agent_offline": "Ningún agente de ese proyecto está en línea. Pide a un miembro del proyecto que inicie un runtime y vuelve a enviarlo.",
+    "dispatch_project_reassign_unsupported": "El trabajo enviado a un proyecto no se puede reasignar aquí. Gestiónalo dentro del proyecto.",
     "dispatch_not_found": "Este trabajo ya no está en tu historial de envíos.",
-    "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización."
+    "dispatch_organization_only": "El trabajo se envía desde el centro de trabajo de la organización.",
+    "delete_failed": "No se pudo eliminar el envío. Inténtalo de nuevo."
   },
   "plan": {
     "title": "Plan"

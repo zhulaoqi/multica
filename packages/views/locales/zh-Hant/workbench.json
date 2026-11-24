@@ -45,7 +45,12 @@
     "personal_squad": "我的小隊",
     "blocked": "阻塞：{{missing}}",
     "binding_none": "你還沒有自己的 Agent，請聯絡部門負責人建立。",
-    "binding_failed": "綁定失敗，請重試。"
+    "binding_failed": "綁定失敗，請重試。",
+    "delete": "刪除",
+    "delete_title": "刪除這筆派活紀錄？",
+    "delete_description": "只從「最近派活」中移除；專案或部門裡的工單與產出不受影響。",
+    "delete_confirm": "刪除",
+    "cancel": "取消"
   },
   "status": {
     "queued": "已交給部門，負責人稍後接手。",
@@ -93,7 +98,7 @@
     "org_dispatch_forbidden": "你沒有該部門的權限。",
     "agent_binding_required": "請先綁定智慧體，再把工作發給部門。",
     "org_dispatch_no_agents": "該部門還沒有 Agent，請先到組織頁新增。",
-    "org_dispatch_leader_unavailable": "暫時聯絡不上部門負責人，請稍後再試。",
+    "org_dispatch_leader_unavailable": "該部門線上的 AI 代理都沒有對你開放，請聯絡部門負責人。",
     "org_dispatch_leader_offline": "該部門的 Agent 都不在線，請讓部門負責人啟動 Runtime 後再派活。",
     "org_dispatch_unroutable": "無法判斷該交給哪個部門，請點名部門或補充說明。",
     "org_dispatch_failed": "沒能把這項工作交給部門。",
@@ -103,8 +108,11 @@
     "personal_squad_not_found": "這個個人小隊已不存在，重新傳送即可新建。",
     "org_dispatch_target_conflict": "部門和我的小隊只能選一個。",
     "org_dispatch_reassign_forbidden": "只有發起人可以改派這項工作。",
+    "org_dispatch_project_agent_offline": "該專案暫時沒有在線的 Agent，請讓專案成員啟動 Runtime 後再派活。",
+    "dispatch_project_reassign_unsupported": "派到專案的活暫不支援改派，請直接在專案裡處理。",
     "dispatch_not_found": "這項工作已不在你的派活紀錄中。",
-    "dispatch_organization_only": "請到組織的工作台派工作。"
+    "dispatch_organization_only": "請到組織的工作台派工作。",
+    "delete_failed": "刪除失敗，請重試。"
   },
   "plan": {
     "title": "計畫"

@@ -327,7 +327,7 @@ func TestListRequestableProjects_ScopesToPermission(t *testing.T) {
 
 // TestDispatchWork_ProjectTargetUsesItsOwnList: an explicit project_id gates
 // the dispatch by the project list (or the owning department when empty), the
-// work still lands on the owning department, and an unauthorized project is
+// work is delivered into the project workspace, and an unauthorized project is
 // indistinguishable from a missing one.
 func TestDispatchWork_ProjectTargetUsesItsOwnList(t *testing.T) {
 	startDispatchTest(t)
@@ -351,6 +351,7 @@ func TestDispatchWork_ProjectTargetUsesItsOwnList(t *testing.T) {
 		t.Fatalf("add leader invocation target: %v", err)
 	}
 	project := createOrganizationProject(t, "proj-dispatch", unitID)
+	projectAgent := insertProjectAgent(t, project, "proj-dispatch-agent", admin)
 	t.Cleanup(func() {
 		testPool.Exec(context.Background(), `DELETE FROM workspace_intake_source WHERE workspace_id = $1`, project)
 		clearDispatchFixtures(t)
@@ -378,6 +379,12 @@ func TestDispatchWork_ProjectTargetUsesItsOwnList(t *testing.T) {
 	}
 	if res.Dispatch.UnitID != unitID || res.Dispatch.UnitPath != "项目派活部" {
 		t.Fatalf("dispatch = %+v, want owning unit %s", res.Dispatch, unitID)
+	}
+	if res.Issue.WorkspaceID != project {
+		t.Fatalf("issue workspace = %s, want project %s", res.Issue.WorkspaceID, project)
+	}
+	if res.Issue.AssigneeType == nil || *res.Issue.AssigneeType != "agent" || res.Issue.AssigneeID == nil || *res.Issue.AssigneeID != projectAgent {
+		t.Fatalf("assignee = %v %v, want project agent %s", res.Issue.AssigneeType, res.Issue.AssigneeID, projectAgent)
 	}
 
 	// With no list of its own the project inherits the department, which does
@@ -410,7 +417,8 @@ func TestDispatchWork_ProjectTargetUsesItsOwnList(t *testing.T) {
 
 // TestDispatchWork_FreeTextRoutesToNamedProject covers the C-end question
 // case: the text names a project under the owning department, the requester
-// may hand that project work, and no project was selected by hand.
+// may hand that project work, no project was selected by hand, and the work
+// lands in the project workspace rather than the department queue.
 func TestDispatchWork_FreeTextRoutesToNamedProject(t *testing.T) {
 	startDispatchTest(t)
 	markOrganizationWorkspace(t)
@@ -431,6 +439,7 @@ func TestDispatchWork_FreeTextRoutesToNamedProject(t *testing.T) {
 		t.Fatalf("add leader invocation target: %v", err)
 	}
 	project := createOrganizationProject(t, "AIHUB", unitID)
+	projectAgent := insertProjectAgent(t, project, "free-text-route-project-agent", admin)
 	t.Cleanup(func() {
 		testPool.Exec(context.Background(), `DELETE FROM workspace_intake_source WHERE workspace_id = $1`, project)
 		clearDispatchFixtures(t)
@@ -451,6 +460,14 @@ func TestDispatchWork_FreeTextRoutesToNamedProject(t *testing.T) {
 	}
 	if res.Dispatch.UnitID != unitID {
 		t.Fatalf("dispatch unit = %s, want owning unit %s", res.Dispatch.UnitID, unitID)
+	}
+	// The question was asked about AIHUB, so AIHUB runs it: the issue lives in
+	// the project workspace and is assigned to its online agent.
+	if res.Issue.WorkspaceID != project {
+		t.Fatalf("issue workspace = %s, want project %s", res.Issue.WorkspaceID, project)
+	}
+	if res.Issue.AssigneeType == nil || *res.Issue.AssigneeType != "agent" || res.Issue.AssigneeID == nil || *res.Issue.AssigneeID != projectAgent {
+		t.Fatalf("assignee = %v %v, want project agent %s", res.Issue.AssigneeType, res.Issue.AssigneeID, projectAgent)
 	}
 
 	status, items, body := listDispatches(t, requester, "")

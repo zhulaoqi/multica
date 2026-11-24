@@ -1456,6 +1456,17 @@ func (s *TaskService) EnqueueTaskForSquadLeaderByActor(ctx context.Context, issu
 	return s.enqueueMentionTask(ctx, issue, leaderID, pgtype.UUID{}, true, squadID, false, "", actorUserID, pgtype.UUID{}, OriginDerived)
 }
 
+// EnqueueTaskForDispatchExecutor queues a run of a dispatch delivered into a
+// project workspace. The task carries is_leader_task so the start, completion
+// and failure notices and leader_state read it like a department squad leader,
+// but it has no squad: the daemon clears the leader role and runs an ordinary
+// agent turn. actorUserID is the requester who handed the work. handoffNote is
+// the project routing note: it asks the receiving agent to hand the request to
+// the project agent whose declared responsibilities best match it.
+func (s *TaskService) EnqueueTaskForDispatchExecutor(ctx context.Context, issue db.Issue, agentID pgtype.UUID, actorUserID pgtype.UUID, handoffNote string) (db.AgentTaskQueue, error) {
+	return s.enqueueMentionTask(ctx, issue, agentID, pgtype.UUID{}, true, pgtype.UUID{}, false, handoffNote, actorUserID, pgtype.UUID{}, OriginDerived)
+}
+
 // EnqueueTaskForSquadLeaderWithHandoff is the squad equivalent of
 // EnqueueTaskForIssueWithHandoff.
 func (s *TaskService) EnqueueTaskForSquadLeaderWithHandoff(ctx context.Context, issue db.Issue, leaderID pgtype.UUID, squadID pgtype.UUID, handoffNote string, actorUserID pgtype.UUID) (db.AgentTaskQueue, error) {
@@ -1908,6 +1919,20 @@ func (s *TaskService) MemberMayInvokeAgent(ctx context.Context, agentID, userID 
 		return false, fmt.Errorf("load agent: %w", err)
 	}
 	return memberMayInvokeAgent(ctx, s.Queries, agent, userID, agent.WorkspaceID)
+}
+
+// MemberMayCollaborateWithAgent is MemberMayInvokeAgent for collaboration
+// paths (department dispatch and its follow-ups), where a primary twin is open
+// to every member of its workspace. Same verdict/error split.
+func (s *TaskService) MemberMayCollaborateWithAgent(ctx context.Context, agentID, userID pgtype.UUID) (bool, error) {
+	agent, err := s.Queries.GetAgent(ctx, agentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load agent: %w", err)
+	}
+	return memberMayCollaborateWithAgent(ctx, s.Queries, agent, userID, agent.WorkspaceID)
 }
 
 // PrepareChatTaskEnqueue performs reads and optional external integration work

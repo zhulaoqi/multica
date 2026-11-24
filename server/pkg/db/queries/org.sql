@@ -286,3 +286,18 @@ SELECT id, name, slug, org_unit_id
 FROM workspace
 WHERE NOT is_organization AND org_unit_id IS NOT NULL
 ORDER BY name;
+
+-- name: ListProjectDispatchAgents :many
+-- Agents in one project workspace that can execute a dispatch right now: user
+-- agents (organization projections included) whose runtime is online.
+-- Preference — an owner who leads the owning department or an ancestor first —
+-- is resolved in Go so the query stays stable.
+SELECT a.id, a.owner_id, a.is_primary, a.created_at
+FROM agent a
+JOIN agent_runtime r ON r.id = a.runtime_id
+WHERE a.workspace_id = $1
+  AND a.archived_at IS NULL
+  AND a.kind = 'user'
+  AND a.runtime_id IS NOT NULL
+  AND r.status = 'online'
+ORDER BY a.is_primary DESC, a.created_at ASC;

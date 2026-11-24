@@ -71,3 +71,28 @@ func memberMayInvokeAgent(ctx context.Context, queries *db.Queries, agent db.Age
 	}
 	return false, nil
 }
+
+// IsPrimaryTwin reports whether the agent is an active member's digital twin,
+// using the same predicate as agent_primary_twin_uidx.
+func IsPrimaryTwin(agent db.Agent) bool {
+	return agent.IsPrimary && !agent.ArchivedAt.Valid && agent.Kind == "user" && agent.OwnerID.Valid
+}
+
+// memberMayCollaborateWithAgent is the invocation policy for collaboration
+// paths: dispatching to a department, assigning or mentioning, and squad
+// delegation. A member's primary twin represents them in the workspace, so
+// anyone with access to the workspace may hand it work whatever its
+// permission_mode; private chat keeps the plain memberMayInvokeAgent rule.
+func memberMayCollaborateWithAgent(ctx context.Context, queries *db.Queries, agent db.Agent, memberUserID pgtype.UUID, workspaceID pgtype.UUID) (bool, error) {
+	if memberUserID.Valid && IsPrimaryTwin(agent) {
+		switch access, err := resolveWorkspaceAccess(ctx, queries, workspaceID, memberUserID); {
+		case err == nil && access.Allowed():
+			return true, nil
+		case err == nil, errors.Is(err, pgx.ErrNoRows):
+			// No access to this workspace; the ordinary rule still decides.
+		default:
+			return false, fmt.Errorf("load workspace access: %w", err)
+		}
+	}
+	return memberMayInvokeAgent(ctx, queries, agent, memberUserID, workspaceID)
+}
