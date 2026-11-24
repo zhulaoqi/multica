@@ -388,15 +388,7 @@ func (s *OrgDispatchService) ListRequestableProjects(ctx context.Context, wsUUID
 	if err != nil {
 		return nil, err
 	}
-	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, wsUUID)
-	if err != nil {
-		return nil, fmt.Errorf("list org agents: %w", err)
-	}
-	runnable := make(map[pgtype.UUID]bool, len(units))
-	for id, count := range unitAgentCounts(units, agents) {
-		runnable[id] = count > 0
-	}
-	candidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, runnable, paths)
+	candidates, err := s.routeProjectCandidates(ctx, wsUUID, access, units, sources, paths)
 	if err != nil {
 		return nil, err
 	}
