@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider, useSidebar } from "@multica/ui/components/ui/sidebar";
 import { workspaceListOptions } from "@multica/core/workspace/queries";
+import { workbenchKeys } from "@multica/core/workbench/queries";
 import { renderWithI18n } from "../test/i18n";
 import { AppRail } from "./app-rail";
 import { AppShellProvider, useAppShell } from "./app-shell-context";
@@ -16,6 +17,7 @@ const state = vi.hoisted(() => ({
   chat: { activeSessionId: null as string | null, isOpen: false },
   stuck: [] as unknown[],
   workspaces: [] as { id: string; slug: string; is_organization?: boolean }[],
+  dispatches: [] as unknown[],
 }));
 
 vi.mock("../navigation", () => ({
@@ -84,6 +86,7 @@ function renderRail(children?: ReactNode, rail: ReactNode = <AppRail />) {
   });
   client.setQueryData(["chat", "ws-1", "sessions"], state.chatSessions);
   client.setQueryData(workspaceListOptions().queryKey, state.workspaces as never);
+  client.setQueryData(workbenchKeys.dispatches("ws-1"), state.dispatches as never);
   return renderWithI18n(
     <QueryClientProvider client={client}>
       <SidebarProvider>
@@ -108,6 +111,7 @@ beforeEach(() => {
   state.chat = { activeSessionId: null, isOpen: false };
   state.stuck = [];
   state.workspaces = [];
+  state.dispatches = [];
 });
 
 describe("AppRail global actions", () => {
@@ -190,6 +194,27 @@ describe("AppRail badges", () => {
     state.stuck = [{ id: "agent-1" }];
     renderRail();
     expect(link("/acme/agents")?.querySelector(".bg-warning")).not.toBeNull();
+  });
+
+  // Work lists only the organization's own issues, so a dispatch delivered
+  // into a project must not badge it with nothing to open.
+  const review = (id: string, workspaceId: string) => ({
+    issue: { id, workspace_id: workspaceId, status: "in_review" },
+    dispatched_at: "2026-11-24T00:00:00Z",
+  });
+
+  it("counts the organization's own reviews on the admin shell's Work", () => {
+    state.workspaces = [{ id: "ws-1", slug: "acme", is_organization: true }];
+    state.dispatches = [review("i-org", "ws-1"), review("i-project", "ws-project")];
+    renderRail();
+    expect(countBadge("/acme/issues")).toHaveAttribute("aria-label", "1");
+  });
+
+  it("leaves project reviews off the admin shell's Work", () => {
+    state.workspaces = [{ id: "ws-1", slug: "acme", is_organization: true }];
+    state.dispatches = [review("i-project", "ws-project")];
+    renderRail();
+    expect(countBadge("/acme/issues")).toBeNull();
   });
 });
 
