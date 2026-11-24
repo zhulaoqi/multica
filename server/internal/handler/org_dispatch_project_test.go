@@ -805,6 +805,18 @@ func TestDispatchWork_HandsTheProjectExecutorARoutingNote(t *testing.T) {
 	`, setup.agentID); err != nil {
 		t.Fatalf("promote executor to primary: %v", err)
 	}
+	// A member who wrote their duty as the description, the way the team tree
+	// shows it, is matched on that text too.
+	describedOwner := createPermissionTestMember(t, "project-routing-note-described@example.com")
+	describedID := insertProjectAgent(t, setup.projectID, "routing-described", describedOwner)
+	if _, err := testPool.Exec(context.Background(), `
+		UPDATE agent SET description = $2, is_primary = true WHERE id = $1
+	`, describedID, "aihub adclaw 项目开发 问题排查"); err != nil {
+		t.Fatalf("describe worker duty: %v", err)
+	}
+	// The executor's owner leads the owning department, so its row is tagged
+	// and equally matching members win over it.
+	setOrgUnitLead(t, setup.unitID, setup.admin)
 	// A secondary agent is not a handover target for this requester, so the
 	// roster must leave it out instead of inviting a refused mention.
 	secondaryID := insertProjectAgent(t, setup.projectID, "routing-secondary", setup.admin)
@@ -832,6 +844,8 @@ func TestDispatchWork_HandsTheProjectExecutorARoutingNote(t *testing.T) {
 		"AIHUB BI 项目研发负责人",
 		"not: 基础设施运维",
 		"(none declared)",
+		"responsibilities: aihub adclaw 项目开发 问题排查",
+		`pick a row without "department lead"`,
 	}
 	for _, want := range wants {
 		if !strings.Contains(note, want) {
@@ -854,6 +868,14 @@ func TestDispatchWork_HandsTheProjectExecutorARoutingNote(t *testing.T) {
 	}
 	if !strings.Contains(executorRows[0], "routing-note-project-agent") || !strings.Contains(executorRows[0], "(none declared)") {
 		t.Fatalf("executor row = %q, want its own name and an empty duty list", executorRows[0])
+	}
+	if !strings.Contains(executorRows[0], "department lead") {
+		t.Fatalf("executor row = %q, want the department lead tag", executorRows[0])
+	}
+	for _, line := range strings.Split(note, "\n") {
+		if strings.Contains(line, "routing-worker") && strings.Contains(line, "department lead") {
+			t.Fatalf("worker row is tagged as a lead: %q", line)
+		}
 	}
 }
 
