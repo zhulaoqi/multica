@@ -261,8 +261,8 @@ func TestOrgBot_P2PPlainTextDispatchesLikeWorkbench(t *testing.T) {
 	if dispatcher.calls[0].UnitID != testUUID(0x21) {
 		t.Fatalf("unit = %+v", dispatcher.calls[0].UnitID)
 	}
-	if len(h.client.textSent) != 1 || !strings.Contains(h.client.textSent[0].Text, "ORG-7") {
-		t.Fatalf("reply = %+v", h.client.textSent)
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "ORG-7") || !strings.Contains(h.client.sent[0].CardJSON, "看一下对账差异") {
+		t.Fatalf("card = %+v", h.client.sent)
 	}
 }
 
@@ -377,12 +377,15 @@ func TestOrgBot_DispatchesIntoOrganization(t *testing.T) {
 	if !strings.Contains(call.Description, "## 目标") || !strings.Contains(call.Description, "## 验收") {
 		t.Fatalf("description not sectioned: %q", call.Description)
 	}
-	text := h.client.textSent[0].Text
-	if !strings.Contains(text, "研发部 / 支付组") || !strings.Contains(text, "ORG-7") {
-		t.Fatalf("confirmation missing unit or identifier: %q", text)
+	if len(h.client.sent) != 1 {
+		t.Fatalf("cards = %d", len(h.client.sent))
 	}
-	if !strings.Contains(text, "/org/") {
-		t.Fatalf("confirmation missing organization deep link: %q", text)
+	card := h.client.sent[0].CardJSON
+	if !strings.Contains(card, "研发部 / 支付组") || !strings.Contains(card, "ORG-7") {
+		t.Fatalf("confirmation missing unit or identifier: %s", card)
+	}
+	if !strings.Contains(card, "/org/") {
+		t.Fatalf("confirmation missing organization deep link: %s", card)
 	}
 	if res.IssueWorkspaceSlug != "org" {
 		t.Fatalf("issue workspace slug = %q, want org", res.IssueWorkspaceSlug)

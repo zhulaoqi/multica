@@ -79,6 +79,9 @@ type OrgBotConfig struct {
 	// Projects lists projects this person may hand work. Nil means the
 	// picker only accepts a typed project name.
 	Projects OrgBotProjects
+	// Departments lists departments this person may hand work. Nil means the
+	// picker still offers the personal squad and any projects.
+	Departments OrgBotDepartments
 	// Context remembers the target chosen in this chat. Nil means each
 	// message is routed on its own.
 	Context     OrgBotContextStore
@@ -203,11 +206,9 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 	}
 	command := strings.TrimSpace(msg.CommandBody)
 	if command == "" {
-		// Stickers, voice and video carry no dispatchable text. Answering beats
-		// silence: a person who just sent something must see that the bot is
-		// alive and what it accepts.
-		b.sendChoiceCard(ctx, msg, orgBotMenuCard())
-		return orgBotP2PHintCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+		// Stickers, voice and video carry no dispatchable text. Offer the same
+		// department, squad and project choices a person can tap on a real request.
+		return b.workbenchReply(ctx, msg, "换目标")
 	}
 	if chatCommand, ok := parseOrgChatCommand(command); ok {
 		return b.chatCommandReply(ctx, msg, chatCommand)
@@ -293,11 +294,9 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 		return "", DispatchResult{}, fmt.Errorf("dispatch to org unit: %w", err)
 	}
 
-	identifier := service.IssueIdentifier(org.IssuePrefix, result.Issue.Number)
-	reply := prefixTarget(matches[0].Path, orgDispatchCreatedText(org.Slug, matches[0].Path, identifier, result.Issue.Title, b.cfg.AppURL))
-	if note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID); note != "" {
-		reply += "\n" + note
-	}
+	identifier, slug := dispatchedIssueRef(org, result)
+	note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID)
+	reply := b.presentDispatched(ctx, msg, matches[0].Path, result.Issue.Title, identifier, matches[0].Path, slug, note)
 	b.saveTarget(ctx, msg, userID, OrgBotChatContext{
 		Kind:                orgBotTargetDepartment,
 		UnitID:              matches[0].Unit.ID,
@@ -310,7 +309,7 @@ func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, Dispatc
 		IssueID:            result.Issue.ID,
 		IssueNumber:        result.Issue.Number,
 		IssueIdentifier:    identifier,
-		IssueWorkspaceSlug: org.Slug,
+		IssueWorkspaceSlug: slug,
 		IssueTitle:         result.Issue.Title,
 		DispatchUnitName:   result.Unit.Name,
 	}, nil
@@ -366,20 +365,5 @@ const (
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
 	orgBotP2PHintCopy        = "直接把要做的事发给我，和在易研里发一样。例如：帮支付组看一下对账差异。回复「换目标」可以选择部门、我的小队或项目。"
 	orgBotP2PAmbiguousCopy   = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
-	orgBotP2PUnroutableCopy  = "没能判断该交给哪个部门。在这句话里写上部门名称后再发一次。"
 	orgBotP2PTooLongCopy     = "这条消息太长了，请缩短后再发。"
 )
-
-// orgDispatchCreatedText links into the organization workspace, where every
-// dispatch lands.
-func orgDispatchCreatedText(orgSlug, unitPath, identifier, title, appURL string) string {
-	line := fmt.Sprintf("已派给 %s：%s", strings.TrimSpace(unitPath), identifier)
-	if t := strings.TrimSpace(title); t != "" {
-		line += " — " + t
-	}
-	line += "\n队长会拆解并派给组内 Agent，完成后我会在这里汇报。"
-	if link := channel.IssueWebLink(appURL, orgSlug, identifier); link != "" {
-		line += "\n" + link
-	}
-	return line
-}

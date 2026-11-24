@@ -404,6 +404,44 @@ func (s *OrgDispatchService) ListRequestableProjects(ctx context.Context, wsUUID
 	return out, nil
 }
 
+// ListRequestableDepartments returns every department this person may hand
+// work, whether or not it already has an agent. The bot picker uses the full
+// list; dispatch still refuses a department that cannot run the work.
+func (s *OrgDispatchService) ListRequestableDepartments(ctx context.Context, wsUUID, actorID pgtype.UUID) ([]RouteCandidate, error) {
+	access, err := workspaceaccess.Resolve(ctx, s.Queries, wsUUID, actorID, false)
+	if err != nil || !access.Allowed() {
+		return nil, ErrDispatchRequesterNotInTeam
+	}
+	units, err := orgUnitsForUser(ctx, s.Queries, wsUUID, access)
+	if err != nil {
+		return nil, fmt.Errorf("list org units: %w", err)
+	}
+	paths := orgscope.Paths(units)
+	sources, err := intakeSources(ctx, s.Queries, wsUUID)
+	if err != nil {
+		return nil, err
+	}
+	visible := requestableUnits(access, units, sources)
+	agents, err := s.Queries.ListAgentsInOrgUnits(ctx, wsUUID)
+	if err != nil {
+		return nil, fmt.Errorf("list org agents: %w", err)
+	}
+	counts := unitAgentCounts(units, agents)
+	out := make([]RouteCandidate, 0, len(units))
+	for _, unit := range units {
+		if !unitVisible(visible, unit.ID) {
+			continue
+		}
+		out = append(out, RouteCandidate{
+			UnitID:     uuidString(unit.ID),
+			Path:       paths[unit.ID],
+			AgentCount: counts[unit.ID],
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
 // routeChoice is one model answer: a department or a project.
 type routeChoice struct {
 	Unit    db.ListOrgUnitsRow

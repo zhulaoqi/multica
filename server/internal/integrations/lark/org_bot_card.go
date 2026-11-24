@@ -93,47 +93,211 @@ func cardActionToken(raw json.RawMessage) (string, bool) {
 	return action, action != ""
 }
 
-func orgBotChoiceCard(title, body string, buttons []orgBotCardButton) (string, error) {
-	if len(buttons) == 0 {
-		return "", nil
+type orgBotCardField struct {
+	Label string
+	Value string
+}
+
+// orgBotChoiceCard is the tap list. The header is the only title; the numbered
+// text reply stays outside the card for clients that cannot click buttons.
+func orgBotChoiceCard(title string, buttons []orgBotCardButton) (string, error) {
+	return orgBotNoticeCard("blue", title, nil, buttons, "", "")
+}
+
+func orgBotSelectedCard(state OrgBotChatContext) (string, error) {
+	label := strings.TrimSpace(state.label())
+	title := "已选中"
+	if label != "" {
+		title = "已选中 " + label
 	}
-	actions := make([]any, 0, len(buttons))
-	for i, button := range buttons {
-		kind := "default"
-		if i == 0 {
-			kind = "primary"
+	fields := []orgBotCardField{{Label: "下一步", Value: "直接发送需求"}}
+	if state.Kind == orgBotTargetProject {
+		if path := strings.TrimSpace(state.UnitPath); path != "" {
+			fields = append([]orgBotCardField{{Label: "交给", Value: path}}, fields...)
 		}
-		actions = append(actions, map[string]any{
-			"tag":  "button",
-			"text": map[string]any{"tag": "plain_text", "content": trimCardButton(button.Label)},
-			"type": kind,
-			"value": map[string]string{
-				"action": button.Action,
+	}
+	return orgBotNoticeCard("blue", title, fields, []orgBotCardButton{{
+		Label:  "换一个",
+		Action: "target:menu",
+	}}, "", "")
+}
+
+func orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attachment string) (string, error) {
+	title := "已交给"
+	label = strings.TrimSpace(label)
+	if label != "" {
+		title = "已交给 " + label
+	}
+	fields := []orgBotCardField{
+		{Label: "需求", Value: requirement},
+		{Label: "编号", Value: identifier},
+	}
+	handedTo = strings.TrimSpace(handedTo)
+	if handedTo != "" && handedTo != label && !strings.Contains(label, handedTo) {
+		fields = append(fields, orgBotCardField{Label: "交给", Value: handedTo})
+	}
+	if note := strings.TrimSpace(attachment); note != "" {
+		fields = append(fields, orgBotCardField{Label: "附件", Value: note})
+	}
+	return orgBotNoticeCard("green", title, fields, nil, "打开任务", link)
+}
+
+// OrgDispatchStartCard is the notice sent when a department begins the work.
+func OrgDispatchStartCard(identifier, title, unit, link string) (string, error) {
+	return orgBotNoticeCard("blue", "部门开始处理", []orgBotCardField{
+		{Label: "需求", Value: title},
+		{Label: "编号", Value: identifier},
+		{Label: "部门", Value: unit},
+	}, nil, "打开任务", link)
+}
+
+// OrgDispatchDoneCard is the notice sent when that work is finished.
+func OrgDispatchDoneCard(identifier, title, status, link string) (string, error) {
+	return orgBotNoticeCard("green", "已完成", []orgBotCardField{
+		{Label: "需求", Value: title},
+		{Label: "编号", Value: identifier},
+		{Label: "状态", Value: orgBotStatusLabel(status)},
+	}, nil, "打开任务", link)
+}
+
+// OrgDispatchFailedCard is the notice sent when the department could not run it.
+func OrgDispatchFailedCard(identifier, title, unit, reason, link string) (string, error) {
+	return orgBotNoticeCard("red", "派活失败", []orgBotCardField{
+		{Label: "需求", Value: title},
+		{Label: "编号", Value: identifier},
+		{Label: "部门", Value: unit},
+		{Label: "原因", Value: reason},
+	}, nil, "打开任务", link)
+}
+
+func orgBotStatusLabel(status string) string {
+	switch strings.TrimSpace(status) {
+	case "backlog", "todo":
+		return "待处理"
+	case "in_progress":
+		return "处理中"
+	case "in_review":
+		return "待验收"
+	case "done":
+		return "已完成"
+	case "blocked":
+		return "阻塞"
+	case "cancelled":
+		return "已取消"
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons []orgBotCardButton, openLabel, openURL string) (string, error) {
+	elements := make([]any, 0, len(fields)+len(buttons)+1)
+	for _, field := range fields {
+		value := cardPlain(field.Value)
+		if value == "" {
+			continue
+		}
+		elements = append(elements, map[string]any{
+			"tag":                "column_set",
+			"flex_mode":          "none",
+			"background_style":   "default",
+			"horizontal_spacing": "8px",
+			"columns": []any{
+				map[string]any{
+					"tag":            "column",
+					"width":          "weighted",
+					"weight":         1,
+					"vertical_align": "center",
+					"elements": []any{
+						map[string]any{"tag": "markdown", "content": "**" + field.Label + "**"},
+					},
+				},
+				map[string]any{
+					"tag":            "column",
+					"width":          "weighted",
+					"weight":         3,
+					"vertical_align": "center",
+					"elements": []any{
+						map[string]any{"tag": "markdown", "content": value},
+					},
+				},
 			},
 		})
 	}
+	for i, button := range buttons {
+		kind := "default"
+		if i == 0 && strings.TrimSpace(openURL) == "" {
+			kind = "primary"
+		}
+		action := map[string]string{"action": button.Action}
+		elements = append(elements, map[string]any{
+			"tag":   "button",
+			"text":  map[string]any{"tag": "plain_text", "content": trimCardButton(button.Label)},
+			"type":  kind,
+			"value": action,
+			"behaviors": []any{
+				map[string]any{"type": "callback", "value": action},
+			},
+		})
+	}
+	if url := strings.TrimSpace(openURL); url != "" {
+		label := strings.TrimSpace(openLabel)
+		if label == "" {
+			label = "打开"
+		}
+		elements = append(elements, map[string]any{
+			"tag":  "button",
+			"text": map[string]any{"tag": "plain_text", "content": label},
+			"type": "primary",
+			"behaviors": []any{
+				map[string]any{"type": "open_url", "default_url": url},
+			},
+		})
+	}
+	if len(elements) == 0 {
+		return "", nil
+	}
 	doc := map[string]any{
-		"config": map[string]any{"wide_screen_mode": true},
+		"schema": "2.0",
+		"config": map[string]any{"update_multi": true},
 		"header": map[string]any{
-			"template": "blue",
-			"title":    map[string]any{"tag": "plain_text", "content": title},
+			"template": template,
+			"title":    map[string]any{"tag": "plain_text", "content": trimCardTitle(title)},
 		},
-		"elements": []any{
-			map[string]any{
-				"tag":  "div",
-				"text": map[string]any{"tag": "lark_md", "content": body},
-			},
-			map[string]any{
-				"tag":     "action",
-				"actions": actions,
-			},
-		},
+		"body": map[string]any{"elements": elements},
 	}
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func trimCardTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "易研"
+	}
+	runes := []rune(title)
+	if len(runes) > 80 {
+		return string(runes[:80])
+	}
+	return title
+}
+
+func cardPlain(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch r {
+		case '\\', '*', '_', '`', '[', ']', '<', '>', '~':
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func trimCardButton(label string) string {
@@ -148,37 +312,33 @@ func trimCardButton(label string) string {
 	return label
 }
 
-func orgBotMenuCard() string {
-	card, err := orgBotChoiceCard("发给谁", "选择之后的消息发给谁。", []orgBotCardButton{
-		{Label: "部门", Action: "target:department"},
-		{Label: "我的小队", Action: "target:personal"},
-		{Label: "项目", Action: "target:project"},
-	})
-	if err != nil {
-		return ""
-	}
-	return card
-}
-
 func orgBotCandidateCard(items []OrgBotCandidate) string {
 	buttons := make([]orgBotCardButton, 0, orgBotChoiceButtonLimit)
 	for _, item := range items {
-		if item.UnitID == "" {
-			continue
-		}
 		if len(buttons) >= orgBotChoiceButtonLimit {
 			break
 		}
-		label := item.Path
-		if label == "" {
-			label = item.Name
+		var action string
+		switch item.Kind {
+		case orgBotTargetPersonal:
+			action = "target:personal"
+		case orgBotTargetProject:
+			if item.ProjectID == "" {
+				continue
+			}
+			action = "project:" + item.ProjectID
+		default:
+			if item.UnitID == "" {
+				continue
+			}
+			action = "unit:" + item.UnitID
 		}
-		buttons = append(buttons, orgBotCardButton{Label: label, Action: "unit:" + item.UnitID})
+		buttons = append(buttons, orgBotCardButton{Label: item.display(), Action: action})
 	}
 	if len(buttons) == 0 {
 		return ""
 	}
-	card, err := orgBotChoiceCard("选择部门", "点一个部门，或回复序号。", buttons)
+	card, err := orgBotChoiceCard("发给谁", buttons)
 	if err != nil {
 		return ""
 	}
@@ -189,7 +349,7 @@ func orgBotProjectCard(buttons []orgBotCardButton) string {
 	if len(buttons) > orgBotChoiceButtonLimit {
 		buttons = buttons[:orgBotChoiceButtonLimit]
 	}
-	card, err := orgBotChoiceCard("选择项目", "点一个项目，或回复项目名称。", buttons)
+	card, err := orgBotChoiceCard("选择项目", buttons)
 	if err != nil {
 		return ""
 	}

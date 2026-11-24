@@ -28,11 +28,36 @@ const (
 // chat yet. A missing table is reported the same way so the bot still answers.
 var ErrOrgBotContextMissing = errors.New("org bot context missing")
 
-// OrgBotCandidate is one department offered when a sentence matches several.
+// OrgBotCandidate is one choice the bot offers: a department, the personal
+// squad, or a project. Kind is empty for a department remembered before the
+// picker listed all three.
 type OrgBotCandidate struct {
-	UnitID string `json:"unit_id"`
-	Path   string `json:"path"`
-	Name   string `json:"name"`
+	Kind      string `json:"kind,omitempty"`
+	UnitID    string `json:"unit_id,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
+	Path      string `json:"path,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
+func (c OrgBotCandidate) display() string {
+	switch c.Kind {
+	case orgBotTargetPersonal:
+		return "我的小队"
+	case orgBotTargetProject:
+		name := strings.TrimSpace(c.Name)
+		if name == "" {
+			name = "项目"
+		}
+		if path := strings.TrimSpace(c.Path); path != "" {
+			return "项目 " + name + "（" + path + "）"
+		}
+		return "项目 " + name
+	default:
+		if path := strings.TrimSpace(c.Path); path != "" {
+			return path
+		}
+		return strings.TrimSpace(c.Name)
+	}
 }
 
 // OrgBotChatContext is the target remembered for one person in one chat.
@@ -82,6 +107,13 @@ type OrgBotContextStore interface {
 // OrgBotProjects lists the projects this person may hand work.
 type OrgBotProjects interface {
 	ListRequestableProjects(ctx context.Context, wsUUID, actorID pgtype.UUID) ([]service.RequestableProject, error)
+}
+
+// OrgBotDepartments lists the departments this person may hand work, including
+// ones that do not yet have an agent. The picker shows them so the person can
+// choose instead of rewriting the sentence.
+type OrgBotDepartments interface {
+	ListRequestableDepartments(ctx context.Context, wsUUID, actorID pgtype.UUID) ([]service.RouteCandidate, error)
 }
 
 func marshalOrgBotCandidates(items []OrgBotCandidate) string {

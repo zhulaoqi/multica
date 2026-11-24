@@ -85,8 +85,8 @@ func TestOrgBot_RememberedDepartmentUsedOnNextMessage(t *testing.T) {
 	if dispatcher.calls[1].Description != "再看一眼退款" || dispatcher.calls[1].UnitID != testUUID(0x21) {
 		t.Fatalf("second dispatch = %+v", dispatcher.calls[1])
 	}
-	if !strings.Contains(h.client.textSent[1].Text, "当前发给 财务/支付组") {
-		t.Fatalf("reply = %q", h.client.textSent[1].Text)
+	if len(h.client.sent) < 2 || !strings.Contains(h.client.sent[1].CardJSON, "已交给 财务/支付组") {
+		t.Fatalf("card = %+v", h.client.sent)
 	}
 }
 
@@ -133,8 +133,8 @@ func TestOrgBot_PersonalTargetIsRemembered(t *testing.T) {
 	if len(dispatcher.calls) != 0 {
 		t.Fatalf("choosing a squad dispatched")
 	}
-	if !strings.Contains(h.client.textSent[0].Text, "我的小队") {
-		t.Fatalf("reply = %q", h.client.textSent[0].Text)
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "已选中 我的小队") {
+		t.Fatalf("card = %+v", h.client.sent)
 	}
 	if _, err := h.bot.Handle(context.Background(), p2pText("m2", "整理本周纪要")); err != nil {
 		t.Fatalf("work: %v", err)
@@ -142,8 +142,70 @@ func TestOrgBot_PersonalTargetIsRemembered(t *testing.T) {
 	if len(dispatcher.calls) != 1 || !dispatcher.calls[0].Personal || dispatcher.calls[0].Description != "整理本周纪要" {
 		t.Fatalf("dispatch = %+v", dispatcher.calls)
 	}
-	if !strings.Contains(h.client.textSent[1].Text, "当前发给 我的小队") {
-		t.Fatalf("reply = %q", h.client.textSent[1].Text)
+	if len(h.client.sent) < 2 || !strings.Contains(h.client.sent[1].CardJSON, "已交给 我的小队") {
+		t.Fatalf("card = %+v", h.client.sent)
+	}
+}
+
+func TestOrgBot_ProjectNameAloneDoesNotBecomeTheTask(t *testing.T) {
+	projectID := testUUID(0x31)
+	dispatcher := &orgBotDispatcherFake{dispatch: service.OrgDispatchResult{
+		Issue:   db.Issue{ID: testUUID(0x42), Number: 6, Title: "把登录失败的提示改清楚"},
+		Unit:    db.ListOrgUnitsRow{Name: "开发二组"},
+		Project: &db.Workspace{Slug: "aihub", IssuePrefix: "AIHU", Name: "AIHUB"},
+	}}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = &orgBotRouterFake{result: service.RouteResult{
+		Path:    "企业技术中心/研发部/开发二组",
+		Unit:    db.ListOrgUnitsRow{ID: testUUID(0x21), Name: "开发二组"},
+		Project: &service.RouteProject{ID: projectID, Name: "AIHUB", Slug: "aihub"},
+	}}
+	h.bot.cfg.Context = &memOrgBotContext{}
+
+	if _, err := h.bot.Handle(context.Background(), p2pText("m1", "AIHUB")); err != nil {
+		t.Fatalf("name: %v", err)
+	}
+	if len(dispatcher.calls) != 0 {
+		t.Fatalf("project name created a task: %+v", dispatcher.calls)
+	}
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "已选中 项目 AIHUB") || !strings.Contains(h.client.sent[0].CardJSON, "企业技术中心/研发部/开发二组") {
+		t.Fatalf("card = %+v", h.client.sent)
+	}
+	if _, err := h.bot.Handle(context.Background(), p2pText("m2", "把登录失败的提示改清楚")); err != nil {
+		t.Fatalf("work: %v", err)
+	}
+	if len(dispatcher.calls) != 1 || dispatcher.calls[0].ProjectID != projectID || dispatcher.calls[0].Description != "把登录失败的提示改清楚" {
+		t.Fatalf("dispatch = %+v", dispatcher.calls)
+	}
+	if h.bot.cfg.Router.(*orgBotRouterFake).calls != 1 {
+		t.Fatalf("routed the requirement again")
+	}
+	card := h.client.sent[len(h.client.sent)-1].CardJSON
+	for _, want := range []string{"AIHU-6", "把登录失败的提示改清楚", "/aihub/issues/AIHU-6"} {
+		if !strings.Contains(card, want) {
+			t.Fatalf("card missing %q: %s", want, card)
+		}
+	}
+	if strings.Contains(card, "ORG-6") || strings.Contains(card, "/org/") {
+		t.Fatalf("card used the organization issue: %s", card)
+	}
+}
+
+func TestOrgBot_ProjectSentenceStillDispatches(t *testing.T) {
+	dispatcher := &orgBotDispatcherFake{dispatch: createdPayDispatch("帮 AIHUB 看一下登录失败")}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = &orgBotRouterFake{result: service.RouteResult{
+		Path:    "企业技术中心/研发部/开发二组",
+		Unit:    db.ListOrgUnitsRow{ID: testUUID(0x21), Name: "开发二组"},
+		Project: &service.RouteProject{ID: testUUID(0x31), Name: "AIHUB", Slug: "aihub"},
+	}}
+	h.bot.cfg.Context = &memOrgBotContext{}
+
+	if _, err := h.bot.Handle(context.Background(), p2pText("m1", "帮 AIHUB 看一下登录失败")); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(dispatcher.calls) != 1 || dispatcher.calls[0].Description != "帮 AIHUB 看一下登录失败" || dispatcher.calls[0].ProjectID != testUUID(0x31) {
+		t.Fatalf("dispatch = %+v", dispatcher.calls)
 	}
 }
 
@@ -222,8 +284,8 @@ func TestOrgBot_StagedFileAttachesToCreatedTask(t *testing.T) {
 	if att.IssueID != testUUID(0x42) || att.WorkspaceID != testUUID(0x01) || string(att.Data) != "png-bytes" {
 		t.Fatalf("attachment = %+v", att)
 	}
-	if !strings.Contains(h.client.textSent[1].Text, "已附上") {
-		t.Fatalf("reply = %q", h.client.textSent[1].Text)
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "已附上") {
+		t.Fatalf("card = %+v", h.client.sent)
 	}
 }
 
@@ -245,8 +307,78 @@ func TestOrgBot_FileAfterDispatchAttachesToThatTask(t *testing.T) {
 	if len(h.attachments.attachments) != 1 || h.attachments.attachments[0].IssueID != testUUID(0x42) {
 		t.Fatalf("attachment = %+v", h.attachments.attachments)
 	}
-	if !strings.Contains(h.client.textSent[1].Text, "刚才的 ORG-7") {
-		t.Fatalf("reply = %q", h.client.textSent[1].Text)
+	if len(h.client.textSent) != 1 || !strings.Contains(h.client.textSent[0].Text, "刚才的 ORG-7") {
+		t.Fatalf("reply = %+v", h.client.textSent)
+	}
+}
+
+type orgBotDepartmentsFake struct {
+	units []service.RouteCandidate
+}
+
+func (f orgBotDepartmentsFake) ListRequestableDepartments(context.Context, pgtype.UUID, pgtype.UUID) ([]service.RouteCandidate, error) {
+	return f.units, nil
+}
+
+func TestOrgBot_UnroutableOffersChoices(t *testing.T) {
+	dispatcher := &orgBotDispatcherFake{}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = &orgBotRouterFake{err: service.ErrDispatchUnroutable}
+	h.bot.cfg.Departments = orgBotDepartmentsFake{units: []service.RouteCandidate{
+		{UnitID: util.UUIDToString(testUUID(0x21)), Path: "财务/支付组"},
+	}}
+	h.bot.cfg.Projects = orgBotProjectsFake{projects: []service.RequestableProject{{
+		ID: testUUID(0x31), Name: "支付中台", Path: "财务/支付组",
+	}}}
+	h.bot.cfg.Context = &memOrgBotContext{}
+
+	res, err := h.bot.Handle(context.Background(), p2pText("m1", "你会干啥"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if res.Outcome != OutcomeDispatchAmbiguous || len(dispatcher.calls) != 0 {
+		t.Fatalf("outcome = %q calls = %d", res.Outcome, len(dispatcher.calls))
+	}
+	text := h.client.textSent[0].Text
+	for _, want := range []string{"我的小队", "财务/支付组", "支付中台", "回复序号"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("reply missing %q: %q", want, text)
+		}
+	}
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "target:personal") {
+		t.Fatalf("card = %+v", h.client.sent)
+	}
+}
+
+func TestOrgBot_AskingForDepartmentsOffersChoices(t *testing.T) {
+	dispatcher := &orgBotDispatcherFake{dispatch: createdPayDispatch("对账")}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = payRoute()
+	h.bot.cfg.Departments = orgBotDepartmentsFake{units: []service.RouteCandidate{
+		{UnitID: util.UUIDToString(testUUID(0x21)), Path: "财务/支付组"},
+	}}
+	h.bot.cfg.Context = &memOrgBotContext{}
+
+	if _, err := h.bot.Handle(context.Background(), p2pText("m1", "你不能返回部门做选择吗")); err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if len(dispatcher.calls) != 0 {
+		t.Fatalf("asking for a choice dispatched")
+	}
+	if _, err := h.bot.Handle(context.Background(), p2pText("m2", "2")); err != nil {
+		t.Fatalf("pick: %v", err)
+	}
+	if len(dispatcher.calls) != 0 {
+		t.Fatalf("picking dispatched the question")
+	}
+	if _, err := h.bot.Handle(context.Background(), p2pText("m3", "帮我看一下对账差异")); err != nil {
+		t.Fatalf("work: %v", err)
+	}
+	if len(dispatcher.calls) != 1 || dispatcher.calls[0].UnitID != testUUID(0x21) || dispatcher.calls[0].Description != "帮我看一下对账差异" {
+		t.Fatalf("dispatch = %+v", dispatcher.calls)
+	}
+	if h.bot.cfg.Router.(*orgBotRouterFake).calls != 0 {
+		t.Fatalf("chosen department was routed again")
 	}
 }
 

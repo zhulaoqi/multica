@@ -758,6 +758,20 @@ func SendTextWithReplyFallback(ctx context.Context, log *slog.Logger, op string,
 	})
 }
 
+// SendCardWithReplyFallback posts an interactive card through the same
+// reply/fallback path as SendTextWithReplyFallback.
+func SendCardWithReplyFallback(ctx context.Context, log *slog.Logger, op string, client APIClient, p SendCardParams) error {
+	if log == nil {
+		log = slog.Default()
+	}
+	return sendWithReplyFallback(log, op, p.ReplyTarget, func(target ReplyTarget) error {
+		params := p
+		params.ReplyTarget = target
+		_, err := client.SendInteractiveCard(ctx, params)
+		return err
+	})
+}
+
 func (p *Patcher) installationCredentials(inst Installation) (InstallationCredentials, error) {
 	if p.credentials == nil {
 		return InstallationCredentials{}, errors.New("lark patcher: credentials resolver missing")

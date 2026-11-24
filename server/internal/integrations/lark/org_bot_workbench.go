@@ -68,7 +68,7 @@ func (b *OrgBot) stepWorkbench(ctx context.Context, msg InboundMessage, userID p
 	kind, arg := classifyWorkbenchText(text)
 	switch kind {
 	case "menu":
-		return b.menuReply(ctx, msg, state)
+		return b.menuReply(ctx, msg, userID, org, state)
 	case "cancel":
 		state.Awaiting = ""
 		state.PendingText = ""
@@ -88,7 +88,7 @@ func (b *OrgBot) stepWorkbench(ctx context.Context, msg InboundMessage, userID p
 func (b *OrgBot) applyChoice(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext, kind, arg string) (string, DispatchResult, OrgBotChatContext, error) {
 	switch kind {
 	case "menu":
-		return b.menuReply(ctx, msg, state)
+		return b.menuReply(ctx, msg, userID, org, state)
 	case "department":
 		return b.chooseDepartmentAuto(ctx, msg, userID, org, state)
 	case "personal":
@@ -110,14 +110,7 @@ func (b *OrgBot) applyFreeText(ctx context.Context, msg InboundMessage, userID p
 	switch state.Awaiting {
 	case orgBotAwaitAmbiguous:
 		if candidate, ok := matchCandidate(text, state.Candidates); ok {
-			id, path, ok := b.resolveCandidate(ctx, org.ID, userID, candidate)
-			if !ok {
-				return b.repeatCandidates(ctx, msg, state), DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
-			}
-			return b.finishPin(ctx, msg, userID, org, state, service.UnitMatch{
-				Unit: db.ListOrgUnitsRow{ID: id},
-				Path: path,
-			})
+			return b.applyMatchedCandidate(ctx, msg, userID, org, state, candidate)
 		}
 		return b.repeatCandidates(ctx, msg, state), DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
 	case orgBotAwaitProject:
@@ -130,6 +123,9 @@ func (b *OrgBot) applyFreeText(ctx context.Context, msg InboundMessage, userID p
 		state.Awaiting = ""
 		return b.dispatchUsingState(ctx, msg, userID, org, text, state)
 	default:
+		if asksForTargetList(text) {
+			return b.offerTargets(ctx, msg, userID, org, state)
+		}
 		if match, ok := b.lookupExactDepartment(ctx, org.ID, userID, text); ok {
 			return b.finishPin(ctx, msg, userID, org, state, match)
 		}
@@ -140,14 +136,8 @@ func (b *OrgBot) applyFreeText(ctx context.Context, msg InboundMessage, userID p
 	}
 }
 
-func (b *OrgBot) menuReply(ctx context.Context, msg InboundMessage, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
-	state.Awaiting = orgBotAwaitTarget
-	b.sendChoiceCard(ctx, msg, orgBotMenuCard())
-	body := "选择之后的消息发给谁：\n部门 — 按内容判断，判断后记住\n我的小队\n项目\n回复「部门」「我的小队」或「项目」。指定某个部门用「指定部门 名称」。"
-	if label := state.label(); label != "" {
-		body = "当前发给 " + label + "。\n" + body
-	}
-	return body, DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
+func (b *OrgBot) menuReply(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
+	return b.offerTargets(ctx, msg, userID, org, state)
 }
 
 func (b *OrgBot) chooseDepartmentAuto(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
@@ -175,7 +165,7 @@ func (b *OrgBot) choosePersonal(ctx context.Context, msg InboundMessage, userID 
 	intended.Awaiting = ""
 	intended.PendingText = ""
 	intended.Candidates = nil
-	return targetConfirm(intended.label()), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
+	return b.presentSelected(ctx, msg, intended), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
 }
 
 func (b *OrgBot) listProjects(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
@@ -197,7 +187,7 @@ func (b *OrgBot) listProjects(ctx context.Context, msg InboundMessage, userID pg
 		return "你现在没有可以交办的项目。回复「部门」或「我的小队」。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
 	}
 	var body strings.Builder
-	body.WriteString("回复项目名称，之后的消息会交给它：")
+	body.WriteString("回复名称。")
 	for _, project := range projects {
 		if project.Path != "" {
 			fmt.Fprintf(&body, "\n%s（%s）", project.Name, project.Path)
@@ -283,7 +273,7 @@ func (b *OrgBot) chooseProject(ctx context.Context, msg InboundMessage, userID p
 	intended.Awaiting = ""
 	intended.PendingText = ""
 	intended.Candidates = nil
-	return targetConfirm(intended.label()), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
+	return b.presentSelected(ctx, msg, intended), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
 }
 
 func (b *OrgBot) finishPin(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext, match service.UnitMatch) (string, DispatchResult, OrgBotChatContext, error) {
@@ -297,11 +287,7 @@ func (b *OrgBot) finishPin(ctx context.Context, msg InboundMessage, userID pgtyp
 	intended.Awaiting = ""
 	intended.PendingText = ""
 	intended.Candidates = nil
-	label := intended.label()
-	if label == "" {
-		label = "部门"
-	}
-	return targetConfirm(label), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
+	return b.presentSelected(ctx, msg, intended), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
 }
 
 func (b *OrgBot) dispatchUsingState(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, text string, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
@@ -331,7 +317,7 @@ func (b *OrgBot) routeAndDispatch(ctx context.Context, msg InboundMessage, userI
 		return formatOrgBotCandidates(orgBotP2PAmbiguousCopy, state.Candidates),
 			DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
 	case errors.Is(err, service.ErrDispatchUnroutable):
-		return orgBotP2PUnroutableCopy, DispatchResult{Outcome: OutcomeDispatchNoAccess}, state, nil
+		return b.offerTargets(ctx, msg, userID, org, state)
 	case errors.Is(err, service.ErrDispatchTextTooLong):
 		return orgBotP2PTooLongCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
 	case errors.Is(err, service.ErrDispatchTextRequired):
@@ -351,6 +337,14 @@ func (b *OrgBot) routeAndDispatch(ctx context.Context, msg InboundMessage, userI
 		intended.ProjectName = route.Project.Name
 		intended.UnitID = route.Unit.ID
 		intended.UnitPath = route.Path
+		// A message that is only the project name selects it. The next message
+		// is the requirement, so the name is not stored as the task.
+		if textIsOnlyName(text, route.Project.Name) {
+			intended.Awaiting = ""
+			intended.PendingText = ""
+			intended.Candidates = nil
+			return b.presentSelected(ctx, msg, intended), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
+		}
 	} else {
 		intended.Kind = orgBotTargetDepartment
 		intended.UnitID = route.Unit.ID
@@ -422,11 +416,9 @@ func (b *OrgBot) runDispatch(ctx context.Context, msg InboundMessage, userID pgt
 		return "", DispatchResult{}, base, fmt.Errorf("dispatch workbench message: %w", err)
 	}
 
-	identifier := service.IssueIdentifier(org.IssuePrefix, result.Issue.Number)
-	reply := prefixTarget(label, orgDispatchCreatedText(org.Slug, createdPath, identifier, result.Issue.Title, b.cfg.AppURL))
-	if note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID); note != "" {
-		reply += "\n" + note
-	}
+	identifier, slug := dispatchedIssueRef(org, result)
+	note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID)
+	reply := b.presentDispatched(ctx, msg, label, result.Issue.Title, identifier, createdPath, slug, note)
 	next := intended
 	next.Awaiting = ""
 	next.PendingText = ""
@@ -441,10 +433,102 @@ func (b *OrgBot) runDispatch(ctx context.Context, msg InboundMessage, userID pgt
 		IssueID:            result.Issue.ID,
 		IssueNumber:        result.Issue.Number,
 		IssueIdentifier:    identifier,
-		IssueWorkspaceSlug: org.Slug,
+		IssueWorkspaceSlug: slug,
 		IssueTitle:         result.Issue.Title,
 		DispatchUnitName:   result.Unit.Name,
 	}, next, nil
+}
+
+func (b *OrgBot) offerTargets(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
+	state.Awaiting = orgBotAwaitAmbiguous
+	state.PendingText = ""
+	state.Candidates = b.targetChoices(ctx, org.ID, userID)
+	b.sendChoiceCard(ctx, msg, orgBotCandidateCard(state.Candidates))
+	if len(state.Candidates) == 0 {
+		return "现在没有可以点选的部门、小队或项目。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
+	}
+	intro := "回复序号。"
+	if label := state.label(); label != "" && state.Kind != "" {
+		intro = "当前发给 " + label + "。\n" + intro
+	}
+	return formatOrgBotCandidates(intro, state.Candidates), DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
+}
+
+func (b *OrgBot) targetChoices(ctx context.Context, wsUUID, userID pgtype.UUID) []OrgBotCandidate {
+	choices := []OrgBotCandidate{{
+		Kind: orgBotTargetPersonal,
+		Name: "我的小队",
+		Path: "我的小队",
+	}}
+	if b.cfg.Departments != nil {
+		units, err := b.cfg.Departments.ListRequestableDepartments(ctx, wsUUID, userID)
+		if err != nil {
+			b.cfg.Logger.Warn("lark org bot: list departments", "error", err)
+		}
+		for _, unit := range units {
+			path := strings.TrimSpace(unit.Path)
+			choices = append(choices, OrgBotCandidate{
+				Kind:   orgBotTargetDepartment,
+				UnitID: strings.TrimSpace(unit.UnitID),
+				Path:   path,
+				Name:   pathBase(path),
+			})
+		}
+	}
+	for _, project := range b.requestableProjects(ctx, wsUUID, userID) {
+		id := util.UUIDToString(project.ID)
+		if id == "" || strings.TrimSpace(project.Name) == "" {
+			continue
+		}
+		choices = append(choices, OrgBotCandidate{
+			Kind:      orgBotTargetProject,
+			ProjectID: id,
+			Name:      project.Name,
+			Path:      project.Path,
+		})
+	}
+	if len(choices) > orgBotProjectListLimit {
+		choices = choices[:orgBotProjectListLimit]
+	}
+	return choices
+}
+
+func (b *OrgBot) applyMatchedCandidate(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext, candidate OrgBotCandidate) (string, DispatchResult, OrgBotChatContext, error) {
+	switch candidate.Kind {
+	case orgBotTargetPersonal:
+		return b.choosePersonal(ctx, msg, userID, org, state)
+	case orgBotTargetProject:
+		id, err := util.ParseUUID(candidate.ProjectID)
+		if err != nil {
+			return b.repeatCandidates(ctx, msg, state), DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
+		}
+		return b.chooseProject(ctx, msg, userID, org, state, service.RequestableProject{
+			ID:   id,
+			Name: candidate.Name,
+			Path: candidate.Path,
+		})
+	default:
+		id, path, ok := b.resolveCandidate(ctx, org.ID, userID, candidate)
+		if !ok {
+			return b.repeatCandidates(ctx, msg, state), DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
+		}
+		return b.finishPin(ctx, msg, userID, org, state, service.UnitMatch{
+			Unit: db.ListOrgUnitsRow{ID: id},
+			Path: path,
+		})
+	}
+}
+
+func asksForTargetList(text string) bool {
+	text = strings.TrimSpace(text)
+	switch text {
+	case "有哪些部门", "部门列表", "列出部门", "返回部门":
+		return true
+	}
+	if !strings.Contains(text, "选择") {
+		return false
+	}
+	return strings.Contains(text, "部门") || strings.Contains(text, "小队") || strings.Contains(text, "项目")
 }
 
 func (b *OrgBot) repeatCandidates(ctx context.Context, msg InboundMessage, state OrgBotChatContext) string {
@@ -541,10 +625,16 @@ func (b *OrgBot) saveTarget(ctx context.Context, msg InboundMessage, userID pgty
 }
 
 func (b *OrgBot) sendChoiceCard(ctx context.Context, msg InboundMessage, card string) {
-	if strings.TrimSpace(card) == "" || b.cfg.Client == nil {
-		return
+	if err := b.sendCard(ctx, msg, card); err != nil {
+		b.cfg.Logger.Warn("lark org bot: choice card failed", "chat_id", string(msg.ChatID), "error", err)
 	}
-	err := sendWithReplyFallback(b.cfg.Logger, "send org bot choice card", inboundReplyTarget(msg), func(target ReplyTarget) error {
+}
+
+func (b *OrgBot) sendCard(ctx context.Context, msg InboundMessage, card string) error {
+	if strings.TrimSpace(card) == "" || b.cfg.Client == nil {
+		return errors.New("empty card")
+	}
+	return sendWithReplyFallback(b.cfg.Logger, "send org bot card", inboundReplyTarget(msg), func(target ReplyTarget) error {
 		_, sendErr := b.cfg.Client.SendInteractiveCard(ctx, SendCardParams{
 			InstallationID: b.cfg.Credentials,
 			ChatID:         msg.ChatID,
@@ -553,9 +643,75 @@ func (b *OrgBot) sendChoiceCard(ctx context.Context, msg InboundMessage, card st
 		})
 		return sendErr
 	})
+}
+
+func (b *OrgBot) presentSelected(ctx context.Context, msg InboundMessage, state OrgBotChatContext) string {
+	card, err := orgBotSelectedCard(state)
 	if err != nil {
-		b.cfg.Logger.Warn("lark org bot: choice card failed", "chat_id", string(msg.ChatID), "error", err)
+		card = ""
 	}
+	label := state.label()
+	if label == "" {
+		label = "部门"
+	}
+	return b.presentCard(ctx, msg, card, "已选中 "+label+"。直接发送需求。")
+}
+
+func (b *OrgBot) presentDispatched(ctx context.Context, msg InboundMessage, label, requirement, identifier, handedTo, slug, attachment string) string {
+	link := channel.IssueWebLink(b.cfg.AppURL, slug, identifier)
+	card, err := orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attachment)
+	if err != nil {
+		card = ""
+	}
+	return b.presentCard(ctx, msg, card, dispatchedFallback(label, requirement, identifier, handedTo, link, attachment))
+}
+
+func (b *OrgBot) presentCard(ctx context.Context, msg InboundMessage, card, fallback string) string {
+	if err := b.sendCard(ctx, msg, card); err != nil {
+		if b.cfg.Logger != nil {
+			b.cfg.Logger.Warn("lark org bot: card failed", "chat_id", string(msg.ChatID), "error", err)
+		}
+		return fallback
+	}
+	return ""
+}
+
+func dispatchedIssueRef(org db.Workspace, result service.OrgDispatchResult) (identifier, slug string) {
+	if result.Project != nil {
+		return service.IssueIdentifier(result.Project.IssuePrefix, result.Issue.Number), strings.TrimSpace(result.Project.Slug)
+	}
+	return service.IssueIdentifier(org.IssuePrefix, result.Issue.Number), org.Slug
+}
+
+func dispatchedFallback(label, requirement, identifier, handedTo, link, attachment string) string {
+	var body strings.Builder
+	fmt.Fprintf(&body, "已交给 %s", strings.TrimSpace(label))
+	if requirement = strings.TrimSpace(requirement); requirement != "" {
+		fmt.Fprintf(&body, "\n需求：%s", requirement)
+	}
+	if identifier = strings.TrimSpace(identifier); identifier != "" {
+		fmt.Fprintf(&body, "\n编号：%s", identifier)
+	}
+	handedTo = strings.TrimSpace(handedTo)
+	if handedTo != "" && handedTo != strings.TrimSpace(label) {
+		fmt.Fprintf(&body, "\n交给：%s", handedTo)
+	}
+	if attachment = strings.TrimSpace(attachment); attachment != "" {
+		fmt.Fprintf(&body, "\n%s", attachment)
+	}
+	if link = strings.TrimSpace(link); link != "" {
+		fmt.Fprintf(&body, "\n%s", link)
+	}
+	return body.String()
+}
+
+func textIsOnlyName(text, name string) bool {
+	text = strings.TrimSpace(text)
+	name = strings.TrimSpace(name)
+	if text == "" || name == "" || strings.Contains(text, "\n") {
+		return false
+	}
+	return strings.EqualFold(text, name)
 }
 
 func classifyWorkbenchText(text string) (string, string) {
@@ -606,32 +762,17 @@ func clearWorkbenchTarget(state OrgBotChatContext) OrgBotChatContext {
 	return state
 }
 
-func targetConfirm(label string) string {
-	return "之后的消息会发给 " + label + "。回复「换目标」可以改。"
-}
-
-func prefixTarget(label, body string) string {
-	label = strings.TrimSpace(label)
-	if label == "" || body == "" {
-		return body
-	}
-	return "当前发给 " + label + "。\n" + body
-}
-
 func formatOrgBotCandidates(intro string, candidates []OrgBotCandidate) string {
 	var body strings.Builder
 	body.WriteString(intro)
 	n := 0
 	for _, candidate := range candidates {
-		path := strings.TrimSpace(candidate.Path)
-		if path == "" {
-			path = strings.TrimSpace(candidate.Name)
-		}
-		if path == "" {
+		label := candidate.display()
+		if label == "" {
 			continue
 		}
 		n++
-		fmt.Fprintf(&body, "\n%d. %s", n, path)
+		fmt.Fprintf(&body, "\n%d. %s", n, label)
 	}
 	return body.String()
 }
@@ -641,6 +782,7 @@ func orgBotCandidatesFromRoute(in []service.RouteCandidate) []OrgBotCandidate {
 	for _, candidate := range in {
 		path := strings.TrimSpace(candidate.Path)
 		out = append(out, OrgBotCandidate{
+			Kind:   orgBotTargetDepartment,
 			UnitID: strings.TrimSpace(candidate.UnitID),
 			Path:   path,
 			Name:   pathBase(path),
@@ -653,6 +795,7 @@ func orgBotCandidatesFromUnits(matches []service.UnitMatch) []OrgBotCandidate {
 	out := make([]OrgBotCandidate, 0, len(matches))
 	for _, match := range matches {
 		out = append(out, OrgBotCandidate{
+			Kind:   orgBotTargetDepartment,
 			UnitID: util.UUIDToString(match.Unit.ID),
 			Path:   match.Path,
 			Name:   strings.TrimSpace(match.Unit.Name),
@@ -685,7 +828,7 @@ func matchCandidate(text string, candidates []OrgBotCandidate) (OrgBotCandidate,
 		return shown[n-1], true
 	}
 	for _, candidate := range shown {
-		if strings.EqualFold(candidate.Path, text) || strings.EqualFold(candidate.Name, text) || strings.EqualFold(candidate.UnitID, text) {
+		if strings.EqualFold(candidate.Path, text) || strings.EqualFold(candidate.Name, text) || strings.EqualFold(candidate.display(), text) || strings.EqualFold(candidate.UnitID, text) {
 			return candidate, true
 		}
 	}

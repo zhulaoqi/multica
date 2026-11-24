@@ -62,7 +62,10 @@ type feishuOrgBotWorker struct {
 	installationID pgtype.UUID
 }
 
-var _ lark.OrgBotProjects = (*service.OrgDispatchService)(nil)
+var (
+	_ lark.OrgBotProjects    = (*service.OrgDispatchService)(nil)
+	_ lark.OrgBotDepartments = (*service.OrgDispatchService)(nil)
+)
 
 // registerFeishuOrgBot wires the organization bot when the Feishu login app is
 // configured. Returns nil (and logs why) otherwise.
@@ -222,6 +225,10 @@ func (w *feishuOrgBotWorker) ensure(ctx context.Context) error {
 	if catalog, ok := w.router.(lark.OrgBotProjects); ok {
 		projects = catalog
 	}
+	var departments lark.OrgBotDepartments
+	if catalog, ok := w.router.(lark.OrgBotDepartments); ok {
+		departments = catalog
+	}
 	bot, err := lark.NewOrgBot(lark.OrgBotConfig{
 		InstallationID: row.ID,
 		BotOpenID:      string(info.OpenID),
@@ -234,6 +241,7 @@ func (w *feishuOrgBotWorker) ensure(ctx context.Context) error {
 		Dispatcher:     w.dispatcher,
 		Router:         w.router,
 		Projects:       projects,
+		Departments:    departments,
 		Context:        lark.NewDBOrgBotContext(w.queries),
 		Chat:           w.chat,
 		Attachments:    w.attachments,

@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/integrations/lark"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -49,16 +49,17 @@ func TestDispatchOriginReplyTarget(t *testing.T) {
 	}
 }
 
-func TestDispatchStartTextNamesDepartmentAndLink(t *testing.T) {
-	notice := &service.ChatDispatchStartNotice{
-		Issue:      db.Issue{Number: 7, Title: "对账"},
-		UnitName:   "支付组",
-		Identifier: "PAY-7",
+func TestDispatchStartCardNamesDepartmentAndLink(t *testing.T) {
+	card, err := lark.OrgDispatchStartCard("PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7")
+	if err != nil {
+		t.Fatalf("card: %v", err)
 	}
-	text := dispatchStartText(notice, "pay", "https://app.example.com")
-	for _, want := range []string{"开始处理", "PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("start text missing %q: %q", want, text)
+	for _, want := range []string{"部门开始处理", "PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7"} {
+		if !strings.Contains(card, want) {
+			t.Fatalf("start card missing %q: %s", want, card)
 		}
+	}
+	if strings.Contains(card, "subtitle") {
+		t.Fatalf("card has a subtitle: %s", card)
 	}
 }

@@ -219,9 +219,13 @@ func sendDispatchCompletionNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
+	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch completion", client, queries, installs, func() string {
-		return dispatchCompletionText(notice, workspaceSlug, appURL)
+		card, err := lark.OrgDispatchDoneCard(notice.Identifier, notice.Issue.Title, notice.Issue.Status, link)
+		if err != nil {
+			return ""
+		}
+		return card
 	})
 }
 
@@ -232,9 +236,13 @@ func sendDispatchFailureNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
+	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch failure", client, queries, installs, func() string {
-		return dispatchFailureText(notice, workspaceSlug, appURL)
+		card, err := lark.OrgDispatchFailedCard(notice.Identifier, notice.Issue.Title, notice.UnitName, notice.Reason, link)
+		if err != nil {
+			return ""
+		}
+		return card
 	})
 }
 
@@ -245,15 +253,19 @@ func sendDispatchStartNotice(
 	installs *lark.InstallationService,
 	appURL string,
 ) {
-	workspaceSlug := dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries)
+	link := channel.IssueWebLink(appURL, dispatchWorkspaceSlug(notice.Issue.WorkspaceID, queries), notice.Identifier)
 	sendDispatchNotice(notice.Origin, notice.Issue.ID, "dispatch start", client, queries, installs, func() string {
-		return dispatchStartText(notice, workspaceSlug, appURL)
+		card, err := lark.OrgDispatchStartCard(notice.Identifier, notice.Issue.Title, notice.UnitName, link)
+		if err != nil {
+			return ""
+		}
+		return card
 	})
 }
 
-// sendDispatchNotice posts one dispatch message into its origin conversation.
-// The origin message id (when present) keeps the message in the same Lark
-// topic; SendTextWithReplyFallback only retries at chat level when Lark says
+// sendDispatchNotice posts one dispatch card into its origin conversation.
+// The origin message id (when present) keeps the card in the same Lark
+// topic; SendCardWithReplyFallback only retries at chat level when Lark says
 // the topic reply is impossible.
 func sendDispatchNotice(
 	origin db.DispatchOrigin,
@@ -279,10 +291,15 @@ func sendDispatchNotice(
 		slog.Error(op+": resolve reply bot failed", "issue_id", util.UUIDToString(issueID), "error", err)
 		return
 	}
-	err = lark.SendTextWithReplyFallback(ctx, slog.Default(), op, client, lark.SendTextParams{
+	body := text()
+	if strings.TrimSpace(body) == "" {
+		slog.Warn(op + ": empty card")
+		return
+	}
+	err = lark.SendCardWithReplyFallback(ctx, slog.Default(), op, client, lark.SendCardParams{
 		InstallationID: creds,
 		ChatID:         lark.ChatID(origin.ChatID.String),
-		Text:           text(),
+		CardJSON:       body,
 		ReplyTarget:    dispatchOriginReplyTarget(origin),
 	})
 	if err != nil {
@@ -316,18 +333,6 @@ func dispatchWorkspaceSlug(workspaceID pgtype.UUID, queries *db.Queries) string 
 		return ""
 	}
 	return ws.Slug
-}
-
-func dispatchStartText(notice *service.ChatDispatchStartNotice, workspaceSlug, appURL string) string {
-	line := fmt.Sprintf("部门开始处理：%s — %s", notice.Identifier, notice.Issue.Title)
-	if notice.UnitName != "" {
-		line += fmt.Sprintf("（部门：%s）", notice.UnitName)
-	}
-	line += "\n完成后我会在这里汇报。"
-	if link := channel.IssueWebLink(appURL, workspaceSlug, notice.Identifier); link != "" {
-		line += "\n" + link
-	}
-	return line
 }
 
 // dispatchReplyCredentials picks the bot that can post into the origin chat.
@@ -376,27 +381,4 @@ func dispatchReplyCredentials(
 		TenantKey: inst.TenantKey.String,
 		Region:    lark.Region(inst.Region),
 	}, nil
-}
-
-func dispatchFailureText(notice *service.OrgDispatchFailureNotice, workspaceSlug, appURL string) string {
-	line := fmt.Sprintf("派活失败：%s — %s", notice.Identifier, notice.Issue.Title)
-	if notice.UnitName != "" {
-		line += fmt.Sprintf("（部门：%s）", notice.UnitName)
-	}
-	if notice.Reason != "" {
-		line += "\n原因：" + notice.Reason
-	}
-	if link := channel.IssueWebLink(appURL, workspaceSlug, notice.Identifier); link != "" {
-		line += "\n" + link
-	}
-	return line
-}
-
-func dispatchCompletionText(notice *service.OrgDispatchNotice, workspaceSlug, appURL string) string {
-	line := fmt.Sprintf("派活完成：%s — %s（状态：%s）",
-		notice.Identifier, notice.Issue.Title, statusLabel(notice.Issue.Status))
-	if link := channel.IssueWebLink(appURL, workspaceSlug, notice.Identifier); link != "" {
-		line += "\n" + link
-	}
-	return line
 }
