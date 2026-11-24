@@ -145,6 +145,8 @@ type fakeAPIClient struct {
 	mdCardErr      error
 	mdCardReturn   string
 	bindingSent    []BindingPromptParams
+	personal       []personalCardSend
+	menus          []publishedBotMenu
 	// threadReplyErr, when non-nil, is returned by the three send
 	// methods whenever the call carries a thread ReplyTarget, while the
 	// attempt is still recorded. Tests inject either a classified
@@ -209,6 +211,31 @@ func (f *fakeAPIClient) SendBindingPromptCard(ctx context.Context, p BindingProm
 }
 func (f *fakeAPIClient) GetBotInfo(ctx context.Context, creds InstallationCredentials) (BotInfo, error) {
 	return BotInfo{}, nil
+}
+
+type personalCardSend struct {
+	OpenID   string
+	CardJSON string
+}
+
+type publishedBotMenu struct {
+	OpenID string
+	Items  []BotMenuItem
+}
+
+func (f *fakeAPIClient) SendPersonalInteractiveCard(_ context.Context, _ InstallationCredentials, openID, cardJSON string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.personal = append(f.personal, personalCardSend{OpenID: openID, CardJSON: cardJSON})
+	return "om_personal", f.sendErr
+}
+
+func (f *fakeAPIClient) PublishUserBotMenu(_ context.Context, _ InstallationCredentials, openID string, items []BotMenuItem) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	copied := append([]BotMenuItem{}, items...)
+	f.menus = append(f.menus, publishedBotMenu{OpenID: openID, Items: copied})
+	return nil
 }
 func (f *fakeAPIClient) GetMessage(ctx context.Context, creds InstallationCredentials, messageID string) ([]LarkMessage, error) {
 	return nil, nil

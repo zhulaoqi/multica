@@ -12,6 +12,7 @@ import (
 
 	"github.com/multica-ai/multica/server/internal/integrations/channel/engine"
 	"github.com/multica-ai/multica/server/internal/service"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -252,16 +253,13 @@ func TestOrgBot_P2PPlainTextDispatchesLikeWorkbench(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
-	if res.Outcome != OutcomeDispatchCreated {
-		t.Fatalf("outcome = %q", res.Outcome)
+	if res.Outcome != OutcomeDispatchAmbiguous || len(dispatcher.calls) != 0 {
+		t.Fatalf("outcome = %q calls = %d", res.Outcome, len(dispatcher.calls))
 	}
-	if len(dispatcher.calls) != 1 || dispatcher.calls[0].Description != "帮支付组看一下对账差异" {
-		t.Fatalf("dispatch = %+v", dispatcher.calls)
+	if h.bot.cfg.Router.(*orgBotRouterFake).calls != 0 {
+		t.Fatalf("plain text was routed")
 	}
-	if dispatcher.calls[0].UnitID != testUUID(0x21) {
-		t.Fatalf("unit = %+v", dispatcher.calls[0].UnitID)
-	}
-	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "ORG-7") || !strings.Contains(h.client.sent[0].CardJSON, "看一下对账差异") {
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, "发给谁") {
 		t.Fatalf("card = %+v", h.client.sent)
 	}
 }
@@ -269,13 +267,11 @@ func TestOrgBot_P2PPlainTextDispatchesLikeWorkbench(t *testing.T) {
 func TestOrgBot_P2PAmbiguousDepartmentRepliesWithChoices(t *testing.T) {
 	dispatcher := &orgBotDispatcherFake{}
 	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
-	h.bot.cfg.Router = &orgBotRouterFake{
-		err: service.ErrDispatchAmbiguous,
-		result: service.RouteResult{Candidates: []service.RouteCandidate{
-			{Path: "财务/支付组"},
-			{Path: "财务/结算组"},
-		}},
-	}
+	h.bot.cfg.Router = payRoute()
+	h.bot.cfg.Departments = orgBotDepartmentsFake{units: []service.RouteCandidate{
+		{UnitID: util.UUIDToString(testUUID(0x21)), Path: "财务/支付组"},
+		{UnitID: util.UUIDToString(testUUID(0x22)), Path: "财务/结算组"},
+	}}
 
 	msg := InboundMessage{
 		ChatID:       "oc_dm",

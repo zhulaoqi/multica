@@ -403,6 +403,39 @@ func (c *httpAPIClient) SendPersonalInteractiveCard(ctx context.Context, creds I
 	return resp.Data.MessageID, nil
 }
 
+// PublishUserBotMenu replaces the menu pinned above one person's input.
+// Feishu shows it only in the private chat with this bot.
+func (c *httpAPIClient) PublishUserBotMenu(ctx context.Context, creds InstallationCredentials, openID string, items []BotMenuItem) error {
+	openID = strings.TrimSpace(openID)
+	if openID == "" {
+		return errors.New("lark http client: missing bot menu user")
+	}
+	if len(items) == 0 {
+		return errors.New("lark http client: empty bot menu")
+	}
+	body, err := userBotMenuBody(openID, items)
+	if err != nil {
+		return err
+	}
+	q := url.Values{}
+	q.Set("user_id_type", "open_id")
+	path := "/open-apis/bot/v3/bot_menu?" + q.Encode()
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := c.doAuthedJSON(ctx, creds, http.MethodPost, path, body, &resp); err != nil {
+		return fmt.Errorf("lark http client: publish bot menu: %w", err)
+	}
+	if resp.Code != 0 {
+		if isTokenError(resp.Code) {
+			c.invalidateToken(creds.AppID)
+		}
+		return &APIError{Op: "publish bot menu", Code: resp.Code, Msg: resp.Msg}
+	}
+	return nil
+}
+
 // SendPersonalCard sends when the concrete client supports personal delivery.
 func SendPersonalCard(client APIClient, ctx context.Context, creds InstallationCredentials, openID, cardJSON string) error {
 	sender, ok := client.(interface {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"strings"
@@ -24,13 +25,13 @@ var feishuInboxAlreadySent = map[string]bool{
 var feishuInboxLabel = map[string]string{
 	"issue_assigned":     "任务分配给你",
 	"unassigned":         "任务已从你名下移走",
-	"assignee_changed":   "负责人变了",
-	"status_changed":     "状态变了",
+	"assignee_changed":   "负责人已更新",
+	"status_changed":     "状态已更新",
 	"new_comment":        "有新评论",
 	"mentioned":          "有人提到你",
-	"priority_changed":   "优先级变了",
-	"start_date_changed": "开始日期变了",
-	"due_date_changed":   "截止日期变了",
+	"priority_changed":   "优先级已更新",
+	"start_date_changed": "开始日期已更新",
+	"due_date_changed":   "截止日期已更新",
 	"task_completed":     "智能体运行完成",
 	"task_failed":        "智能体运行失败",
 	"agent_blocked":      "智能体被挡住",
@@ -145,17 +146,20 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 	if title == "" {
 		title = "有一条新通知"
 	}
-	subject := mapString(item, "title")
-	body := inboxMapBody(item)
-	var text string
-	switch {
-	case subject != "" && body != "":
-		text = subject + "\n" + body
-	case subject != "":
-		text = subject
-	default:
-		text = body
+	subject := strings.TrimSpace(mapString(item, "title"))
+	body := strings.TrimSpace(inboxMapBody(item))
+	change := feishuInboxChange(ctx, queries, kind, item)
+	var lines []string
+	if subject != "" {
+		lines = append(lines, "**任务**　"+subject)
 	}
+	if change != "" {
+		lines = append(lines, change)
+	}
+	if body != "" {
+		lines = append(lines, body)
+	}
+	text := strings.Join(lines, "\n")
 	if text == "" {
 		text = title
 	}
@@ -165,6 +169,9 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 		template = "orange"
 	}
 	button := "打开"
+	if mapString(item, "issue_id") != "" {
+		button = "打开任务"
+	}
 	if link == "" {
 		button = "知道了"
 		link = appURLFromEnv()
@@ -173,6 +180,149 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 		link = "https://open.feishu.cn"
 	}
 	return lark.IntakeCard(template, title, text, button, link)
+}
+
+func feishuInboxChange(ctx context.Context, queries *db.Queries, kind string, item map[string]any) string {
+	details := inboxDetails(item)
+	switch kind {
+	case "status_changed":
+		return feishuChangeLine("状态", feishuStatusLabel(details["from"]), feishuStatusLabel(details["to"]))
+	case "priority_changed":
+		return feishuChangeLine("优先级", feishuPriorityLabel(details["from"]), feishuPriorityLabel(details["to"]))
+	case "start_date_changed":
+		return feishuChangeLine("开始日期", details["from"], details["to"])
+	case "due_date_changed":
+		return feishuChangeLine("截止日期", details["from"], details["to"])
+	case "assignee_changed", "issue_assigned", "unassigned":
+		label := "负责人"
+		if kind == "unassigned" {
+			label = "原负责人"
+		}
+		return feishuChangeLine(label,
+			feishuAssigneeName(ctx, queries, details["prev_assignee_type"], details["prev_assignee_id"]),
+			feishuAssigneeName(ctx, queries, details["new_assignee_type"], details["new_assignee_id"]),
+		)
+	default:
+		return ""
+	}
+}
+
+func feishuChangeLine(label, from, to string) string {
+	from = strings.TrimSpace(from)
+	to = strings.TrimSpace(to)
+	switch {
+	case from != "" && to != "" && from != to:
+		return "**" + label + "**　" + from + " → " + to
+	case to != "":
+		return "**" + label + "**　" + to
+	case from != "":
+		return "**" + label + "**　" + from
+	default:
+		return ""
+	}
+}
+
+func feishuStatusLabel(status string) string {
+	switch strings.TrimSpace(status) {
+	case "", "none":
+		return ""
+	case "backlog", "todo":
+		return "待处理"
+	case "in_progress":
+		return "处理中"
+	case "in_review":
+		return "待验收"
+	case "done":
+		return "已完成"
+	case "blocked":
+		return "阻塞"
+	case "cancelled", "canceled":
+		return "已取消"
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+func feishuPriorityLabel(priority string) string {
+	switch strings.TrimSpace(priority) {
+	case "", "none":
+		return ""
+	case "urgent":
+		return "紧急"
+	case "high":
+		return "高"
+	case "medium":
+		return "中"
+	case "low":
+		return "低"
+	default:
+		return strings.TrimSpace(priority)
+	}
+}
+
+func feishuAssigneeName(ctx context.Context, queries *db.Queries, kind, id string) string {
+	if queries == nil {
+		return ""
+	}
+	parsed, err := util.ParseUUID(strings.TrimSpace(id))
+	if err != nil || !parsed.Valid {
+		return ""
+	}
+	switch strings.TrimSpace(kind) {
+	case "agent":
+		agent, err := queries.GetAgent(ctx, parsed)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(agent.Name)
+	case "member", "user":
+		user, err := queries.GetUser(ctx, parsed)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(user.Name)
+	default:
+		return ""
+	}
+}
+
+func inboxDetails(item map[string]any) map[string]string {
+	out := map[string]string{}
+	raw, ok := item["details"]
+	if !ok || raw == nil {
+		return out
+	}
+	var decoded map[string]any
+	switch v := raw.(type) {
+	case map[string]string:
+		return v
+	case map[string]any:
+		decoded = v
+	case json.RawMessage:
+		if len(v) == 0 {
+			return out
+		}
+		_ = json.Unmarshal(v, &decoded)
+	case []byte:
+		if len(v) == 0 {
+			return out
+		}
+		_ = json.Unmarshal(v, &decoded)
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return out
+		}
+		_ = json.Unmarshal([]byte(v), &decoded)
+	default:
+		return out
+	}
+	for key, value := range decoded {
+		switch typed := value.(type) {
+		case string:
+			out[key] = typed
+		}
+	}
+	return out
 }
 
 func feishuInboxLink(ctx context.Context, queries *db.Queries, item map[string]any) string {

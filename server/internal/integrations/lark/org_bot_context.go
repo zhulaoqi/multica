@@ -21,7 +21,9 @@ const (
 	orgBotAwaitProject   = "pick_project"
 	orgBotAwaitAmbiguous = "ambiguous"
 
-	orgBotCardActionType = "card_action"
+	orgBotCardActionType  = "card_action"
+	orgBotMenuActionType  = "bot_menu"
+	orgBotChatEnteredType = "chat_entered"
 )
 
 // ErrOrgBotContextMissing means this person has not chosen a target in this
@@ -74,6 +76,22 @@ type OrgBotChatContext struct {
 	LastIssueID         pgtype.UUID
 	LastIssueIdentifier string
 	UpdatedAt           time.Time
+}
+
+// hasConcreteTarget reports a target the person already confirmed. A sentence
+// never creates one: project, department and squad come only from a choice
+// this bot offered.
+func (state OrgBotChatContext) hasConcreteTarget() bool {
+	switch state.Kind {
+	case orgBotTargetPersonal:
+		return true
+	case orgBotTargetProject:
+		return state.ProjectID.Valid
+	case orgBotTargetDepartment:
+		return state.UnitID.Valid
+	default:
+		return false
+	}
 }
 
 func (state OrgBotChatContext) label() string {

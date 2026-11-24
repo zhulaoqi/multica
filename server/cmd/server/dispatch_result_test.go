@@ -54,7 +54,7 @@ func TestDispatchStartCardNamesDepartmentAndLink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("card: %v", err)
 	}
-	for _, want := range []string{"部门开始处理", "PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7"} {
+	for _, want := range []string{"部门开始处理", "PAY-7", "对账", "支付组", "https://app.example.com/pay/issues/PAY-7", "切换"} {
 		if !strings.Contains(card, want) {
 			t.Fatalf("start card missing %q: %s", want, card)
 		}

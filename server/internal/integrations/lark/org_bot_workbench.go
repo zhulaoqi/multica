@@ -49,15 +49,26 @@ func (b *OrgBot) workbenchReply(ctx context.Context, msg InboundMessage, text st
 	}
 
 	state := b.loadTarget(ctx, msg, userID)
+	if msg.MessageType == orgBotMenuActionType {
+		b.clearMenuPin(msg.SenderOpenID)
+	} else if pin, ok := b.takeMenuPin(msg.SenderOpenID); ok {
+		state = applyMenuPin(state, pin)
+	}
 	reply, result, state, err := b.stepWorkbench(ctx, msg, userID, org, strings.TrimSpace(text), state)
 	if err != nil {
 		return "", DispatchResult{}, err
 	}
 	b.saveTarget(ctx, msg, userID, state)
+	if msg.ChatType == ChatTypeP2P {
+		b.publishMenu(ctx, msg, userID, org.ID)
+	}
 	return reply, result, nil
 }
 
 func (b *OrgBot) stepWorkbench(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, text string, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
+	if msg.MessageType == orgBotMenuActionType {
+		return b.applyMenuKey(ctx, msg, userID, org, state, text)
+	}
 	if msg.MessageType == orgBotCardActionType {
 		kind, arg, ok := classifyCardAction(text)
 		if !ok {
@@ -65,7 +76,7 @@ func (b *OrgBot) stepWorkbench(ctx context.Context, msg InboundMessage, userID p
 		}
 		return b.applyChoice(ctx, msg, userID, org, state, kind, arg)
 	}
-	kind, arg := classifyWorkbenchText(text)
+	kind, arg := classifyWorkbenchText(text, msg.ChatType == ChatTypeGroup)
 	switch kind {
 	case "menu":
 		return b.menuReply(ctx, msg, userID, org, state)
@@ -88,6 +99,9 @@ func (b *OrgBot) stepWorkbench(ctx context.Context, msg InboundMessage, userID p
 func (b *OrgBot) applyChoice(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext, kind, arg string) (string, DispatchResult, OrgBotChatContext, error) {
 	switch kind {
 	case "menu":
+		if msg.ChatType == ChatTypeGroup && msg.MessageType == orgBotCardActionType {
+			return "群里要更换目标，请发送「换项目」「换部门」或「换小队」。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
+		}
 		return b.menuReply(ctx, msg, userID, org, state)
 	case "department":
 		return b.chooseDepartmentAuto(ctx, msg, userID, org, state)
@@ -117,43 +131,30 @@ func (b *OrgBot) applyFreeText(ctx context.Context, msg InboundMessage, userID p
 		if project, ok := b.findProject(ctx, org.ID, userID, text); ok {
 			return b.chooseProject(ctx, msg, userID, org, state, project)
 		}
-		if strings.TrimSpace(state.PendingText) != "" {
-			return "没有这个项目。回复列表里的名称，或回复「取消」。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
-		}
-		state.Awaiting = ""
-		return b.dispatchUsingState(ctx, msg, userID, org, text, state)
+		return "没有这个项目。回复列表里的名称，或回复「取消」。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
 	default:
-		if asksForTargetList(text) {
-			return b.offerTargets(ctx, msg, userID, org, state)
-		}
-		if match, ok := b.lookupExactDepartment(ctx, org.ID, userID, text); ok {
-			return b.finishPin(ctx, msg, userID, org, state, match)
+		if asksForTargetList(text) || (msg.ChatType == ChatTypeGroup && !state.hasConcreteTarget() && asksToSwitchTarget(text)) {
+			return b.offerTargets(ctx, msg, userID, org, state, false)
 		}
 		if state.Awaiting == orgBotAwaitTarget {
 			state.Awaiting = ""
+		}
+		// The sentence is the requirement. It does not name a project,
+		// department or squad; those come only from a choice we offered.
+		if !state.hasConcreteTarget() {
+			state.PendingText = text
+			return b.offerTargets(ctx, msg, userID, org, state, true)
 		}
 		return b.dispatchUsingState(ctx, msg, userID, org, text, state)
 	}
 }
 
 func (b *OrgBot) menuReply(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
-	return b.offerTargets(ctx, msg, userID, org, state)
+	return b.offerTargets(ctx, msg, userID, org, state, false)
 }
 
 func (b *OrgBot) chooseDepartmentAuto(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
-	pending := strings.TrimSpace(state.PendingText)
-	state.Kind = orgBotTargetDepartment
-	state.UnitID = pgtype.UUID{}
-	state.UnitPath = ""
-	state.ProjectID = pgtype.UUID{}
-	state.ProjectName = ""
-	state.Awaiting = ""
-	state.Candidates = nil
-	state.PendingText = ""
-	if pending != "" {
-		return b.routeAndDispatch(ctx, msg, userID, org, pending, state)
-	}
-	return "下一条消息会按内容判断部门，判断之后会记住。回复「换目标」可以改。", DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
+	return b.offerTargets(ctx, msg, userID, org, state, strings.TrimSpace(state.PendingText) != "")
 }
 
 func (b *OrgBot) choosePersonal(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
@@ -317,7 +318,8 @@ func (b *OrgBot) routeAndDispatch(ctx context.Context, msg InboundMessage, userI
 		return formatOrgBotCandidates(orgBotP2PAmbiguousCopy, state.Candidates),
 			DispatchResult{Outcome: OutcomeDispatchAmbiguous}, state, nil
 	case errors.Is(err, service.ErrDispatchUnroutable):
-		return b.offerTargets(ctx, msg, userID, org, state)
+		state.PendingText = text
+		return b.offerTargets(ctx, msg, userID, org, state, true)
 	case errors.Is(err, service.ErrDispatchTextTooLong):
 		return orgBotP2PTooLongCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, state, nil
 	case errors.Is(err, service.ErrDispatchTextRequired):
@@ -337,14 +339,6 @@ func (b *OrgBot) routeAndDispatch(ctx context.Context, msg InboundMessage, userI
 		intended.ProjectName = route.Project.Name
 		intended.UnitID = route.Unit.ID
 		intended.UnitPath = route.Path
-		// A message that is only the project name selects it. The next message
-		// is the requirement, so the name is not stored as the task.
-		if textIsOnlyName(text, route.Project.Name) {
-			intended.Awaiting = ""
-			intended.PendingText = ""
-			intended.Candidates = nil
-			return b.presentSelected(ctx, msg, intended), DispatchResult{Outcome: OutcomeDispatchUsage}, intended, nil
-		}
 	} else {
 		intended.Kind = orgBotTargetDepartment
 		intended.UnitID = route.Unit.ID
@@ -439,9 +433,13 @@ func (b *OrgBot) runDispatch(ctx context.Context, msg InboundMessage, userID pgt
 	}, next, nil
 }
 
-func (b *OrgBot) offerTargets(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext) (string, DispatchResult, OrgBotChatContext, error) {
+func (b *OrgBot) offerTargets(ctx context.Context, msg InboundMessage, userID pgtype.UUID, org db.Workspace, state OrgBotChatContext, keepPending bool) (string, DispatchResult, OrgBotChatContext, error) {
+	pending := ""
+	if keepPending {
+		pending = strings.TrimSpace(state.PendingText)
+	}
 	state.Awaiting = orgBotAwaitAmbiguous
-	state.PendingText = ""
+	state.PendingText = pending
 	state.Candidates = b.targetChoices(ctx, org.ID, userID)
 	b.sendChoiceCard(ctx, msg, orgBotCandidateCard(state.Candidates))
 	if len(state.Candidates) == 0 {
@@ -603,7 +601,7 @@ func (b *OrgBot) resolveCandidate(ctx context.Context, wsUUID, userID pgtype.UUI
 }
 
 func (b *OrgBot) loadTarget(ctx context.Context, msg InboundMessage, userID pgtype.UUID) OrgBotChatContext {
-	if b.cfg.Context == nil || !userID.Valid {
+	if b.cfg.Context == nil || !userID.Valid || msg.ChatID == "" {
 		return OrgBotChatContext{}
 	}
 	state, err := b.cfg.Context.Load(ctx, b.cfg.InstallationID, string(msg.ChatID), userID)
@@ -615,7 +613,7 @@ func (b *OrgBot) loadTarget(ctx context.Context, msg InboundMessage, userID pgty
 }
 
 func (b *OrgBot) saveTarget(ctx context.Context, msg InboundMessage, userID pgtype.UUID, state OrgBotChatContext) {
-	if b.cfg.Context == nil || !userID.Valid {
+	if b.cfg.Context == nil || !userID.Valid || msg.ChatID == "" {
 		return
 	}
 	state.UpdatedAt = time.Now()
@@ -634,6 +632,9 @@ func (b *OrgBot) sendCard(ctx context.Context, msg InboundMessage, card string) 
 	if strings.TrimSpace(card) == "" || b.cfg.Client == nil {
 		return errors.New("empty card")
 	}
+	if msg.ChatID == "" {
+		return SendPersonalCard(b.cfg.Client, ctx, b.cfg.Credentials, string(msg.SenderOpenID), card)
+	}
 	return sendWithReplyFallback(b.cfg.Logger, "send org bot card", inboundReplyTarget(msg), func(target ReplyTarget) error {
 		_, sendErr := b.cfg.Client.SendInteractiveCard(ctx, SendCardParams{
 			InstallationID: b.cfg.Credentials,
@@ -646,7 +647,7 @@ func (b *OrgBot) sendCard(ctx context.Context, msg InboundMessage, card string) 
 }
 
 func (b *OrgBot) presentSelected(ctx context.Context, msg InboundMessage, state OrgBotChatContext) string {
-	card, err := orgBotSelectedCard(state)
+	card, err := orgBotSelectedCard(state, msg.ChatType != ChatTypeGroup)
 	if err != nil {
 		card = ""
 	}
@@ -659,7 +660,7 @@ func (b *OrgBot) presentSelected(ctx context.Context, msg InboundMessage, state 
 
 func (b *OrgBot) presentDispatched(ctx context.Context, msg InboundMessage, label, requirement, identifier, handedTo, slug, attachment string) string {
 	link := channel.IssueWebLink(b.cfg.AppURL, slug, identifier)
-	card, err := orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attachment)
+	card, err := orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attachment, msg.ChatType != ChatTypeGroup)
 	if err != nil {
 		card = ""
 	}
@@ -705,33 +706,76 @@ func dispatchedFallback(label, requirement, identifier, handedTo, link, attachme
 	return body.String()
 }
 
-func textIsOnlyName(text, name string) bool {
-	text = strings.TrimSpace(text)
-	name = strings.TrimSpace(name)
-	if text == "" || name == "" || strings.Contains(text, "\n") {
-		return false
-	}
-	return strings.EqualFold(text, name)
-}
-
-func classifyWorkbenchText(text string) (string, string) {
+func classifyWorkbenchText(text string, group bool) (string, string) {
 	trimmed := strings.TrimSpace(text)
-	switch strings.ToLower(trimmed) {
-	case "换目标", "选择目标", "/目标", "目标", "发给谁":
+	switch {
+	case group && asksToNameASwitch(trimmed):
 		return "menu", ""
-	case "部门", "自动", "自动判断":
-		return "department", ""
-	case "我的小队", "小队", "个人":
-		return "personal", ""
-	case "项目":
-		return "project", ""
-	case "取消":
+	case !group && asksToSwitchTarget(trimmed):
+		return "menu", ""
+	}
+	if trimmed == "取消" {
 		return "cancel", ""
 	}
-	if name, ok := strings.CutPrefix(trimmed, "指定部门"); ok {
-		return "pin", strings.TrimSpace(name)
-	}
 	return "text", trimmed
+}
+
+// asksToSwitchTarget is a request to pick another project, department or
+// squad. The whole message has to be that request, so a real requirement
+// that merely mentions changing something still goes to the current target.
+func asksToSwitchTarget(text string) bool {
+	return switchCore(text, isSwitchPhrase)
+}
+
+func switchCore(text string, match func(string) bool) bool {
+	text = strings.Trim(strings.TrimSpace(text), "。！？!?，,~ ")
+	if text == "" {
+		return false
+	}
+	if match(text) {
+		return true
+	}
+	for _, prefix := range []string{"我想", "我要", "帮我", "给我", "请", "想", "要"} {
+		rest, ok := strings.CutPrefix(text, prefix)
+		if !ok {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		rest = strings.TrimSuffix(rest, "一下")
+		rest = strings.TrimSuffix(rest, "吧")
+		rest = strings.Trim(strings.TrimSpace(rest), "。！？!?，,~ ")
+		if match(rest) {
+			return true
+		}
+	}
+	return false
+}
+
+func asksToNameASwitch(text string) bool {
+	return switchCore(text, isNamedSwitchPhrase)
+}
+
+func isSwitchPhrase(text string) bool {
+	return isNamedSwitchPhrase(text) || isGenericSwitchPhrase(text)
+}
+
+func isNamedSwitchPhrase(text string) bool {
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "换项目", "换部门", "换小队", "换个项目", "换个部门", "换个小队",
+		"切换项目", "切换部门", "切换小队":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGenericSwitchPhrase(text string) bool {
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "换目标", "选择目标", "/目标", "目标", "发给谁", "重新选择", "换一个", "切换", "切换目标":
+		return true
+	default:
+		return false
+	}
 }
 
 func classifyCardAction(token string) (string, string, bool) {

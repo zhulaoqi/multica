@@ -1628,6 +1628,64 @@ func TestHTTPClient_ListMessageReactions_BusinessError(t *testing.T) {
 	}
 }
 
+func TestHTTPClient_PublishUserBotMenu(t *testing.T) {
+	fake := newLarkFake(t)
+	fake.stubToken("tok", 7200)
+	fake.mux.HandleFunc("/open-apis/bot/v3/bot_menu", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s", r.Method)
+		}
+		if r.URL.Query().Get("user_id_type") != "open_id" {
+			t.Errorf("user_id_type = %q", r.URL.Query().Get("user_id_type"))
+		}
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			t.Errorf("auth = %q", r.Header.Get("Authorization"))
+		}
+		var body struct {
+			UserID  string `json:"user_id"`
+			BotMenu struct {
+				Items []struct {
+					Name      string            `json:"name"`
+					I18n      map[string]string `json:"i18n_name"`
+					Behaviors []struct {
+						Type     string `json:"type"`
+						EventKey string `json:"event_key"`
+						Primary  bool   `json:"is_primary"`
+					} `json:"behaviors"`
+					Children []struct {
+						Name string `json:"name"`
+					} `json:"children"`
+				} `json:"bot_menu_items"`
+			} `json:"bot_menu"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body.UserID != "ou_user" || len(body.BotMenu.Items) != 2 {
+			t.Fatalf("body = %+v", body)
+		}
+		if body.BotMenu.Items[0].Name != "我的小队" || body.BotMenu.Items[0].Behaviors[0].EventKey != "s" || !body.BotMenu.Items[0].Behaviors[0].Primary {
+			t.Fatalf("squad = %+v", body.BotMenu.Items[0])
+		}
+		if body.BotMenu.Items[1].Name != "项目" || len(body.BotMenu.Items[1].Children) != 1 || body.BotMenu.Items[1].Children[0].Name != "AIHUB" {
+			t.Fatalf("projects = %+v", body.BotMenu.Items[1])
+		}
+		if body.BotMenu.Items[0].I18n["zh_cn"] != "我的小队" {
+			t.Fatalf("i18n = %+v", body.BotMenu.Items[0].I18n)
+		}
+		writeJSON(w, map[string]any{"code": 0, "msg": "ok"})
+	})
+
+	c := newTestClient(fake, time.Now)
+	err := c.PublishUserBotMenu(context.Background(), testCreds(), "ou_user", []BotMenuItem{
+		{Name: "我的小队", EventKey: "s"},
+		{Name: "项目", Children: []BotMenuItem{{Name: "AIHUB", EventKey: "pKEY"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // fakeClock is a minimal monotonic clock for tests that need to drive
 // the cache TTL deterministically.
 type fakeClock struct{ now time.Time }

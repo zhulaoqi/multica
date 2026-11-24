@@ -29,6 +29,7 @@ const OrgBotChannelType = "feishu_org"
 type OrgBot struct {
 	cfg   OrgBotConfig
 	files orgBotFileBuffer
+	menu  orgBotMenuMemory
 }
 
 // OrgBotIdentityStore resolves a Feishu sender to a Multica user. It reads
@@ -128,7 +129,18 @@ func (b *OrgBot) Run(ctx context.Context) error {
 // error is infrastructure-only and makes the connector NACK so Lark retries;
 // business refusals are replies with a nil error.
 func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult, error) {
-	if msg.ChatID == "" || msg.MessageID == "" || msg.SenderOpenID == "" {
+	if msg.MessageType == orgBotMenuActionType && msg.ChatID == "" {
+		if chatID, ok := b.knownP2PChat(msg.SenderOpenID); ok {
+			msg.ChatID = chatID
+			msg.ChatType = ChatTypeP2P
+			msg.AddressedToBot = true
+		}
+	}
+	b.noteP2PChat(msg)
+	// A menu click arrives without a chat id until this process has seen the
+	// private chat. The selection is held and applied to the next message.
+	menuBeforeChat := msg.MessageType == orgBotMenuActionType && msg.ChatID == "" && msg.SenderOpenID != "" && msg.MessageID != ""
+	if !menuBeforeChat && (msg.ChatID == "" || msg.MessageID == "" || msg.SenderOpenID == "") {
 		return DispatchResult{Outcome: OutcomeDropped, DropReason: DropReasonInvalidEvent}, nil
 	}
 	// Logging only p2p and addressed group messages keeps chatty groups quiet
@@ -190,9 +202,15 @@ func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult
 			"message_id", msg.MessageID, "error", err)
 	}
 	if reply != "" {
-		if err := b.sendText(ctx, msg, reply); err != nil {
+		var sendErr error
+		if msg.ChatID == "" {
+			sendErr = b.sendPersonalText(ctx, msg, reply)
+		} else {
+			sendErr = b.sendText(ctx, msg, reply)
+		}
+		if sendErr != nil {
 			b.cfg.Logger.Warn("lark org bot: reply failed",
-				"chat_id", string(msg.ChatID), "message_id", msg.MessageID, "error", err)
+				"chat_id", string(msg.ChatID), "message_id", msg.MessageID, "error", sendErr)
 		}
 	}
 	return result, nil
@@ -200,6 +218,12 @@ func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult
 
 // reply decides what the message means and returns the text to send.
 func (b *OrgBot) reply(ctx context.Context, msg InboundMessage) (string, DispatchResult, error) {
+	if msg.MessageType == orgBotChatEnteredType {
+		return b.refreshMenu(ctx, msg)
+	}
+	if msg.MessageType == orgBotMenuActionType {
+		return b.workbenchReply(ctx, msg, strings.TrimSpace(msg.CommandBody))
+	}
 	// Media carries no text; its meaning comes from the thread it was sent in.
 	if msg.MessageType == "image" || msg.MessageType == "file" {
 		return b.mediaReply(ctx, msg)

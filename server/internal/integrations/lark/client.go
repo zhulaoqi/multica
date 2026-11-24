@@ -159,6 +159,22 @@ type ReactionLister interface {
 	ListMessageReactions(ctx context.Context, p ListMessageReactionsParams) ([]MessageReaction, error)
 }
 
+// BotMenuItem is one entry on the per-user menu pinned above the Feishu
+// input. A leaf carries EventKey; a parent carries Children and no key.
+// Feishu shows this menu only in a private chat with the bot.
+type BotMenuItem struct {
+	Name     string
+	EventKey string
+	Children []BotMenuItem
+}
+
+// BotMenuPublisher replaces the menu one person sees above the input.
+// It is separate from APIClient: only the organization bot publishes it,
+// and fakes that never touch the menu stay untouched.
+type BotMenuPublisher interface {
+	PublishUserBotMenu(ctx context.Context, creds InstallationCredentials, openID string, items []BotMenuItem) error
+}
+
 // ListMessagesParams selects a bounded, recent window of messages in a
 // single Lark chat for the group-context prefetch. Only the fields the
 // enricher needs today are exposed (ChatID, ThreadID, PageSize, EndTime);
