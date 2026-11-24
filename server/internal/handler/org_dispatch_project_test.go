@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/multica-ai/multica/server/internal/events"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 // insertProjectAgent creates a user agent in projectID bound to an online
@@ -940,5 +943,53 @@ func TestCreateComment_ProjectDispatchMentionWakesTheChosenAgent(t *testing.T) {
 	}
 	if plainTasks != 0 {
 		t.Fatalf("plain issue worker tasks = %d, want none without a dispatch", plainTasks)
+	}
+}
+
+// TestDispatchWork_ProjectIssueCreatedEventCarriesTheIssue keeps the project
+// issue on its requester's radar: the subscriber listener reads creator and
+// assignee from the created event's "issue" payload, and without it the
+// requester is never subscribed, so the project inbox stays empty.
+func TestDispatchWork_ProjectIssueCreatedEventCarriesTheIssue(t *testing.T) {
+	setup := setupProjectDispatch(t, "project-created-event", "事件项目", true)
+
+	created := make(chan map[string]any, 8)
+	testHandler.Bus.Subscribe(protocol.EventIssueCreated, func(e events.Event) {
+		if e.WorkspaceID != setup.projectID {
+			return
+		}
+		payload, _ := e.Payload.(map[string]any)
+		select {
+		case created <- payload:
+		default:
+		}
+	})
+
+	status, res, body := postDispatchWork(t, setup.requester, map[string]any{
+		"text":              "dispatch-test 事件项目支持哪些渠道",
+		"client_request_id": "66666666-6666-6666-6666-666666666016",
+		"project_id":        setup.projectID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", status, body)
+	}
+
+	var payload map[string]any
+	select {
+	case payload = <-created:
+	default:
+		t.Fatal("no issue:created event for the project workspace")
+	}
+	issue, ok := payload["issue"].(map[string]any)
+	if !ok {
+		t.Fatalf("issue:created payload = %#v, want an issue map", payload)
+	}
+	if issue["id"] != res.Issue.ID || issue["creator_type"] != "member" || issue["creator_id"] != setup.requester {
+		t.Fatalf("event issue = %v/%v/%v, want %s created by member %s",
+			issue["id"], issue["creator_type"], issue["creator_id"], res.Issue.ID, setup.requester)
+	}
+	assigneeID, _ := issue["assignee_id"].(*string)
+	if assigneeID == nil || *assigneeID != setup.agentID {
+		t.Fatalf("event assignee = %v, want project agent %s", assigneeID, setup.agentID)
 	}
 }

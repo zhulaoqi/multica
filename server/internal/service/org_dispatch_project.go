@@ -50,7 +50,15 @@ func (s *OrgDispatchService) dispatchToProject(
 		CreatorType:   "member",
 		CreatorID:     p.ActorID,
 		AttachmentIDs: p.AttachmentIDs,
-	}, IssueCreateOpts{Platform: p.Platform, SkipAssignedTaskEnqueue: true})
+	}, IssueCreateOpts{
+		Platform:                p.Platform,
+		SkipAssignedTaskEnqueue: true,
+		// The subscriber listener reads creator and assignee from this payload;
+		// without it the requester is never subscribed to the project issue.
+		BroadcastPayload: func(issue db.Issue, _ []db.Attachment, _ []db.IssueLabel) map[string]any {
+			return map[string]any{"issue": IssueToMapResolved(ctx, s.Queries, issue, project.IssuePrefix)}
+		},
+	})
 	if err != nil {
 		return OrgDispatchResult{}, err
 	}
