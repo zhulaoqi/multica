@@ -1,6 +1,26 @@
 import { z } from "zod";
 import { IssueSchema } from "../api/schemas";
 
+const DispatchAttachmentSchema = z
+  .object({
+    id: z.string(),
+    workspace_id: z.string().default(""),
+    issue_id: z.string().nullable().default(null),
+    comment_id: z.string().nullable().default(null),
+    chat_session_id: z.string().nullable().default(null),
+    chat_message_id: z.string().nullable().default(null),
+    uploader_type: z.string().default(""),
+    uploader_id: z.string().default(""),
+    filename: z.string().default(""),
+    url: z.string().default(""),
+    download_url: z.string().default(""),
+    markdown_url: z.string().default(""),
+    content_type: z.string().default(""),
+    size_bytes: z.number().default(0),
+    created_at: z.string().default(""),
+  })
+  .loose();
+
 export const DispatchCandidateSchema = z
   .object({
     unit_id: z.string(),
@@ -47,6 +67,7 @@ export const DispatchProgressSchema = z
 export const DispatchListItemSchema = z
   .object({
     issue: IssueSchema,
+    request_attachments: z.array(DispatchAttachmentSchema).default([]),
     // A personal dispatch has no department; squad_id names its own squad.
     unit_id: z.string().default(""),
     unit_path: z.string().default(""),
@@ -115,25 +136,7 @@ export const DispatchTrailChildSchema = z
 
 // Full attachment shape: the trail result feeds ReadonlyContent, which renders
 // files from the same fields the timeline uses.
-export const DispatchTrailAttachmentSchema = z
-  .object({
-    id: z.string(),
-    workspace_id: z.string().default(""),
-    issue_id: z.string().nullable().default(null),
-    comment_id: z.string().nullable().default(null),
-    chat_session_id: z.string().nullable().default(null),
-    chat_message_id: z.string().nullable().default(null),
-    uploader_type: z.string().default(""),
-    uploader_id: z.string().default(""),
-    filename: z.string().default(""),
-    url: z.string().default(""),
-    download_url: z.string().default(""),
-    markdown_url: z.string().default(""),
-    content_type: z.string().default(""),
-    size_bytes: z.number().default(0),
-    created_at: z.string().default(""),
-  })
-  .loose();
+export const DispatchTrailAttachmentSchema = DispatchAttachmentSchema;
 
 export const DispatchTrailResultSchema = z
   .object({

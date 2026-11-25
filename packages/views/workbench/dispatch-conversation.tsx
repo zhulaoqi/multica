@@ -17,6 +17,7 @@ import { Progress } from "@multica/ui/components/ui/progress";
 import { Spinner } from "@multica/ui/components/ui/spinner";
 import { errorCode } from "@multica/core/api";
 import { useWorkspacePaths } from "@multica/core/paths";
+import type { Attachment } from "@multica/core/types";
 import type { DispatchCandidate, DispatchListItem } from "@multica/core/workbench";
 import { useHomeMode } from "../common/home-mode";
 import { useT, useTimeAgo } from "../i18n";
@@ -28,6 +29,7 @@ import { DispatchResultBlock } from "./dispatch-result-block";
 import { DispatchTrail } from "./dispatch-trail";
 import { ReassignDispatchDialog } from "./reassign-dispatch";
 import { DispatchReview } from "./dispatch-review";
+import { DispatchAttachmentList } from "./dispatch-attachment-list";
 import type { ChildProgress, DispatchPhase } from "./use-workbench-conversation";
 
 /** A submission that has not been accepted by the server yet. */
@@ -37,19 +39,28 @@ export interface WorkbenchAttempt {
   status: "pending" | "failed";
   error?: unknown;
   candidates: DispatchCandidate[];
-  /** Uploaded files to send again with a retry or a picked department. */
-  attachmentIds: string[];
+  /** Uploaded files to render and send again with a retry or picked department. */
+  attachments: Attachment[];
   /** The attempt targeted the requester's personal squad, not a department. */
   personal?: boolean;
   /** The project the attempt was handed through, when it named one. */
   project?: { id: string; name: string };
 }
 
-function UserBubble({ text }: { text: string }) {
+function UserBubble({
+  text,
+  attachments = [],
+}: {
+  text: string;
+  attachments?: readonly Attachment[];
+}) {
   return (
-    <p className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-body whitespace-pre-wrap break-words">
-      {text}
-    </p>
+    <div className="ml-auto flex max-w-[85%] flex-col items-end gap-2">
+      <p className="rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-body whitespace-pre-wrap break-words">
+        {text}
+      </p>
+      <DispatchAttachmentList attachments={attachments} />
+    </div>
   );
 }
 
@@ -178,7 +189,10 @@ export function DispatchConversation({
 
   return (
     <div className="flex flex-col gap-3">
-      <UserBubble text={item.issue.description ?? item.issue.title} />
+      <UserBubble
+        text={item.issue.description ?? item.issue.title}
+        attachments={item.request_attachments}
+      />
       <article className="flex gap-3 rounded-xl border bg-card p-4">
         <span className="mt-0.5 shrink-0">{phaseIcon(phase)}</span>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -314,7 +328,7 @@ export function DispatchAttemptConversation({
   const { t } = useT("workbench");
   return (
     <div className="flex flex-col gap-3">
-      <UserBubble text={attempt.text} />
+      <UserBubble text={attempt.text} attachments={attempt.attachments} />
       <article className="flex gap-3 rounded-xl border bg-card p-4">
         <span className="mt-0.5 shrink-0">
           {attempt.status === "pending" ? (

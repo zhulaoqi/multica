@@ -826,17 +826,18 @@ describe("WorkbenchPage", () => {
       expect(apiState.commentDispatch).toHaveBeenCalledWith(
         "issue-1",
         "[@AIHUB agent](mention://agent/agent-9)\n\nAlso add the screenshots",
+        undefined,
       ),
     );
     // The project issue is not writable with this workspace's issue client.
     expect(apiState.createComment).not.toHaveBeenCalled();
   });
 
-  it("hides the attachment control on a project follow-up", () => {
+  it("keeps the attachment control on a project follow-up", () => {
     renderRemoteThread();
 
-    expect(document.querySelector('input[type="file"]')).toBeNull();
-    expect(screen.queryByRole("button", { name: "Attach files" })).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeInTheDocument();
   });
 
   it("accepts a project result through the dispatch control", async () => {
@@ -871,6 +872,7 @@ describe("WorkbenchPage", () => {
       expect(apiState.commentDispatch).toHaveBeenCalledWith(
         "issue-1",
         "[@AIHUB agent](mention://agent/agent-9)\n\nAdd the pricing table",
+        undefined,
       ),
     );
     await waitFor(() =>
@@ -916,6 +918,21 @@ describe("WorkbenchPage", () => {
     expect(screen.getAllByText(/AIHUB/).length).toBeGreaterThan(1);
   });
 
+  it("shows request images with the sent message after reopening history", () => {
+    state.dispatches = [
+      dispatchItem({
+        request_attachments: [imageAttachment()],
+      } as Partial<DispatchListItem>),
+    ];
+    state.searchParams = new URLSearchParams("dispatch=issue-1");
+    qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
+    renderPage();
+
+    expect(
+      screen.getByRole("img", { name: "checkout-error.png" }),
+    ).toBeInTheDocument();
+  });
+
   it("sends uploaded files with the request", async () => {
     apiState.uploadFile.mockResolvedValue({
       id: "att-1",
@@ -939,6 +956,30 @@ describe("WorkbenchPage", () => {
     await waitFor(() =>
       expect(state.mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({ attachmentIds: ["att-1"] }),
+      ),
+    );
+  });
+
+  it("uploads images with a project follow-up instead of dropping them", async () => {
+    apiState.uploadFile.mockResolvedValue(imageAttachment());
+    apiState.commentDispatch.mockResolvedValue({
+      issue: remoteReviewItem().issue,
+      delivered: true,
+    });
+    renderRemoteThread();
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(
+      input,
+      new File(["image"], "checkout-error.png", { type: "image/png" }),
+    );
+    await submitText("The error is shown here");
+
+    await waitFor(() =>
+      expect(apiState.commentDispatch).toHaveBeenCalledWith(
+        "issue-1",
+        "[@AIHUB agent](mention://agent/agent-9)\n\nThe error is shown here",
+        ["att-image"],
       ),
     );
   });
@@ -1027,6 +1068,26 @@ function createdComment() {
     parent_id: null,
     created_at: NOW,
     updated_at: NOW,
+  };
+}
+
+function imageAttachment() {
+  return {
+    id: "att-image",
+    workspace_id: WS,
+    issue_id: null,
+    comment_id: null,
+    chat_session_id: null,
+    chat_message_id: null,
+    uploader_type: "member",
+    uploader_id: "user-1",
+    filename: "checkout-error.png",
+    url: "https://files.example/checkout-error.png",
+    download_url: "https://files.example/checkout-error.png",
+    markdown_url: "https://files.example/checkout-error.png",
+    content_type: "image/png",
+    size_bytes: 10,
+    created_at: NOW,
   };
 }
 

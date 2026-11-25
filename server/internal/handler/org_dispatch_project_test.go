@@ -474,9 +474,19 @@ func TestCommentDispatch_WakesTheProjectExecutor(t *testing.T) {
 		t.Fatalf("count tasks before follow-up: %v", err)
 	}
 
+	var attachmentID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO attachment (workspace_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
+		VALUES ($1, 'member', $2, 'error.png', 'https://files.example/error.png', 'image/png', 512)
+		RETURNING id::text
+	`, testWorkspaceID, setup.requester).Scan(&attachmentID); err != nil {
+		t.Fatalf("seed follow-up attachment: %v", err)
+	}
+
 	rec := httptest.NewRecorder()
 	testHandler.CommentDispatch(rec, orgRequestWithParam(setup.requester, "POST", "/api/org/dispatches/x/messages", "issueId", rootID, map[string]any{
-		"content": "再补一下模型的上下文窗口",
+		"content":        "再补一下模型的上下文窗口",
+		"attachment_ids": []string{attachmentID},
 	}))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("follow-up status = %d, want 200: %s", rec.Code, rec.Body.String())
@@ -501,6 +511,21 @@ func TestCommentDispatch_WakesTheProjectExecutor(t *testing.T) {
 	}
 	if commentWorkspace != setup.projectID || commentContent != "再补一下模型的上下文窗口" {
 		t.Fatalf("comment = %s/%q, want project/%q", commentWorkspace, commentContent, "再补一下模型的上下文窗口")
+	}
+	var attachmentWorkspace, attachmentIssueID, attachmentCommentID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT workspace_id::text, issue_id::text, comment_id::text
+		FROM attachment WHERE id = $1
+	`, attachmentID).Scan(&attachmentWorkspace, &attachmentIssueID, &attachmentCommentID); err != nil {
+		t.Fatalf("load follow-up attachment: %v", err)
+	}
+	if attachmentWorkspace != setup.projectID || attachmentIssueID != rootID || attachmentCommentID == "" {
+		t.Fatalf(
+			"follow-up attachment = %s/%s/%s, want project/root/comment",
+			attachmentWorkspace,
+			attachmentIssueID,
+			attachmentCommentID,
+		)
 	}
 	var after int
 	if err := testPool.QueryRow(context.Background(), `

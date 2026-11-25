@@ -30,6 +30,8 @@
     "leave_thread": "Quitter cette conversation",
     "attach_files": "Joindre des fichiers",
     "remove_attachment": "Retirer {{name}}",
+    "preview_attachment": "Prévisualiser {{name}}",
+    "drop_files": "Déposez les fichiers ici",
     "uploading": "Envoi…",
     "mention": "Mentionner quelqu'un",
     "mention_label": "Mentionner",

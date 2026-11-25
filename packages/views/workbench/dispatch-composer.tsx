@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import type { Attachment } from "@multica/core/types";
 import {
   ArrowUp,
   AtSign,
@@ -20,14 +21,12 @@ import { Spinner } from "@multica/ui/components/ui/spinner";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../i18n";
+import { DispatchAttachmentList } from "./dispatch-attachment-list";
 
 const MAX_DISPATCH_TEXT = 4000;
 
 /** A file already uploaded, waiting for the message it belongs to. */
-export interface ComposerAttachment {
-  id: string;
-  filename: string;
-}
+export type ComposerAttachment = Attachment;
 
 /** Someone the requester can pull into the conversation by name. */
 export interface ComposerMention {
@@ -84,7 +83,7 @@ export function DispatchComposer({
   threadTitle?: string | null;
   onExitThread?: () => void;
   attachments?: readonly ComposerAttachment[];
-  onAttachFiles?: (files: FileList) => void;
+  onAttachFiles?: (files: FileList | readonly File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   uploading?: boolean;
   mentions?: readonly ComposerMention[];
@@ -94,6 +93,7 @@ export function DispatchComposer({
   const composingRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [draggingFiles, setDraggingFiles] = useState(false);
 
   const submit = () => {
     const text = value.trim();
@@ -122,12 +122,50 @@ export function DispatchComposer({
 
   return (
     <form
+      data-testid="dispatch-composer"
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
-      className="flex flex-col gap-2 rounded-xl border bg-background p-2 shadow-xs focus-within:border-ring/60"
+      onDragEnter={(event) => {
+        if (!onAttachFiles || event.dataTransfer.types.includes("Files") === false) {
+          return;
+        }
+        event.preventDefault();
+        setDraggingFiles(true);
+      }}
+      onDragOver={(event) => {
+        if (!onAttachFiles || event.dataTransfer.types.includes("Files") === false) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        setDraggingFiles(false);
+      }}
+      onDrop={(event) => {
+        setDraggingFiles(false);
+        if (!onAttachFiles || event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        onAttachFiles(event.dataTransfer.files);
+      }}
+      className={cn(
+        "relative flex flex-col gap-2 rounded-xl border bg-background p-2 shadow-xs focus-within:border-ring/60",
+        draggingFiles && "border-ring ring-2 ring-ring/20",
+      )}
     >
+      {draggingFiles ? (
+        <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-lg border border-dashed border-ring bg-background/90 text-body font-medium">
+          {t(($) => $.page.drop_files)}
+        </div>
+      ) : null}
       {inThread ? (
         <div className="flex items-center gap-1.5 self-start rounded-md border bg-muted/50 py-0.5 pr-1 pl-2 text-caption">
           <MessageSquareText className="size-3.5 text-muted-foreground" aria-hidden />
@@ -176,31 +214,10 @@ export function DispatchComposer({
           ) : null}
         </div>
       ) : null}
-      {attachments.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
-          {attachments.map((attachment) => (
-            <li
-              key={attachment.id}
-              className="flex max-w-60 items-center gap-1.5 rounded-md border bg-muted/40 py-0.5 pr-1 pl-2 text-caption"
-            >
-              <Paperclip className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">{attachment.filename}</span>
-              {onRemoveAttachment ? (
-                <button
-                  type="button"
-                  aria-label={t(($) => $.page.remove_attachment, {
-                    name: attachment.filename,
-                  })}
-                  onClick={() => onRemoveAttachment(attachment.id)}
-                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="size-3" />
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <DispatchAttachmentList
+        attachments={attachments}
+        onRemove={onRemoveAttachment}
+      />
       <Textarea
         // Remounting on a focus request re-runs autoFocus; the value stays
         // controlled, so the draft is not lost.
@@ -208,6 +225,11 @@ export function DispatchComposer({
         ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onPaste={(event) => {
+          if (!onAttachFiles || event.clipboardData.files.length === 0) return;
+          event.preventDefault();
+          onAttachFiles(event.clipboardData.files);
+        }}
         placeholder={
           inThread
             ? t(($) => $.page.followup_placeholder)

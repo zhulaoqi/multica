@@ -30,6 +30,8 @@
     "leave_thread": "Leave this thread",
     "attach_files": "Attach files",
     "remove_attachment": "Remove {{name}}",
+    "preview_attachment": "Preview {{name}}",
+    "drop_files": "Drop files here",
     "uploading": "Uploading…",
     "mention": "Mention someone",
     "mention_label": "Mention",

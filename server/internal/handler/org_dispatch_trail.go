@@ -445,7 +445,8 @@ func newerAttachment(a, b db.Attachment) bool {
 }
 
 type dispatchMessageRequest struct {
-	Content string `json:"content"`
+	Content       string   `json:"content"`
+	AttachmentIDs []string `json:"attachment_ids"`
 }
 
 // CommentDispatch posts the requester's follow-up into the issue's own
@@ -465,7 +466,17 @@ func (h *Handler) CommentDispatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	reply, err := h.OrgDispatchService.CommentChatDispatch(r.Context(), member.UserID, issueUUID, body.Content)
+	attachmentIDs, ok := parseUUIDSliceOrBadRequest(w, body.AttachmentIDs, "attachment_ids")
+	if !ok {
+		return
+	}
+	reply, err := h.OrgDispatchService.CommentChatDispatch(
+		r.Context(),
+		member.UserID,
+		issueUUID,
+		body.Content,
+		attachmentIDs,
+	)
 	if err != nil {
 		h.writeDispatchControlError(w, r, err)
 		return
@@ -521,6 +532,8 @@ func (h *Handler) writeDispatchControlError(w http.ResponseWriter, r *http.Reque
 		writeErrorCode(w, http.StatusBadRequest, "dispatch_invalid_status", "status must be done or in_progress")
 	case errors.Is(err, service.ErrDispatchTextRequired):
 		writeErrorCode(w, http.StatusBadRequest, "dispatch_text_required", "text is required")
+	case errors.Is(err, service.ErrDispatchAttachmentNotFound):
+		writeErrorCode(w, http.StatusBadRequest, "attachment_not_found", "some attachments are not available to this request")
 	default:
 		slog.Error("dispatch control failed", append(logger.RequestAttrs(r), "error", err)...)
 		writeError(w, http.StatusInternalServerError, "could not update dispatch")

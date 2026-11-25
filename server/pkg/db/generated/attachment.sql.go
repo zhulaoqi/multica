@@ -53,6 +53,45 @@ func (q *Queries) BindChatAttachmentsToMessage(ctx context.Context, arg BindChat
 	return items, nil
 }
 
+const bindDispatchCommentAttachments = `-- name: BindDispatchCommentAttachments :execrows
+UPDATE attachment
+SET issue_id = $1,
+    comment_id = $2
+WHERE workspace_id = $3
+  AND issue_id IS NULL
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = $4
+  AND id = ANY($5::uuid[])
+`
+
+type BindDispatchCommentAttachmentsParams struct {
+	IssueID       pgtype.UUID   `json:"issue_id"`
+	CommentID     pgtype.UUID   `json:"comment_id"`
+	WorkspaceID   pgtype.UUID   `json:"workspace_id"`
+	UploaderID    pgtype.UUID   `json:"uploader_id"`
+	AttachmentIds []pgtype.UUID `json:"attachment_ids"`
+}
+
+// The dispatch service has already authorized the requester and, for project
+// work, moved these unbound uploads into the issue workspace. Bind the exact
+// requester-owned set to the follow-up comment in one guarded update.
+func (q *Queries) BindDispatchCommentAttachments(ctx context.Context, arg BindDispatchCommentAttachmentsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bindDispatchCommentAttachments,
+		arg.IssueID,
+		arg.CommentID,
+		arg.WorkspaceID,
+		arg.UploaderID,
+		arg.AttachmentIds,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countUnboundChatAttachmentsForTask = `-- name: CountUnboundChatAttachmentsForTask :one
 SELECT COUNT(*) FROM attachment
 WHERE workspace_id = $1
@@ -956,6 +995,60 @@ type ListAttachmentsBySourceContextParams struct {
 
 func (q *Queries) ListAttachmentsBySourceContext(ctx context.Context, arg ListAttachmentsBySourceContextParams) ([]Attachment, error) {
 	rows, err := q.db.Query(ctx, listAttachmentsBySourceContext, arg.WorkspaceID, arg.SourceContextID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.IssueID,
+			&i.CommentID,
+			&i.UploaderType,
+			&i.UploaderID,
+			&i.Filename,
+			&i.Url,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.CreatedAt,
+			&i.ChatSessionID,
+			&i.ChatMessageID,
+			&i.TaskID,
+			&i.SourceContextID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRootAttachmentsByIssueIDsAnyWorkspace = `-- name: ListRootAttachmentsByIssueIDsAnyWorkspace :many
+SELECT id, workspace_id, issue_id, comment_id, uploader_type, uploader_id, filename, url, content_type, size_bytes, created_at, chat_session_id, chat_message_id, task_id, source_context_id FROM attachment
+WHERE issue_id = ANY($1::uuid[])
+  AND comment_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = $2
+ORDER BY issue_id ASC, created_at ASC, id ASC
+`
+
+type ListRootAttachmentsByIssueIDsAnyWorkspaceParams struct {
+	IssueIds   []pgtype.UUID `json:"issue_ids"`
+	UploaderID pgtype.UUID   `json:"uploader_id"`
+}
+
+// Dispatch history has already authorized each root through dispatch_origin.
+// Project dispatches live outside the origin workspace, so this batch read is
+// deliberately workspace-neutral and only returns root-owned request files.
+func (q *Queries) ListRootAttachmentsByIssueIDsAnyWorkspace(ctx context.Context, arg ListRootAttachmentsByIssueIDsAnyWorkspaceParams) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listRootAttachmentsByIssueIDsAnyWorkspace, arg.IssueIds, arg.UploaderID)
 	if err != nil {
 		return nil, err
 	}

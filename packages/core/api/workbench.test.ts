@@ -190,6 +190,49 @@ describe("ApiClient listMyDispatches", () => {
     const client = new ApiClient("https://api.example.test");
     await expect(client.listMyDispatches(10)).resolves.toEqual([]);
   });
+
+  it("reads the files sent with the root request", async () => {
+    vi.stubGlobal("fetch", respond({
+      dispatches: [{
+        issue: issue(),
+        dispatched_at: "2026-11-12T08:00:00Z",
+        request_attachments: [{
+          id: "att-1",
+          filename: "error.png",
+          content_type: "image/png",
+          url: "https://files.example/error.png",
+          download_url: "/api/attachments/att-1/download",
+        }],
+      }],
+    }));
+
+    const client = new ApiClient("https://api.example.test");
+    const dispatches = await client.listMyDispatches();
+
+    expect(dispatches[0]?.request_attachments).toEqual([
+      expect.objectContaining({
+        id: "att-1",
+        filename: "error.png",
+        content_type: "image/png",
+      }),
+    ]);
+  });
+});
+
+describe("ApiClient commentDispatch", () => {
+  it("posts follow-up attachment ids with the text", async () => {
+    const fetchMock = respond({ issue: issue(), delivered: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient("https://api.example.test");
+    await client.commentDispatch("issue-1", "See the screenshot", ["att-1"]);
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      content: "See the screenshot",
+      attachment_ids: ["att-1"],
+    });
+  });
 });
 
 describe("ApiClient listDepartmentDispatches", () => {

@@ -30,6 +30,8 @@
     "leave_thread": "このスレッドを閉じる",
     "attach_files": "ファイルを添付",
     "remove_attachment": "{{name}} を削除",
+    "preview_attachment": "{{name}} をプレビュー",
+    "drop_files": "ここにファイルをドロップ",
     "uploading": "アップロード中…",
     "mention": "メンションする",
     "mention_label": "メンション",

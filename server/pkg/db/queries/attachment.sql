@@ -30,6 +30,18 @@ SELECT * FROM attachment
 WHERE issue_id = $1 AND workspace_id = $2
 ORDER BY created_at ASC;
 
+-- name: ListRootAttachmentsByIssueIDsAnyWorkspace :many
+-- Dispatch history has already authorized each root through dispatch_origin.
+-- Project dispatches live outside the origin workspace, so this batch read is
+-- deliberately workspace-neutral and only returns root-owned request files.
+SELECT * FROM attachment
+WHERE issue_id = ANY(sqlc.arg(issue_ids)::uuid[])
+  AND comment_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = sqlc.arg(uploader_id)
+ORDER BY issue_id ASC, created_at ASC, id ASC;
+
 -- name: ListAttachmentsByComment :many
 SELECT * FROM attachment
 WHERE comment_id = $1 AND workspace_id = $2
@@ -310,6 +322,22 @@ WHERE workspace_id = sqlc.arg(workspace_id)
 UPDATE attachment
 SET workspace_id = sqlc.arg(to_workspace_id)
 WHERE workspace_id = sqlc.arg(from_workspace_id)
+  AND issue_id IS NULL
+  AND comment_id IS NULL
+  AND chat_message_id IS NULL
+  AND source_context_id IS NULL
+  AND uploader_type = 'member'
+  AND uploader_id = sqlc.arg(uploader_id)
+  AND id = ANY(sqlc.arg(attachment_ids)::uuid[]);
+
+-- name: BindDispatchCommentAttachments :execrows
+-- The dispatch service has already authorized the requester and, for project
+-- work, moved these unbound uploads into the issue workspace. Bind the exact
+-- requester-owned set to the follow-up comment in one guarded update.
+UPDATE attachment
+SET issue_id = sqlc.arg(issue_id),
+    comment_id = sqlc.arg(comment_id)
+WHERE workspace_id = sqlc.arg(workspace_id)
   AND issue_id IS NULL
   AND comment_id IS NULL
   AND chat_message_id IS NULL

@@ -56,17 +56,21 @@ type dispatchWorkResponse struct {
 }
 
 type dispatchListItem struct {
-	Issue        IssueResponse `json:"issue"`
-	UnitID       string        `json:"unit_id"`
-	UnitPath     string        `json:"unit_path"`
-	ProjectID    string        `json:"project_id,omitempty"`
-	ProjectName  string        `json:"project_name,omitempty"`
-	SquadID      string        `json:"squad_id,omitempty"`
-	Personal     bool          `json:"personal,omitempty"`
-	DispatchedAt string        `json:"dispatched_at"`
-	Completed    bool          `json:"completed"`
-	NotifiedAt   *string       `json:"notified_at,omitempty"`
-	LeaderState  string        `json:"leader_state"`
+	Issue IssueResponse `json:"issue"`
+	// RequestAttachments are the files sent with the root request. Follow-up
+	// and executor-produced files stay on their own comments and are not mixed
+	// into the request bubble.
+	RequestAttachments []AttachmentResponse `json:"request_attachments"`
+	UnitID             string               `json:"unit_id"`
+	UnitPath           string               `json:"unit_path"`
+	ProjectID          string               `json:"project_id,omitempty"`
+	ProjectName        string               `json:"project_name,omitempty"`
+	SquadID            string               `json:"squad_id,omitempty"`
+	Personal           bool                 `json:"personal,omitempty"`
+	DispatchedAt       string               `json:"dispatched_at"`
+	Completed          bool                 `json:"completed"`
+	NotifiedAt         *string              `json:"notified_at,omitempty"`
+	LeaderState        string               `json:"leader_state"`
 	// Blocker is the open intake blocker, when there is one: it is why the
 	// work is parked, so both the requester and the department see it.
 	Blocker *dispatchBlocker `json:"blocker,omitempty"`
@@ -401,6 +405,7 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, row.IssueID)
 	}
 	issuesByID := make(map[pgtype.UUID]db.Issue, len(rows))
+	requestAttachmentsByIssue := make(map[pgtype.UUID][]AttachmentResponse, len(rows))
 	if len(ids) > 0 {
 		issues, err := h.Queries.ListIssuesByIDsAnyWorkspace(ctx, ids)
 		if err != nil {
@@ -410,6 +415,28 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, issue := range issues {
 			issuesByID[issue.ID] = issue
+		}
+		attachments, err := h.Queries.ListRootAttachmentsByIssueIDsAnyWorkspace(
+			ctx,
+			db.ListRootAttachmentsByIssueIDsAnyWorkspaceParams{
+				IssueIds:   ids,
+				UploaderID: member.UserID,
+			},
+		)
+		if err != nil {
+			slog.Error("load dispatch request attachments failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "could not list dispatches")
+			return
+		}
+		mode := attachmentURLModeFromRequest(r)
+		for _, attachment := range attachments {
+			if !attachment.IssueID.Valid {
+				continue
+			}
+			requestAttachmentsByIssue[attachment.IssueID] = append(
+				requestAttachmentsByIssue[attachment.IssueID],
+				h.attachmentToResponse(attachment, mode),
+			)
 		}
 	}
 	// Blockers are recorded in the workspace that owns the issue, and only an
@@ -470,16 +497,21 @@ func (h *Handler) ListMyDispatches(w http.ResponseWriter, r *http.Request) {
 		}
 		resp := issueToResponse(issue, prefixFor(issue.WorkspaceID))
 		fillFor(issue.WorkspaceID)(&resp)
+		requestAttachments := requestAttachmentsByIssue[row.IssueID]
+		if requestAttachments == nil {
+			requestAttachments = []AttachmentResponse{}
+		}
 		item := dispatchListItem{
-			Issue:        resp,
-			UnitID:       uuidToString(row.TargetUnitID),
-			UnitPath:     dispatchUnitPath(units, row.TargetUnitID),
-			ProjectID:    uuidToString(row.TargetProjectID),
-			ProjectName:  row.ProjectName.String,
-			DispatchedAt: timestampToString(row.CreatedAt),
-			Completed:    row.NotifiedAt.Valid,
-			LeaderState:  row.LeaderState,
-			Progress:     progressByIssue[row.IssueID],
+			Issue:              resp,
+			RequestAttachments: requestAttachments,
+			UnitID:             uuidToString(row.TargetUnitID),
+			UnitPath:           dispatchUnitPath(units, row.TargetUnitID),
+			ProjectID:          uuidToString(row.TargetProjectID),
+			ProjectName:        row.ProjectName.String,
+			DispatchedAt:       timestampToString(row.CreatedAt),
+			Completed:          row.NotifiedAt.Valid,
+			LeaderState:        row.LeaderState,
+			Progress:           progressByIssue[row.IssueID],
 		}
 		if blocker, ok := blockersByIssue[row.IssueID]; ok {
 			item.Blocker = &blocker
@@ -694,12 +726,13 @@ func (h *Handler) buildDispatchQueue(r *http.Request, wsUUID pgtype.UUID, rows [
 		fill(&resp)
 		item := dispatchQueueItem{
 			dispatchListItem: dispatchListItem{
-				Issue:        resp,
-				UnitID:       uuidToString(row.TargetUnitID),
-				UnitPath:     dispatchUnitPath(units, row.TargetUnitID),
-				DispatchedAt: timestampToString(row.CreatedAt),
-				Completed:    row.NotifiedAt.Valid,
-				LeaderState:  row.LeaderState,
+				Issue:              resp,
+				RequestAttachments: []AttachmentResponse{},
+				UnitID:             uuidToString(row.TargetUnitID),
+				UnitPath:           dispatchUnitPath(units, row.TargetUnitID),
+				DispatchedAt:       timestampToString(row.CreatedAt),
+				Completed:          row.NotifiedAt.Valid,
+				LeaderState:        row.LeaderState,
 			},
 			RequesterID:   uuidToString(row.RequesterID),
 			RequesterName: namesByID[row.RequesterID],

@@ -30,6 +30,8 @@
     "leave_thread": "이 스레드 닫기",
     "attach_files": "파일 첨부",
     "remove_attachment": "{{name}} 제거",
+    "preview_attachment": "{{name}} 미리보기",
+    "drop_files": "여기에 파일 놓기",
     "uploading": "업로드 중…",
     "mention": "멘션하기",
     "mention_label": "멘션",

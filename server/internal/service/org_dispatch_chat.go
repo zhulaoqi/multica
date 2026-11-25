@@ -231,7 +231,14 @@ func (s *OrgDispatchService) RejectChatDispatch(ctx context.Context, actorID, is
 	if reason == "" {
 		reason = "验收未通过，请按原要求返工。"
 	}
-	reply, err := s.postChatDispatchComment(ctx, actorID, issue, "验收未通过："+reason)
+	reply, err := s.postChatDispatchComment(
+		ctx,
+		actorID,
+		issue,
+		"验收未通过："+reason,
+		nil,
+		issue.WorkspaceID,
+	)
 	if err != nil {
 		return ChatDispatchReply{}, err
 	}
@@ -246,7 +253,7 @@ func (s *OrgDispatchService) RejectChatDispatch(ctx context.Context, actorID, is
 // FollowUpChatDispatch adds the requester's message as a comment and wakes the
 // squad leader so it can continue the conversation.
 func (s *OrgDispatchService) FollowUpChatDispatch(ctx context.Context, actorID, issueID pgtype.UUID, text string) (ChatDispatchReply, error) {
-	_, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
+	origin, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
 	if err != nil {
 		return ChatDispatchReply{}, err
 	}
@@ -254,22 +261,35 @@ func (s *OrgDispatchService) FollowUpChatDispatch(ctx context.Context, actorID, 
 	if text == "" {
 		return ChatDispatchReply{}, errors.New("follow-up text is required")
 	}
-	return s.postChatDispatchComment(ctx, actorID, issue, text)
+	return s.postChatDispatchComment(ctx, actorID, issue, text, nil, origin.WorkspaceID)
 }
 
 // CommentChatDispatch posts the requester's follow-up from the web workbench.
 // It shares the chat surface's requester check and wakes whichever agent holds
 // the issue, so the C-end and Feishu drive the same conversation.
-func (s *OrgDispatchService) CommentChatDispatch(ctx context.Context, actorID, issueID pgtype.UUID, text string) (ChatDispatchReply, error) {
+func (s *OrgDispatchService) CommentChatDispatch(
+	ctx context.Context,
+	actorID,
+	issueID pgtype.UUID,
+	text string,
+	attachmentIDs []pgtype.UUID,
+) (ChatDispatchReply, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ChatDispatchReply{}, ErrDispatchTextRequired
 	}
-	_, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
+	origin, issue, err := s.chatDispatchTarget(ctx, actorID, issueID)
 	if err != nil {
 		return ChatDispatchReply{}, err
 	}
-	return s.postChatDispatchComment(ctx, actorID, issue, text)
+	return s.postChatDispatchComment(
+		ctx,
+		actorID,
+		issue,
+		text,
+		attachmentIDs,
+		origin.WorkspaceID,
+	)
 }
 
 // UpdateChatDispatchStatus applies the two verdicts the web workbench offers:
@@ -340,8 +360,15 @@ func (s *OrgDispatchService) chatDispatchTarget(ctx context.Context, actorID, is
 
 // postChatDispatchComment stores the requester's message as a member comment,
 // publishes it for the web app, and asks the squad leader to run again.
-func (s *OrgDispatchService) postChatDispatchComment(ctx context.Context, actorID pgtype.UUID, issue db.Issue, content string) (ChatDispatchReply, error) {
-	created, err := s.Queries.CreateComment(ctx, db.CreateCommentParams{
+func (s *OrgDispatchService) postChatDispatchComment(
+	ctx context.Context,
+	actorID pgtype.UUID,
+	issue db.Issue,
+	content string,
+	attachmentIDs []pgtype.UUID,
+	uploadWorkspaceID pgtype.UUID,
+) (ChatDispatchReply, error) {
+	params := db.CreateCommentParams{
 		ID:          dbid.NewV7(),
 		IssueID:     issue.ID,
 		WorkspaceID: issue.WorkspaceID,
@@ -349,8 +376,57 @@ func (s *OrgDispatchService) postChatDispatchComment(ctx context.Context, actorI
 		AuthorID:    actorID,
 		Content:     content,
 		Type:        "comment",
-	})
+	}
+	var (
+		created db.CreateCommentRow
+		err     error
+	)
+	if len(attachmentIDs) == 0 {
+		created, err = s.Queries.CreateComment(ctx, params)
+	} else {
+		if s.TxStarter == nil {
+			return ChatDispatchReply{}, errors.New("dispatch attachment transaction unavailable")
+		}
+		tx, beginErr := s.TxStarter.Begin(ctx)
+		if beginErr != nil {
+			return ChatDispatchReply{}, fmt.Errorf("begin dispatch comment: %w", beginErr)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		qtx := s.Queries.WithTx(tx)
+		var moved int64
+		moved, err = qtx.RehomeDispatchAttachments(ctx, db.RehomeDispatchAttachmentsParams{
+			ToWorkspaceID:   issue.WorkspaceID,
+			FromWorkspaceID: uploadWorkspaceID,
+			UploaderID:      actorID,
+			AttachmentIds:   attachmentIDs,
+		})
+		if err == nil && int(moved) != len(attachmentIDs) {
+			err = ErrDispatchAttachmentNotFound
+		}
+		if err == nil {
+			created, err = qtx.CreateComment(ctx, params)
+		}
+		if err == nil {
+			var bound int64
+			bound, err = qtx.BindDispatchCommentAttachments(ctx, db.BindDispatchCommentAttachmentsParams{
+				IssueID:       issue.ID,
+				CommentID:     params.ID,
+				WorkspaceID:   issue.WorkspaceID,
+				UploaderID:    actorID,
+				AttachmentIds: attachmentIDs,
+			})
+			if err == nil && int(bound) != len(attachmentIDs) {
+				err = ErrDispatchAttachmentNotFound
+			}
+		}
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
+	}
 	if err != nil {
+		if errors.Is(err, ErrDispatchAttachmentNotFound) {
+			return ChatDispatchReply{}, err
+		}
 		return ChatDispatchReply{}, fmt.Errorf("create dispatch comment: %w", err)
 	}
 	comment := created.Comment()

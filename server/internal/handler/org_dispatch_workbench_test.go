@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/multica-ai/multica/server/internal/service"
@@ -128,6 +129,15 @@ func TestDispatchWork_BindsUploadedAttachmentsToTheRootIssue(t *testing.T) {
 	}
 	if boundIssueID != res.Issue.ID {
 		t.Fatalf("attachment issue = %s, want root issue %s", boundIssueID, res.Issue.ID)
+	}
+
+	listStatus, _, listBody := listDispatches(t, admin, "")
+	if listStatus != http.StatusOK {
+		t.Fatalf("list status = %d, want 200: %s", listStatus, listBody)
+	}
+	if !strings.Contains(listBody, `"request_attachments"`) ||
+		!strings.Contains(listBody, `"filename":"brief.pdf"`) {
+		t.Fatalf("dispatch history does not include its request attachment: %s", listBody)
 	}
 }
 

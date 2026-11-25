@@ -40,6 +40,7 @@ export function useDispatchWork(wsId: string) {
       // provisional row with the server's leader_state as it changes.
       const item: DispatchListItem = {
         issue: data.issue,
+        request_attachments: [],
         unit_id: data.dispatch.unit_id,
         unit_path: data.dispatch.unit_path,
         squad_id: data.dispatch.squad_id,
@@ -68,6 +69,7 @@ export function useDispatchWork(wsId: string) {
 
 export interface CommentDispatchVariables {
   content: string;
+  attachmentIds?: string[];
 }
 
 /**
@@ -78,7 +80,8 @@ export interface CommentDispatchVariables {
 export function useCommentDispatch(wsId: string, issueId: string) {
   const qc = useQueryClient();
   return useMutation<DispatchCommentResponse, unknown, CommentDispatchVariables>({
-    mutationFn: ({ content }) => api.commentDispatch(issueId, content),
+    mutationFn: ({ content, attachmentIds }) =>
+      api.commentDispatch(issueId, content, attachmentIds),
     onSuccess: (data) => {
       qc.setQueryData<DispatchListItem[]>(
         workbenchKeys.dispatches(wsId),

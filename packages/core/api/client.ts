@@ -6076,12 +6076,19 @@ export class ApiClient {
   }
 
   /** Posts the requester's follow-up and asks the executor to run again. */
-  async commentDispatch(issueId: string, content: string): Promise<DispatchCommentResponse> {
+  async commentDispatch(
+    issueId: string,
+    content: string,
+    attachmentIds?: string[],
+  ): Promise<DispatchCommentResponse> {
     const raw = await this.fetch<unknown>(
       `/api/org/dispatches/${encodeURIComponent(issueId)}/messages`,
       {
         method: "POST",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          ...(attachmentIds?.length ? { attachment_ids: attachmentIds } : {}),
+        }),
       },
     );
     const parsed = parseWithFallback<DispatchCommentResponse | null>(

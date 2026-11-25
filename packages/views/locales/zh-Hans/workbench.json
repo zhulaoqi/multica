@@ -30,6 +30,8 @@
     "leave_thread": "退出这个会话",
     "attach_files": "添加附件",
     "remove_attachment": "移除 {{name}}",
+    "preview_attachment": "预览 {{name}}",
+    "drop_files": "拖到这里上传",
     "uploading": "上传中…",
     "mention": "提及成员",
     "mention_label": "提及",

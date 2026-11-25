@@ -36,7 +36,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { findPrimaryTwin, ownedTwins } from "@multica/core/agents";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
-import type { Agent } from "@multica/core/types";
+import type { Agent, Attachment } from "@multica/core/types";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   useFileUpload,
@@ -412,7 +412,7 @@ function DispatchWorkbench() {
     [agents, squads, t],
   );
 
-  const attachFiles = async (files: FileList) => {
+  const attachFiles = async (files: FileList | readonly File[]) => {
     setUploadFailed(false);
     for (const file of Array.from(files)) {
       try {
@@ -468,6 +468,7 @@ function DispatchWorkbench() {
       if (crossWorkspace) {
         await commentDispatch.mutateAsync({
           content: followUpComment(mention, raw),
+          attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
         });
       } else {
         await followUp.mutateAsync({
@@ -495,7 +496,7 @@ function DispatchWorkbench() {
     }: {
       unitId?: string;
       attemptId?: string;
-      files?: string[];
+      files?: Attachment[];
       personal?: boolean;
       project?: { id: string; name: string };
     } = {},
@@ -513,7 +514,7 @@ function DispatchWorkbench() {
         text: trimmed,
         status: "pending",
         candidates: [],
-        attachmentIds: files,
+        attachments: files,
         personal: personalTarget,
         project: projectTarget,
       };
@@ -529,7 +530,8 @@ function DispatchWorkbench() {
         projectId: projectTarget?.id,
         personal: personalTarget,
         clientRequestId: id,
-        attachmentIds: files.length > 0 ? files : undefined,
+        attachmentIds:
+          files.length > 0 ? files.map((attachment) => attachment.id) : undefined,
       });
       setAttempts((prev) => prev.filter((attempt) => attempt.id !== id));
       setText("");
@@ -576,7 +578,7 @@ function DispatchWorkbench() {
     void submitDispatch(trimmed, {
       unitId:
         targetPersonal || projectTarget ? undefined : (presetUnitId ?? undefined),
-      files: attachmentIds,
+      files: attachments,
       personal: targetPersonal,
       project: projectTarget
         ? { id: projectTarget.id, name: projectTarget.name }
@@ -663,7 +665,7 @@ function DispatchWorkbench() {
           onRetry={() =>
             void submitDispatch(attempt.text, {
               attemptId: attempt.id,
-              files: attempt.attachmentIds,
+              files: attempt.attachments,
               personal: attempt.personal,
               project: attempt.project,
             })
@@ -672,7 +674,7 @@ function DispatchWorkbench() {
             void submitDispatch(attempt.text, {
               unitId: candidate.unit_id,
               attemptId: attempt.id,
-              files: attempt.attachmentIds,
+              files: attempt.attachments,
             })
           }
         />
@@ -866,12 +868,9 @@ function DispatchWorkbench() {
                     }
                   : undefined
               }
-              attachments={attachments.map((entry) => ({
-                id: entry.id,
-                filename: entry.filename,
-              }))}
-              onAttachFiles={crossWorkspace ? undefined : attachFiles}
-              onRemoveAttachment={crossWorkspace ? undefined : removeAttachment}
+              attachments={attachments}
+              onAttachFiles={attachFiles}
+              onRemoveAttachment={removeAttachment}
               uploading={uploading}
               mentions={mentions}
               focusToken={focusToken}
