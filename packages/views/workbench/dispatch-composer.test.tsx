@@ -100,4 +100,28 @@ describe("DispatchComposer attachments", () => {
       attachment,
     });
   });
+
+  it("keeps a document name and its remove button on one row", () => {
+    const documentAttachment = {
+      ...imageAttachment(),
+      id: "att-document",
+      filename: "A very long proposal document.docx",
+      content_type:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    };
+    renderComposer({
+      attachments: [documentAttachment],
+      onRemoveAttachment: vi.fn(),
+    });
+
+    const remove = screen.getByRole("button", {
+      name: "Remove A very long proposal document.docx",
+    });
+    const row = remove.closest("li");
+
+    expect(row).toHaveClass("flex", "items-center");
+    expect(row).toContainElement(
+      screen.getByText("A very long proposal document.docx"),
+    );
+  });
 });

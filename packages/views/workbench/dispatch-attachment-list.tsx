@@ -63,7 +63,14 @@ export function DispatchAttachmentList({
         {attachments.map((attachment) => {
           const image = attachment.content_type.startsWith("image/");
           return (
-            <li key={attachment.id} className="relative">
+            <li
+              key={attachment.id}
+              className={cn(
+                "relative",
+                !image &&
+                  "flex max-w-60 min-w-0 items-center gap-1.5 rounded-md border bg-muted/40 py-1 pr-1 pl-2 text-caption",
+              )}
+            >
               {image ? (
                 <DispatchImageThumbnail
                   attachment={attachment}
@@ -72,7 +79,7 @@ export function DispatchAttachmentList({
                   }
                 />
               ) : (
-                <div className="flex max-w-60 items-center gap-1.5 rounded-md border bg-muted/40 py-1 pr-2 pl-2 text-caption">
+                <>
                   <Paperclip
                     className="size-3 shrink-0 text-muted-foreground"
                     aria-hidden
@@ -80,7 +87,7 @@ export function DispatchAttachmentList({
                   <span className="min-w-0 flex-1 truncate">
                     {attachment.filename}
                   </span>
-                </div>
+                </>
               )}
               {onRemove ? (
                 <button
@@ -93,7 +100,7 @@ export function DispatchAttachmentList({
                     "rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
                     image
                       ? "absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center border bg-background shadow-xs"
-                      : "ml-1 inline-flex size-5 items-center justify-center",
+                      : "inline-flex size-5 shrink-0 items-center justify-center",
                   )}
                 >
                   <X className="size-3" />
