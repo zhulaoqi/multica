@@ -388,6 +388,14 @@ const (
 	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
 	orgBotP2PHintCopy        = "直接把要做的事发给我，和在易研里发一样。例如：帮支付组看一下对账差异。回复「换目标」可以选择部门、我的小队或项目。"
-	orgBotP2PAmbiguousCopy   = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
-	orgBotP2PTooLongCopy     = "这条消息太长了，请缩短后再发。"
+	// Same words as the workbench empty state. Sent each time the person
+	// enters the private chat.
+	orgBotOpenCopy = "告诉团队要做什么\n\n" +
+		"用一句话描述要做的事，系统会判断交给哪个部门，部门负责人再拆分成任务。\n\n" +
+		"可以这样说\n" +
+		"准备下周的客户上线材料\n" +
+		"排查昨天结算失败的原因\n" +
+		"给新看板写一篇发布公告"
+	orgBotP2PAmbiguousCopy = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
+	orgBotP2PTooLongCopy   = "这条消息太长了，请缩短后再发。"
 )

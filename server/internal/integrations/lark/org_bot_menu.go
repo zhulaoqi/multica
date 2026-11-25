@@ -166,7 +166,10 @@ func (b *OrgBot) refreshMenu(ctx context.Context, msg InboundMessage) (string, D
 		return "", DispatchResult{}, fmt.Errorf("load organization workspace: %w", err)
 	}
 	b.publishMenu(ctx, msg, userID, org.ID)
-	return "", DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+	// Entering the private chat is the only signal Feishu sends for "opened
+	// the bot again". Closing the chat, and whether they found it by search,
+	// are not separate events.
+	return orgBotOpenCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 }
 
 func (b *OrgBot) publishMenu(ctx context.Context, msg InboundMessage, userID, orgID pgtype.UUID) {

@@ -495,8 +495,8 @@ func TestOrgBot_OpeningTheChatPublishesThePersonalMenu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enter: %v", err)
 	}
-	if res.Outcome != OutcomeDispatchUsage || len(h.client.textSent) != 0 || len(h.client.sent) != 0 {
-		t.Fatalf("opening the chat replied: %+v text %d cards %d", res, len(h.client.textSent), len(h.client.sent))
+	if res.Outcome != OutcomeDispatchUsage || len(h.client.textSent) != 1 || h.client.textSent[0].Text != orgBotOpenCopy || len(h.client.sent) != 0 {
+		t.Fatalf("opening the chat: %+v text %+v cards %d", res, h.client.textSent, len(h.client.sent))
 	}
 	if len(h.client.menus) != 1 || !menuNames(h.client.menus[0].Items)["AIHUB"] || !menuNames(h.client.menus[0].Items)["我的小队"] {
 		t.Fatalf("menus = %+v", h.client.menus)
