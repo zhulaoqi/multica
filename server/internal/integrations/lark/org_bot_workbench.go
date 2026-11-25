@@ -18,11 +18,10 @@ import (
 )
 
 const (
-	orgBotStageTTL          = 10 * time.Minute
-	orgBotRecentIssueWindow = 2 * time.Minute
-	orgBotStageLimit        = 3
-	orgBotProjectListLimit  = 20
-	orgBotNameLookupLimit   = 80
+	orgBotStageTTL         = 10 * time.Minute
+	orgBotStageLimit       = 3
+	orgBotProjectListLimit = 20
+	orgBotNameLookupLimit  = 80
 )
 
 // workbenchReply handles a private message, an @ in a group, or a card click
@@ -992,36 +991,13 @@ func (b *OrgBot) attachStagedFiles(ctx context.Context, msg InboundMessage, user
 }
 
 // keepInboundMedia holds a file that arrived outside a dispatch thread until
-// the next sentence creates the task, or attaches it to a task created moments
-// ago. Feishu delivers the file as its own event.
+// the next sentence creates the task. Feishu delivers the file as its own
+// event, so binding it to the most recent task would attach a newly pasted
+// screenshot to the previous request instead of the text still being typed.
 func (b *OrgBot) keepInboundMedia(ctx context.Context, msg InboundMessage, userID pgtype.UUID) (string, DispatchResult, error) {
 	media, reply, result, err := b.downloadInboundMedia(ctx, msg)
 	if err != nil || reply != "" {
 		return reply, result, err
-	}
-	state := b.loadTarget(ctx, msg, userID)
-	if state.LastIssueID.Valid && state.Awaiting == "" && strings.TrimSpace(state.PendingText) == "" &&
-		!state.UpdatedAt.IsZero() && time.Since(state.UpdatedAt) <= orgBotRecentIssueWindow {
-		org, orgErr := b.cfg.Organization.GetOrganizationWorkspace(ctx)
-		if orgErr == nil {
-			stored, attachErr := b.cfg.Attachments.AttachToIssue(ctx, OrgBotAttachment{
-				ActorID:     userID,
-				WorkspaceID: org.ID,
-				IssueID:     state.LastIssueID,
-				Filename:    media.Filename,
-				ContentType: media.ContentType,
-				Data:        media.Data,
-			})
-			if attachErr != nil {
-				return "", DispatchResult{}, fmt.Errorf("attach inbound media: %w", attachErr)
-			}
-			ident := state.LastIssueIdentifier
-			if ident == "" {
-				ident = "刚才的任务"
-			}
-			return fmt.Sprintf("已把 %s 附加到刚才的 %s。", stored.Filename, ident),
-				DispatchResult{Outcome: OutcomeIngested}, nil
-		}
 	}
 	b.rememberFiles(b.stageKey(string(msg.ChatID), userID), stagedOrgBotFile{
 		Filename:    media.Filename,

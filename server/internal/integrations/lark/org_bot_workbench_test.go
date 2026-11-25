@@ -418,7 +418,7 @@ func TestOrgBot_StagedFileAttachesToCreatedTask(t *testing.T) {
 	}
 }
 
-func TestOrgBot_FileAfterDispatchAttachesToThatTask(t *testing.T) {
+func TestOrgBot_FileAfterDispatchWaitsForTheNextTask(t *testing.T) {
 	dispatcher := &orgBotDispatcherFake{dispatch: createdPayDispatch("对账")}
 	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
 	h.bot.cfg.Router = payRoute()
@@ -437,11 +437,21 @@ func TestOrgBot_FileAfterDispatchAttachesToThatTask(t *testing.T) {
 	if _, err := h.bot.Handle(context.Background(), img); err != nil {
 		t.Fatalf("image: %v", err)
 	}
-	if len(h.attachments.attachments) != 1 || h.attachments.attachments[0].IssueID != testUUID(0x42) {
-		t.Fatalf("attachment = %+v", h.attachments.attachments)
+	if len(h.attachments.attachments) != 0 {
+		t.Fatalf("image attached to the previous task: %+v", h.attachments.attachments)
 	}
-	if len(h.client.textSent) != 1 || !strings.Contains(h.client.textSent[0].Text, "刚才的 ORG-7") {
+	if len(h.client.textSent) != 1 || !strings.Contains(h.client.textSent[0].Text, "下一条要做的事") {
 		t.Fatalf("reply = %+v", h.client.textSent)
+	}
+	if _, err := h.bot.Handle(context.Background(), p2pText("m2", "再查一下退款差异")); err != nil {
+		t.Fatalf("next text: %v", err)
+	}
+	if len(dispatcher.calls) != 2 {
+		t.Fatalf("dispatch calls = %d, want 2", len(dispatcher.calls))
+	}
+	if len(h.attachments.attachments) != 1 ||
+		h.attachments.attachments[0].IssueID != testUUID(0x42) {
+		t.Fatalf("attachment = %+v", h.attachments.attachments)
 	}
 }
 
