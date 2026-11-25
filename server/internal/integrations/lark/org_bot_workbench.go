@@ -36,6 +36,14 @@ func (b *OrgBot) workbenchReply(ctx context.Context, msg InboundMessage, text st
 	if unbound {
 		return b.loginPromptReply(), DispatchResult{Outcome: OutcomeNeedsBinding}, nil
 	}
+	if msg.MessageType == "post" {
+		var mediaReply string
+		var mediaResult DispatchResult
+		text, mediaReply, mediaResult, err = b.keepPostMedia(ctx, msg, userID, text)
+		if err != nil || mediaReply != "" {
+			return mediaReply, mediaResult, err
+		}
+	}
 	if b.cfg.Router == nil {
 		return orgBotP2PHintCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 	}
@@ -410,7 +418,11 @@ func (b *OrgBot) runDispatch(ctx context.Context, msg InboundMessage, userID pgt
 	}
 
 	identifier, slug := dispatchedIssueRef(org, result)
-	note := b.attachStagedFiles(ctx, msg, userID, org.ID, result.Issue.ID)
+	issueWorkspaceID := result.Issue.WorkspaceID
+	if !issueWorkspaceID.Valid {
+		issueWorkspaceID = org.ID
+	}
+	note := b.attachStagedFiles(ctx, msg, userID, issueWorkspaceID, result.Issue.ID)
 	reply := b.presentDispatched(ctx, msg, label, result.Issue.Title, identifier, createdPath, slug, note)
 	next := intended
 	next.Awaiting = ""
@@ -1007,4 +1019,67 @@ func (b *OrgBot) keepInboundMedia(ctx context.Context, msg InboundMessage, userI
 	})
 	return fmt.Sprintf("已收到 %s。它会跟你下一条要做的事一起交出去。", media.Filename),
 		DispatchResult{Outcome: OutcomeIngested}, nil
+}
+
+func (b *OrgBot) keepPostMedia(ctx context.Context, msg InboundMessage, userID pgtype.UUID, text string) (string, string, DispatchResult, error) {
+	resources := currentMediaResources(msg)
+	if len(resources) == 0 {
+		return text, "", DispatchResult{}, nil
+	}
+
+	files := make([]stagedOrgBotFile, 0, len(resources))
+	names := make([]string, 0, len(resources))
+	for i, res := range resources {
+		resource, err := b.cfg.Client.DownloadMessageResource(ctx, b.cfg.Credentials, DownloadResourceParams{
+			MessageID: firstNonEmpty(res.messageID, msg.MessageID),
+			FileKey:   res.key,
+			Type:      res.fetchType,
+		})
+		if err != nil {
+			return "", "", DispatchResult{}, fmt.Errorf("download post media: %w", err)
+		}
+		if int64(len(resource.Data)) > orgBotAttachmentMaxBytes {
+			return "", orgBotAttachmentTooLargeCopy, DispatchResult{Outcome: OutcomeIngested}, nil
+		}
+		contentType := firstNonEmpty(strings.TrimSpace(resource.ContentType), strings.TrimSpace(res.mimeType))
+		filename := mediaFilename(msg, res, DownloadedResourceStream{
+			ContentType: contentType,
+			Filename:    resource.Filename,
+		}, contentType, i)
+		files = append(files, stagedOrgBotFile{
+			Filename:    filename,
+			ContentType: contentType,
+			Data:        append([]byte(nil), resource.Data...),
+			At:          time.Now(),
+		})
+		names = append(names, filename)
+	}
+
+	key := b.stageKey(string(msg.ChatID), userID)
+	for _, file := range files {
+		b.rememberFiles(key, file)
+	}
+	text = stripPostMediaMarkers(text, msg.Content)
+	if text == "" {
+		return "", fmt.Sprintf("已收到 %s。它会跟你下一条要做的事一起交出去。", strings.Join(names, "、")),
+			DispatchResult{Outcome: OutcomeIngested}, nil
+	}
+	return text, "", DispatchResult{}, nil
+}
+
+func stripPostMediaMarkers(text, content string) string {
+	doc, err := decodePostContent(content)
+	if err != nil {
+		return strings.TrimSpace(text)
+	}
+	for _, paragraph := range doc.Content {
+		for _, span := range paragraph {
+			if _, ok := postSpanMediaResource(span, ""); !ok {
+				continue
+			}
+			marker := flattenPostParagraphWithMedia([]larkPostSpan{span}, nil)
+			text = strings.Replace(text, marker, "", 1)
+		}
+	}
+	return strings.TrimSpace(text)
 }

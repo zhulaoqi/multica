@@ -418,6 +418,51 @@ func TestOrgBot_StagedFileAttachesToCreatedTask(t *testing.T) {
 	}
 }
 
+func TestOrgBot_PostImageAttachesToTheTaskCreatedFromTheSameMessage(t *testing.T) {
+	const requirement = "帮我看下这两个问题，解决掉"
+	dispatch := createdPayDispatch(requirement)
+	dispatch.Issue.WorkspaceID = testUUID(0x31)
+	dispatch.Project = &db.Workspace{ID: testUUID(0x31), Name: "AIHUB", Slug: "aihub", IssuePrefix: "AIH"}
+	dispatcher := &orgBotDispatcherFake{dispatch: dispatch}
+	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
+	h.bot.cfg.Router = payRoute()
+	h.bot.cfg.Context = &memOrgBotContext{ok: true, state: OrgBotChatContext{
+		Kind:        orgBotTargetProject,
+		ProjectID:   testUUID(0x31),
+		ProjectName: "AIHUB",
+	}}
+	h.client.resource = DownloadedResource{
+		Data:        []byte("png-bytes"),
+		ContentType: "image/png",
+		Filename:    "shot.png",
+	}
+
+	post := p2pText("post-1", "[Image]\n"+requirement)
+	post.MessageType = "post"
+	post.Content = `{"content":[[{"tag":"img","image_key":"img_1"}],[{"tag":"text","text":"` + requirement + `"}]]}`
+
+	if _, err := h.bot.Handle(context.Background(), post); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	if len(dispatcher.calls) != 1 {
+		t.Fatalf("dispatch calls = %d", len(dispatcher.calls))
+	}
+	if dispatcher.calls[0].Title != requirement || dispatcher.calls[0].Description != requirement {
+		t.Fatalf("dispatch text = title %q description %q", dispatcher.calls[0].Title, dispatcher.calls[0].Description)
+	}
+	if len(h.attachments.attachments) != 1 {
+		t.Fatalf("attachments = %d", len(h.attachments.attachments))
+	}
+	att := h.attachments.attachments[0]
+	if att.IssueID != testUUID(0x42) || att.WorkspaceID != testUUID(0x31) || string(att.Data) != "png-bytes" {
+		t.Fatalf("attachment = %+v", att)
+	}
+	if len(h.client.sent) != 1 || !strings.Contains(h.client.sent[0].CardJSON, requirement) ||
+		strings.Contains(h.client.sent[0].CardJSON, "[Image]") {
+		t.Fatalf("dispatch card = %+v", h.client.sent)
+	}
+}
+
 func TestOrgBot_FileAfterDispatchWaitsForTheNextTask(t *testing.T) {
 	dispatcher := &orgBotDispatcherFake{dispatch: createdPayDispatch("对账")}
 	h := newOrgBotHarness(t, boundIdentity(), testOrganization(), dispatcher)
