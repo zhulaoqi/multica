@@ -166,10 +166,17 @@ func (b *OrgBot) refreshMenu(ctx context.Context, msg InboundMessage) (string, D
 		return "", DispatchResult{}, fmt.Errorf("load organization workspace: %w", err)
 	}
 	b.publishMenu(ctx, msg, userID, org.ID)
-	// Entering the private chat is the only signal Feishu sends for "opened
-	// the bot again". Closing the chat, and whether they found it by search,
-	// are not separate events.
-	return orgBotOpenCopy, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+	// Feishu reports the newest message this person can still see. A value
+	// means the history is still there, so reopening the chat stays quiet.
+	// An empty value is a first open or a cleared history.
+	if strings.TrimSpace(msg.LastVisibleMessageID) != "" {
+		return "", DispatchResult{Outcome: OutcomeDispatchUsage}, nil
+	}
+	post, err := orgBotOpenPost()
+	if err != nil {
+		return "", DispatchResult{}, err
+	}
+	return post, DispatchResult{Outcome: OutcomeDispatchUsage}, nil
 }
 
 func (b *OrgBot) publishMenu(ctx context.Context, msg InboundMessage, userID, orgID pgtype.UUID) {

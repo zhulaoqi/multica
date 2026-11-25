@@ -47,6 +47,15 @@ func TestOrgBotFrameDecoderChatEntered(t *testing.T) {
 	if msg.MessageType != orgBotChatEnteredType || msg.ChatID != "oc_dm" || msg.SenderOpenID != "ou_user" {
 		t.Fatalf("message = %+v", msg)
 	}
+	if msg.LastVisibleMessageID != "" {
+		t.Fatalf("missing last message = %q", msg.LastVisibleMessageID)
+	}
+
+	kept := []byte(`{"schema":"2.0","header":{"event_id":"ev_enter","event_type":"im.chat.access_event.bot_p2p_chat_entered_v1","app_id":"cli_x"},"event":{"chat_id":"oc_dm","operator_id":{"open_id":"ou_user"},"last_message_id":"om_kept"}}`)
+	msg, ok, err = NewOrgBotFrameDecoder().Decode(kept, Installation{})
+	if err != nil || !ok || msg.LastVisibleMessageID != "om_kept" {
+		t.Fatalf("kept history = %+v ok %v err %v", msg, ok, err)
+	}
 }
 
 func TestOrgBotCardsStayCompact(t *testing.T) {

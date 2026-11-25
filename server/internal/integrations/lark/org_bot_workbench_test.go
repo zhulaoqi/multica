@@ -495,8 +495,24 @@ func TestOrgBot_OpeningTheChatPublishesThePersonalMenu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enter: %v", err)
 	}
-	if res.Outcome != OutcomeDispatchUsage || len(h.client.textSent) != 1 || h.client.textSent[0].Text != orgBotOpenCopy || len(h.client.sent) != 0 {
-		t.Fatalf("opening the chat: %+v text %+v cards %d", res, h.client.textSent, len(h.client.sent))
+	if res.Outcome != OutcomeDispatchUsage || len(h.client.textSent) != 0 || len(h.client.posts) != 1 || len(h.client.sent) != 0 {
+		t.Fatalf("opening an empty chat: %+v text %d posts %+v", res, len(h.client.textSent), h.client.posts)
+	}
+	post := h.client.posts[0].Content
+	for _, want := range []string{"告诉团队要做什么", "用一句话描述要做的事", `"italic"`, "可以这样说", "准备下周的客户上线材料", "- 排查昨天结算失败的原因"} {
+		if !strings.Contains(post, want) {
+			t.Fatalf("open guide missing %q: %s", want, post)
+		}
+	}
+
+	again := p2pText("m2", "")
+	again.MessageType = orgBotChatEnteredType
+	again.LastVisibleMessageID = "om_kept"
+	if _, err := h.bot.Handle(context.Background(), again); err != nil {
+		t.Fatalf("reenter: %v", err)
+	}
+	if len(h.client.posts) != 1 || len(h.client.textSent) != 0 {
+		t.Fatalf("a chat that still has history sent another guide: posts %d text %d", len(h.client.posts), len(h.client.textSent))
 	}
 	if len(h.client.menus) != 1 || !menuNames(h.client.menus[0].Items)["AIHUB"] || !menuNames(h.client.menus[0].Items)["我的小队"] {
 		t.Fatalf("menus = %+v", h.client.menus)

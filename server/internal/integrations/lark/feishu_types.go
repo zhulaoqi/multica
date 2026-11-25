@@ -68,6 +68,11 @@ type InboundMessage struct {
 	ParentID string
 	RootID   string
 
+	// LastVisibleMessageID is the newest message this person can still see,
+	// set only on a chat-entered event. Empty means the private chat has no
+	// visible history: a first open, or the person cleared it.
+	LastVisibleMessageID string
+
 	// ThreadID is the Lark topic (话题) id, populated only for messages posted
 	// inside a thread, so a non-empty value signals an in-thread @-mention.
 	// Persisted on the chat binding so the outbound patcher threads its reply.

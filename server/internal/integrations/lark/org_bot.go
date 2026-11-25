@@ -2,6 +2,7 @@ package lark
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -203,9 +204,12 @@ func (b *OrgBot) Handle(ctx context.Context, msg InboundMessage) (DispatchResult
 	}
 	if reply != "" {
 		var sendErr error
-		if msg.ChatID == "" {
+		switch {
+		case msg.MessageType == orgBotChatEnteredType:
+			sendErr = b.sendOpenGuide(ctx, msg, reply)
+		case msg.ChatID == "":
 			sendErr = b.sendPersonalText(ctx, msg, reply)
-		} else {
+		default:
 			sendErr = b.sendText(ctx, msg, reply)
 		}
 		if sendErr != nil {
@@ -361,6 +365,47 @@ func (b *OrgBot) loginPromptReply() string {
 	return copy
 }
 
+// orgBotOpenPost is the workbench empty state as one rich-text message:
+// a title, the italic explanation, and the example list.
+func orgBotOpenPost() (string, error) {
+	doc := map[string]any{
+		"zh_cn": map[string]any{
+			"title": "告诉团队要做什么",
+			"content": []any{
+				[]any{map[string]any{
+					"tag":   "text",
+					"text":  "用一句话描述要做的事，系统会判断交给哪个部门，部门负责人再拆分成任务。",
+					"style": []string{"italic"},
+				}},
+				[]any{map[string]any{
+					"tag":  "md",
+					"text": "可以这样说\n- 准备下周的客户上线材料\n- 排查昨天结算失败的原因\n- 给新看板写一篇发布公告",
+				}},
+			},
+		},
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func (b *OrgBot) sendOpenGuide(ctx context.Context, msg InboundMessage, content string) error {
+	sender, ok := b.cfg.Client.(interface {
+		SendPostMessage(context.Context, SendPostParams) (string, error)
+	})
+	if !ok {
+		return errors.New("lark client cannot send a post")
+	}
+	_, err := sender.SendPostMessage(ctx, SendPostParams{
+		InstallationID: b.cfg.Credentials,
+		ChatID:         msg.ChatID,
+		Content:        content,
+	})
+	return err
+}
+
 func (b *OrgBot) sendText(ctx context.Context, msg InboundMessage, text string) error {
 	return sendWithReplyFallback(b.cfg.Logger, "send org bot reply", inboundReplyTarget(msg), func(target ReplyTarget) error {
 		_, err := b.cfg.Client.SendTextMessage(ctx, SendTextParams{
@@ -388,14 +433,6 @@ const (
 	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
 	orgBotP2PHintCopy        = "直接把要做的事发给我，和在易研里发一样。例如：帮支付组看一下对账差异。回复「换目标」可以选择部门、我的小队或项目。"
-	// Same words as the workbench empty state. Sent each time the person
-	// enters the private chat.
-	orgBotOpenCopy = "告诉团队要做什么\n\n" +
-		"用一句话描述要做的事，系统会判断交给哪个部门，部门负责人再拆分成任务。\n\n" +
-		"可以这样说\n" +
-		"准备下周的客户上线材料\n" +
-		"排查昨天结算失败的原因\n" +
-		"给新看板写一篇发布公告"
-	orgBotP2PAmbiguousCopy = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
-	orgBotP2PTooLongCopy   = "这条消息太长了，请缩短后再发。"
+	orgBotP2PAmbiguousCopy   = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"
+	orgBotP2PTooLongCopy     = "这条消息太长了，请缩短后再发。"
 )

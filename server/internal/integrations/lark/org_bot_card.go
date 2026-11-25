@@ -137,8 +137,9 @@ func decodeOrgBotChatEntered(payload []byte) (InboundMessage, bool, error) {
 		return InboundMessage{}, false, errors.New("chat entered missing event")
 	}
 	var evt struct {
-		ChatID     string `json:"chat_id"`
-		OperatorID struct {
+		ChatID        string `json:"chat_id"`
+		LastMessageID string `json:"last_message_id"`
+		OperatorID    struct {
 			OpenID string `json:"open_id"`
 		} `json:"operator_id"`
 	}
@@ -151,16 +152,17 @@ func decodeOrgBotChatEntered(payload []byte) (InboundMessage, bool, error) {
 		return InboundMessage{}, false, nil
 	}
 	return InboundMessage{
-		EventType:      env.Header.EventType,
-		EventID:        env.Header.EventID,
-		AppID:          env.Header.AppID,
-		ChatID:         ChatID(chatID),
-		ChatType:       ChatTypeP2P,
-		MessageID:      env.Header.EventID,
-		SenderOpenID:   OpenID(openID),
-		MessageType:    orgBotChatEnteredType,
-		AddressedToBot: true,
-		CreateTime:     env.Header.CreateTime,
+		EventType:            env.Header.EventType,
+		EventID:              env.Header.EventID,
+		AppID:                env.Header.AppID,
+		ChatID:               ChatID(chatID),
+		ChatType:             ChatTypeP2P,
+		MessageID:            env.Header.EventID,
+		SenderOpenID:         OpenID(openID),
+		MessageType:          orgBotChatEnteredType,
+		AddressedToBot:       true,
+		CreateTime:           env.Header.CreateTime,
+		LastVisibleMessageID: strings.TrimSpace(evt.LastMessageID),
 	}, true, nil
 }
 

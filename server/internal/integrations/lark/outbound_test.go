@@ -136,6 +136,7 @@ type fakeAPIClient struct {
 	sent           []SendCardParams
 	patched        []PatchCardParams
 	textSent       []SendTextParams
+	posts          []SendPostParams
 	mdCardSent     []SendMarkdownCardParams
 	sendReturn     string
 	sendErr        error
@@ -184,6 +185,12 @@ func (f *fakeAPIClient) PatchInteractiveCard(ctx context.Context, p PatchCardPar
 	defer f.mu.Unlock()
 	f.patched = append(f.patched, p)
 	return f.patchErr
+}
+func (f *fakeAPIClient) SendPostMessage(ctx context.Context, p SendPostParams) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.posts = append(f.posts, p)
+	return "om_post", f.textSendErr
 }
 func (f *fakeAPIClient) SendTextMessage(ctx context.Context, p SendTextParams) (string, error) {
 	f.mu.Lock()

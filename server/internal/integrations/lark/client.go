@@ -319,6 +319,14 @@ type PatchCardParams struct {
 // SendTextParams is the input shape for posting a plain text message.
 // Text is sent verbatim to Lark; the client handles JSON encoding of
 // the `{"text": "..."}` content envelope Lark requires.
+// SendPostParams posts one rich-text message (msg_type=post). Content is the
+// JSON object Lark expects in the content field, already serialized.
+type SendPostParams struct {
+	InstallationID InstallationCredentials
+	ChatID         ChatID
+	Content        string
+}
+
 type SendTextParams struct {
 	InstallationID InstallationCredentials
 	ChatID         ChatID

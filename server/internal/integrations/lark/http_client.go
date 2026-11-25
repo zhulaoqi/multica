@@ -488,6 +488,35 @@ func (c *httpAPIClient) SendTextMessage(ctx context.Context, p SendTextParams) (
 	return resp.Data.MessageID, nil
 }
 
+// SendPostMessage posts a rich-text message. Callers pass the serialized
+// post document; Lark renders its title, text styles and markdown.
+func (c *httpAPIClient) SendPostMessage(ctx context.Context, p SendPostParams) (string, error) {
+	if p.ChatID == "" {
+		return "", errors.New("lark http client: missing chat_id")
+	}
+	if strings.TrimSpace(p.Content) == "" {
+		return "", errors.New("lark http client: missing post content")
+	}
+	path, body := outboundMessageRequest(p.ChatID, "post", p.Content, ReplyTarget{})
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID string `json:"message_id"`
+		} `json:"data"`
+	}
+	if err := c.doAuthedJSON(ctx, p.InstallationID, http.MethodPost, path, body, &resp); err != nil {
+		return "", fmt.Errorf("lark http client: send post message: %w", err)
+	}
+	if resp.Code != 0 || resp.Data.MessageID == "" {
+		if isTokenError(resp.Code) {
+			c.invalidateToken(p.InstallationID.AppID)
+		}
+		return "", &APIError{Op: "send post message", Code: resp.Code, Msg: resp.Msg}
+	}
+	return resp.Data.MessageID, nil
+}
+
 func markdownCardContent(markdown, summary string) (string, error) {
 	return markdownCardJSON(markdownImageLinks(markdown), summary)
 }
