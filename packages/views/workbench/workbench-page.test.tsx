@@ -928,9 +928,11 @@ describe("WorkbenchPage", () => {
     qc.setQueryData(issueTimelineOptions("issue-1").queryKey, []);
     renderPage();
 
-    expect(
-      screen.getByRole("img", { name: "checkout-error.png" }),
-    ).toBeInTheDocument();
+    const bubble = screen.getByTestId("dispatch-user-bubble");
+    expect(within(bubble).getByText("Prepare onboarding materials for next week"))
+      .toBeInTheDocument();
+    expect(within(bubble).getByRole("img", { name: "checkout-error.png" }))
+      .toBeInTheDocument();
   });
 
   it("sends uploaded files with the request", async () => {

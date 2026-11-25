@@ -55,11 +55,14 @@ function UserBubble({
   attachments?: readonly Attachment[];
 }) {
   return (
-    <div className="ml-auto flex max-w-[85%] flex-col items-end gap-2">
-      <p className="rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-body whitespace-pre-wrap break-words">
+    <div
+      data-testid="dispatch-user-bubble"
+      className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-body break-words"
+    >
+      <p className="whitespace-pre-wrap">
         {text}
       </p>
-      <DispatchAttachmentList attachments={attachments} />
+      <DispatchAttachmentList attachments={attachments} className="mt-2" />
     </div>
   );
 }
