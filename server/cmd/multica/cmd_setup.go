@@ -25,10 +25,11 @@ var setupCmd = &cobra.Command{
 The server and web addresses are read from the multica-test services.
 Use 'multica setup cloud' to connect to Multica Cloud (multica.ai) instead.
 
-If you run this command over SSH on a remote machine, keep the localhost
-callback and follow the SSH tunnel hint printed during browser login. If your
-browser can reach this CLI directly on a private network address, pass
---callback-host <host-or-ip>.
+SSH and headless Linux sessions automatically use device login: open the
+printed URL in any browser and approve the code shown in the terminal.
+Use --device to select this flow explicitly. If your browser can reach this
+CLI directly on a private network address, --callback-host remains available
+for the local callback flow.
 
 Use --profile to create an isolated configuration for a separate environment:
   multica setup self-host --profile staging --server-url https://api-staging.co`,
@@ -40,10 +41,8 @@ var setupCloudCmd = &cobra.Command{
 	Short: "Configure the CLI for Multica Cloud (multica.ai)",
 	Long: `Explicitly configures the CLI to connect to Multica Cloud (multica.ai).
 
-If you run this command over SSH on a remote machine, keep the localhost
-callback and follow the SSH tunnel hint printed during browser login. If your
-browser can reach this CLI directly on a private network address, pass
---callback-host <host-or-ip>.
+SSH and headless Linux sessions automatically use device login. Use --device
+to select it explicitly.
 
 Use this only when you intend to sign in at multica.ai.`,
 	RunE: runSetupCloud,
@@ -57,9 +56,8 @@ var setupSelfHostCmd = &cobra.Command{
 By default, connects to http://localhost:8080 (backend) and http://localhost:3000 (frontend).
 Use --server-url and --app-url to specify a custom server (e.g. an on-premise deployment).
 
-If you run this command from a different machine than the server, also pass
---callback-host <host-or-ip-the-browser-can-reach-back-to-this-machine-on> so
-the OAuth login flow can return the token to the CLI.
+SSH and headless Linux sessions automatically use device login. Open the
+printed URL in any browser, verify the code, and approve the terminal.
 
 Examples:
   multica setup self-host
@@ -70,13 +68,16 @@ Examples:
 
 func init() {
 	setupCmd.Flags().String(callbackHostFlag, "", callbackHostFlagHelp)
+	setupCmd.Flags().Bool(deviceLoginFlag, false, deviceLoginFlagHelp)
 	setupCloudCmd.Flags().String(callbackHostFlag, "", callbackHostFlagHelp)
+	setupCloudCmd.Flags().Bool(deviceLoginFlag, false, deviceLoginFlagHelp)
 
 	setupSelfHostCmd.Flags().String("server-url", "", "Backend server URL (e.g. https://api.internal.co) (env: MULTICA_SERVER_URL)")
 	setupSelfHostCmd.Flags().String("app-url", "", "Frontend app URL (e.g. https://app.internal.co) (env: MULTICA_APP_URL)")
 	setupSelfHostCmd.Flags().Int("port", 8080, "Backend server port (used when --server-url is not set)")
 	setupSelfHostCmd.Flags().Int("frontend-port", 3000, "Frontend port (used when --app-url is not set)")
 	setupSelfHostCmd.Flags().String(callbackHostFlag, "", callbackHostFlagHelp)
+	setupSelfHostCmd.Flags().Bool(deviceLoginFlag, false, deviceLoginFlagHelp)
 
 	setupCmd.AddCommand(setupCloudCmd)
 	setupCmd.AddCommand(setupSelfHostCmd)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,6 +23,27 @@ type profileFeishuExchanger struct{ profile FeishuProfile }
 
 func (e profileFeishuExchanger) Exchange(context.Context, string) (FeishuProfile, error) {
 	return e.profile, nil
+}
+
+func TestFeishuLoginStartCarriesCLIDeviceCodeInState(t *testing.T) {
+	h := &Handler{FeishuLoginExchanger: &FeishuOAuth{
+		AppID:       "app-id",
+		AppSecret:   "secret",
+		RedirectURI: "https://example.test/auth/feishu/callback",
+		HTTP:        http.DefaultClient,
+	}}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/feishu/start?cli_device=ABCD-EFGH", nil)
+	h.FeishuLoginStart(rec, req)
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := location.Query().Get("state"); got != "cli-device:ABCD-EFGH" {
+		t.Fatalf("state = %q", got)
+	}
 }
 
 func TestFeishuLoginResponse_OmitsPrivateIdentity(t *testing.T) {
@@ -110,6 +132,36 @@ func TestFeishuLoginCallback_SetsSessionCookiesAndSkipsTheLoginPage(t *testing.T
 	}
 	if !sessionCookie {
 		t.Fatalf("redirect did not carry the session cookie: %v", w.Result().Cookies())
+	}
+}
+
+func TestFeishuLoginCallbackReturnsToCLIDeviceApproval(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("handler not available")
+	}
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	email := "feishu-device-" + suffix + "@multica.test"
+	openID := "ou_device_" + suffix
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM feishu_identity WHERE open_id = $1`, openID)
+		testPool.Exec(context.Background(), `DELETE FROM "user" WHERE email = $1`, email)
+	})
+	previous := testHandler.FeishuLoginExchanger
+	testHandler.FeishuLoginExchanger = profileFeishuExchanger{profile: FeishuProfile{
+		OpenID: openID, Name: "终端授权", Email: email,
+	}}
+	t.Cleanup(func() { testHandler.FeishuLoginExchanger = previous })
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/auth/feishu/callback?code=fresh&state=cli-device%3AABCD-EFGH",
+		nil,
+	)
+	testHandler.FeishuLoginCallback(rec, req)
+
+	if got := rec.Header().Get("Location"); got != "/login?cli_device=ABCD-EFGH" {
+		t.Fatalf("Location = %q", got)
 	}
 }
 

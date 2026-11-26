@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -9,8 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/testutil"
 	"github.com/spf13/cobra"
 )
@@ -205,6 +209,102 @@ func TestBrowserLoginInstructionsSSHRemoteHint(t *testing.T) {
 	got = browserLoginInstructions(loginURL, "192.168.1.25", 43689, true)
 	if strings.Contains(got, "ssh -L") {
 		t.Fatalf("non-loopback callback should not include SSH tunnel command:\n%s", got)
+	}
+}
+
+func TestShouldUseDeviceLogin(t *testing.T) {
+	tests := []struct {
+		name    string
+		force   bool
+		ssh     bool
+		goos    string
+		display string
+		wayland string
+		want    bool
+	}{
+		{name: "explicit flag", force: true, goos: "darwin", want: true},
+		{name: "ssh session", ssh: true, goos: "linux", display: ":0", want: true},
+		{name: "headless linux", goos: "linux", want: true},
+		{name: "x11 linux", goos: "linux", display: ":0"},
+		{name: "wayland linux", goos: "linux", wayland: "wayland-0"},
+		{name: "mac keeps browser callback", goos: "darwin"},
+		{name: "windows keeps browser callback", goos: "windows"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldUseDeviceLogin(tc.force, tc.ssh, tc.goos, func(key string) string {
+				switch key {
+				case "DISPLAY":
+					return tc.display
+				case "WAYLAND_DISPLAY":
+					return tc.wayland
+				default:
+					return ""
+				}
+			})
+			if got != tc.want {
+				t.Fatalf("shouldUseDeviceLogin() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPollCLIDeviceTokenWaitsForApproval(t *testing.T) {
+	var polls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/cli-device/token" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if polls.Add(1) == 1 {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"authorization_pending"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"token":"session-jwt"}`))
+	}))
+	defer srv.Close()
+
+	client := cli.NewAPIClient(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	token, err := pollCLIDeviceToken(ctx, client, "device-secret", time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "session-jwt" || polls.Load() != 2 {
+		t.Fatalf("token = %q, polls = %d", token, polls.Load())
+	}
+}
+
+func TestPollCLIDeviceTokenRetriesTemporaryServerFailure(t *testing.T) {
+	var polls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if polls.Add(1) == 1 {
+			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token":"session-jwt"}`))
+	}))
+	defer srv.Close()
+
+	client := cli.NewAPIClient(srv.URL, "", "")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	token, err := pollCLIDeviceToken(ctx, client, "device-secret", time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "session-jwt" || polls.Load() != 2 {
+		t.Fatalf("token = %q, polls = %d", token, polls.Load())
+	}
+}
+
+func TestLoginDeviceFlagWiring(t *testing.T) {
+	flag := loginCmd.Flags().Lookup(deviceLoginFlag)
+	if flag == nil || flag.Value.Type() != "bool" {
+		t.Fatalf("login command is missing the --%s boolean flag", deviceLoginFlag)
 	}
 }
 

@@ -522,6 +522,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		}
 	}
 	if rdb != nil {
+		h.CLIDeviceLogins = auth.NewRedisCLIDeviceStore(rdb)
 		h.UpdateStore = handler.NewRedisUpdateStore(rdb)
 		h.ModelListStore = handler.NewRedisModelListStore(rdb)
 		h.ModelCatalogCache = handler.NewRedisModelCatalogCache(rdb)
@@ -533,6 +534,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		h.WebhookIPRateLimiter = handler.NewRedisWebhookIPRateLimiter(rdb, handler.DefaultWebhookIPRateLimit())
 		h.WebhookAbsoluteIPRateLimiter = handler.NewRedisWebhookAbsoluteIPRateLimiter(rdb, handler.DefaultWebhookAbsoluteIPRateLimit())
 		h.InvitationRateLimiters = handler.NewRedisInvitationRateLimiters(rdb, invitationRateLimits)
+	} else {
+		slog.Warn("cli device login: no Redis; pending sessions are per-process and require a single API replica")
 	}
 
 	// Channel engine (MUL-3620): the platform-agnostic inbound runtime.
@@ -1645,12 +1648,19 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	trustedProxies := middleware.ParseTrustedProxies(os.Getenv("RATE_LIMIT_TRUSTED_PROXIES"))
 	authRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_AUTH", 5), time.Minute, trustedProxies)
 	authVerifyRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_AUTH_VERIFY", 20), time.Minute, trustedProxies)
+	cliDeviceStartRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_CLI_DEVICE_START", 30), time.Minute, trustedProxies)
+	// Polls arrive every three seconds and company users commonly share one
+	// egress IP. Keep enough room for concurrent logins; the device secret is
+	// still required and session creation remains under the tighter limiter.
+	cliDevicePollRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_CLI_DEVICE_POLL", 600), time.Minute, trustedProxies)
 	contactSalesRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_CONTACT_SALES", 5), time.Hour, trustedProxies)
 	r.With(authRL).Post("/auth/send-code", h.SendCode)
 	r.With(authVerifyRL).Post("/auth/verify-code", h.VerifyCode)
 	r.With(authRL).Post("/auth/google", h.GoogleLogin)
 	r.With(authRL).Post("/auth/feishu", h.FeishuLogin)
 	r.With(authRL).Post("/auth/operator", h.OperatorLogin)
+	r.With(cliDeviceStartRL).Post("/api/cli-device/start", h.StartCLIDeviceLogin)
+	r.With(cliDevicePollRL).Post("/api/cli-device/token", h.PollCLIDeviceLogin)
 	// Feishu sign-in is two browser redirects. The limiter keys on the
 	// connecting IP, and every request reaches the API through the web proxy,
 	// so one bucket is shared by the whole company — a few retries in a row
@@ -1821,6 +1831,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		// without this guard a prompt-injected agent could trade its scoped,
 		// short-lived credential for a 30-day session JWT.
 		r.With(handler.RequireHumanActor).Post("/api/cli-token", h.IssueCliToken)
+		r.With(handler.RequireHumanActor).Post("/api/cli-device/approve", h.ApproveCLIDeviceLogin)
 		// Sliding session renewal for clients that hold the session as a
 		// string (Desktop, mobile). Browsers get theirs re-issued inline by
 		// middleware.Auth and never call this (MUL-7436).

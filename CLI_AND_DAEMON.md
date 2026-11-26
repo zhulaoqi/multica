@@ -62,7 +62,7 @@ multica setup self-host
 Or step by step:
 
 ```bash
-# 1. Authenticate (opens browser for login)
+# 1. Authenticate
 multica login
 
 # 2. Start the agent daemon
@@ -82,6 +82,14 @@ multica login
 ```
 
 Opens your browser for OAuth authentication, creates a 90-day personal access token, and auto-configures your workspaces.
+
+SSH and headless Linux sessions automatically use device login instead: the
+CLI prints a URL and code that can be approved in any browser. Select this flow
+explicitly with:
+
+```bash
+multica login --device
+```
 
 ### Token Login
 

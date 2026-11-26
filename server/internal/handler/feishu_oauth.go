@@ -129,7 +129,11 @@ func (h *Handler) FeishuLoginStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "feishu login is not configured")
 		return
 	}
-	http.Redirect(w, r, oauth.AuthorizeURL("intake"), http.StatusFound)
+	state := "intake"
+	if code := normalizeCLIDeviceUserCode(r.URL.Query().Get("cli_device")); validCLIDeviceUserCode(code) {
+		state = "cli-device:" + code
+	}
+	http.Redirect(w, r, oauth.AuthorizeURL(state), http.StatusFound)
 }
 
 func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
@@ -146,10 +150,15 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 	r2.Header.Set("Content-Type", "application/json")
 	rec := &bufferedResponse{header: make(http.Header)}
 	h.FeishuLogin(rec, r2)
+	deviceCode := cliDeviceCodeFromFeishuState(r.URL.Query().Get("state"))
 	if rec.status >= 400 || rec.status == 0 {
 		// Send the person back to the sign-in page with a message instead of a
 		// bare JSON error; the exchange reason is logged by FeishuLogin.
-		http.Redirect(w, r, "/login?error=feishu", http.StatusFound)
+		location := "/login?error=feishu"
+		if deviceCode != "" {
+			location += "&cli_device=" + url.QueryEscape(deviceCode)
+		}
+		http.Redirect(w, r, location, http.StatusFound)
 		return
 	}
 	// Only the session cookies belong on the redirect. The login response's
@@ -163,7 +172,23 @@ func (h *Handler) FeishuLoginCallback(w http.ResponseWriter, r *http.Request) {
 		Name: "multica_logged_in", Value: "1", Path: "/",
 		MaxAge: 31536000, SameSite: http.SameSiteLaxMode,
 	})
+	if deviceCode != "" {
+		http.Redirect(w, r, "/login?cli_device="+url.QueryEscape(deviceCode), http.StatusFound)
+		return
+	}
 	http.Redirect(w, r, h.feishuLandingPath(r.Context(), rec), http.StatusFound)
+}
+
+func cliDeviceCodeFromFeishuState(state string) string {
+	const prefix = "cli-device:"
+	if !strings.HasPrefix(state, prefix) {
+		return ""
+	}
+	code := normalizeCLIDeviceUserCode(strings.TrimPrefix(state, prefix))
+	if !validCLIDeviceUserCode(code) {
+		return ""
+	}
+	return code
 }
 
 // feishuLandingPath skips the login page. A fresh session has no

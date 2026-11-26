@@ -66,6 +66,45 @@ describe("ApiClient VCS repository browsing", () => {
   });
 });
 
+describe("ApiClient CLI device login", () => {
+  it("approves a device login without exposing an existing token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "approved" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    await expect(client.approveCliDeviceLogin("ABCD-EFGH")).resolves.toEqual({
+      status: "approved",
+    });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/cli-device/approve");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      user_code: "ABCD-EFGH",
+    });
+  });
+
+  it("falls back safely when a server returns a malformed approval response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ status: 42 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const client = new ApiClient("https://api.example.test");
+
+    await expect(client.approveCliDeviceLogin("ABCD-EFGH")).resolves.toEqual({
+      status: "",
+    });
+  });
+});
+
 describe("ApiClient status reorder", () => {
   it("opts into built-in ordering and tolerates malformed responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ statuses: "invalid" }), {

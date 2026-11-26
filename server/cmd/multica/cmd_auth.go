@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -64,7 +65,9 @@ var authLogoutCmd = &cobra.Command{
 // localhost are rejected because the web login never accepts them.
 const callbackHostFlag = "callback-host"
 
-const callbackHostFlagHelp = "Callback host reachable from the browser: localhost, 127.0.0.1, or an RFC 1918 IPv4 address. For SSH-only machines, use the printed tunnel hint instead."
+const callbackHostFlagHelp = "Callback host reachable from the browser: localhost, 127.0.0.1, or an RFC 1918 IPv4 address. SSH and headless sessions use device login automatically."
+const deviceLoginFlag = "device"
+const deviceLoginFlagHelp = "Authenticate through a browser on another device; selected automatically for SSH and headless Linux sessions."
 
 func init() {
 	authCmd.AddCommand(authStatusCmd)
@@ -137,7 +140,29 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 		}
 		return runAuthLoginToken(cmd, tokenFlag)
 	}
+	if shouldUseDeviceLogin(
+		deviceLoginFlagValue(cmd),
+		runningInSSHSession(),
+		runtime.GOOS,
+		os.Getenv,
+	) {
+		return runAuthLoginDevice(cmd)
+	}
 	return runAuthLoginBrowser(cmd)
+}
+
+func shouldUseDeviceLogin(
+	force bool,
+	ssh bool,
+	goos string,
+	getenv func(string) string,
+) bool {
+	if force || ssh {
+		return true
+	}
+	return goos == "linux" &&
+		strings.TrimSpace(getenv("DISPLAY")) == "" &&
+		strings.TrimSpace(getenv("WAYLAND_DISPLAY")) == ""
 }
 
 // resolveCallbackBinding picks the host that goes into the `cli_callback`
@@ -320,6 +345,7 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	fmt.Fprintln(os.Stderr, "Opening browser to authenticate...")
 	if err := openBrowser(loginURL); err != nil {
 		fmt.Fprintf(os.Stderr, "Could not open browser automatically.\n")
+		return runAuthLoginDevice(cmd)
 	}
 	fmt.Fprint(os.Stderr, browserLoginInstructions(loginURL, callbackHost, port, runningInSSHSession()))
 
@@ -333,6 +359,135 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 		return fmt.Errorf("timed out waiting for authentication")
 	}
 
+	return completeCLIAuthentication(cmd, serverURL, appURL, jwtToken)
+}
+
+type cliDeviceStartResponse struct {
+	DeviceCode string `json:"device_code"`
+	UserCode   string `json:"user_code"`
+	ExpiresIn  int    `json:"expires_in"`
+	Interval   int    `json:"interval"`
+}
+
+func requestCLIDeviceLogin(ctx context.Context, client *cli.APIClient) (cliDeviceStartResponse, error) {
+	var response cliDeviceStartResponse
+	err := client.PostJSON(ctx, "/api/cli-device/start", map[string]any{}, &response)
+	if err != nil {
+		return cliDeviceStartResponse{}, err
+	}
+	if response.DeviceCode == "" || response.UserCode == "" {
+		return cliDeviceStartResponse{}, fmt.Errorf("server returned an incomplete device login response")
+	}
+	return response, nil
+}
+
+func pollCLIDeviceToken(
+	ctx context.Context,
+	client *cli.APIClient,
+	deviceCode string,
+	interval time.Duration,
+) (string, error) {
+	if interval <= 0 {
+		interval = 3 * time.Second
+	}
+	retryDelay := interval
+	for {
+		var response struct {
+			Status string `json:"status"`
+			Token  string `json:"token"`
+		}
+		if err := client.PostJSON(ctx, "/api/cli-device/token", map[string]string{
+			"device_code": deviceCode,
+		}, &response); err != nil {
+			if !retryableDevicePollError(err) {
+				return "", err
+			}
+			if err := waitForDevicePoll(ctx, retryDelay); err != nil {
+				return "", err
+			}
+			retryDelay = min(retryDelay*2, 15*time.Second)
+			continue
+		}
+		if response.Token != "" {
+			return response.Token, nil
+		}
+		if response.Status != "authorization_pending" {
+			return "", fmt.Errorf("server returned an invalid device login status")
+		}
+		retryDelay = interval
+		if err := waitForDevicePoll(ctx, interval); err != nil {
+			return "", err
+		}
+	}
+}
+
+func retryableDevicePollError(err error) bool {
+	var httpErr *cli.HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusTooManyRequests ||
+			httpErr.StatusCode >= http.StatusInternalServerError
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
+}
+
+func waitForDevicePoll(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func runAuthLoginDevice(cmd *cobra.Command) error {
+	serverURL := resolveHumanServerURL(cmd)
+	appURL := resolveAppURL(cmd)
+	client := cli.NewAPIClient(serverURL, "", "")
+
+	startCtx, cancelStart := cli.APIContext(context.Background())
+	session, err := requestCLIDeviceLogin(startCtx, client)
+	cancelStart()
+	if err != nil {
+		return cli.WithUserMessageUnlessNetwork("Could not start browser sign-in. Try again or use `multica login --token`.", err)
+	}
+
+	verificationURL := strings.TrimRight(appURL, "/") +
+		"/login?cli_device=" + url.QueryEscape(session.UserCode)
+	fmt.Fprintf(os.Stderr, "Open this URL in any browser:\n  %s\n\n", verificationURL)
+	fmt.Fprintf(os.Stderr, "Confirm that this code appears in the browser:\n  %s\n\n", session.UserCode)
+	if !runningInSSHSession() && (runtime.GOOS != "linux" ||
+		strings.TrimSpace(os.Getenv("DISPLAY")) != "" ||
+		strings.TrimSpace(os.Getenv("WAYLAND_DISPLAY")) != "") {
+		_ = openBrowser(verificationURL)
+	}
+	fmt.Fprintln(os.Stderr, "Waiting for authentication...")
+
+	expiresIn := time.Duration(session.ExpiresIn) * time.Second
+	if expiresIn <= 0 || expiresIn > 10*time.Minute {
+		expiresIn = 5 * time.Minute
+	}
+	interval := time.Duration(session.Interval) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), expiresIn)
+	defer cancel()
+	jwtToken, err := pollCLIDeviceToken(ctx, client, session.DeviceCode, interval)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("browser sign-in timed out; run `multica login` again")
+		}
+		return cli.WithUserMessageUnlessNetwork("Browser sign-in did not complete. Run `multica login` again.", err)
+	}
+	return completeCLIAuthentication(cmd, serverURL, appURL, jwtToken)
+}
+
+func completeCLIAuthentication(
+	cmd *cobra.Command,
+	serverURL string,
+	appURL string,
+	jwtToken string,
+) error {
 	// Use the JWT to create a PAT via the existing API.
 	client := cli.NewAPIClient(serverURL, "", jwtToken)
 
@@ -349,7 +504,7 @@ func runAuthLoginBrowser(cmd *cobra.Command) error {
 	var patResp struct {
 		Token string `json:"token"`
 	}
-	err = client.PostJSON(ctx, "/api/tokens", map[string]any{
+	err := client.PostJSON(ctx, "/api/tokens", map[string]any{
 		"name":            patName,
 		"expires_in_days": expiresInDays,
 	}, &patResp)
@@ -405,6 +560,17 @@ func callbackHostFlagValue(cmd *cobra.Command) string {
 		}
 	}
 	return ""
+}
+
+func deviceLoginFlagValue(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		for _, flags := range []*pflag.FlagSet{c.Flags(), c.PersistentFlags(), c.InheritedFlags()} {
+			if flag := flags.Lookup(deviceLoginFlag); flag != nil && flag.Value.String() == "true" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func nonEmptyFlagValue(flags *pflag.FlagSet, name string) string {

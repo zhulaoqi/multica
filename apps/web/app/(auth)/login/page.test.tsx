@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enCommon from "@multica/views/locales/en/common.json";
@@ -22,6 +23,7 @@ function createWrapper() {
 
 const {
   mockIssueCliToken,
+  mockApproveCliDevice,
   mockListWorkspaces,
   mockListMyInvitations,
   mockPush,
@@ -30,6 +32,7 @@ const {
   authStateRef,
 } = vi.hoisted(() => ({
   mockIssueCliToken: vi.fn(),
+  mockApproveCliDevice: vi.fn(),
   mockListWorkspaces: vi.fn(),
   mockListMyInvitations: vi.fn(),
   mockPush: vi.fn(),
@@ -74,6 +77,9 @@ vi.mock("@multica/core/auth", async () => {
 vi.mock("@/features/auth/auth-cookie", () => ({
   setLoggedInCookie: vi.fn(),
 }));
+vi.mock("@/features/auth/login-backdrop", () => ({
+  LoginBackdrop: () => null,
+}));
 
 // Mock api
 vi.mock("@multica/core/api", () => ({
@@ -84,6 +90,7 @@ vi.mock("@multica/core/api", () => ({
     setToken: vi.fn(),
     getMe: vi.fn(),
     issueCliToken: mockIssueCliToken,
+    approveCliDeviceLogin: mockApproveCliDevice,
   },
 }));
 
@@ -158,6 +165,42 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(mockIssueCliToken).toHaveBeenCalledOnce();
     });
+  });
+
+  it("asks an authenticated user to approve a headless CLI device code", async () => {
+    searchParamsState.params = new URLSearchParams({
+      cli_device: "ABCD-EFGH",
+    });
+    authStateRef.state.user = { id: "u1", email: "admin@operator.local" };
+    mockApproveCliDevice.mockResolvedValue({ status: "approved" });
+    const user = userEvent.setup();
+
+    render(<LoginPage />, { wrapper: createWrapper() });
+
+    expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "授权此终端" }));
+    await waitFor(() => {
+      expect(mockApproveCliDevice).toHaveBeenCalledWith("ABCD-EFGH");
+    });
+    expect(screen.getByText(/终端已完成登录/)).toBeInTheDocument();
+  });
+
+  it("preserves the device code through Feishu sign-in", () => {
+    searchParamsState.params = new URLSearchParams({
+      cli_device: "ABCD-EFGH",
+    });
+
+    render(<LoginPage />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole("link", { name: "飞书登录" })).toHaveAttribute(
+      "href",
+      "/auth/feishu/start?cli_device=ABCD-EFGH",
+    );
+    expect(screen.getByRole("link", { name: "开发者入口" })).toHaveAttribute(
+      "href",
+      "/login/operator?next=%2Flogin%3Fcli_device%3DABCD-EFGH",
+    );
   });
 
   it("does not flash the login form when a session is already present", () => {

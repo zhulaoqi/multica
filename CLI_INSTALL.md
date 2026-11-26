@@ -125,9 +125,11 @@ Run:
 multica login
 ```
 
-**Important:** This command opens a browser window for OAuth authentication. Tell the user:
+On a desktop, this command opens a browser window for authentication. In SSH,
+container, web-terminal, and other headless Linux sessions it prints a URL and
+code instead; open the URL in any browser and approve the matching code.
 
-> "A browser window will open for Multica login. Please complete the authentication in your browser, then come back here."
+Use `multica login --device` to select the second flow explicitly.
 
 Wait for the command to complete. It will automatically discover and watch all workspaces the user belongs to.
 
@@ -140,7 +142,8 @@ multica auth status
 Expected output should show the authenticated user and server URL.
 
 **If login fails:**
-- If no browser is available (headless environment), the user can generate a Personal Access Token at `https://multica.ai/settings?tab=tokens` and run: `multica login --token <mul_...>` (use `--token=` with an empty value to be prompted interactively).
+- Retry with `multica login --device`; the URL may be opened on another computer.
+- As a fallback, generate a Personal Access Token at `https://multica.ai/settings?tab=tokens` and run `multica login --token <mul_...>` (use `--token=` with an empty value to be prompted interactively).
 - If the server URL needs to be customized: `multica config set server_url <url>` before logging in.
 
 ---

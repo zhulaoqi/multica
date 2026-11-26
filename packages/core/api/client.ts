@@ -478,6 +478,8 @@ import {
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
   ListVCSRepositoriesResponseSchema,
   EMPTY_LIST_VCS_REPOSITORIES_RESPONSE,
+  CliDeviceApproveResponseSchema,
+  EMPTY_CLI_DEVICE_APPROVE_RESPONSE,
   RuntimeModelListRequestSchema,
   MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   SkillSchema,
@@ -1075,6 +1077,19 @@ export class ApiClient {
 
   async issueCliToken(): Promise<{ token: string }> {
     return this.fetch("/api/cli-token", { method: "POST" });
+  }
+
+  async approveCliDeviceLogin(userCode: string): Promise<{ status: string }> {
+    const raw = await this.fetch<unknown>("/api/cli-device/approve", {
+      method: "POST",
+      body: JSON.stringify({ user_code: userCode }),
+    });
+    return parseWithFallback(
+      raw,
+      CliDeviceApproveResponseSchema,
+      EMPTY_CLI_DEVICE_APPROVE_RESPONSE,
+      { endpoint: "POST /api/cli-device/approve" },
+    );
   }
 
   /**

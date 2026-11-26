@@ -103,6 +103,14 @@ import type {
   WorkspaceCreateOptions,
   WorkspaceMcpServer,
 } from "../types";
+
+export const CliDeviceApproveResponseSchema = z.object({
+  status: z.string(),
+}).loose();
+
+export const EMPTY_CLI_DEVICE_APPROVE_RESPONSE = {
+  status: "",
+};
 import type { CloudRuntimeNode } from "../runtimes/cloud-runtime";
 import type { CreateFeedbackResponse } from "../feedback/types";
 

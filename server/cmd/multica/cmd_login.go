@@ -61,6 +61,7 @@ func init() {
 	// consume the value normally.
 	loginCmd.Flags().Lookup("token").NoOptDefVal = tokenPromptSentinel
 	loginCmd.Flags().String(callbackHostFlag, "", callbackHostFlagHelp)
+	loginCmd.Flags().Bool(deviceLoginFlag, false, deviceLoginFlagHelp)
 }
 
 func runLogin(cmd *cobra.Command, args []string) error {

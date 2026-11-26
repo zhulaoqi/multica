@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { paths, useHasOnboarded } from "@multica/core/paths";
 import { api } from "@multica/core/api";
 import type { Workspace } from "@multica/core/types";
 import { BRAND } from "@multica/ui/lib/multica-brand";
+import { Button } from "@multica/ui/components/ui/button";
 import { CliCallbackError } from "@/features/auth/cli-callback-error";
 import { resolveWebPostAuthDestination } from "@/lib/post-auth-destination";
 import { LoginBackdrop } from "@/features/auth/login-backdrop";
@@ -52,6 +53,10 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
 
   const cliCallbackRaw = searchParams.get("cli_callback");
+  const cliDeviceRaw = searchParams.get("cli_device");
+  const cliDeviceCode = cliDeviceRaw?.trim().toUpperCase() ?? null;
+  const invalidCliDevice =
+    cliDeviceCode !== null && !/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(cliDeviceCode);
   // The Feishu callback sends people back here when the code exchange fails,
   // so the sign-in page can explain the failure instead of showing JSON.
   const feishuFailed = searchParams.get("error") === "feishu";
@@ -81,7 +86,7 @@ function LoginPageContent() {
       settledLoggedOutRef.current = true;
       return;
     }
-    if (cliCallbackRaw !== null) return;
+    if (cliCallbackRaw !== null || cliDeviceRaw !== null) return;
     // The developer account always lands on the console, including when the
     // session cookie arrives after the first logged-out paint.
     if (user.is_operator && !nextUrl) {
@@ -106,7 +111,7 @@ function LoginPageContent() {
       .catch(() => [] as Workspace[])
       .then((list) => resolveLoggedInDestination(qc, hasOnboarded, list))
       .then((dest) => router.replace(dest));
-  }, [isLoading, user, router, nextUrl, cliCallbackRaw, hasOnboarded, qc]);
+  }, [isLoading, user, router, nextUrl, cliCallbackRaw, cliDeviceRaw, hasOnboarded, qc]);
 
   // The CLI is waiting on a local callback. A session that already exists
   // must hand it a token; showing the login form again never completes setup.
@@ -126,12 +131,25 @@ function LoginPageContent() {
 
   if (invalidCliCallback) return <CliCallbackError />;
 
+  const loginQuery = searchParams.toString();
+  const operatorHref = loginQuery
+    ? `/login/operator?next=${encodeURIComponent(`/login?${loginQuery}`)}`
+    : "/login/operator";
+
   return (
     <FeishuSignIn
-      operatorHref={`/login/operator${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+      operatorHref={operatorHref}
       authorizingCli={authorizingCli}
       showForm={!isLoading && !user}
       feishuFailed={feishuFailed}
+      cliDeviceCode={invalidCliDevice ? null : cliDeviceCode}
+      invalidCliDevice={invalidCliDevice}
+      accountLabel={user ? user.name || user.email : null}
+      feishuHref={
+        cliDeviceCode && !invalidCliDevice
+          ? `/auth/feishu/start?cli_device=${encodeURIComponent(cliDeviceCode)}`
+          : "/auth/feishu/start"
+      }
     />
   );
 }
@@ -141,12 +159,36 @@ function FeishuSignIn({
   showForm,
   feishuFailed,
   operatorHref,
+  cliDeviceCode,
+  invalidCliDevice,
+  accountLabel,
+  feishuHref,
 }: {
   authorizingCli: boolean;
   showForm: boolean;
   feishuFailed: boolean;
   operatorHref: string;
+  cliDeviceCode: string | null;
+  invalidCliDevice: boolean;
+  accountLabel: string | null;
+  feishuHref: string;
 }) {
+  const [deviceStatus, setDeviceStatus] = useState<
+    "idle" | "approving" | "approved" | "failed"
+  >("idle");
+
+  async function approveDevice() {
+    if (!cliDeviceCode || deviceStatus === "approving") return;
+    setDeviceStatus("approving");
+    try {
+      const result = await api.approveCliDeviceLogin(cliDeviceCode);
+      if (result.status !== "approved") throw new Error("unexpected approval response");
+      setDeviceStatus("approved");
+    } catch {
+      setDeviceStatus("failed");
+    }
+  }
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05070b] text-white">
       <Image
@@ -174,7 +216,7 @@ function FeishuSignIn({
                 the API response as a page. */}
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
-              href="/auth/feishu/start"
+              href={feishuHref}
               className="mt-10 inline-flex h-12 w-full items-center justify-center bg-white text-body font-semibold text-[#0a0d12] transition-colors hover:bg-white/92"
             >
               飞书登录
@@ -188,6 +230,41 @@ function FeishuSignIn({
               开发者入口
             </a>
           </>
+        ) : invalidCliDevice ? (
+          <p role="alert" className="mt-10 text-body leading-relaxed text-[#ffb347]">
+            终端登录请求无效，请回到终端重新发起登录。
+          </p>
+        ) : cliDeviceCode ? (
+          <div className="mt-10 space-y-5">
+            <p className="text-body text-white/80">确认终端中显示的是以下验证码</p>
+            <p className="font-mono text-2xl font-semibold tracking-[0.16em]">
+              {cliDeviceCode}
+            </p>
+            <p className="text-body leading-relaxed text-white/65">
+              仅当你刚刚在自己的终端发起登录，并且验证码完全一致时才授权。
+              {accountLabel ? ` 将使用账号 ${accountLabel}。` : ""}
+            </p>
+            {deviceStatus === "approved" ? (
+              <p className="text-body text-white/80">终端已完成登录，可以关闭此页面。</p>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => void approveDevice()}
+                  disabled={deviceStatus === "approving"}
+                  aria-busy={deviceStatus === "approving" || undefined}
+                >
+                  授权此终端
+                </Button>
+                {deviceStatus === "failed" ? (
+                  <p role="alert" className="text-body leading-relaxed text-[#ffb347]">
+                    授权失败或请求已过期，请回到终端重新发起登录。
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
         ) : authorizingCli ? (
           <p className="mt-10 text-body text-white/80">正在把登录交给这台电脑</p>
         ) : null}
