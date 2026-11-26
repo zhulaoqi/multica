@@ -85,6 +85,7 @@ func TestCredentialRoutesRejectTaskToken(t *testing.T) {
 		body   any
 	}{
 		{name: "cli-token", method: http.MethodPost, path: "/api/cli-token"},
+		{name: "approve cli device", method: http.MethodPost, path: "/api/cli-device/approve", body: map[string]any{"user_code": "ABCD-EFGH"}},
 		{name: "create pat", method: http.MethodPost, path: "/api/tokens", body: map[string]any{"name": "mul-8154-escalation"}},
 		{name: "list pats", method: http.MethodGet, path: "/api/tokens"},
 		{name: "revoke pat", method: http.MethodDelete, path: "/api/tokens/" + patID},
@@ -108,6 +109,38 @@ func TestCredentialRoutesRejectTaskToken(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+	})
+	t.Run("cli device route boundaries", func(t *testing.T) {
+		start := do(t, http.MethodPost, "/api/cli-device/start", "", map[string]any{})
+		defer start.Body.Close()
+		if start.StatusCode != http.StatusCreated {
+			t.Fatalf("start status = %d, want 201", start.StatusCode)
+		}
+		var session struct {
+			DeviceCode string `json:"device_code"`
+			UserCode   string `json:"user_code"`
+		}
+		if err := json.NewDecoder(start.Body).Decode(&session); err != nil {
+			t.Fatalf("decode start response: %v", err)
+		}
+
+		unauthenticated := do(t, http.MethodPost, "/api/cli-device/approve", "", map[string]string{"user_code": session.UserCode})
+		unauthenticated.Body.Close()
+		if unauthenticated.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("unauthenticated approve status = %d, want 401", unauthenticated.StatusCode)
+		}
+
+		approve := do(t, http.MethodPost, "/api/cli-device/approve", testToken, map[string]string{"user_code": session.UserCode})
+		approve.Body.Close()
+		if approve.StatusCode != http.StatusOK {
+			t.Fatalf("human approve status = %d, want 200", approve.StatusCode)
+		}
+
+		poll := do(t, http.MethodPost, "/api/cli-device/token", "", map[string]string{"device_code": session.DeviceCode})
+		defer poll.Body.Close()
+		if poll.StatusCode != http.StatusOK {
+			t.Fatalf("public poll status = %d, want 200", poll.StatusCode)
 		}
 	})
 	t.Run("jwt create pat", func(t *testing.T) {
