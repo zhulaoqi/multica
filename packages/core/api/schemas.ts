@@ -72,6 +72,7 @@ import type {
   ListIssuesResponse,
   ListGitHubInstallationsResponse,
   ListGitHubRepositoriesResponse,
+  ListVCSRepositoriesResponse,
   ListLabelsResponse,
   ListWebhookDeliveriesResponse,
   IssueStatusEntry,
@@ -402,6 +403,27 @@ export const ListGitHubRepositoriesResponseSchema = z.object({
 export const EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE: ListGitHubRepositoriesResponse = {
   repositories: [],
   total_count: 0,
+  next_page: null,
+};
+
+export const VCSRepositorySchema = z.object({
+  id: z.number(),
+  full_name: z.string(),
+  description: z.string().optional().default(""),
+  clone_url: z.string(),
+  html_url: z.string(),
+  private: z.boolean(),
+  archived: z.boolean(),
+  default_branch: z.string().optional().default(""),
+}).loose();
+
+export const ListVCSRepositoriesResponseSchema = z.object({
+  repositories: z.array(VCSRepositorySchema).default([]),
+  next_page: z.number().nullable().optional().default(null),
+}).loose();
+
+export const EMPTY_LIST_VCS_REPOSITORIES_RESPONSE: ListVCSRepositoriesResponse = {
+  repositories: [],
   next_page: null,
 };
 

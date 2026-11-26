@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -202,6 +204,28 @@ func normalizeGitLabPipelineState(s string) string {
 	}
 }
 
+func gitLabHTTPClient() *http.Client {
+	client := *httpClient
+	baseRedirectCheck := client.CheckRedirect
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) > 0 {
+			origin := via[0].URL
+			if !strings.EqualFold(next.URL.Scheme, origin.Scheme) ||
+				!strings.EqualFold(next.URL.Host, origin.Host) {
+				return http.ErrUseLastResponse
+			}
+		}
+		if baseRedirectCheck != nil {
+			return baseRedirectCheck(next, via)
+		}
+		if len(via) >= 10 {
+			return fmt.Errorf("gitlab: stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &client
+}
+
 func (gitlabProvider) ValidateToken(ctx context.Context, instanceURL, token string) (Account, error) {
 	endpoint := NormalizeInstanceURL(instanceURL) + "/api/v4/user"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -211,7 +235,7 @@ func (gitlabProvider) ValidateToken(ctx context.Context, instanceURL, token stri
 	req.Header.Set("PRIVATE-TOKEN", token)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := httpClient.Do(req)
+	resp, err := gitLabHTTPClient().Do(req)
 	if err != nil {
 		return Account{}, fmt.Errorf("gitlab: request: %w", err)
 	}
@@ -234,6 +258,79 @@ func (gitlabProvider) ValidateToken(ctx context.Context, instanceURL, token stri
 		return Account{}, errors.New("gitlab: user response missing username")
 	}
 	return Account{Login: u.Username}, nil
+}
+
+func (gitlabProvider) ListRepositories(ctx context.Context, instanceURL, token string, opts RepositoryListOptions) (RepositoryPage, error) {
+	page := opts.Page
+	if page < 1 {
+		page = 1
+	}
+	perPage := opts.PerPage
+	if perPage < 1 || perPage > 100 {
+		perPage = 50
+	}
+	query := url.Values{
+		"membership": {"true"},
+		"simple":     {"true"},
+		"order_by":   {"last_activity_at"},
+		"sort":       {"desc"},
+		"page":       {strconv.Itoa(page)},
+		"per_page":   {strconv.Itoa(perPage)},
+	}
+	if search := strings.TrimSpace(opts.Search); search != "" {
+		query.Set("search", search)
+	}
+	endpoint := NormalizeInstanceURL(instanceURL) + "/api/v4/projects?" + query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return RepositoryPage{}, fmt.Errorf("gitlab: build projects request: %w", err)
+	}
+	req.Header.Set("PRIVATE-TOKEN", token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := gitLabHTTPClient().Do(req)
+	if err != nil {
+		return RepositoryPage{}, fmt.Errorf("gitlab: list projects: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return RepositoryPage{}, ErrUnauthorized
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return RepositoryPage{}, fmt.Errorf("gitlab: GET /projects: status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	var rows []struct {
+		ID                int64  `json:"id"`
+		PathWithNamespace string `json:"path_with_namespace"`
+		Description       string `json:"description"`
+		HTTPURLToRepo     string `json:"http_url_to_repo"`
+		WebURL            string `json:"web_url"`
+		Visibility        string `json:"visibility"`
+		Archived          bool   `json:"archived"`
+		DefaultBranch     string `json:"default_branch"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&rows); err != nil {
+		return RepositoryPage{}, fmt.Errorf("gitlab: decode projects: %w", err)
+	}
+	repositories := make([]Repository, 0, len(rows))
+	for _, row := range rows {
+		if row.ID == 0 || row.PathWithNamespace == "" || row.HTTPURLToRepo == "" {
+			continue
+		}
+		repositories = append(repositories, Repository{
+			ID:            row.ID,
+			FullName:      row.PathWithNamespace,
+			Description:   row.Description,
+			CloneURL:      row.HTTPURLToRepo,
+			HTMLURL:       row.WebURL,
+			Private:       row.Visibility != "public",
+			Archived:      row.Archived,
+			DefaultBranch: row.DefaultBranch,
+		})
+	}
+	nextPage, _ := strconv.Atoi(strings.TrimSpace(resp.Header.Get("X-Next-Page")))
+	return RepositoryPage{Repositories: repositories, NextPage: nextPage}, nil
 }
 
 // splitNamespace splits a GitLab path_with_namespace ("group/subgroup/repo")

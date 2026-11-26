@@ -196,6 +196,7 @@ import type {
   ListVCSConnectionsResponse,
   ConnectVCSRequest,
   ConnectVCSResponse,
+  ListVCSRepositoriesResponse,
   ListLarkInstallationsResponse,
   BeginLarkInstallResponse,
   LarkInstallStatusResponse,
@@ -475,6 +476,8 @@ import {
   EMPTY_GITHUB_CONNECT_RESPONSE,
   EMPTY_LIST_GITHUB_INSTALLATIONS_RESPONSE,
   EMPTY_LIST_GITHUB_REPOSITORIES_RESPONSE,
+  ListVCSRepositoriesResponseSchema,
+  EMPTY_LIST_VCS_REPOSITORIES_RESPONSE,
   RuntimeModelListRequestSchema,
   MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   SkillSchema,
@@ -5359,6 +5362,27 @@ export class ApiClient {
   // VCS integration (Forgejo / Gitea / GitLab)
   async listVCSConnections(workspaceId: string): Promise<ListVCSConnectionsResponse> {
     return this.fetch(`/api/workspaces/${workspaceId}/vcs/connections`);
+  }
+
+  async listVCSConnectionRepositories(
+    workspaceId: string,
+    connectionId: string,
+    params: { page?: number; per_page?: number; search?: string } = {},
+  ): Promise<ListVCSRepositoriesResponse> {
+    const search = new URLSearchParams();
+    if (params.page !== undefined) search.set("page", String(params.page));
+    if (params.per_page !== undefined) search.set("per_page", String(params.per_page));
+    if (params.search?.trim()) search.set("search", params.search.trim());
+    const suffix = search.size > 0 ? `?${search.toString()}` : "";
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/vcs/connections/${connectionId}/repositories${suffix}`,
+    );
+    return parseWithFallback(
+      raw,
+      ListVCSRepositoriesResponseSchema,
+      EMPTY_LIST_VCS_REPOSITORIES_RESPONSE,
+      { endpoint: "GET /api/workspaces/:id/vcs/connections/:connectionId/repositories" },
+    );
   }
 
   async connectVCS(

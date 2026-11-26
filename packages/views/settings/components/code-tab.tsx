@@ -81,6 +81,7 @@ export function CodeTab() {
   const [connecting, setConnecting] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [browseVCSConnectionId, setBrowseVCSConnectionId] = useState<string | null>(null);
 
   async function persistSetting(key: GitHubSettingsKey, next: boolean) {
     if (!workspace || savingKey) return;
@@ -255,11 +256,14 @@ export function CodeTab() {
               </span>
             ) : null}
           </SettingsRow>
-          <VCSConnectionRows />
+          <VCSConnectionRows onBrowseRepositories={setBrowseVCSConnectionId} />
         </SettingsCard>
       </SettingsSection>
 
-      <RepositoriesSection />
+      <RepositoriesSection
+        browseVCSConnectionId={browseVCSConnectionId}
+        onVCSBrowseHandled={() => setBrowseVCSConnectionId(null)}
+      />
 
       <SettingsSection
         title={t(($) => $.code.pr_linking_title)}

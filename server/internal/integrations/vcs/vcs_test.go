@@ -217,6 +217,97 @@ func TestValidateToken(t *testing.T) {
 	}
 }
 
+func TestGitLabListRepositories(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Path != "/api/v4/projects" {
+			t.Errorf("path = %q, want /api/v4/projects", r.URL.Path)
+		}
+		if r.Header.Get("PRIVATE-TOKEN") != "tok" {
+			t.Errorf("PRIVATE-TOKEN = %q", r.Header.Get("PRIVATE-TOKEN"))
+		}
+		if r.URL.Query().Get("membership") != "true" ||
+			r.URL.Query().Get("simple") != "true" ||
+			r.URL.Query().Get("search") != "data" ||
+			r.URL.Query().Get("page") != "2" {
+			t.Errorf("query = %q", r.URL.RawQuery)
+		}
+		w.Header().Set("X-Next-Page", "3")
+		_, _ = w.Write([]byte(`[{
+			"id": 42,
+			"path_with_namespace": "group/sub/dataeye",
+			"description": "Data platform",
+			"http_url_to_repo": "https://gitlab.example/group/sub/dataeye.git",
+			"web_url": "https://gitlab.example/group/sub/dataeye",
+			"visibility": "private",
+			"archived": false,
+			"default_branch": "main"
+		}]`))
+	}))
+	defer srv.Close()
+
+	provider, _ := For("gitlab")
+	browser, ok := provider.(RepositoryBrowser)
+	if !ok {
+		t.Fatal("GitLab provider must support repository browsing")
+	}
+	page, err := browser.ListRepositories(context.Background(), srv.URL, "tok", RepositoryListOptions{
+		Page:    2,
+		PerPage: 50,
+		Search:  "data",
+	})
+	if err != nil {
+		t.Fatalf("ListRepositories: %v", err)
+	}
+	if requests != 1 || page.NextPage != 3 || len(page.Repositories) != 1 {
+		t.Fatalf("page = %+v, requests = %d", page, requests)
+	}
+	repo := page.Repositories[0]
+	if repo.ID != 42 || repo.FullName != "group/sub/dataeye" ||
+		repo.CloneURL != "https://gitlab.example/group/sub/dataeye.git" ||
+		!repo.Private || repo.Archived {
+		t.Fatalf("repository = %+v", repo)
+	}
+}
+
+func TestGitLabListRepositoriesRejectsUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	provider, _ := For("gitlab")
+	browser := provider.(RepositoryBrowser)
+	_, err := browser.ListRepositories(context.Background(), srv.URL, "tok", RepositoryListOptions{})
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("error = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestGitLabListRepositoriesDoesNotForwardTokenAcrossRedirect(t *testing.T) {
+	var leakedToken string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leakedToken = r.Header.Get("PRIVATE-TOKEN")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer target.Close()
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer source.Close()
+
+	provider, _ := For("gitlab")
+	browser := provider.(RepositoryBrowser)
+	if _, err := browser.ListRepositories(context.Background(), source.URL, "tok", RepositoryListOptions{}); err == nil {
+		t.Fatal("cross-origin redirect must not be followed")
+	}
+	if leakedToken != "" {
+		t.Fatalf("PRIVATE-TOKEN leaked across redirect: %q", leakedToken)
+	}
+}
+
 // GitLab sends timestamps as "2017-09-20 08:31:45 UTC" (not RFC3339). The
 // shared handler parser is RFC3339-only, so without normalization every GitLab
 // timestamp was dropped and replaced with ingestion time — defeating the

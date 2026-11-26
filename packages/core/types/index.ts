@@ -239,6 +239,8 @@ export type {
   ListVCSConnectionsResponse,
   ConnectVCSRequest,
   ConnectVCSResponse,
+  VCSRepository,
+  ListVCSRepositoriesResponse,
 } from "./vcs";
 export type {
   LarkInstallation,

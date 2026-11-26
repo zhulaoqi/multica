@@ -11,6 +11,61 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("ApiClient VCS repository browsing", () => {
+  it("sends pagination and search parameters without exposing a token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          repositories: [
+            {
+              id: 1,
+              full_name: "acme/app",
+              description: "",
+              clone_url: "https://gitlab.example.com/acme/app.git",
+              html_url: "https://gitlab.example.com/acme/app",
+              private: true,
+              archived: false,
+              default_branch: "main",
+            },
+          ],
+          next_page: 3,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("https://api.example.test");
+
+    const result = await client.listVCSConnectionRepositories("ws-1", "vcs-1", {
+      page: 2,
+      per_page: 50,
+      search: " app ",
+    });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.example.test/api/workspaces/ws-1/vcs/connections/vcs-1/repositories?page=2&per_page=50&search=app",
+    );
+    expect(result.next_page).toBe(3);
+  });
+
+  it("falls back to an empty page for a malformed response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ repositories: "invalid" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const client = new ApiClient("https://api.example.test");
+
+    await expect(
+      client.listVCSConnectionRepositories("ws-1", "vcs-1"),
+    ).resolves.toEqual({ repositories: [], next_page: null });
+  });
+});
+
 describe("ApiClient status reorder", () => {
   it("opts into built-in ordering and tolerates malformed responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ statuses: "invalid" }), {

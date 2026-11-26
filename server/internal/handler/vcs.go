@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -43,6 +44,17 @@ type VCSConnectionResponse struct {
 type VCSConnectResponse struct {
 	VCSConnectionResponse
 	WebhookSecret string `json:"webhook_secret"`
+}
+
+type VCSRepositoryResponse struct {
+	ID            int64  `json:"id"`
+	FullName      string `json:"full_name"`
+	Description   string `json:"description"`
+	CloneURL      string `json:"clone_url"`
+	HTMLURL       string `json:"html_url"`
+	Private       bool   `json:"private"`
+	Archived      bool   `json:"archived"`
+	DefaultBranch string `json:"default_branch"`
 }
 
 const vcsWebhookPathPrefix = "/api/webhooks/vcs/"
@@ -144,6 +156,82 @@ func (h *Handler) ListVCSConnections(w http.ResponseWriter, r *http.Request) {
 		"available":   true,
 		"configured":  h.isVCSConfigured(),
 		"can_manage":  canManage,
+	})
+}
+
+// ListVCSConnectionRepositories lists repositories visible to one stored
+// token. The token stays server-side and the connection is fenced to the
+// workspace in the route before any provider request is made.
+func (h *Handler) ListVCSConnectionRepositories(w http.ResponseWriter, r *http.Request) {
+	if !h.isVCSAvailable() || !h.isVCSConfigured() {
+		writeFeatureDisabled(w, "vcs_not_configured", "vcs integration not configured")
+		return
+	}
+	workspaceID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace id")
+	if !ok {
+		return
+	}
+	connectionID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "connectionId"), "connection id")
+	if !ok {
+		return
+	}
+	connection, err := h.Queries.GetVCSConnectionByID(r.Context(), connectionID)
+	if err != nil || connection.WorkspaceID != workspaceID {
+		writeError(w, http.StatusNotFound, "vcs connection not found")
+		return
+	}
+	provider, ok := vcs.For(connection.Provider)
+	if !ok {
+		writeError(w, http.StatusConflict, "vcs provider is not supported")
+		return
+	}
+	browser, ok := provider.(vcs.RepositoryBrowser)
+	if !ok {
+		writeErrorCode(w, http.StatusConflict, "vcs_repository_browse_unsupported", "this provider does not support repository browsing")
+		return
+	}
+	token, err := h.openVCSSecret(connection.AccessTokenEncrypted)
+	if err != nil {
+		slog.Warn("vcs: decrypt repository browse token failed", "connection_id", uuidToString(connection.ID), "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to read vcs credentials")
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	result, err := browser.ListRepositories(r.Context(), connection.InstanceUrl, token, vcs.RepositoryListOptions{
+		Page:    page,
+		PerPage: perPage,
+		Search:  r.URL.Query().Get("search"),
+	})
+	if err != nil {
+		if errors.Is(err, vcs.ErrUnauthorized) {
+			writeErrorCode(w, http.StatusForbidden, "vcs_repository_browse_forbidden", "the access token cannot list repositories; grant read_api access")
+			return
+		}
+		slog.Warn("vcs: list repositories failed", "connection_id", uuidToString(connection.ID), "provider", connection.Provider, "err", err)
+		writeError(w, http.StatusBadGateway, "failed to list vcs repositories")
+		return
+	}
+	repositories := make([]VCSRepositoryResponse, 0, len(result.Repositories))
+	for _, repository := range result.Repositories {
+		repositories = append(repositories, VCSRepositoryResponse{
+			ID:            repository.ID,
+			FullName:      repository.FullName,
+			Description:   repository.Description,
+			CloneURL:      repository.CloneURL,
+			HTMLURL:       repository.HTMLURL,
+			Private:       repository.Private,
+			Archived:      repository.Archived,
+			DefaultBranch: repository.DefaultBranch,
+		})
+	}
+	var nextPage any
+	if result.NextPage > 0 {
+		nextPage = result.NextPage
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"repositories": repositories,
+		"next_page":    nextPage,
 	})
 }
 

@@ -50,3 +50,19 @@ export interface ConnectVCSResponse extends VCSConnection {
    * afterwards (stored encrypted); reconnecting rotates it. */
   webhook_secret: string;
 }
+
+export interface VCSRepository {
+  id: number;
+  full_name: string;
+  description: string;
+  clone_url: string;
+  html_url: string;
+  private: boolean;
+  archived: boolean;
+  default_branch: string;
+}
+
+export interface ListVCSRepositoriesResponse {
+  repositories: VCSRepository[];
+  next_page: number | null;
+}

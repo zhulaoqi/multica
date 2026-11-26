@@ -66,7 +66,11 @@ const PROVIDER_OPTIONS = PROVIDERS.map((p) => ({
  * to connect another. Connecting and rotating both end on the one-time webhook
  * secret, shown in a dialog the user has to dismiss.
  */
-export function VCSConnectionRows() {
+export function VCSConnectionRows({
+  onBrowseRepositories,
+}: {
+  onBrowseRepositories?: (connectionId: string) => void;
+} = {}) {
   const { t } = useT("settings");
   const wsId = useWorkspaceId();
   const qc = useQueryClient();
@@ -82,6 +86,7 @@ export function VCSConnectionRows() {
   const [token, setToken] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [webhook, setWebhook] = useState<ConnectVCSResponse | null>(null);
+  const [browseAfterWebhook, setBrowseAfterWebhook] = useState<string | null>(null);
   const [rotateTarget, setRotateTarget] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -101,6 +106,7 @@ export function VCSConnectionRows() {
       setToken("");
       setConnectOpen(false);
       setWebhook(resp);
+      setBrowseAfterWebhook(resp.provider === "gitlab" ? resp.id : null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t(($) => $.vcs.toast_connect_failed));
     } finally {
@@ -116,11 +122,19 @@ export function VCSConnectionRows() {
       await qc.invalidateQueries({ queryKey: ["vcs", wsId] });
       setRotateTarget(null);
       setWebhook(resp);
+      setBrowseAfterWebhook(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t(($) => $.vcs.toast_rotate_failed));
     } finally {
       setRotating(false);
     }
+  }
+
+  function closeWebhookDialog() {
+    const connectionId = browseAfterWebhook;
+    setWebhook(null);
+    setBrowseAfterWebhook(null);
+    if (connectionId) onBrowseRepositories?.(connectionId);
   }
 
   async function handleDelete() {
@@ -353,7 +367,7 @@ export function VCSConnectionRows() {
       <Dialog
         open={!!webhook}
         onOpenChange={(open) => {
-          if (!open) setWebhook(null);
+          if (!open) closeWebhookDialog();
         }}
       >
         <DialogContent className="sm:max-w-lg">
@@ -382,7 +396,7 @@ export function VCSConnectionRows() {
             </div>
           ) : null}
           <DialogFooter>
-            <Button onClick={() => setWebhook(null)}>{t(($) => $.vcs.webhook_done)}</Button>
+            <Button onClick={closeWebhookDialog}>{t(($) => $.vcs.webhook_done)}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

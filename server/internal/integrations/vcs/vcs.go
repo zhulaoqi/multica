@@ -112,6 +112,37 @@ type Account struct {
 	Login string
 }
 
+// Repository is the provider-neutral shape used by workspace repository
+// pickers. CloneURL is the HTTPS URL because stored VCS credentials are
+// injected for HTTPS clones by the daemon.
+type Repository struct {
+	ID            int64
+	FullName      string
+	Description   string
+	CloneURL      string
+	HTMLURL       string
+	Private       bool
+	Archived      bool
+	DefaultBranch string
+}
+
+type RepositoryListOptions struct {
+	Page    int
+	PerPage int
+	Search  string
+}
+
+type RepositoryPage struct {
+	Repositories []Repository
+	NextPage     int
+}
+
+// RepositoryBrowser is optional: providers implement it only when their API
+// can enumerate repositories available to the stored token.
+type RepositoryBrowser interface {
+	ListRepositories(context.Context, string, string, RepositoryListOptions) (RepositoryPage, error)
+}
+
 // Provider is the per-provider adapter. Implementations are stateless and cheap
 // to construct; the registry holds one instance per kind.
 type Provider interface {

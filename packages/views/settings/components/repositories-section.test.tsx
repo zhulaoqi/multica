@@ -32,6 +32,9 @@ const githubRef = vi.hoisted(() => ({
 const githubQueryStateRef = vi.hoisted(() => ({
   current: { isPending: false, isFetching: false },
 }));
+const vcsRef = vi.hoisted(() => ({
+  current: { connections: [] as Array<Record<string, unknown>> },
+}));
 const githubRepositoriesRef = vi.hoisted(() => ({
   current: [] as {
     id: number;
@@ -49,7 +52,10 @@ const searchParamsRef = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: githubRef.current, ...githubQueryStateRef.current }),
+  useQuery: (options: { queryKey?: readonly unknown[] }) =>
+    options.queryKey?.[0] === "vcs"
+      ? { data: vcsRef.current, isPending: false, isFetching: false }
+      : { data: githubRef.current, ...githubQueryStateRef.current },
   useInfiniteQuery: () => ({
     data: {
       pages: [
@@ -125,6 +131,7 @@ beforeEach(() => {
     can_manage: true,
   };
   githubQueryStateRef.current = { isPending: false, isFetching: false };
+  vcsRef.current = { connections: [] };
   githubRepositoriesRef.current = [];
   searchParamsRef.current = new URLSearchParams("tab=code");
   mockUpdateWorkspace.mockImplementation(async (_id: string, payload: object) => ({
@@ -325,6 +332,77 @@ describe("RepositoriesSection", () => {
         ],
       });
     });
+  });
+
+  it("opens GitLab scanning and imports a selected repository", async () => {
+    workspaceRef.current = { ...workspaceRef.current, repos: [] };
+    vcsRef.current.connections = [
+      {
+        id: "vcs-1",
+        provider: "gitlab",
+        instance_url: "https://gitlab.example.com",
+        account_login: "bot",
+      },
+    ];
+    githubRepositoriesRef.current = [
+      {
+        id: 7,
+        full_name: "acme/app",
+        html_url: "https://gitlab.example.com/acme/app",
+        clone_url: "https://gitlab.example.com/acme/app.git",
+        description: "Application",
+        private: true,
+        archived: false,
+        default_branch: "main",
+      },
+    ];
+    const user = userEvent.setup();
+    render(<RepositoriesSection />, { wrapper: Wrapper });
+
+    await openAddMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Choose from GitLab" }));
+    expect(
+      await screen.findByRole("heading", { name: "Choose GitLab repositories" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Add repositories" }));
+
+    await waitFor(() => {
+      expect(mockUpdateWorkspace).toHaveBeenCalledWith("workspace-1", {
+        repos: [
+          {
+            url: "https://gitlab.example.com/acme/app.git",
+            description: "Application",
+          },
+        ],
+      });
+    });
+  });
+
+  it("opens GitLab scanning after a new connection finishes setup", async () => {
+    vcsRef.current.connections = [
+      {
+        id: "vcs-1",
+        provider: "gitlab",
+        instance_url: "https://gitlab.example.com",
+        account_login: "bot",
+      },
+    ];
+    const onHandled = vi.fn();
+
+    render(
+      <RepositoriesSection
+        browseVCSConnectionId="vcs-1"
+        onVCSBrowseHandled={onHandled}
+      />,
+      { wrapper: Wrapper },
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Choose GitLab repositories" }),
+    ).toBeInTheDocument();
+    expect(onHandled).toHaveBeenCalled();
   });
 
   it("opens the picker after returning from a GitHub connection", async () => {

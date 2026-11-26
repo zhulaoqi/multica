@@ -63,6 +63,7 @@ import {
   githubInstallationRepositoriesOptions,
   githubInstallationsOptions,
 } from "@multica/core/github";
+import { vcsConnectionsOptions } from "@multica/core/vcs/queries";
 import { api } from "@multica/core/api";
 import type {
   GitHubRepository,
@@ -73,51 +74,12 @@ import { useNavigation } from "../../navigation";
 import { useT } from "../../i18n";
 import { SettingsCard, SettingsSection } from "./settings-layout";
 import { GitHubMark } from "./github-mark";
+import { repositoryIdentity } from "./repository-identity";
+import { VCSRepositoryPicker } from "./vcs-repository-picker";
+
+export { repositoryIdentity } from "./repository-identity";
 
 const EMPTY_REPOSITORIES: WorkspaceRepo[] = [];
-
-/** Default ports the URL parser keeps for schemes it does not know. */
-const DEFAULT_PORTS: Record<string, string> = { "ssh:": "22", "git:": "9418" };
-
-/**
- * Host + path identity of a clone URL, so HTTPS and SSH forms of the same
- * repository compare equal. Path casing is preserved: hosts are
- * case-insensitive, repository paths are not guaranteed to be. A non-default
- * port stays in the identity: it can name a different server, and treating
- * two instances as one would block adding the second.
- */
-export function repositoryIdentity(rawURL: string): string | null {
-  const value = rawURL.trim();
-  if (!value) return null;
-
-  let host = "";
-  let path = "";
-  if (!value.includes("://")) {
-    const scpLike = value.match(/^(?:[^@\s/]+@)?([^:\s/]+):(.+)$/);
-    if (scpLike) {
-      host = scpLike[1] ?? "";
-      path = scpLike[2] ?? "";
-    }
-  }
-  if (!host) {
-    try {
-      const parsed = new URL(value);
-      host = parsed.hostname;
-      if (parsed.port && parsed.port !== DEFAULT_PORTS[parsed.protocol]) {
-        host = `${host}:${parsed.port}`;
-      }
-      path = parsed.pathname;
-    } catch {
-      return null;
-    }
-  }
-
-  const normalizedPath = path
-    .replace(/^\/+|\/+$/g, "")
-    .replace(/\.git$/i, "");
-  if (!host || !normalizedPath) return null;
-  return `${host.toLowerCase()}/${normalizedPath}`;
-}
 
 interface RepositoryDraft {
   /** Index being edited, or null when adding. */
@@ -131,7 +93,13 @@ interface RepositoryDraft {
  * and editing happen in a dialog that saves on confirm, so a half-typed URL
  * is never persisted and every change is one deliberate request.
  */
-export function RepositoriesSection() {
+export function RepositoriesSection({
+  browseVCSConnectionId = null,
+  onVCSBrowseHandled,
+}: {
+  browseVCSConnectionId?: string | null;
+  onVCSBrowseHandled?: () => void;
+} = {}) {
   const { t } = useT("settings");
   const workspace = useCurrentWorkspace();
   const wsId = useWorkspaceId();
@@ -151,6 +119,10 @@ export function RepositoriesSection() {
     Map<number, GitHubRepository>
   >(new Map());
   const [repositorySearch, setRepositorySearch] = useState("");
+  const [vcsPickerOpen, setVCSPickerOpen] = useState(false);
+  const [selectedVCSConnectionId, setSelectedVCSConnectionId] = useState<string | null>(
+    null,
+  );
 
   const {
     data: githubData,
@@ -167,6 +139,14 @@ export function RepositoriesSection() {
   const githubConnectConfigured = githubData?.configured === true;
   const githubBrowseConfigured =
     githubData?.repository_browse_configured === true;
+  const { data: vcsData } = useQuery({
+    ...vcsConnectionsOptions(wsId),
+    enabled: !!wsId && canManageWorkspace,
+  });
+  const gitlabConnections = useMemo(
+    () => (vcsData?.connections ?? []).filter((connection) => connection.provider === "gitlab"),
+    [vcsData?.connections],
+  );
   const githubRepositoriesQuery = useInfiniteQuery({
     ...githubInstallationRepositoriesOptions(wsId, selectedInstallationID),
     enabled:
@@ -175,6 +155,18 @@ export function RepositoriesSection() {
       githubBrowseConfigured &&
       !!selectedInstallationID,
   });
+
+  useEffect(() => {
+    if (
+      !browseVCSConnectionId ||
+      !gitlabConnections.some((connection) => connection.id === browseVCSConnectionId)
+    ) {
+      return;
+    }
+    setSelectedVCSConnectionId(browseVCSConnectionId);
+    setVCSPickerOpen(true);
+    onVCSBrowseHandled?.();
+  }, [browseVCSConnectionId, gitlabConnections, onVCSBrowseHandled]);
   const githubRepositories = useMemo(
     () =>
       githubRepositoriesQuery.data?.pages.flatMap(
@@ -415,6 +407,17 @@ export function RepositoriesSection() {
                   ) : null}
                 </span>
               </DropdownMenuItem>
+              {gitlabConnections.length > 0 ? (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedVCSConnectionId(gitlabConnections[0]?.id ?? null);
+                    setVCSPickerOpen(true);
+                  }}
+                >
+                  <FolderGit2 />
+                  {t(($) => $.repositories.choose_from_gitlab)}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 onClick={() => setDraft({ index: null, url: "", description: "" })}
               >
@@ -770,6 +773,19 @@ export function RepositoriesSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VCSRepositoryPicker
+        open={vcsPickerOpen}
+        workspaceId={wsId}
+        connections={gitlabConnections}
+        initialConnectionId={selectedVCSConnectionId}
+        existingUrls={repositories.map((repository) => repository.url)}
+        onOpenChange={(open) => {
+          setVCSPickerOpen(open);
+          if (!open) setSelectedVCSConnectionId(null);
+        }}
+        onImport={(additions) => persist([...repositories, ...additions])}
+      />
 
       <AlertDialog
         open={pendingRemovalIndex !== null}

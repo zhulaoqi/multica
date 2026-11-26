@@ -179,6 +179,60 @@ func TestRotateVCSConnectionWebhookHonorsDeploymentSwitch(t *testing.T) {
 	}
 }
 
+func TestListVCSConnectionRepositories(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects" || r.Header.Get("PRIVATE-TOKEN") != "tok" {
+			t.Fatalf("unexpected upstream request: %s token=%q", r.URL.String(), r.Header.Get("PRIVATE-TOKEN"))
+		}
+		w.Header().Set("X-Next-Page", "2")
+		_, _ = w.Write([]byte(`[{
+			"id":7,
+			"path_with_namespace":"gst/dataeye",
+			"http_url_to_repo":"https://gitlab.example/gst/dataeye.git",
+			"web_url":"https://gitlab.example/gst/dataeye",
+			"visibility":"private",
+			"default_branch":"main"
+		}]`))
+	}))
+	defer provider.Close()
+
+	ctx := context.Background()
+	box := withVCSBox(t)
+	connID := seedVCSConnection(t, ctx, box, "gitlab", provider.URL)
+	t.Cleanup(func() { cleanupVCS(context.Background(), "") })
+
+	req := vcsHandlerRequest(
+		http.MethodGet,
+		"/api/workspaces/"+testWorkspaceID+"/vcs/connections/"+connID+"/repositories?page=1&per_page=50",
+		nil,
+		connID,
+	)
+	var resp struct {
+		Repositories []VCSRepositoryResponse `json:"repositories"`
+		NextPage     int                     `json:"next_page"`
+	}
+	testutil.Call(t, testHandler.ListVCSConnectionRepositories, req).Want(http.StatusOK).JSON(&resp)
+	if resp.NextPage != 2 || len(resp.Repositories) != 1 {
+		t.Fatalf("response = %+v", resp)
+	}
+	if repo := resp.Repositories[0]; repo.FullName != "gst/dataeye" ||
+		repo.CloneURL != "https://gitlab.example/gst/dataeye.git" || !repo.Private {
+		t.Fatalf("repository = %+v", repo)
+	}
+}
+
+func TestListVCSConnectionRepositoriesRejectsCrossWorkspaceConnection(t *testing.T) {
+	ctx := context.Background()
+	box := withVCSBox(t)
+	connID := seedVCSConnection(t, ctx, box, "gitlab", "https://gitlab.example")
+	t.Cleanup(func() { cleanupVCS(context.Background(), "") })
+
+	req := vcsHandlerRequest(http.MethodGet, "/api/workspaces/other/vcs/connections/"+connID+"/repositories", nil, connID)
+	rctx := chi.RouteContext(req.Context())
+	rctx.URLParams.Add("id", "11111111-1111-4111-8111-111111111111")
+	testutil.Call(t, testHandler.ListVCSConnectionRepositories, req).Want(http.StatusNotFound)
+}
+
 // TestConnectVCSReportsUntrustedCertificate covers a Gitea behind a private or
 // self-signed CA: the connect must fail as a certificate problem, not as an
 // unreachable instance, and must not store a connection.

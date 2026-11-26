@@ -51,14 +51,18 @@ beforeEach(() => {
 
 describe("VCSConnectionRows", () => {
   it("connects an instance from a dialog and then shows the one-time webhook secret", async () => {
+    const onBrowseRepositories = vi.fn();
     mockConnect.mockResolvedValue({
       ...CONNECTION,
+      provider: "gitlab",
       webhook_url: "https://api.example/webhooks/vcs/vcs-1",
       webhook_path: "/webhooks/vcs/vcs-1",
       webhook_secret: "s3cret",
     });
     const user = userEvent.setup();
-    renderWithI18n(<VCSConnectionRows />);
+    renderWithI18n(
+      <VCSConnectionRows onBrowseRepositories={onBrowseRepositories} />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Connect" }));
     const form = await screen.findByRole("dialog");
@@ -77,6 +81,7 @@ describe("VCSConnectionRows", () => {
     expect(within(webhook).getByDisplayValue("s3cret")).toBeInTheDocument();
     await user.click(within(webhook).getByRole("button", { name: "I've saved it" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onBrowseRepositories).toHaveBeenCalledWith("vcs-1");
   });
 
   it("copies the webhook secret when the clipboard API is missing", async () => {

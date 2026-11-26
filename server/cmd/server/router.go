@@ -1982,6 +1982,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Delete("/github/installations/{installationId}", h.DeleteGitHubInstallation)
 					// VCS connect / disconnect / webhook regeneration (admin-only).
 					r.Post("/vcs/connections", h.ConnectVCS)
+					r.Get("/vcs/connections/{connectionId}/repositories", h.ListVCSConnectionRepositories)
 					r.Put("/qoder", h.SaveQoderConnection)
 					r.Post("/qoder/check", h.CheckQoderConnection)
 					r.Post("/qoder/environments", h.ListQoderEnvironments)
