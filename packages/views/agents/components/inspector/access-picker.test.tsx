@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from "@testing-library/react";
 import type {
   AgentInvocationTarget,
   MemberWithUser,
@@ -143,6 +149,19 @@ describe("AccessPicker owner-only editing (MUL-3963)", () => {
       permission_mode: "public_to",
       invocation_targets: [{ target_type: "workspace" }],
     });
+  });
+
+  it("leaves a rejected save recoverable without an unhandled promise", async () => {
+    const onChange = vi.fn().mockRejectedValue(new Error("save failed"));
+    renderPicker({ canEdit: true, onChange });
+
+    fireEvent.click(screen.getByRole("radio", { name: /^Entire workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled(),
+    );
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   // Regression: GH #4915. Older self-host backends / stale caches may return

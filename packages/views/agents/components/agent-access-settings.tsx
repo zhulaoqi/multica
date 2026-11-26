@@ -40,7 +40,9 @@ export function AgentAccessSettings({
           members={members}
           ownerId={agent.owner_id}
           canEdit={
-            currentUserId !== null && agent.owner_id === currentUserId
+            !agent.source_agent_id &&
+            currentUserId !== null &&
+            agent.owner_id === currentUserId
           }
           hasComposioAllowlist={
             (agent.composio_toolkit_allowlist ?? []).length > 0

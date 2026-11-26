@@ -157,6 +157,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   // still-visible list response remains authoritative in either case.
   const agent =
     listAgent ?? (isForbidden || isNotFound ? null : detailQuery.data) ?? null;
+  const isProjection = !!agent?.source_agent_id;
   const presence: AgentPresenceDetail | null =
     agent ? presenceMap.get(agent.id) ?? null : null;
   useRegisterCommandBarContext(
@@ -172,6 +173,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
     canArchive: archiveDecision,
     isLoading: permissionsLoading,
   } = useAgentPermissions(agent, wsId);
+  const canManageAgent = canEdit.allowed && !isProjection;
   const { organization } = useOrganizationContext(wsId);
 
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -221,6 +223,10 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
 
   const handleUpdate = useCallback(
     async (id: string, data: Record<string, unknown>) => {
+      if (isProjection) {
+        toast.error(t(($) => $.detail.managed_by_organization_banner));
+        return;
+      }
       // Optimistic update: patch the matching agent in the cached list
       // BEFORE the network round-trip so the pickers flip to the new value
       // immediately on click. Without this, every picker waits 0.5-2s for
@@ -288,7 +294,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         throw e;
       }
     },
-    [qc, t, wsId],
+    [isProjection, qc, t, wsId],
   );
 
   const handleArchive = async (id: string) => {
@@ -434,7 +440,6 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   const runningCount = presence?.runningCount ?? 0;
   const queuedCount = presence?.queuedCount ?? 0;
   const hasActiveWork = runningCount + queuedCount > 0;
-  const isProjection = !!agent.source_agent_id;
   const canRestore = archiveDecision.allowed;
   // Multica's built-in agents cannot be archived — the server refuses it.
   const canArchive = archiveDecision.allowed && !isArchived && !agent.system_key;
@@ -636,7 +641,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         tone="warning"
         icon={<Server className="size-3.5 shrink-0 text-warning" aria-hidden="true" />}
         action={
-          canEdit.allowed ? (
+          canManageAgent ? (
             <Button
               variant="outline"
               size="xs"
@@ -678,7 +683,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
             owner={owner}
             members={members}
             currentUserId={currentUserId}
-            canEdit={canEdit.allowed}
+            canEdit={canManageAgent}
             onUpdate={handleUpdate}
             onEditAccess={() => openAdvanced("access")}
             onOpenSettings={() => openAdvanced("general")}
@@ -706,7 +711,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
 
           <AgentInstructionsSection
             agent={agent}
-            canEdit={canEdit.allowed}
+            canEdit={canManageAgent}
             onUpdate={handleUpdate}
           />
 
@@ -714,7 +719,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
           {runtime?.provider === "qoder_cloud" ? null : (
             <AgentSkillsSection
               agent={agent}
-              canEdit={canEdit.allowed}
+              canEdit={canManageAgent}
               onManage={() => openAdvanced("skills")}
             />
           )}
@@ -728,7 +733,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         members={members}
         onUpdate={handleUpdate}
         currentUserId={currentUserId}
-        canEdit={canEdit.allowed}
+        canEdit={canManageAgent}
         section={advancedSection}
         onSectionChange={openAdvanced}
       />

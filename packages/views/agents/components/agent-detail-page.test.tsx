@@ -26,17 +26,20 @@ import {
 vi.mock("./agent-properties-panel", () => ({
   AgentPropertiesPanel: ({
     agent,
+    canEdit,
     onUpdate,
     onEditAccess,
     onOpenSettings,
   }: {
     agent: Agent;
+    canEdit: boolean;
     onUpdate: (id: string, data: Record<string, unknown>) => Promise<void>;
     onEditAccess: () => void;
     onOpenSettings: () => void;
   }) => (
     <div>
       <span>model:{agent.model}</span>
+      <span>can-edit:{String(canEdit)}</span>
       <button
         type="button"
         onClick={() => void onUpdate(agent.id, { model: "new-model" })}
@@ -84,15 +87,18 @@ vi.mock("./agent-advanced-settings", () => ({
       "integrations",
     ].includes(value),
   AgentAdvancedSettings: ({
+    canEdit,
     section,
     onSectionChange,
   }: {
+    canEdit: boolean;
     section: string | null;
     onSectionChange: (section: string | null) => void;
   }) =>
     section === null ? null : (
       <div data-testid="advanced-settings">
         advanced:{section}
+        <span>advanced-can-edit:{String(canEdit)}</span>
         <button type="button" onClick={() => onSectionChange(null)}>
           close advanced
         </button>
@@ -819,6 +825,11 @@ describe("AgentDetailPage more actions", () => {
       "href",
       "/org/agents/source-1",
     );
+    expect(screen.getByText("can-edit:false")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "update model" }));
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "edit access" }));
+    expect(screen.getByText("advanced-can-edit:false")).toBeInTheDocument();
     const menu = openMoreActions();
     expect(within(menu).queryByRole("menuitem", { name: "Duplicate" })).not.toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Remove from project" }));

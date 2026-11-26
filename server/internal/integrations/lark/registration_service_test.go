@@ -70,9 +70,6 @@ func TestRegistrationServiceConstructorValidatesDeps(t *testing.T) {
 	}
 }
 
-// TestBotNamePreset pins the bot-name pre-fill format that rides on the
-// QR URL: "<agent> - Multica", with a blank agent name degrading to
-// plain "Multica" rather than a dangling " - Multica".
 func TestRegisterExistingRejectsBlankCredentials(t *testing.T) {
 	s := &RegistrationService{api: NewStubAPIClient(nil)}
 	_, err := s.RegisterExisting(context.Background(), RegisterExistingParams{AppID: " ", AppSecret: "secret"})
@@ -81,13 +78,16 @@ func TestRegisterExistingRejectsBlankCredentials(t *testing.T) {
 	}
 }
 
+// TestBotNamePreset pins the bot-name pre-fill format that rides on the
+// QR URL: "<agent> - 易研", with a blank agent name degrading to
+// plain "易研" rather than a dangling " - 易研".
 func TestBotNamePreset(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"Ada", "Ada - Multica"},
-		{"  Ada  ", "Ada - Multica"},
-		{"产品助手", "产品助手 - Multica"},
-		{"", "Multica"},
-		{"   ", "Multica"},
+		{"Ada", "Ada - 易研"},
+		{"  Ada  ", "Ada - 易研"},
+		{"产品助手", "产品助手 - 易研"},
+		{"", "易研"},
+		{"   ", "易研"},
 	}
 	for _, tc := range cases {
 		if got := botNamePreset(tc.in); got != tc.want {

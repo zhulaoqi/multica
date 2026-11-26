@@ -197,6 +197,8 @@ export function AccessPicker({
     setSaving(true);
     try {
       await onChange(draftChange);
+    } catch {
+      // The owner reports the mutation error and keeps the draft available.
     } finally {
       setSaving(false);
     }

@@ -421,7 +421,7 @@ func (b *OrgBot) sendText(ctx context.Context, msg InboundMessage, text string) 
 const (
 	// The title must precede the first section header: the parser treats every
 	// unstructured line after a header as that section's body.
-	orgBotUsageCopy = "我是 Multica 组织 Bot，可以帮你给部门派活。\n\n" +
+	orgBotUsageCopy = "我是易研组织 Bot，可以帮你给部门派活。\n\n" +
 		"`/dispatch <部门名或完整路径>`\n" +
 		"`<标题>`\n" +
 		"`目标: ...`\n" +
@@ -430,7 +430,7 @@ const (
 		"在派活的话题里直接回复可以追问或附文件。\n" +
 		"`/status` 查看进行中的派活；`/cancel 编号` 取消；`/reassign 编号 <部门>` 改派；" +
 		"`/accept 编号` 验收通过；`/reject 编号 <原因>` 驳回返工。"
-	orgBotLoginRequiredCopy  = "还没有找到你的 Multica 账户。请先用飞书登录一次 Multica，再回来派活："
+	orgBotLoginRequiredCopy  = "还没有找到你的易研账户。请先用飞书登录一次易研，再回来派活："
 	orgBotNoOrganizationCopy = "组织工作区还没有建立，暂时不能派活。请联系管理员。"
 	orgBotP2PHintCopy        = "直接把要做的事发给我，和在易研里发一样。例如：帮支付组看一下对账差异。回复「换目标」可以选择部门、我的小队或项目。"
 	orgBotP2PAmbiguousCopy   = "有多个部门可以接。回复序号或名称，你的原话会交给它。也可以回复「我的小队」或「项目」。"

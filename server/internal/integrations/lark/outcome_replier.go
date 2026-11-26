@@ -149,7 +149,7 @@ func NewLarkOutcomeReplier(cfg OutcomeReplierConfig) OutcomeReplier {
 		queries:      cfg.Queries,
 		appURL:       strings.TrimRight(cfg.AppURL, "/"),
 		bindingPath:  bindingPath,
-		noticeHeader: "Multica",
+		noticeHeader: "易研",
 		log:          log,
 	}
 }
@@ -529,16 +529,16 @@ const (
 	agentOfflineCopy              = "Agent 当前离线，消息已记录。下次 daemon 上线后会自动继续处理。"
 	agentArchivedCopy             = "这个 Agent 已被归档，无法继续处理消息。请联系工作区管理员恢复或重新绑定。"
 	freshPendingCopy              = "✅ 已准备从空上下文运行。你的下一条聊天消息仍会进入当前对话，但不会带上之前的上下文。"
-	chatStartedCopy               = "✅ 已新建 Multica 对话。你的下一条消息会进入该对话。"
+	chatStartedCopy               = "✅ 已新建易研对话。你的下一条消息会进入该对话。"
 	issueUsageCopy                = "请填写任务标题，格式如下：\n\n`/issue <标题>`\n`[描述]`（可选）"
 	issueUsageWithMediaCopy       = "请添加标题，并与图片或视频一起重新发送（*图片或视频可以位于命令之前或之后*）：\n\n`/issue <标题>`\n`[描述]`（可选）"
-	bindingPromptUnavailableCopy  = "你还未绑定 Multica 账户，绑定卡片未能发送到你的私聊。\n请先打开机器人对话并发送一条消息，再回到群里重试；仍失败请联系管理员检查应用可用范围。"
+	bindingPromptUnavailableCopy  = "你还未绑定易研账户，绑定卡片未能发送到你的私聊。\n请先打开机器人对话并发送一条消息，再回到群里重试；仍失败请联系管理员检查应用可用范围。"
 	dispatchUsageCopy             = "派活格式如下：\n\n`/dispatch <部门名或完整路径>`\n`<标题>`\n`目标: ...`\n`验收: ...`\n\n`输入: ...` 和 `边界: ...` 为可选项。"
 	dispatchNoAccessCopy          = "你没有向这个部门派活的权限。只能派给自己所在的部门，或自己负责的部门。"
 	dispatchNoAgentsCopy          = "这个部门还没有可用的 Agent，暂时无法派活。请联系部门负责人添加 Agent 后再试。"
 	dispatchLeaderUnavailableCopy = "这个部门的队长 Agent 暂时不能由你调用。请联系部门负责人开放该 Agent 的权限。"
 	dispatchLeaderOfflineCopy     = "这个部门现在没有在线的 Agent，暂时无法承接。请让部门负责人启动 Runtime 后再派活。"
-	dispatchUnboundCopy           = "你还没有绑定自己的 Agent，暂时不能派活。请先在 Multica 里绑定 Agent 后再试。"
+	dispatchUnboundCopy           = "你还没有绑定自己的 Agent，暂时不能派活。请先在易研里绑定 Agent 后再试。"
 )
 
 // dispatchCreatedText confirms the department dispatch. identifier always wins

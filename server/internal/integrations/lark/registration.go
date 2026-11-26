@@ -246,7 +246,7 @@ func (e *RegistrationError) Error() string {
 //
 // namePreset pre-fills the bot/app name on Lark's "create a
 // PersonalAgent" form so the installed bot defaults to e.g.
-// "<agent> - Multica" instead of Lark's auto-generated
+// "<agent> - 易研" instead of Lark's auto-generated
 // "{用户姓名}的智能助手". It is a user-editable default (the user can
 // still change it on the form), and it rides on the QR URL — not the
 // begin POST body, which has no name field. Empty omits the pre-fill.
