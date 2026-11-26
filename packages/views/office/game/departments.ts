@@ -5,6 +5,7 @@
  */
 
 import type { RoomId } from "../scene/layout";
+import { compareText, visibleHierarchy } from "./org-hierarchy";
 
 /** Rooms that can host a department plaque, in assignment order. */
 export const DEPARTMENT_ROOMS: readonly RoomId[] = [
@@ -19,6 +20,8 @@ export const DEPARTMENT_ROOMS: readonly RoomId[] = [
 export interface OrgUnitLike {
   id: string;
   name: string;
+  parent_id?: string | null;
+  position?: number;
 }
 
 export interface OrgAgentLike {
@@ -73,14 +76,25 @@ export function departmentRooms(
     byUnit.set(unitId, entry);
   }
 
+  const hierarchy = visibleHierarchy(units, new Set(byUnit.keys()));
   const names = new Map(units.map((unit) => [unit.id, unit.name]));
-  const ranked = [...byUnit.entries()]
-    .filter(([unitId, entry]) => entry.agents > 0 && names.has(unitId))
+  // A room belongs to a visible top-level department; sub-department work
+  // rolls up into it so the parent plaque reflects the whole subtree.
+  const byRoot = new Map<string, { agents: number; completed: number }>();
+  for (const [unitId, entry] of byUnit) {
+    const rootId = hierarchy.rootOf.get(unitId) ?? unitId;
+    const total = byRoot.get(rootId) ?? { agents: 0, completed: 0 };
+    total.agents += entry.agents;
+    total.completed += entry.completed;
+    byRoot.set(rootId, total);
+  }
+
+  const ranked = [...byRoot.entries()]
+    .filter(([rootId, entry]) => entry.agents > 0 && names.has(rootId))
     .sort(([leftId, left], [rightId, right]) => {
       if (right.completed !== left.completed) return right.completed - left.completed;
-      const leftName = names.get(leftId) ?? "";
-      const rightName = names.get(rightId) ?? "";
-      return leftName.localeCompare(rightName);
+      const byName = compareText(names.get(leftId) ?? "", names.get(rightId) ?? "");
+      return byName !== 0 ? byName : compareText(leftId, rightId);
     })
     .slice(0, rooms.length);
 

@@ -35,7 +35,6 @@ import {
   nextEventDelay,
   pickOfficeEvent,
 } from "../game/events";
-import type { PlayerEmoteId } from "../game/emotes";
 import type { DeskZone } from "../game/zones";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
@@ -80,8 +79,7 @@ const MEETING_POINT = feetAtTile(8, 10);
 const MEETING_RADIUS = 36;
 /** Rows of paper on the desk before the stack stops growing visually. */
 const MAX_DESK_PAPERS = 9;
-/** How long a player emote, the archive stamp, or a random event stays up. */
-const LOCAL_EMOTE_MS = 1_800;
+/** How long the archive stamp or a random event stays up. */
 const ARCHIVE_RITUAL_MS = 2_600;
 const EVENT_EFFECT_MS = 3_200;
 const CONFETTI_MS = 3_800;
@@ -117,10 +115,13 @@ interface ConfettiPiece {
 
 export type { OfficeAgentView };
 
-function localEmoteBubble(kind: PlayerEmoteId): BubbleKind | null {
-  if (kind === "check") return "check";
-  if (kind === "alert") return "alert";
-  return "chat";
+/** Long hierarchy paths would overrun the next cluster, so cap the plate. */
+const MAX_PLAQUE_LABEL_CHARS = 18;
+
+function fitPlaqueLabel(label: string): string {
+  const chars = [...label];
+  if (chars.length <= MAX_PLAQUE_LABEL_CHARS) return label;
+  return `${chars.slice(0, MAX_PLAQUE_LABEL_CHARS - 1).join("")}…`;
 }
 
 /** Company levels are 1-based; anything unusable falls back to a new company. */
@@ -227,8 +228,6 @@ export class OfficeScene {
   private traces: Container | null = null;
   private badges: Container | null = null;
   private zones: Container | null = null;
-  private localEmoteKind: PlayerEmoteId | null = null;
-  private localEmoteUntil = 0;
   private readonly weather: OfficeWeather;
   private readonly cat: OfficeCat;
   private readonly minimap: OfficeMinimap;
@@ -552,7 +551,7 @@ export class OfficeScene {
   private createPlaque(label: string, level: number): Container {
     const plate = new this.pixi.Container();
     const text = new this.pixi.Text({
-      text: `${label} · Lv ${level}`,
+      text: `${fitPlaqueLabel(label)} · Lv ${level}`,
       style: {
         fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
         fontSize: 7,
@@ -600,7 +599,7 @@ export class OfficeScene {
     if (zones.length === 0) return;
     const layer = new this.pixi.Container();
     for (const zone of zones) {
-      const plate = this.createPlaque(zone.label, zone.level);
+      const plate = this.createPlaque(zone.pathLabel, zone.level);
       plate.position.set(zone.anchor.tx * TILE, zone.anchor.ty * TILE);
       layer.addChild(plate);
     }
@@ -608,16 +607,6 @@ export class OfficeScene {
     layer.zIndex = ROOM_LABEL_Z + 1;
     this.world.addChild(layer);
     this.zones = layer;
-  }
-
-  /** The player waves, acknowledges, asks for help, or raises a coffee cup. */
-  playLocalEmote(kind: PlayerEmoteId) {
-    if (this.destroyed) return;
-    const now = performance.now();
-    this.localEmoteKind = kind;
-    this.localEmoteUntil = now + LOCAL_EMOTE_MS;
-    this.local.view.setPose(kind === "wave" ? "wave" : "stand");
-    this.local.view.setBubble(localEmoteBubble(kind));
   }
 
   /**
@@ -642,18 +631,6 @@ export class OfficeScene {
     this.world.addChild(layer);
     this.eventEffect = layer;
     this.eventEffectUntil = now + ARCHIVE_RITUAL_MS;
-  }
-
-  /** A PNG data URL of the current view, or null when extraction is blocked. */
-  capturePhoto(): string | null {
-    if (this.destroyed) return null;
-    try {
-      const canvas = this.app.renderer.extract.canvas(this.app.stage);
-      if (!canvas || typeof canvas.toDataURL !== "function") return null;
-      return canvas.toDataURL("image/png");
-    } catch {
-      return null;
-    }
   }
 
   /** Good news: confetti over the view and a check from every agent. */
@@ -815,13 +792,6 @@ export class OfficeScene {
       piece.view.rotation += piece.spin * dt;
       if (piece.view.y > height + 8) piece.view.y = -8;
     }
-  }
-
-  /** Waves, checks, and coffee cups fade out without touching the walk state. */
-  private stepLocalEmote(now: number) {
-    if (!this.localEmoteKind || now < this.localEmoteUntil) return;
-    this.localEmoteKind = null;
-    this.local.view.setPose("stand");
   }
 
   /**
@@ -1017,7 +987,6 @@ export class OfficeScene {
     this.cat.update(dt, now);
     this.weather.update(dt);
     this.stepConfetti(now, dt);
-    this.stepLocalEmote(now);
     this.stepRandomEvents(now);
     this.stepEventEffect(now);
     this.minimap.update(
@@ -1072,11 +1041,7 @@ export class OfficeScene {
       peer.chatUntil = now + HUMAN_CHAT_MS;
     }
     if (localChatting) this.local.chatUntil = now + HUMAN_CHAT_MS;
-    const emote =
-      this.localEmoteKind && now < this.localEmoteUntil
-        ? localEmoteBubble(this.localEmoteKind)
-        : null;
-    this.local.view.setBubble(emote ?? (now < this.local.chatUntil ? "chat" : null));
+    this.local.view.setBubble(now < this.local.chatUntil ? "chat" : null);
     for (const peer of this.peers.values()) {
       peer.view.setBubble(now < peer.chatUntil ? "chat" : null);
     }

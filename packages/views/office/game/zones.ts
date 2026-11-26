@@ -1,28 +1,37 @@
 /**
- * Seats the office by department so each staffed unit owns a contiguous desk
- * cluster. Pure and deterministic: agents keep their seats while status and
+ * Seats the office by department so each staffed top-level department owns a
+ * contiguous desk cluster and its sub-departments stay visually nested under
+ * it. Pure and deterministic: agents keep their seats while status and
  * activity change; only org-chart or roster edits move them.
  */
 
 import type { DeskZoneSpec } from "../scene/layout";
 import { OFFICE_DESK_COUNT, OFFICE_DESK_ZONES } from "../scene/layout";
 import { departmentLevel } from "./departments";
+import {
+  compareText,
+  compareUnits,
+  visibleHierarchy,
+  type HierUnit,
+} from "./org-hierarchy";
 
 export interface DeskZone {
   key: string;
+  /** The visible top-level department this cluster belongs to. */
   unitId: string;
+  /** Top-level department name. */
   label: string;
+  /** `研发部 › AIHUB`, or `研发部 › AIHUB、BI中台` when a cluster is shared. */
+  pathLabel: string;
   level: number;
   anchor: { tx: number; ty: number };
   /** Agents seated in this cluster, including those without a known unit. */
   agentCount: number;
+  /** Visible direct sub-department names represented in this cluster. */
+  children: string[];
 }
 
-export interface ZoneUnit {
-  id: string;
-  name: string;
-  position?: number;
-}
+export type ZoneUnit = HierUnit;
 
 export interface ZoneAgent {
   id: string;
@@ -43,9 +52,13 @@ export interface ZoneAssignment {
   unseated: string[];
 }
 
-function compareText(left: string, right: string): number {
-  if (left === right) return 0;
-  return left < right ? -1 : 1;
+interface ZoneGroup {
+  rootId: string;
+  unitId: string;
+  label: string;
+  isRootGroup: boolean;
+  agentIds: string[];
+  order: HierUnit;
 }
 
 /**
@@ -54,6 +67,22 @@ function compareText(left: string, right: string): number {
  */
 function rosterFor(ids: readonly string[]): string[] {
   return [...new Set(ids)].sort(compareText);
+}
+
+function groupFor(
+  root: HierUnit,
+  unit: HierUnit,
+  agentIds: string[],
+  isRootGroup: boolean,
+): ZoneGroup {
+  return {
+    rootId: root.id,
+    unitId: unit.id,
+    label: unit.name,
+    isRootGroup,
+    agentIds,
+    order: unit,
+  };
 }
 
 export function assignDeskZones(
@@ -108,39 +137,104 @@ export function assignDeskZones(
     return { seats, zones: [], unseated };
   }
 
-  const orderedUnits = [...byUnit.keys()]
-    .map((unitId) => unitById.get(unitId)!)
-    .sort((left, right) => {
-      const position = (left.position ?? 0) - (right.position ?? 0);
-      if (position !== 0) return position;
-      const name = compareText(left.name, right.name);
-      return name !== 0 ? name : compareText(left.id, right.id);
-    })
-    .map((unit) => unit.id);
+  const hierarchy = visibleHierarchy(units, new Set(byUnit.keys()));
+  const roots = hierarchy.roots;
+
+  // A group is the unit whose name appears on the plaque: the root's direct
+  // employees, or everything below one of its visible direct children.
+  const groupForUnit = (root: HierUnit, child: HierUnit): ZoneGroup => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const walk = (unitId: string) => {
+      if (seen.has(unitId)) return;
+      seen.add(unitId);
+      ids.push(...(byUnit.get(unitId) ?? []));
+      for (const nested of hierarchy.childrenOf.get(unitId) ?? []) walk(nested.id);
+    };
+    walk(child.id);
+    return groupFor(root, child, rosterFor(ids), false);
+  };
+
+  const groupsByRoot = new Map<string, ZoneGroup[]>();
+  for (const root of roots) {
+    const groups: ZoneGroup[] = [];
+    const direct = rosterFor(byUnit.get(root.id) ?? []);
+    if (direct.length > 0) groups.push(groupFor(root, root, direct, true));
+    for (const child of hierarchy.childrenOf.get(root.id) ?? []) {
+      const group = groupForUnit(root, child);
+      if (group.agentIds.length > 0) groups.push(group);
+    }
+    groups.sort((left, right) => {
+      if (right.agentIds.length !== left.agentIds.length) {
+        return right.agentIds.length - left.agentIds.length;
+      }
+      return compareUnits(left.order, right.order);
+    });
+    groupsByRoot.set(root.id, groups);
+  }
+
+  // Each root gets at least one cluster; extra clusters rotate through the
+  // roots in display order. With more roots than clusters, the leading roots
+  // keep a cluster and the rest spill into spare seats.
+  const clustersByRoot = new Map<string, DeskZoneSpec[]>();
+  const rootByCluster = new Map<string, string>();
+  for (const root of roots) clustersByRoot.set(root.id, []);
+  if (roots.length > 0) {
+    roots.forEach((root, index) => {
+      let mine: DeskZoneSpec[];
+      if (roots.length <= specs.length) {
+        mine = specs.filter((_, specIndex) => specIndex % roots.length === index);
+      } else {
+        mine = index < specs.length ? [specs[index]!] : [];
+      }
+      clustersByRoot.set(root.id, mine);
+      for (const spec of mine) rootByCluster.set(spec.key, root.id);
+    });
+  }
 
   const seats: ZoneSeat[] = [];
   const used = new Set<number>();
   const spill: string[] = [];
+  const groupLabelByAgent = new Map<string, string>();
+  const rootBySeat = new Map<string, string>();
 
-  orderedUnits.forEach((unitId, specIndex) => {
-    const roster = rosterFor(byUnit.get(unitId) ?? []);
-    const spec = specs[specIndex];
-    if (!spec) {
-      spill.push(...roster);
-      return;
+  for (const root of roots) {
+    const clusters = clustersByRoot.get(root.id) ?? [];
+    const groups = groupsByRoot.get(root.id) ?? [];
+    if (clusters.length === 0) {
+      for (const group of groups) spill.push(...group.agentIds);
+      continue;
     }
-    spec.homes.forEach((home, index) => {
-      const agentId = roster[index];
-      if (agentId === undefined) return;
-      used.add(home);
-      seats.push({ id: agentId, home });
+    groups.forEach((group, groupIndex) => {
+      const preferredIndex = Math.min(groupIndex, clusters.length - 1);
+      const preferred = clusters[preferredIndex]!;
+      const searchOrder = [
+        preferred,
+        ...clusters.filter((cluster) => cluster !== preferred),
+      ];
+      for (const agentId of group.agentIds) {
+        let home: number | undefined;
+        for (const spec of searchOrder) {
+          const free = spec.homes.find((candidate) => !used.has(candidate));
+          if (free !== undefined) {
+            home = free;
+            break;
+          }
+        }
+        if (home === undefined) {
+          spill.push(agentId);
+          continue;
+        }
+        used.add(home);
+        seats.push({ id: agentId, home });
+        rootBySeat.set(agentId, root.id);
+        if (!group.isRootGroup) groupLabelByAgent.set(agentId, group.label);
+      }
     });
-    for (const agentId of roster.slice(spec.homes.length)) spill.push(agentId);
-  });
-  spill.push(...rosterFor(loose));
+  }
 
   // Spilled agents fill spare desks first (left to right, row by row), then
-  // the extra standing spots.
+  // the extra standing spots. Loose agents without a known unit go last.
   const spareDesks = seatOrder
     .filter((home) => home < OFFICE_DESK_COUNT && !used.has(home))
     .sort((a, b) => a - b);
@@ -149,7 +243,8 @@ export function assignDeskZones(
     .sort((a, b) => a - b);
   const spare = [...spareDesks, ...spareSpots];
   const unseated: string[] = [];
-  spill.forEach((agentId, index) => {
+  const spillRoster = [...spill, ...rosterFor(loose)];
+  spillRoster.forEach((agentId, index) => {
     const home = spare[index];
     if (home === undefined) {
       unseated.push(agentId);
@@ -159,13 +254,15 @@ export function assignDeskZones(
     seats.push({ id: agentId, home });
   });
 
-  const completedByUnit = new Map<string, number>();
+  const completedByRoot = new Map<string, number>();
   for (const agent of orderedAgents) {
     const unitId = unitByAgent.get(agent.id);
     if (!unitId || !unitById.has(unitId)) continue;
-    completedByUnit.set(
-      unitId,
-      (completedByUnit.get(unitId) ?? 0) +
+    const rootId = hierarchy.rootOf.get(unitId);
+    if (!rootId) continue;
+    completedByRoot.set(
+      rootId,
+      (completedByRoot.get(rootId) ?? 0) +
         Math.max(0, completedByAgent.get(agent.id) ?? 0),
     );
   }
@@ -176,28 +273,32 @@ export function assignDeskZones(
   for (const spec of specs) {
     const occupants = seats.filter((seat) => spec.homes.includes(seat.home));
     if (occupants.length === 0) continue;
-    const counts = new Map<string, number>();
-    let dominant: string | null = null;
-    let dominantCount = 0;
+    const rootId = rootByCluster.get(spec.key);
+    if (!rootId) continue;
+    // Loose agents and cross-root spill may land in a cluster, but only
+    // agents from the cluster's own department tree justify its plaque.
+    if (!occupants.some((seat) => rootBySeat.get(seat.id) === rootId)) continue;
+    const root = hierarchy.byId.get(rootId);
+    if (!root) continue;
+    // Children are ordered by their first seat in the cluster, so sharing a
+    // cluster keeps the plaque text stable.
+    const children: string[] = [];
     for (const seat of occupants) {
-      const unitId = unitByAgent.get(seat.id);
-      if (!unitId || !unitById.has(unitId)) continue;
-      const count = (counts.get(unitId) ?? 0) + 1;
-      counts.set(unitId, count);
-      if (count > dominantCount) {
-        dominant = unitId;
-        dominantCount = count;
-      }
+      const child = groupLabelByAgent.get(seat.id);
+      if (child && !children.includes(child)) children.push(child);
     }
-    if (!dominant) continue;
-    const unit = unitById.get(dominant)!;
+    const pathLabel = children.length
+      ? `${root.name} › ${children.join("、")}`
+      : root.name;
     zones.push({
       key: spec.key,
-      unitId: dominant,
-      label: unit.name,
-      level: departmentLevel(completedByUnit.get(dominant) ?? 0),
+      unitId: root.id,
+      label: root.name,
+      pathLabel,
+      level: departmentLevel(completedByRoot.get(root.id) ?? 0),
       anchor: spec.anchor,
       agentCount: occupants.length,
+      children,
     });
   }
 

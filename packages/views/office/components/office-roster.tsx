@@ -15,6 +15,8 @@ export interface OfficeRosterMember {
 export interface OfficeRosterAgent {
   id: string;
   name: string;
+  /** The member this agent belongs to, when it has one. */
+  ownerName?: string | null;
   status: AgentDeskStatus;
   /** Office level from the last 30 days of completed work. */
   level: number;
@@ -107,7 +109,16 @@ export function OfficeRoster({
                     isAgent
                     size="sm"
                   />
-                  <span className="min-w-0 flex-1 truncate text-body">{agent.name}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="block truncate text-body">{agent.name}</span>
+                    {agent.ownerName && (
+                      <span className="block truncate text-caption text-muted-foreground">
+                        {t(($) => $.page.roster.owner, {
+                          name: agent.ownerName,
+                        })}
+                      </span>
+                    )}
+                  </span>
                   {agent.isMvp && (
                     <Crown
                       className="size-3.5 shrink-0 text-warning"

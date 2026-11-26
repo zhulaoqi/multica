@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2 } from "@multica/ui/icons";
-import { cn } from "@multica/ui/lib/utils";
 import {
   useWorkspaceActivityMap,
   useWorkspacePresenceMap,
@@ -21,9 +20,9 @@ import {
   squadListOptions,
 } from "@multica/core/workspace/queries";
 import type { Agent, Squad } from "@multica/core/types";
-import type { PlayerEmoteId } from "./game/emotes";
 import type { OfficeEventId } from "./game/events";
 import { teamUserIdsFor } from "../agents/team-scope";
+import { unitPaths } from "../org/org-tree";
 import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
 import { CollectionPageHeader } from "../layout";
 import { isAgentStuck } from "../layout/panels/team-status";
@@ -32,6 +31,7 @@ import { useT } from "../i18n";
 import { useMyDispatchScope } from "../workbench/use-my-dispatch-scope";
 import { dispatchPhase } from "../workbench/use-workbench-conversation";
 import { AgentInteractPanel } from "./components/agent-interact-panel";
+import { OfficeBrief } from "./components/office-brief";
 import {
   OfficeCelebration,
   type OfficeCelebrationEvent,
@@ -41,15 +41,10 @@ import { OfficeCoffeePanel } from "./components/office-coffee-panel";
 import { OfficeMeetingPanel, type MeetingNote } from "./components/office-meeting-panel";
 import { OfficeReceptionPanel } from "./components/office-reception-panel";
 import { OfficeRoster } from "./components/office-roster";
-import {
-  OfficeEmoteWheel,
-  OfficePhotoBar,
-  OfficeToolbar,
-} from "./components/office-toolbar";
+import { OfficeToolbar } from "./components/office-toolbar";
 import { OfficeTrophyPanel } from "./components/office-trophy-panel";
 import { pickCoffeePrompt } from "./game/coffee";
 import { departmentRooms } from "./game/departments";
-import { playerEmoteForKey } from "./game/emotes";
 import {
   agentProgress,
   companyProgress,
@@ -78,6 +73,7 @@ import { useOpenAgentChat } from "./use-open-agent-chat";
 const EMPTY_AGENTS: Agent[] = [];
 const EMPTY_SQUADS: Squad[] = [];
 const TOAST_MS = 4_000;
+const SOUND_STORAGE_KEY = "multica.office.sound";
 
 /** How an agent's live presence reads on its desk. */
 export function deskStatus(detail: AgentPresenceDetail | undefined): AgentDeskStatus {
@@ -152,8 +148,18 @@ export function OfficePage({
   const nameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const member of members) map.set(member.user_id, member.name);
+    // The org tree can name owners outside the member list (e.g. a lead
+    // viewing a colleague who has not joined the project); never let an
+    // empty name win over a real one.
+    for (const member of orgTree?.members ?? []) {
+      if (member.name) map.set(member.user_id, member.name);
+    }
     return map;
-  }, [members]);
+  }, [members, orgTree]);
+  const unitPathById = useMemo(
+    () => unitPaths(orgTree?.units ?? []),
+    [orgTree],
+  );
 
   const localName = (user?.id ? nameById.get(user.id) : null) ?? user?.name ?? "";
 
@@ -275,16 +281,40 @@ export function OfficePage({
       activeAgents
         .map((agent) => {
           const detail = byAgent.get(agent.id);
+          const unitId = unitByAgent.get(agent.id);
           return {
             id: agent.id,
             name: agent.name,
+            ownerName: agent.owner_id
+              ? nameById.get(agent.owner_id) ?? null
+              : null,
+            unitPath:
+              unitId && unitPathById.has(unitId)
+                ? unitPathById.get(unitId) ?? null
+                : null,
             status: deskStatus(detail),
             queuedCount: detail?.queuedCount ?? 0,
             alert: isAgentStuck(detail),
           };
         }),
-    [activeAgents, byAgent],
+    [activeAgents, byAgent, nameById, unitByAgent, unitPathById],
   );
+  const brief = useMemo(() => {
+    let busiest: string | null = null;
+    let best = 0;
+    for (const agent of activeAgents) {
+      const done = completionsToday(activityByAgent.get(agent.id));
+      if (done > best) {
+        best = done;
+        busiest = agent.name;
+      }
+    }
+    return {
+      completed: todayCompleted,
+      running: agentStatuses.filter((agent) => agent.status === "working").length,
+      busiest,
+    };
+  }, [activeAgents, activityByAgent, agentStatuses, todayCompleted]);
   const workspaceActivityById = useAgentActivityText(wsId, agentStatuses);
   const myLabels = useMemo(() => {
     const labels = new Map<string, string>();
@@ -313,9 +343,11 @@ export function OfficePage({
   }, [home, myActivityById, workspaceActivityById]);
   const agentViews = useMemo(
     () =>
-      agentStatuses.map(({ id, name, status, alert }) => ({
+      agentStatuses.map(({ id, name, ownerName, unitPath, status, alert }) => ({
         id,
         name,
+        ownerName,
+        unitPath,
         status,
         alert,
         activity: activityById.get(id) ?? null,
@@ -360,9 +392,6 @@ export function OfficePage({
   const [coffeeOpen, setCoffeeOpen] = useState(false);
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [trophiesOpen, setTrophiesOpen] = useState(false);
-  const [emotesOpen, setEmotesOpen] = useState(false);
-  const [photoMode, setPhotoMode] = useState(false);
-  const [photoSaved, setPhotoSaved] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(true);
   const [soundOn, setSoundOn] = useState(false);
   const [coffeeSeed, setCoffeeSeed] = useState(0);
@@ -372,6 +401,7 @@ export function OfficePage({
   const [celebration, setCelebration] = useState<OfficeCelebrationEvent | null>(null);
   const canvasRef = useRef<OfficeCanvasHandle>(null);
   const audioRef = useRef<OfficeAudio | null>(null);
+  const soundWantedRef = useRef(false);
 
   const season = useMemo(() => seasonFor(new Date()), []);
 
@@ -401,10 +431,12 @@ export function OfficePage({
       const leaderId = squadId ? leaderBySquad.get(squadId) : null;
       if (!leaderId) continue;
       if (phase === "in_review") canvasRef.current?.deliverToReception(leaderId);
-      else if (phase === "failed") canvasRef.current?.playEmote(leaderId, "alert");
-      else if (phase === "completed" && previous === "in_review") {
+      else if (phase === "failed") {
+        canvasRef.current?.playEmote(leaderId, "alert");
+        audioRef.current?.cue("alert");
+      } else if (phase === "completed" && previous === "in_review") {
         canvasRef.current?.archiveRitual();
-        audioRef.current?.cue("sign");
+        audioRef.current?.cue("complete");
       }
     }
   }, [dispatches, squads]);
@@ -454,8 +486,17 @@ export function OfficePage({
   // 30-day window as everything else. Org data is optional.
   const departments = useMemo(
     () =>
-      departmentRooms(orgTree?.units ?? [], orgTree?.agents ?? [], completedById),
-    [orgTree, completedById],
+      departmentRooms(
+        orgTree?.units ?? [],
+        // Use the same visible roster as the desk planner, so a department
+        // cannot show two different levels on the floor and on its wall.
+        activeAgents.flatMap((agent) => {
+          const unitId = unitByAgent.get(agent.id);
+          return unitId ? [{ id: agent.id, unit_id: unitId }] : [];
+        }),
+        completedById,
+      ),
+    [orgTree, activeAgents, unitByAgent, completedById],
   );
   // Room plaques describe the company, so the C-end keeps them off; it shows
   // the desk-zone plaques instead.
@@ -526,11 +567,11 @@ export function OfficePage({
     seenMilestones.current = next;
     if (companyLevel > previous.level) {
       canvasRef.current?.celebrate();
-      audioRef.current?.cue("celebrate");
+      audioRef.current?.cue("level");
       setCelebration({ kind: "company", level: companyLevel });
     } else if (weekly.met && !previous.weeklyMet) {
       canvasRef.current?.celebrate();
-      audioRef.current?.cue("celebrate");
+      audioRef.current?.cue("level");
       setCelebration({ kind: "weekly", count: weekly.completed });
     }
   }, [activityLoading, companyLevel, weekly.met, weekly.completed]);
@@ -553,47 +594,81 @@ export function OfficePage({
 
   const handleRandomEvent = useCallback((event: OfficeEventId) => {
     setEventToast({ id: event, at: Date.now() });
-    audioRef.current?.cue(event === "cat" ? "meow" : "event");
-  }, []);
-
-  const playEmote = useCallback((kind: PlayerEmoteId) => {
-    canvasRef.current?.playLocalEmote(kind);
-    audioRef.current?.cue("event");
   }, []);
 
   const toggleSound = useCallback(() => {
+    const persist = (on: boolean) => {
+      try {
+        window.localStorage.setItem(SOUND_STORAGE_KEY, on ? "on" : "off");
+      } catch {
+        // Private mode or blocked storage: sound still works for this visit.
+      }
+    };
     if (audioRef.current?.running) {
       audioRef.current.stop();
+      soundWantedRef.current = false;
       setSoundOn(false);
+      persist(false);
       return;
     }
     const audio = audioRef.current ?? new OfficeAudio();
     audioRef.current = audio;
-    setSoundOn(audio.start());
+    const started = audio.start();
+    setSoundOn(started);
+    if (started) {
+      soundWantedRef.current = false;
+      persist(true);
+    }
   }, []);
 
-  // Photo mode is a full-view state; Escape should always be able to leave it.
+  // A saved "on" preference still needs a gesture before the browser will
+  // actually play; arm a one-shot listener instead of failing silently.
   useEffect(() => {
-    if (!photoMode) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setPhotoMode(false);
-      setPhotoSaved(false);
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [photoMode]);
+    let stored = false;
+    try {
+      stored = window.localStorage.getItem(SOUND_STORAGE_KEY) === "on";
+    } catch {
+      return;
+    }
+    if (!stored) return;
+    soundWantedRef.current = true;
 
-  const savePhoto = useCallback(() => {
-    const data = canvasRef.current?.capturePhoto();
-    if (!data) return;
-    const link = document.createElement("a");
-    link.href = data;
-    link.download = `multica-office-${new Date().toISOString().slice(0, 10)}.png`;
-    link.click();
-    setPhotoSaved(true);
-    window.setTimeout(() => setPhotoSaved(false), 2_500);
+    const begin = (event: Event) => {
+      if (!soundWantedRef.current) return;
+      // The toolbar button's own click must decide on/off; starting the audio
+      // on pointerdown would make the first click turn the sound back off.
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest('[data-testid="office-toolbar-sound"]')
+      ) {
+        return;
+      }
+      const audio = audioRef.current ?? new OfficeAudio();
+      audioRef.current = audio;
+      const started = audio.start();
+      setSoundOn(started);
+      if (!started) return;
+      soundWantedRef.current = false;
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
+    window.addEventListener("pointerdown", begin);
+    window.addEventListener("keydown", begin);
+    return () => {
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
+  }, []);
+
+  // Background tabs suspend audio; the pad must not pile up notes and burst
+  // when the user comes back.
+  useEffect(() => {
+    const onVisibility = () => {
+      audioRef.current?.setHidden(document.visibilityState === "hidden");
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   const handleAccepted = useCallback(() => {
@@ -717,33 +792,16 @@ export function OfficePage({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canTalk, canCheckIn, canCoffee, canMeeting, focusedAgent]);
 
-  // The emote wheel is reachable from the number row so it never needs a
-  // click in the middle of a conversation.
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      if (isTypingTarget(event.target)) return;
-      const emote = playerEmoteForKey(event.key);
-      if (!emote) return;
-      event.preventDefault();
-      playEmote(emote.id);
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [playEmote]);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {!photoMode && !home && (
+      {!home && (
         <CollectionPageHeader icon={Building2} title={t(($) => $.page.title)} />
       )}
-      {error && !photoMode && (
+      {error && (
         <p className="px-4 pt-2 text-caption text-warning">{t(($) => $.page.error)}</p>
       )}
-      <div className={cn("flex min-h-0 flex-1 flex-col lg:flex-row", photoMode && "bg-background")}>
-        <div className={cn("flex min-h-0 flex-1 flex-col gap-2", photoMode ? "p-0" : "p-4")}>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-4">
           <div className="relative flex min-h-0 flex-1">
             <OfficeCanvas
               ref={canvasRef}
@@ -766,68 +824,52 @@ export function OfficePage({
               deskZones={zoneAssignment.zones}
               minimapVisible={minimapVisible}
               engagedAgentId={panelAgent?.id ?? null}
-              className={photoMode ? "rounded-none border-0 shadow-none" : undefined}
             />
-            {home && !photoMode && !scope.isLoading && activeAgents.length === 0 && (
+            {home && !scope.isLoading && activeAgents.length === 0 && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
                 <p className="max-w-xs rounded-lg bg-surface-raised/95 px-4 py-3 text-center text-body text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.home_empty)}
                 </p>
               </div>
             )}
-            {!photoMode && (
-              <>
-                <OfficeToolbar
-                  className="absolute left-3 top-3 z-10"
-                  season={season}
-                  soundOn={soundOn}
-                  minimapOn={minimapVisible}
-                  photoMode={photoMode}
-                  emotesOpen={emotesOpen}
-                  onToggleSound={toggleSound}
-                  onToggleMinimap={() => setMinimapVisible((value) => !value)}
-                  onTogglePhoto={() => {
-                    setPhotoMode(true);
-                    setPhotoSaved(false);
-                    setEmotesOpen(false);
-                    setTrophiesOpen(false);
-                  }}
-                  onToggleEmotes={() => setEmotesOpen((value) => !value)}
-                  onOpenTrophies={() => {
-                    setTrophiesOpen(true);
-                    setEmotesOpen(false);
-                  }}
-                  showTrophies={!home}
-                />
-                {emotesOpen && (
-                  <OfficeEmoteWheel
-                    className="absolute left-3 top-14 z-10"
-                    onEmote={playEmote}
-                    onClose={() => setEmotesOpen(false)}
-                  />
-                )}
-                {trophiesOpen && !home && (
-                  <OfficeTrophyPanel
-                    className="absolute right-3 top-3 z-10"
-                    stats={trophyStats}
-                    departments={departments}
-                    season={season}
-                    onClose={() => setTrophiesOpen(false)}
-                  />
-                )}
-                {eventToast && (
-                  <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-                    <span className="rounded-full bg-surface-raised/95 px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
-                      {t(($) => $.page.events[eventToast.id])}
-                    </span>
-                  </div>
-                )}
-              </>
+            <OfficeToolbar
+              className="absolute left-3 top-3 z-10"
+              season={season}
+              soundOn={soundOn}
+              minimapOn={minimapVisible}
+              onToggleSound={toggleSound}
+              onToggleMinimap={() => setMinimapVisible((value) => !value)}
+              onOpenTrophies={() => setTrophiesOpen(true)}
+              showTrophies={!home}
+            />
+            {trophiesOpen && !home && (
+              <OfficeTrophyPanel
+                className="absolute right-3 top-3 z-10"
+                stats={trophyStats}
+                departments={departments}
+                season={season}
+                onClose={() => setTrophiesOpen(false)}
+              />
             )}
-            {celebration && !photoMode && (
+            {eventToast && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
+                <span className="rounded-full bg-surface-raised/95 px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
+                  {t(($) => $.page.events[eventToast.id])}
+                </span>
+              </div>
+            )}
+            {home && (
+              <OfficeBrief
+                className="absolute right-3 top-3 z-10 max-w-[60%] justify-end"
+                completed={brief.completed}
+                running={brief.running}
+                busiest={brief.busiest}
+              />
+            )}
+            {celebration && (
               <OfficeCelebration event={celebration} onDismiss={dismissCelebration} />
             )}
-            {!anyPanelOpen && !photoMode && focusedAgent && (
+            {!anyPanelOpen && focusedAgent && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.interact.hint, {
@@ -837,21 +879,21 @@ export function OfficePage({
                 </span>
               </div>
             )}
-            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "reception" && (
+            {!home && !anyPanelOpen && !focusedAgent && placeFocused === "reception" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.reception.hint, { key: "T" })}
                 </span>
               </div>
             )}
-            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "coffee" && (
+            {!home && !anyPanelOpen && !focusedAgent && placeFocused === "coffee" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.coffee.hint, { key: "T" })}
                 </span>
               </div>
             )}
-            {!home && !anyPanelOpen && !photoMode && !focusedAgent && placeFocused === "meeting" && (
+            {!home && !anyPanelOpen && !focusedAgent && placeFocused === "meeting" && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                 <span className="rounded-full bg-surface-raised px-3 py-1 text-caption text-muted-foreground shadow-sm ring-1 ring-surface-border">
                   {t(($) => $.page.meeting.hint, { key: "T" })}
@@ -893,6 +935,18 @@ export function OfficePage({
                 className="absolute bottom-3 left-3"
                 agent={panelAgent}
                 status={deskStatus(byAgent.get(panelAgent.id))}
+                ownerName={
+                  panelAgent.owner_id
+                    ? nameById.get(panelAgent.owner_id) ?? null
+                    : null
+                }
+                unitPath={(() => {
+                  const unitId = unitByAgent.get(panelAgent.id);
+                  return unitId ? unitPathById.get(unitId) ?? null : null;
+                })()}
+                agentTodayCompleted={completionsToday(
+                  activityByAgent.get(panelAgent.id),
+                )}
                 canAssign={canAssign(panelAgent)}
                 onClose={closePanel}
                 onOpenChat={() => openAgentChat(panelAgent.id)}
@@ -903,26 +957,12 @@ export function OfficePage({
                 activity={activityById.get(panelAgent.id) ?? null}
               />
             )}
-            {photoMode && (
-              <div className="absolute inset-x-0 bottom-4 z-10 flex justify-center">
-                <OfficePhotoBar
-                  onSave={savePhoto}
-                  onExit={() => {
-                    setPhotoMode(false);
-                    setPhotoSaved(false);
-                  }}
-                  saved={photoSaved}
-                />
-              </div>
-            )}
           </div>
-          {!photoMode && (
-            <p className="text-center text-caption text-muted-foreground">
-              {joined ? t(($) => $.page.hint) : t(($) => $.page.connecting)}
-            </p>
-          )}
+          <p className="text-center text-caption text-muted-foreground">
+            {joined ? t(($) => $.page.hint) : t(($) => $.page.connecting)}
+          </p>
         </div>
-        {!photoMode && !home && (
+        {!home && (
           <OfficeRoster
             members={rosterMembers}
             agents={rosterAgents}

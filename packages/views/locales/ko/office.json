@@ -15,7 +15,8 @@
       "count_other": "{{count}}명",
       "level": "Lv {{level}}",
       "company_level": "회사 레벨 {{level}}",
-      "mvp": "이번 달 최고 기여자"
+      "mvp": "이번 달 최고 기여자",
+      "owner": "소유자: {{name}}"
     },
     "status": {
       "working": "작업 중",
@@ -53,7 +54,10 @@
       "cancel": "취소",
       "task_error": "작업을 만들지 못했습니다. 다시 시도하세요.",
       "task_error_agent_unavailable": "이 에이전트는 지금 작업을 받을 수 없습니다.",
-      "task_error_issue_limit": "이 워크스페이스의 작업 수가 한도에 도달했습니다."
+      "task_error_issue_limit": "이 워크스페이스의 작업 수가 한도에 도달했습니다.",
+      "owner": "소유자: {{name}}",
+      "department": "부서: {{path}}",
+      "today": "오늘 완료: {{count}}"
     },
     "reception": {
       "title": "안내 데스크",
@@ -89,11 +93,9 @@
     "company_name": "eclicktech",
     "toolbar": {
       "season": "계절: {{season}}",
-      "emotes": "이모트",
       "trophies": "트로피 월",
       "minimap_show": "미니맵 표시",
       "minimap_hide": "미니맵 숨기기",
-      "photo": "사진 모드",
       "sound_on": "소리 켜기",
       "sound_off": "소리 끄기"
     },
@@ -102,19 +104,6 @@
       "summer": "여름",
       "autumn": "가을",
       "winter": "겨울"
-    },
-    "emotes": {
-      "title": "이모트",
-      "wave": "손 흔들기",
-      "check": "좋아요",
-      "alert": "도움 필요",
-      "coffee": "커피"
-    },
-    "photo": {
-      "hint": "원하는 구도로 담아 보세요.",
-      "save": "PNG로 저장",
-      "saved": "다운로드에 저장했습니다.",
-      "exit": "사진 모드 종료"
     },
     "events": {
       "cat": "사무실 고양이가 지나갔습니다.",
@@ -191,6 +180,11 @@
         "progress": "진행 중",
         "in_review": "검토 중"
       }
+    },
+    "brief": {
+      "completed": "오늘 완료 {{count}}",
+      "running": "진행 중 {{count}}",
+      "busiest": "가장 바쁨 {{name}}"
     }
   }
 }

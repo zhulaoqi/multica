@@ -38,10 +38,17 @@ const ERRAND_KINDS: StationKind[] = [
 ];
 
 /** While heads-down: quick breaks that keep them near their desk. */
-const WORK_ERRANDS: StationKind[] = ["coffee", "water", "snack", "printer", "server", "plant"];
+export const WORK_ERRANDS: StationKind[] = [
+  "coffee",
+  "water",
+  "snack",
+  "printer",
+  "server",
+  "plant",
+];
 
 /** While idle: longer trips to the lounge and pantry. */
-const IDLE_ERRANDS: StationKind[] = [
+export const IDLE_ERRANDS: StationKind[] = [
   "sofa",
   "beanbag",
   "kitchen-table",
@@ -238,19 +245,20 @@ export function workRoot(env: RoutineEnv): () => Action[] {
       { kind: "show" },
       { kind: "walk", station: env.home },
       { kind: "face", dir: "down" },
-      { kind: "pose", pose: "type", ms: env.rng.int(6_000, 12_000) },
+      { kind: "pose", pose: "type", ms: env.rng.int(18_000, 35_000) },
       {
         kind: "fn",
         run: (brain) => {
           // Leave in the middle of the burst: the typing frame stays on the
-          // stack and resumes when the errand returns.
-          if (!env.rng.chance(0.55)) return;
+          // stack and resumes when the errand returns. A break is rare, so
+          // the floor reads as people working rather than milling about.
+          if (!env.rng.chance(0.15)) return;
           const errand = pickErrand(env, WORK_ERRANDS);
           if (errand) brain.pushRoutine(errand);
         },
       },
-      { kind: "pose", pose: "type", ms: env.rng.int(4_000, 8_000) },
-      { kind: "pose", pose: "sit", ms: env.rng.int(600, 1_600) },
+      { kind: "pose", pose: "type", ms: env.rng.int(10_000, 20_000) },
+      { kind: "pose", pose: "sit", ms: env.rng.int(600, 1_500) },
     ];
     return steps;
   };
@@ -277,17 +285,26 @@ export function meetingRoot(env: RoutineEnv, seat: string): () => Action[] {
   return () => meetingRoutine(env, seat);
 }
 
-/** Idle agents wander to the soft corners of the office and doze at their desk. */
+/** Idle agents mostly stay at their desk and occasionally take a proper break. */
 export function idleRoot(env: RoutineEnv): () => Action[] {
   return () => {
-    const errand = pickErrand(env, IDLE_ERRANDS);
-    if (errand) return [{ kind: "show" }, ...errand];
+    if (env.rng.chance(0.2)) {
+      const errand = pickErrand(env, IDLE_ERRANDS);
+      if (errand) return [{ kind: "show" }, ...errand];
+    }
+    // The desk branch must walk home first: newcomers spawn at the doorway.
+    const sleeping = env.rng.chance(0.2);
     return [
       { kind: "show" },
       { kind: "walk", station: env.home },
       { kind: "face", dir: "down" },
-      { kind: "pose", pose: "sleep", ms: env.rng.int(4_000, 8_000) },
-      { kind: "say", bubble: "sleep", ms: 1_400 },
+      { kind: "say", bubble: sleeping ? "sleep" : "dots", ms: 900 },
+      {
+        kind: "pose",
+        pose: sleeping ? "sleep" : "read",
+        ms: env.rng.int(12_000, 24_000),
+      },
+      { kind: "pose", pose: "sit", ms: env.rng.int(2_000, 4_000) },
     ];
   };
 }

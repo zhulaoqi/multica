@@ -55,11 +55,12 @@ describe("assignDeskZones", () => {
       new Map(),
     );
 
-    expect(seats.map((seat) => seat.home)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 18, 19]);
+    // The west cluster fills first, then the center cluster; the east cluster
+    // only opens once the first two are full.
+    expect(seats.map((seat) => seat.home)).toEqual([0, 1, 2, 3, 6, 7, 8, 9, 18, 19]);
     expect(zones.map((zone) => [zone.key, zone.label])).toEqual([
       ["west", "AIHUB"],
       ["center", "AIHUB"],
-      ["east", "AIHUB"],
     ]);
   });
 
@@ -162,6 +163,48 @@ describe("assignDeskZones", () => {
       "Unit 1",
       "Unit 2",
     ]);
+  });
+
+  it("labels sub-departments with their parent path and rolls levels up", () => {
+    const groupUnits = [
+      { id: "rd", name: "研发部", position: 0 },
+      { id: "aihub", name: "AIHUB", parent_id: "rd", position: 0 },
+      { id: "bi", name: "BI中台", parent_id: "rd", position: 1 },
+      { id: "rd2", name: "研发二组", parent_id: "rd", position: 2 },
+    ];
+    const agents = agentsOf("a1", "a2", "b1", "b2", "c1", "c2");
+    const unitByAgent = new Map([
+      ["a1", "aihub"],
+      ["a2", "aihub"],
+      ["b1", "bi"],
+      ["b2", "bi"],
+      ["c1", "rd2"],
+      ["c2", "rd2"],
+    ]);
+    const completed = new Map(agents.map((agent) => [agent.id, 10]));
+    const { seats, zones } = assignDeskZones(
+      agents,
+      unitByAgent,
+      groupUnits,
+      completed,
+    );
+
+    expect(homeOf(seats)).toEqual({
+      a1: 0,
+      a2: 1,
+      b1: 2,
+      b2: 3,
+      c1: 4,
+      c2: 5,
+    });
+    expect(zones.map((zone) => [zone.key, zone.pathLabel, zone.children])).toEqual([
+      ["west", "研发部 › AIHUB", ["AIHUB"]],
+      ["center", "研发部 › BI中台", ["BI中台"]],
+      ["east", "研发部 › 研发二组", ["研发二组"]],
+    ]);
+    expect(zones.every((zone) => zone.label === "研发部")).toBe(true);
+    // 60 completions roll up to the parent department: level 7.
+    expect(zones.every((zone) => zone.level === departmentLevel(60))).toBe(true);
   });
 
   it("reads plaque levels from completed work without moving seats", () => {

@@ -21,7 +21,6 @@ import {
 } from "../scene/office-scene";
 import type { OfficeEventId } from "../game/events";
 import type { DeskZone } from "../game/zones";
-import type { PlayerEmoteId } from "../game/emotes";
 import type { SeasonTheme } from "../game/season";
 
 export interface OfficeCanvasProps {
@@ -67,13 +66,9 @@ export interface OfficeCanvasHandle {
   deliverToReception: (agentId: string) => void;
   /** Confetti plus a check from every agent. */
   celebrate: () => void;
-  /** Player emote above the local avatar. */
-  playLocalEmote: (kind: PlayerEmoteId) => void;
   /** Stamped folder, confetti, and a check from every agent. */
   archiveRitual: () => void;
   setMinimapVisible: (visible: boolean) => void;
-  /** PNG data URL of the current view. */
-  capturePhoto: () => string | null;
 }
 
 /**
@@ -149,10 +144,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
         deliverToReception: (agentId) =>
           sceneRef.current?.deliverToReception(agentId),
         celebrate: () => sceneRef.current?.celebrate(),
-        playLocalEmote: (kind) => sceneRef.current?.playLocalEmote(kind),
         archiveRitual: () => sceneRef.current?.archiveRitual(),
         setMinimapVisible: (visible) => sceneRef.current?.setMinimapVisible(visible),
-        capturePhoto: () => sceneRef.current?.capturePhoto() ?? null,
       }),
       [],
     );

@@ -33,4 +33,36 @@ describe("pickVisitPair", () => {
     expect(pair?.visitor.id).toBe("a");
     expect(pair?.host.id).toBe("b");
   });
+
+  it("sends an eligible idle agent even when it is the second candidate", () => {
+    const pair = pickVisitPair(
+      [at("working", 0), at("idle", 20), at("far", 100)],
+      200,
+      new Set(["idle"]),
+    );
+    expect(pair).toEqual({
+      visitor: at("idle", 20),
+      host: at("working", 0),
+    });
+  });
+
+  it("ignores the closest pair when neither agent may visit", () => {
+    expect(
+      pickVisitPair(
+        [at("working-a", 0), at("working-b", 20), at("idle", 100)],
+        200,
+        new Set(["idle"]),
+      ),
+    ).toEqual({
+      visitor: at("idle", 100),
+      host: at("working-b", 20),
+    });
+    expect(
+      pickVisitPair(
+        [at("working-a", 0), at("working-b", 20)],
+        200,
+        new Set(["idle"]),
+      ),
+    ).toBeNull();
+  });
 });

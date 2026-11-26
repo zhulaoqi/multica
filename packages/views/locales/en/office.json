@@ -16,7 +16,8 @@
       "member": "Member",
       "level": "Lv {{level}}",
       "company_level": "Company Lv {{level}}",
-      "mvp": "Top contributor this month"
+      "mvp": "Top contributor this month",
+      "owner": "Owner: {{name}}"
     },
     "status": {
       "working": "Working",
@@ -56,7 +57,10 @@
       "cancel": "Cancel",
       "task_error": "Couldn't create the task. Try again.",
       "task_error_agent_unavailable": "This agent can't take work right now.",
-      "task_error_issue_limit": "This workspace has reached its issue limit."
+      "task_error_issue_limit": "This workspace has reached its issue limit.",
+      "owner": "Owner: {{name}}",
+      "department": "Department: {{path}}",
+      "today": "Completed today: {{count}}"
     },
     "reception": {
       "title": "Front desk",
@@ -95,11 +99,9 @@
     "company_name": "eclicktech",
     "toolbar": {
       "season": "Season: {{season}}",
-      "emotes": "Emotes",
       "trophies": "Trophy wall",
       "minimap_show": "Show minimap",
       "minimap_hide": "Hide minimap",
-      "photo": "Photo mode",
       "sound_on": "Turn sound on",
       "sound_off": "Turn sound off"
     },
@@ -108,19 +110,6 @@
       "summer": "Summer",
       "autumn": "Autumn",
       "winter": "Winter"
-    },
-    "emotes": {
-      "title": "Emotes",
-      "wave": "Wave",
-      "check": "Nice",
-      "alert": "Need a hand",
-      "coffee": "Coffee"
-    },
-    "photo": {
-      "hint": "The office is yours to frame.",
-      "save": "Save PNG",
-      "saved": "Saved to your downloads.",
-      "exit": "Exit photo mode"
     },
     "events": {
       "cat": "The office cat padded through.",
@@ -198,6 +187,11 @@
         "progress": "In progress",
         "in_review": "In review"
       }
+    },
+    "brief": {
+      "completed": "Done today {{count}}",
+      "running": "Running {{count}}",
+      "busiest": "Busiest {{name}}"
     }
   }
 }

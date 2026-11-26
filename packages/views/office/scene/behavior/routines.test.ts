@@ -5,6 +5,8 @@ import { Behavior } from "./behavior";
 import { createRng } from "./rng";
 import { Reservations } from "./reservations";
 import {
+  IDLE_ERRANDS,
+  WORK_ERRANDS,
   idleRoot,
   leaveRoutine,
   meetingRoutine,
@@ -36,14 +38,31 @@ function hooksFor(context: RoutineEnv) {
 }
 
 describe("workRoot", () => {
-  it("starts every burst at the desk with a typing pose", () => {
-    const context = env();
-    const steps = workRoot(context)();
+  it("starts every burst at the desk with a long typing pose", () => {
+    const steps = workRoot(env())();
     expect(steps[0]).toEqual({ kind: "show" });
-    expect(steps[1]).toEqual({ kind: "walk", station: "desk:0" });
-    expect(steps[3]).toMatchObject({ kind: "pose", pose: "type" });
+    expect(steps.some((step) => step.kind === "walk" && step.station === "desk:0")).toBe(true);
+    const typing = steps.filter(
+      (step) => step.kind === "pose" && step.pose === "type",
+    );
+    expect(typing).toHaveLength(2);
+    expect(typing[0]).toMatchObject({
+      kind: "pose",
+      pose: "type",
+      ms: expect.any(Number),
+    });
+    expect(typing[0]!.kind === "pose" ? typing[0]!.ms : 0).toBeGreaterThanOrEqual(18_000);
     // The burst ends back in the chair, and the loop restarts after that.
     expect(steps[steps.length - 1]).toMatchObject({ pose: "sit" });
+  });
+
+  it("keeps hydration and food breaks in the work rotation", () => {
+    expect(WORK_ERRANDS).toEqual(
+      expect.arrayContaining(["coffee", "water", "snack"]),
+    );
+    expect(IDLE_ERRANDS).toEqual(
+      expect.arrayContaining(["sofa", "beanbag", "kitchen-table"]),
+    );
   });
 
   it("carries the cup back to the desk before drinking it", () => {
@@ -111,10 +130,22 @@ describe("pickErrand", () => {
 });
 
 describe("idleRoot", () => {
-  it("always ends a cycle back at the desk", () => {
-    const steps = idleRoot(env("idle"))();
-    const lastWalk = [...steps].reverse().find((step) => step.kind === "walk");
-    expect(lastWalk).toMatchObject({ station: "desk:0" });
+  function forced(firstChance: boolean): RoutineEnv {
+    const context = env("forced");
+    return { ...context, rng: { ...context.rng, chance: () => firstChance } };
+  }
+
+  it("walks back to the desk and reads when staying in", () => {
+    const steps = idleRoot(forced(false))();
+    expect(steps.some((step) => step.kind === "walk" && step.station === "desk:0")).toBe(true);
+    expect(steps.some((step) => step.kind === "pose" && step.pose === "read")).toBe(true);
+    expect(steps[steps.length - 1]).toMatchObject({ pose: "sit" });
+  });
+
+  it("takes a real break occasionally and still walks", () => {
+    const steps = idleRoot(forced(true))();
+    expect(steps[0]).toEqual({ kind: "show" });
+    expect(steps.some((step) => step.kind === "walk")).toBe(true);
   });
 });
 

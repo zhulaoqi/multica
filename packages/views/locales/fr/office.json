@@ -16,7 +16,8 @@
       "member": "Membre",
       "level": "Niv. {{level}}",
       "company_level": "Niveau de l’entreprise {{level}}",
-      "mvp": "Meilleure contribution du mois"
+      "mvp": "Meilleure contribution du mois",
+      "owner": "Propriétaire : {{name}}"
     },
     "status": {
       "working": "En cours",
@@ -56,7 +57,10 @@
       "cancel": "Annuler",
       "task_error": "Impossible de créer la tâche. Réessayez.",
       "task_error_agent_unavailable": "Cet agent ne peut pas accepter de travail pour le moment.",
-      "task_error_issue_limit": "Cet espace de travail a atteint sa limite de tâches."
+      "task_error_issue_limit": "Cet espace de travail a atteint sa limite de tâches.",
+      "owner": "Propriétaire : {{name}}",
+      "department": "Département : {{path}}",
+      "today": "Terminés aujourd'hui : {{count}}"
     },
     "reception": {
       "title": "Accueil",
@@ -95,11 +99,9 @@
     "company_name": "eclicktech",
     "toolbar": {
       "season": "Saison : {{season}}",
-      "emotes": "Émoticônes",
       "trophies": "Mur des trophées",
       "minimap_show": "Afficher la mini-carte",
       "minimap_hide": "Masquer la mini-carte",
-      "photo": "Mode photo",
       "sound_on": "Activer le son",
       "sound_off": "Couper le son"
     },
@@ -108,19 +110,6 @@
       "summer": "Été",
       "autumn": "Automne",
       "winter": "Hiver"
-    },
-    "emotes": {
-      "title": "Émoticônes",
-      "wave": "Saluer",
-      "check": "Bien joué",
-      "alert": "Besoin d'aide",
-      "coffee": "Café"
-    },
-    "photo": {
-      "hint": "À vous de cadrer.",
-      "save": "Enregistrer en PNG",
-      "saved": "Enregistré dans vos téléchargements.",
-      "exit": "Quitter le mode photo"
     },
     "events": {
       "cat": "Le chat du bureau est passé.",
@@ -198,6 +187,11 @@
         "progress": "En cours",
         "in_review": "En revue"
       }
+    },
+    "brief": {
+      "completed": "Aujourd'hui {{count}}",
+      "running": "En cours {{count}}",
+      "busiest": "Le plus actif {{name}}"
     }
   }
 }
