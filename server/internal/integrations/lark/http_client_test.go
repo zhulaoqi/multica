@@ -1105,6 +1105,9 @@ func TestHTTPClient_SendBindingPromptCard_HappyPath(t *testing.T) {
 	if !strings.Contains(capturedBody["content"], "去绑定") {
 		t.Errorf("binding card should carry the localized CTA: %q", capturedBody["content"])
 	}
+	if !strings.Contains(capturedBody["content"], "易研") || strings.Contains(capturedBody["content"], "Multica") {
+		t.Errorf("binding card should use the Chinese product name: %q", capturedBody["content"])
+	}
 }
 
 func TestHTTPClient_SendBindingPromptCard_NoAvailabilityReturnsAPIError(t *testing.T) {
