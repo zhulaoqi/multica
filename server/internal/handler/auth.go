@@ -168,6 +168,10 @@ func isSixDigitCode(code string) bool {
 }
 
 func (h *Handler) issueJWT(user db.User) (string, error) {
+	return h.issueJWTWithTTL(user, auth.AuthTokenTTL())
+}
+
+func (h *Handler) issueJWTWithTTL(user db.User, ttl time.Duration) (string, error) {
 	if auth.IsTemporarilyDisabledUser(uuidToString(user.ID), user.Email) {
 		return "", auth.ErrTemporarilyDisabledUser
 	}
@@ -185,7 +189,7 @@ func (h *Handler) issueJWT(user db.User) (string, error) {
 		"email": user.Email,
 		"name":  user.Name,
 		"sid":   sid,
-		"exp":   time.Now().Add(auth.AuthTokenTTL()).Unix(),
+		"exp":   time.Now().Add(ttl).Unix(),
 		"iat":   time.Now().Unix(),
 	})
 	return token.SignedString(auth.JWTSecret())

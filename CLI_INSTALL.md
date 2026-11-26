@@ -125,9 +125,10 @@ Run:
 multica login
 ```
 
-On a desktop, this command opens a browser window for authentication. In SSH,
-container, web-terminal, and other headless Linux sessions it prints a URL and
-code instead; open the URL in any browser and approve the matching code.
+On a desktop, this command opens a browser window for authentication. In SSH
+and headless Linux sessions, including typical containers and web terminals,
+it prints a URL and code instead; open the URL in any browser and approve the
+matching code.
 
 Use `multica login --device` to select the second flow explicitly.
 

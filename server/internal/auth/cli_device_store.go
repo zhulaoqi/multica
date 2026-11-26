@@ -17,8 +17,8 @@ var (
 
 // CLIDeviceStore coordinates a browser approval with a headless CLI. The
 // device digest is the secret lookup key; the short user code is only for the
-// browser confirmation page. Consume is destructive so an approval can mint
-// at most one session token.
+// browser confirmation page. Complete stores one short-lived exchange token
+// so a lost HTTP response can be retried without minting a second token.
 type CLIDeviceStore interface {
 	Create(ctx context.Context, deviceDigest, userCode string, ttl time.Duration) error
 	Approve(ctx context.Context, userCode, userID string) error
@@ -116,8 +116,8 @@ func (s *MemoryCLIDeviceStore) Complete(_ context.Context, userCode, deviceDiges
 	}
 	if session.token == "" {
 		session.token = token
+		session.expiresAt = s.now().Add(ttl)
 	}
-	session.expiresAt = s.now().Add(ttl)
 	s.sessions[userCode] = session
 	return session.token, nil
 }

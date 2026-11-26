@@ -122,3 +122,27 @@ func TestMemoryCLIDeviceStoreBoundsPendingSessions(t *testing.T) {
 		t.Fatalf("second create error = %v", err)
 	}
 }
+
+func TestMemoryCLIDeviceStoreRetryDoesNotExtendCompletedSession(t *testing.T) {
+	store := NewMemoryCLIDeviceStore()
+	now := time.Now()
+	store.now = func() time.Time { return now }
+	ctx := context.Background()
+	if err := store.Create(ctx, "digest-4", "2345-6789", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Approve(ctx, "2345-6789", "user-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Complete(ctx, "2345-6789", "digest-4", "token-1", 30*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(20 * time.Second)
+	if token, err := store.Complete(ctx, "2345-6789", "digest-4", "token-2", 30*time.Second); err != nil || token != "token-1" {
+		t.Fatalf("retry complete = %q, %v", token, err)
+	}
+	now = now.Add(11 * time.Second)
+	if _, err := store.Get(ctx, "2345-6789", "digest-4"); !errors.Is(err, ErrCLIDeviceNotFound) {
+		t.Fatalf("completed session was extended by retry: %v", err)
+	}
+}

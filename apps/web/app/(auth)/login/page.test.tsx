@@ -178,6 +178,9 @@ describe("LoginPage", () => {
     render(<LoginPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText("ABCD-EFGH")).toBeInTheDocument();
+    expect(screen.getByText(/仅当你刚刚在自己的终端发起登录/)).toHaveTextContent(
+      "将使用账号 admin@operator.local",
+    );
     expect(mockReplace).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "授权此终端" }));
     await waitFor(() => {

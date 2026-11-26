@@ -214,7 +214,6 @@ function FeishuSignIn({
             {/* A plain anchor: this must be a full page load so the browser
                 follows Feishu's redirect. Client routing would try to render
                 the API response as a page. */}
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href={feishuHref}
               className="mt-10 inline-flex h-12 w-full items-center justify-center bg-white text-body font-semibold text-[#0a0d12] transition-colors hover:bg-white/92"

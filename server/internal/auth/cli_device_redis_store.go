@@ -49,8 +49,8 @@ local token = redis.call('HGET', KEYS[1], 't')
 if not token then
     token = ARGV[2]
     redis.call('HSET', KEYS[1], 't', token)
+    redis.call('EXPIRE', KEYS[1], ARGV[3])
 end
-redis.call('EXPIRE', KEYS[1], ARGV[3])
 return token
 `)
 

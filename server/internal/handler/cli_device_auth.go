@@ -19,6 +19,7 @@ import (
 const (
 	cliDeviceLoginTTL          = 5 * time.Minute
 	cliDeviceCompletedTTL      = 30 * time.Second
+	cliDeviceExchangeTokenTTL  = 2 * time.Minute
 	cliDeviceLoginPollInterval = 3
 )
 
@@ -198,7 +199,9 @@ func (h *Handler) PollCLIDeviceLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	token, err := h.issueJWT(user)
+	// This bearer exists only long enough for the CLI to create and verify its
+	// PAT. Unlike an interactive browser session, it must not live for days.
+	token, err := h.issueJWTWithTTL(user, cliDeviceExchangeTokenTTL)
 	if err != nil {
 		if errors.Is(err, auth.ErrTemporarilyDisabledUser) {
 			writeError(w, http.StatusForbidden, auth.TemporarilyDisabledUserError)
