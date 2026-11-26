@@ -2917,7 +2917,7 @@ func (h *Handler) RestoreAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if restored.SourceAgentID.Valid {
-		if synced, err := h.Queries.SyncAgentProjection(r.Context(), restored.ID); err == nil {
+		if synced, err := h.syncAgentProjection(r.Context(), restored.ID); err == nil {
 			restored = synced
 		} else {
 			slog.Warn("sync restored projection failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)

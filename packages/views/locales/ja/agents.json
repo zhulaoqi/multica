@@ -732,6 +732,7 @@
     "members_group": "メンバー",
     "public_group": "公開アクセス",
     "owner_only_readonly": "このエージェントを実行できる相手は、オーナーのみが変更できます。",
+    "organization_managed_readonly": "組織で管理されています。組織側でアクセスを変更すると、このプロジェクトにも自動で同期されます。",
     "members_empty": "選択できるワークスペースメンバーがいません",
     "composio_switch_hint": "ご注意 — このエージェントは Composio アプリが有効です。共有すると、アクセス権を持つ全員がこのエージェントを通じてこれらのアプリを利用できます。"
   },

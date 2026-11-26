@@ -70,6 +70,25 @@ func loadProjection(t *testing.T, project, source string) (projectionRow, bool) 
 	return row, true
 }
 
+func loadProjectionAccess(t *testing.T, projectionID string) (string, string, string) {
+	t.Helper()
+	var mode, targetType, targetID string
+	if err := testPool.QueryRow(context.Background(), `
+		SELECT a.permission_mode, COALESCE(t.target_type, ''), COALESCE(t.target_id::text, '')
+		FROM agent a
+		LEFT JOIN agent_invocation_target t ON t.agent_id = a.id
+		WHERE a.id = $1
+	`, projectionID).Scan(&mode, &targetType, &targetID); err != nil {
+		t.Fatalf("load projection access: %v", err)
+	}
+	return mode, targetType, targetID
+}
+
+func countProjectionTargets(t *testing.T, projectionID string) int {
+	t.Helper()
+	return countRows(t, `SELECT count(*) FROM agent_invocation_target WHERE agent_id = $1`, projectionID)
+}
+
 func projectRequest(userID, project, method, path, param, value string, body any) *http.Request {
 	req := orgRequestWithParam(userID, method, path, param, value, body)
 	req.Header.Set("X-Workspace-ID", project)
@@ -138,6 +157,86 @@ func TestProjection_FollowsSourceEditsAndArchive(t *testing.T) {
 	}
 	if row, _ := loadProjection(t, fx.project, fx.source); row.Archived || !row.Primary {
 		t.Fatalf("projection after source restore = %+v, want active primary", row)
+	}
+}
+
+func TestProjection_CopiesOrganizationAccessOnCreate(t *testing.T) {
+	fx := newProjectionFixture(t, "proj-access-create")
+	ctx := context.Background()
+	if _, err := testPool.Exec(ctx, `
+		UPDATE agent SET permission_mode = 'public_to', visibility = 'workspace' WHERE id = $1;
+		INSERT INTO agent_invocation_target (agent_id, target_type, target_id, created_by)
+		VALUES ($1, 'workspace', $2, $3)
+	`, fx.source, testWorkspaceID, fx.owner); err != nil {
+		t.Fatalf("seed source access: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent_invocation_target WHERE agent_id = $1`, fx.source)
+	})
+
+	if err := testHandler.ensurePrimaryTwinInWorkspace(ctx, parseUUID(fx.project), parseUUID(fx.owner)); err != nil {
+		t.Fatalf("ensure primary twin: %v", err)
+	}
+	projection, _ := loadProjection(t, fx.project, fx.source)
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent_invocation_target WHERE agent_id = $1`, projection.ID)
+	})
+
+	mode, targetType, targetID := loadProjectionAccess(t, projection.ID)
+	if mode != "public_to" || targetType != "workspace" || targetID != fx.project {
+		t.Fatalf("projection access = %q %q %q, want public_to workspace %s", mode, targetType, targetID, fx.project)
+	}
+
+	if _, err := testPool.Exec(ctx, `UPDATE agent SET permission_mode = 'private' WHERE id = $1`, projection.ID); err != nil {
+		t.Fatalf("corrupt projection mode: %v", err)
+	}
+	if err := testHandler.ensurePrimaryTwinInWorkspace(ctx, parseUUID(fx.project), parseUUID(fx.owner)); err != nil {
+		t.Fatalf("re-ensure primary twin: %v", err)
+	}
+	mode, _, _ = loadProjectionAccess(t, projection.ID)
+	if mode != "public_to" {
+		t.Fatalf("re-ensured projection mode = %q, want public_to", mode)
+	}
+}
+
+func TestProjection_FollowsOrganizationAccessEdits(t *testing.T) {
+	fx := newProjectionFixture(t, "proj-access-update")
+	ctx := context.Background()
+	if err := testHandler.ensurePrimaryTwinInWorkspace(ctx, parseUUID(fx.project), parseUUID(fx.owner)); err != nil {
+		t.Fatalf("ensure primary twin: %v", err)
+	}
+	projection, _ := loadProjection(t, fx.project, fx.source)
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM agent_invocation_target WHERE agent_id IN ($1, $2)`, fx.source, projection.ID)
+	})
+
+	rec := httptest.NewRecorder()
+	testHandler.UpdateAgent(rec, orgRequestWithParam(fx.owner, http.MethodPut, "/api/agents/x", "id", fx.source, map[string]any{
+		"permission_mode": "public_to",
+		"invocation_targets": []map[string]any{
+			{"target_type": "member", "target_id": fx.owner},
+		},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update source access = %d %s", rec.Code, rec.Body.String())
+	}
+
+	mode, targetType, targetID := loadProjectionAccess(t, projection.ID)
+	if mode != "public_to" || targetType != "member" || targetID != fx.owner {
+		t.Fatalf("projection access = %q %q %q, want public_to member %s", mode, targetType, targetID, fx.owner)
+	}
+
+	rec = httptest.NewRecorder()
+	testHandler.UpdateAgent(rec, orgRequestWithParam(fx.owner, http.MethodPut, "/api/agents/x", "id", fx.source, map[string]any{
+		"permission_mode":    "private",
+		"invocation_targets": []map[string]any{},
+	}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("make source private = %d %s", rec.Code, rec.Body.String())
+	}
+	mode, _, _ = loadProjectionAccess(t, projection.ID)
+	if mode != "private" || countProjectionTargets(t, projection.ID) != 0 {
+		t.Fatalf("private projection retained access targets")
 	}
 }
 

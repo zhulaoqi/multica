@@ -98,6 +98,7 @@ interface AgentAdvancedSettingsProps {
   onUpdate: (id: string, data: Record<string, unknown>) => Promise<void>;
   currentUserId: string | null;
   canEdit: boolean;
+  sourceHref?: string | null;
   /** The open section, or `null` when the dialog is closed. */
   section: AdvancedSection | null;
   onSectionChange: (section: AdvancedSection | null) => void;
@@ -116,6 +117,7 @@ export function AgentAdvancedSettings({
   onUpdate,
   currentUserId,
   canEdit,
+  sourceHref,
   section,
   onSectionChange,
 }: AgentAdvancedSettingsProps) {
@@ -326,6 +328,7 @@ export function AgentAdvancedSettings({
                       agent={agent}
                       members={members}
                       currentUserId={currentUserId}
+                      sourceHref={sourceHref}
                       onDirtyChange={setDirty}
                       onUpdate={onUpdate}
                     />

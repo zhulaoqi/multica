@@ -46,6 +46,7 @@ export function AccessPicker({
   members,
   ownerId,
   canEdit = true,
+  readOnlyDescription,
   hasComposioAllowlist = false,
   onDirtyChange,
   onReadyChange,
@@ -58,6 +59,7 @@ export function AccessPicker({
   members: MemberWithUser[];
   ownerId?: string | null;
   canEdit?: boolean;
+  readOnlyDescription?: string;
   hasComposioAllowlist?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   /** Notified when the draft becomes committable / non-committable.
@@ -205,6 +207,8 @@ export function AccessPicker({
   };
 
   if (!canEdit) {
+    const description =
+      readOnlyDescription ?? t(($) => $.access.owner_only_readonly);
     const summaryLabel = persistedPrivate
       ? t(($) => $.access.trigger_private)
       : persistedWorkspace
@@ -218,7 +222,7 @@ export function AccessPicker({
     return (
       <div
         className="flex items-start gap-3 px-4 py-4"
-        aria-label={t(($) => $.access.owner_only_readonly)}
+        aria-label={description}
         data-testid="access-readonly"
       >
         <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -227,7 +231,7 @@ export function AccessPicker({
         <div className="min-w-0">
           <p className="text-body font-medium">{summaryLabel}</p>
           <p className="mt-0.5 text-caption leading-5 text-muted-foreground">
-            {t(($) => $.access.owner_only_readonly)}
+            {description}
           </p>
         </div>
       </div>

@@ -69,6 +69,17 @@ func (h *Handler) publishProjection(eventType string, a db.Agent) {
 	})
 }
 
+func (h *Handler) syncAgentProjection(ctx context.Context, id pgtype.UUID) (db.Agent, error) {
+	synced, err := h.Queries.SyncAgentProjection(ctx, id)
+	if err != nil {
+		return db.Agent{}, err
+	}
+	if err := h.Queries.SyncAgentProjectionInvocationTargets(ctx, id); err != nil {
+		return db.Agent{}, fmt.Errorf("sync invocation targets: %w", err)
+	}
+	return synced, nil
+}
+
 // ensureProjection makes sure workspaceID has an active projection of source.
 // An archived projection is restored rather than duplicated. created reports
 // whether a row became active.
@@ -79,13 +90,17 @@ func (h *Handler) ensureProjection(ctx context.Context, workspaceID pgtype.UUID,
 	})
 	if err == nil {
 		if !existing.ArchivedAt.Valid {
-			return existing, false, nil
+			synced, err := h.syncAgentProjection(ctx, existing.ID)
+			if err != nil {
+				return db.Agent{}, false, fmt.Errorf("sync existing projection: %w", err)
+			}
+			return synced, false, nil
 		}
 		restored, err := h.Queries.RestoreAgent(ctx, existing.ID)
 		if err != nil {
 			return db.Agent{}, false, fmt.Errorf("restore projection: %w", err)
 		}
-		synced, err := h.Queries.SyncAgentProjection(ctx, restored.ID)
+		synced, err := h.syncAgentProjection(ctx, restored.ID)
 		if err != nil {
 			return db.Agent{}, false, fmt.Errorf("sync restored projection: %w", err)
 		}
@@ -103,6 +118,9 @@ func (h *Handler) ensureProjection(ctx context.Context, workspaceID pgtype.UUID,
 	}
 	if err != nil {
 		return db.Agent{}, false, fmt.Errorf("create projection: %w", err)
+	}
+	if err := h.Queries.SyncAgentProjectionInvocationTargets(ctx, created.ID); err != nil {
+		return db.Agent{}, false, fmt.Errorf("sync created projection invocation targets: %w", err)
 	}
 	return created, true, nil
 }
@@ -130,7 +148,7 @@ func (h *Handler) syncProjectionsForSource(ctx context.Context, source db.Agent)
 		if p.ArchivedAt.Valid {
 			continue
 		}
-		synced, err := h.Queries.SyncAgentProjection(ctx, p.ID)
+		synced, err := h.syncAgentProjection(ctx, p.ID)
 		if err != nil {
 			slog.Warn("sync projection failed", "error", err, "agent_id", uuidToString(p.ID), "source_agent_id", uuidToString(source.ID))
 			continue
@@ -242,7 +260,7 @@ func (h *Handler) syncProjectionsForDaemon(ctx context.Context, workspaceID pgty
 		return
 	}
 	for _, p := range projections {
-		synced, err := h.Queries.SyncAgentProjection(ctx, p.ID)
+		synced, err := h.syncAgentProjection(ctx, p.ID)
 		if err != nil {
 			slog.Warn("sync projection for daemon failed", "error", err, "agent_id", uuidToString(p.ID))
 			continue

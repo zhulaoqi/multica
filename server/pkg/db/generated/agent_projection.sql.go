@@ -826,3 +826,47 @@ func (q *Queries) SyncAgentProjection(ctx context.Context, id pgtype.UUID) (Agen
 	)
 	return i, err
 }
+
+const syncAgentProjectionInvocationTargets = `-- name: SyncAgentProjectionInvocationTargets :exec
+WITH desired AS MATERIALIZED (
+    SELECT
+        p.id AS agent_id,
+        t.target_type,
+        CASE
+            WHEN t.target_type = 'workspace' THEN p.workspace_id
+            ELSE t.target_id
+        END AS target_id,
+        t.created_by
+    FROM agent p
+    JOIN agent_invocation_target t ON t.agent_id = p.source_agent_id
+    WHERE p.id = $1
+),
+upserted AS (
+    INSERT INTO agent_invocation_target (
+        agent_id, target_type, target_id, created_by
+    )
+    SELECT agent_id, target_type, target_id, created_by
+    FROM desired
+    ON CONFLICT (agent_id, target_type, target_id) DO UPDATE SET
+        created_by = EXCLUDED.created_by,
+        created_at = now()
+    RETURNING 1
+)
+DELETE FROM agent_invocation_target current
+WHERE current.agent_id = $1
+  AND (SELECT count(*) FROM upserted) >= 0
+  AND NOT EXISTS (
+      SELECT 1
+      FROM desired
+      WHERE desired.target_type = current.target_type
+        AND desired.target_id IS NOT DISTINCT FROM current.target_id
+  )
+`
+
+// Mirrors the source allow-list into one project projection. Workspace-wide
+// access is remapped to the projection's workspace; member and team ids are
+// organization-global and carry across unchanged.
+func (q *Queries) SyncAgentProjectionInvocationTargets(ctx context.Context, projectionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, syncAgentProjectionInvocationTargets, projectionID)
+	return err
+}

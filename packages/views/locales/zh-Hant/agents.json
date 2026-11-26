@@ -893,6 +893,7 @@
     "members_group": "成員",
     "public_group": "公開訪問",
     "owner_only_readonly": "只有該 AI 代理的所有者可以更改誰能呼叫它。",
+    "organization_managed_readonly": "由組織管理。請到組織中更改訪問權限，變更會自動同步到這個專案。",
     "members_empty": "沒有可選擇的工作區成員",
     "composio_switch_hint": "提示——該 AI 代理已啟用 Composio 應用。共享後，所有獲得訪問權限的人都可以透過該 AI 代理使用這些應用。"
   },

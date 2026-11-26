@@ -914,6 +914,7 @@
     "members_group": "People",
     "public_group": "Public access",
     "owner_only_readonly": "Only the agent owner can change who can run this agent.",
+    "organization_managed_readonly": "Managed by the organization. Change access there; updates sync to this project.",
     "members_empty": "No workspace members to choose from",
     "composio_switch_hint": "Heads up — this agent has Composio apps enabled. Sharing it lets everyone with access use those apps through this agent."
   },

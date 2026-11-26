@@ -734,6 +734,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         onUpdate={handleUpdate}
         currentUserId={currentUserId}
         canEdit={canManageAgent}
+        sourceHref={sourceHref}
         section={advancedSection}
         onSectionChange={openAdvanced}
       />

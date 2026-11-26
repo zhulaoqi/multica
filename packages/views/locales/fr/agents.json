@@ -914,6 +914,7 @@
     "members_group": "Personnes",
     "public_group": "Accès public",
     "owner_only_readonly": "Seul le propriétaire de l'agent peut modifier qui peut l'exécuter.",
+    "organization_managed_readonly": "Géré par l'organisation. Modifiez-y l'accès ; les changements sont automatiquement synchronisés avec ce projet.",
     "members_empty": "Aucun membre de l'espace de travail à choisir",
     "composio_switch_hint": "Attention — cet agent a des applications Composio activées. Le partager permet à toute personne y ayant accès d'utiliser ces applications via cet agent."
   },
