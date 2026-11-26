@@ -70,6 +70,10 @@ func (h *Handler) RefreshSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "only interactive sessions can be refreshed")
 		return
 	}
+	if renewable, present := claims["renewable"].(bool); present && !renewable {
+		writeError(w, http.StatusBadRequest, "this session cannot be refreshed")
+		return
+	}
 
 	// Defense in depth, mirroring RenewCurrentPersonalAccessToken: the
 	// middleware set X-User-ID from these very claims, so a mismatch means a

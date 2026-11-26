@@ -168,10 +168,10 @@ func isSixDigitCode(code string) bool {
 }
 
 func (h *Handler) issueJWT(user db.User) (string, error) {
-	return h.issueJWTWithTTL(user, auth.AuthTokenTTL())
+	return h.issueJWTWithTTL(user, auth.AuthTokenTTL(), true)
 }
 
-func (h *Handler) issueJWTWithTTL(user db.User, ttl time.Duration) (string, error) {
+func (h *Handler) issueJWTWithTTL(user db.User, ttl time.Duration, renewable bool) (string, error) {
 	if auth.IsTemporarilyDisabledUser(uuidToString(user.ID), user.Email) {
 		return "", auth.ErrTemporarilyDisabledUser
 	}
@@ -185,12 +185,13 @@ func (h *Handler) issueJWTWithTTL(user db.User, ttl time.Duration) (string, erro
 		return "", err
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":   uuidToString(user.ID),
-		"email": user.Email,
-		"name":  user.Name,
-		"sid":   sid,
-		"exp":   time.Now().Add(ttl).Unix(),
-		"iat":   time.Now().Unix(),
+		"sub":       uuidToString(user.ID),
+		"email":     user.Email,
+		"name":      user.Name,
+		"sid":       sid,
+		"exp":       time.Now().Add(ttl).Unix(),
+		"iat":       time.Now().Unix(),
+		"renewable": renewable,
 	})
 	return token.SignedString(auth.JWTSecret())
 }

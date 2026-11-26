@@ -201,7 +201,7 @@ func (h *Handler) PollCLIDeviceLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// This bearer exists only long enough for the CLI to create and verify its
 	// PAT. Unlike an interactive browser session, it must not live for days.
-	token, err := h.issueJWTWithTTL(user, cliDeviceExchangeTokenTTL)
+	token, err := h.issueJWTWithTTL(user, cliDeviceExchangeTokenTTL, false)
 	if err != nil {
 		if errors.Is(err, auth.ErrTemporarilyDisabledUser) {
 			writeError(w, http.StatusForbidden, auth.TemporarilyDisabledUserError)

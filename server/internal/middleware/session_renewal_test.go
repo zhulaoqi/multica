@@ -107,6 +107,25 @@ func TestAuth_DoesNotRenewOutsideWindow(t *testing.T) {
 	}
 }
 
+func TestAuth_DoesNotRenewNonRenewableCookieToken(t *testing.T) {
+	claims := jwt.MapClaims{
+		"sub":       "test-user-id",
+		"email":     "test@multica.ai",
+		"sid":       "sid-device-exchange",
+		"exp":       time.Now().Add(time.Minute).Unix(),
+		"iat":       time.Now().Unix(),
+		"renewable": false,
+	}
+	token := generateToken(claims, auth.JWTSecret())
+	rec, called := runAuth(t, cookieRequest(http.MethodGet, token))
+	if !called {
+		t.Fatal("the valid exchange token must still authenticate")
+	}
+	if got := renewedAuthCookie(rec); got != "" {
+		t.Error("a non-renewable exchange token must not produce a renewed cookie")
+	}
+}
+
 // Rotating the auth cookie changes what a pre-MUL-7436 CSRF token is checked
 // against. Confining renewal to methods that carry no CSRF check means a
 // rotation can never invalidate the request that triggered it.

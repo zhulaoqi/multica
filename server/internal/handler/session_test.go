@@ -152,6 +152,25 @@ func TestRefreshSession_RejectsNonSessionCredentials(t *testing.T) {
 	})
 }
 
+func TestRefreshSession_RejectsNonRenewableExchangeToken(t *testing.T) {
+	claims := jwt.MapClaims{
+		"sub":       testUserID,
+		"email":     handlerTestEmail,
+		"name":      handlerTestName,
+		"sid":       "sid-device-exchange",
+		"exp":       time.Now().Add(2 * time.Minute).Unix(),
+		"iat":       time.Now().Unix(),
+		"renewable": false,
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(auth.JWTSecret())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.Call(t, testHandler.RefreshSession, bearerRefreshRequest(t, token)).
+		Want(http.StatusBadRequest)
+}
+
 // An expired JWT never reaches this handler in production — the middleware
 // rejects it — but if it ever did, refresh must not be the thing that brings
 // it back to life.

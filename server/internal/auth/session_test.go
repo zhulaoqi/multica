@@ -270,6 +270,14 @@ func TestRenewSessionToken_RejectsClaimsWithoutSubject(t *testing.T) {
 	}
 }
 
+func TestRenewSessionToken_RejectsNonRenewableToken(t *testing.T) {
+	claims := sessionClaims(t, time.Now().Add(time.Minute), "sid-device-exchange")
+	claims["renewable"] = false
+	if _, _, err := RenewSessionToken(claims); err != ErrNotSessionToken {
+		t.Fatalf("err = %v, want ErrNotSessionToken", err)
+	}
+}
+
 // Every non-JWT credential the auth middleware accepts must be unable to
 // become an interactive session. These all authenticate fine; none of them is
 // a session.

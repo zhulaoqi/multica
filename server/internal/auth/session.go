@@ -215,6 +215,9 @@ func RenewSessionToken(claims jwt.MapClaims) (string, time.Time, error) {
 	if sub == "" {
 		return "", time.Time{}, ErrNotSessionToken
 	}
+	if renewable, present := claims["renewable"].(bool); present && !renewable {
+		return "", time.Time{}, ErrNotSessionToken
+	}
 	email, _ := claims["email"].(string)
 
 	// A user disabled since their token was signed must not have that token
