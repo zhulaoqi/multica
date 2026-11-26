@@ -72,6 +72,11 @@ export interface OfficeAgentView {
   activity?: string | null;
   /** Waiting on a runtime that is offline; the head bubble shows an alert. */
   alert?: boolean;
+  /**
+   * Stable home slot assigned by the department zoning: 0-11 are desks, then
+   * the overflow standing spots. Falls back to the array index.
+   */
+  home?: number;
 }
 
 /** A human avatar the agents can react to (the local player and peers). */
@@ -217,11 +222,15 @@ export class OfficeAgents {
   setAgents(agents: OfficeAgentView[]) {
     const present = new Set<string>();
     agents.forEach((agent, index) => {
-      const home = this.homes[index];
+      const homeIndex = agent.home ?? index;
+      const home = this.homes[homeIndex];
       if (!home) return;
       present.add(agent.id);
       const existing = this.avatars.get(agent.id);
       if (existing) {
+        if (existing.home.key !== home.key) {
+          this.reassignHome(existing, home, homeIndex);
+        }
         if (existing.label.text !== agent.name) existing.label.text = agent.name;
         existing.view.setCaption(agent.activity ?? null);
         existing.alert = agent.alert ?? false;
@@ -243,7 +252,7 @@ export class OfficeAgents {
         }
         return;
       }
-      this.avatars.set(agent.id, this.createAvatar(agent, home, index));
+      this.avatars.set(agent.id, this.createAvatar(agent, home, homeIndex));
     });
 
     for (const [id, avatar] of this.avatars) {
@@ -454,7 +463,23 @@ export class OfficeAgents {
 
   // -- avatar lifecycle ---------------------------------------------------
 
-  private createAvatar(agent: OfficeAgentView, home: Station, index: number): Avatar {
+  /**
+   * Department zoning moved the agent to another desk. Agents mid-delivery,
+   * mid-visit, or held by an open panel keep the moment going and settle into
+   * the new home when they return; everyone else walks over right away.
+   */
+  private reassignHome(avatar: Avatar, home: Station, homeIndex: number) {
+    avatar.home = home;
+    avatar.env.home = home.key;
+    avatar.deskIndex = homeIndex;
+    avatar.screen = this.desksFor(homeIndex);
+    if (avatar.errand || avatar.visit || avatar.chatPartnerId) return;
+    if (!avatar.active || avatar.id === this.engagedId) return;
+    this.cancelSocial(avatar, false);
+    this.rebuildRoot(avatar);
+  }
+
+  private createAvatar(agent: OfficeAgentView, home: Station, homeIndex: number): Avatar {
     const view = createCharacter(this.pixi, {
       kind: "agent",
       seed: agent.id,
@@ -479,7 +504,7 @@ export class OfficeAgents {
 
     const env: RoutineEnv = {
       home: home.key,
-      rng: createRng(`${agent.id}:${index}`),
+      rng: createRng(`${agent.id}:${homeIndex}`),
       stations: this.stations,
       isFree: (key) => this.reservations.isFree(key),
     };
@@ -511,8 +536,8 @@ export class OfficeAgents {
       active: false,
       spawnAt: null,
       hidden: false,
-      deskIndex: index,
-      screen: this.desksFor(index),
+      deskIndex: homeIndex,
+      screen: this.desksFor(homeIndex),
       visit: null,
       errand: null,
       chatPartnerId: null,

@@ -20,6 +20,7 @@ import {
   type RoomBadge,
 } from "../scene/office-scene";
 import type { OfficeEventId } from "../game/events";
+import type { DeskZone } from "../game/zones";
 import type { PlayerEmoteId } from "../game/emotes";
 import type { SeasonTheme } from "../game/season";
 
@@ -49,6 +50,8 @@ export interface OfficeCanvasProps {
   deskTraces?: DeskTrace[];
   /** Department name and level per room. */
   roomBadges?: RoomBadge[];
+  /** Department name and level over each seated desk cluster. */
+  deskZones?: DeskZone[];
   /** Whether the corner floor plan is shown. */
   minimapVisible?: boolean;
   /** Agent whose panel is open; it pauses and faces the player. */
@@ -99,6 +102,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       receptionPapers = 0,
       deskTraces = [],
       roomBadges = [],
+      deskZones = [],
       minimapVisible = false,
       engagedAgentId,
       className,
@@ -243,6 +247,10 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     useEffect(() => {
       sceneRef.current?.setRoomBadges(roomBadges);
     }, [roomBadges, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setDeskZones(deskZones);
+    }, [deskZones, ready]);
 
     useEffect(() => {
       sceneRef.current?.setSeason(season);

@@ -23,6 +23,7 @@ import {
 import type { Agent, Squad } from "@multica/core/types";
 import type { PlayerEmoteId } from "./game/emotes";
 import type { OfficeEventId } from "./game/events";
+import { teamUserIdsFor } from "../agents/team-scope";
 import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
 import { CollectionPageHeader } from "../layout";
 import { isAgentStuck } from "../layout/panels/team-status";
@@ -58,11 +59,17 @@ import {
   weeklyProgress,
 } from "./game/progress";
 import { seasonFor } from "./game/season";
+import { assignDeskZones } from "./game/zones";
 import type { TrophyStats } from "./game/trophies";
 import { OfficeAudio } from "./office-sound";
 import type { AgentDeskStatus } from "./scene/characters";
 import { isTypingTarget } from "./scene/input";
-import { buildOfficeLayout, spawnFor, type RoomId } from "./scene/layout";
+import {
+  buildOfficeLayout,
+  OFFICE_DESK_COUNT,
+  spawnFor,
+  type RoomId,
+} from "./scene/layout";
 import type { DeskTrace, OfficePlace, RoomBadge } from "./scene/office-scene";
 import { useAgentActivityText } from "./use-agent-activity";
 import { useMyOfficeActivityText } from "./use-my-office-activity";
@@ -105,12 +112,13 @@ export function OfficePage({
     ...agentListOptions(wsId),
     enabled: !!wsId,
   });
-  // Department plaques are a bonus layer: a workspace without an organisation,
-  // or a caller that cannot read it, still gets the whole office. The C-end
-  // omits them — they describe the company, not the caller's work.
+  // The org tree drives both layers: the workspace office uses it for room
+  // plaques, and the C-end uses it to resolve the lead's own team and the
+  // department each agent desks in. A workspace without an organisation, or a
+  // caller that cannot read it, still gets the whole office.
   const { data: orgTree } = useQuery({
     ...orgTreeOptions(wsId),
-    enabled: !!wsId && !home,
+    enabled: !!wsId,
     retry: false,
   });
   const { byAgent } = useWorkspacePresenceMap(wsId || undefined);
@@ -158,13 +166,36 @@ export function OfficePage({
     [peers, nameById, t],
   );
 
+  const role = members.find((member) => member.user_id === user?.id)?.role;
+  const isWorkspaceAdmin = role === "owner" || role === "admin";
+  // A department lead's team: members of every unit they manage, plus
+  // themselves. Null for everyone who leads nothing.
+  const teamUserIds = useMemo(
+    () => teamUserIdsFor(orgTree, user?.id),
+    [orgTree, user?.id],
+  );
+
   const activeAgents = useMemo(() => {
     const live = agents.filter((agent) => !agent.archived_at);
     if (!home) return live;
+    if (isWorkspaceAdmin) return live;
+    // Leads see their whole team, not just the agents on their own dispatches.
+    if (teamUserIds) {
+      return live.filter(
+        (agent) => !!agent.owner_id && teamUserIds.has(agent.owner_id),
+      );
+    }
     return live.filter(
       (agent) => scope.agentIds.has(agent.id) || scope.workingAgentIds.has(agent.id),
     );
-  }, [agents, home, scope.agentIds, scope.workingAgentIds]);
+  }, [
+    agents,
+    home,
+    isWorkspaceAdmin,
+    teamUserIds,
+    scope.agentIds,
+    scope.workingAgentIds,
+  ]);
 
   // Office levels read the same 30-day series as the Agents list, so the
   // roster, the crown, and the company level all agree with the Team panel.
@@ -176,6 +207,30 @@ export function OfficePage({
       })),
     [activeAgents, activityByAgent],
   );
+  const completedById = useMemo(
+    () => new Map(contributions.map((entry) => [entry.id, entry.completed])),
+    [contributions],
+  );
+  const unitByAgent = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const agent of orgTree?.agents ?? []) {
+      if (agent.unit_id) map.set(agent.id, agent.unit_id);
+    }
+    return map;
+  }, [orgTree]);
+  // Departments get contiguous desk clusters, so AIHUB and BI中台 do not sit
+  // interleaved. The assignment is deterministic and independent of status.
+  const zoneAssignment = useMemo(
+    () =>
+      assignDeskZones(
+        activeAgents,
+        unitByAgent,
+        orgTree?.units ?? [],
+        completedById,
+      ),
+    [activeAgents, unitByAgent, orgTree, completedById],
+  );
+
   const mvpId = useMemo(() => pickMvp(contributions), [contributions]);
   const companyLevel = useMemo(
     () => companyProgress(contributions).level,
@@ -248,7 +303,14 @@ export function OfficePage({
     tasksByIssue: scope.tasksByIssue,
     labels: myLabels,
   });
-  const activityById = home ? myActivityById : workspaceActivityById;
+  // The C-end prefers the caller's own dispatch wording, then falls back to
+  // the workspace-wide activity so team agents keep a meaningful bubble.
+  const activityById = useMemo(() => {
+    if (!home) return workspaceActivityById;
+    const merged = new Map(workspaceActivityById);
+    for (const [id, text] of myActivityById) merged.set(id, text);
+    return merged;
+  }, [home, myActivityById, workspaceActivityById]);
   const agentViews = useMemo(
     () =>
       agentStatuses.map(({ id, name, status, alert }) => ({
@@ -260,6 +322,15 @@ export function OfficePage({
       })),
     [agentStatuses, activityById],
   );
+  // The canvas seats agents by their department zone; the roster keeps the
+  // original ordering.
+  const officeAgentViews = useMemo(() => {
+    const byId = new Map(agentViews.map((view) => [view.id, view]));
+    return zoneAssignment.seats.flatMap(({ id, home: seat }) => {
+      const view = byId.get(id);
+      return view ? [{ ...view, home: seat }] : [];
+    });
+  }, [agentViews, zoneAssignment]);
   const rosterAgents = useMemo(
     () =>
       agentViews.map((agent) => ({
@@ -383,33 +454,34 @@ export function OfficePage({
   // 30-day window as everything else. Org data is optional.
   const departments = useMemo(
     () =>
-      departmentRooms(
-        orgTree?.units ?? [],
-        orgTree?.agents ?? [],
-        new Map(contributions.map((entry) => [entry.id, entry.completed])),
-      ),
-    [orgTree, contributions],
+      departmentRooms(orgTree?.units ?? [], orgTree?.agents ?? [], completedById),
+    [orgTree, completedById],
   );
+  // Room plaques describe the company, so the C-end keeps them off; it shows
+  // the desk-zone plaques instead.
   const roomBadges = useMemo<RoomBadge[]>(
     () =>
-      departments.map((department) => ({
-        room: department.room,
-        label: department.name,
-        level: department.level,
-      })),
-    [departments],
+      home
+        ? []
+        : departments.map((department) => ({
+            room: department.room,
+            label: department.name,
+            level: department.level,
+          })),
+    [home, departments],
   );
 
   // Desks collect today's traces: a mug after the first run, paper as the
-  // day stacks up. Index matches the scene's desk order.
+  // day stacks up. The slot matches the agent's zoned seat.
   const deskTraces = useMemo<DeskTrace[]>(
     () =>
-      activeAgents.flatMap((agent, deskIndex) => {
-        const today = completionsToday(activityByAgent.get(agent.id));
+      zoneAssignment.seats.flatMap(({ id, home: seat }) => {
+        if (seat >= OFFICE_DESK_COUNT) return [];
+        const today = completionsToday(activityByAgent.get(id));
         if (today <= 0) return [];
-        return [{ deskIndex, mug: true, papers: Math.min(3, today) }];
+        return [{ deskIndex: seat, mug: true, papers: Math.min(3, today) }];
       }),
-    [activeAgents, activityByAgent],
+    [zoneAssignment, activityByAgent],
   );
 
   const trophyStats = useMemo<TrophyStats>(
@@ -553,7 +625,6 @@ export function OfficePage({
     if (agents.length > 0 && !panelAgent) setPanelAgentId(null);
   }, [agents.length, panelAgent, panelAgentId]);
 
-  const role = members.find((member) => member.user_id === user?.id)?.role;
   const canAssign = useCallback(
     (agent: Agent) => canAssignAgent(agent, user?.id, role),
     [user?.id, role],
@@ -676,7 +747,7 @@ export function OfficePage({
           <div className="relative flex min-h-0 flex-1">
             <OfficeCanvas
               ref={canvasRef}
-              agents={agentViews}
+              agents={officeAgentViews}
               peers={peerViews}
               localName={localName}
               roomNames={roomNames}
@@ -692,6 +763,7 @@ export function OfficePage({
               receptionPapers={waitingReview.length}
               deskTraces={deskTraces}
               roomBadges={roomBadges}
+              deskZones={zoneAssignment.zones}
               minimapVisible={minimapVisible}
               engagedAgentId={panelAgent?.id ?? null}
               className={photoMode ? "rounded-none border-0 shadow-none" : undefined}

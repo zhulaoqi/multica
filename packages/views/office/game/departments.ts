@@ -30,6 +30,14 @@ export interface OrgAgentLike {
 export const DEPARTMENT_COMPLETIONS_PER_LEVEL = 10;
 export const MAX_DEPARTMENT_LEVEL = 9;
 
+/** Level a department has reached after `completed` finished tasks. */
+export function departmentLevel(completed: number): number {
+  return Math.min(
+    MAX_DEPARTMENT_LEVEL,
+    Math.floor(Math.max(0, completed) / DEPARTMENT_COMPLETIONS_PER_LEVEL) + 1,
+  );
+}
+
 export interface DepartmentRoom {
   room: RoomId;
   unitId: string;
@@ -77,10 +85,7 @@ export function departmentRooms(
     .slice(0, rooms.length);
 
   return ranked.map(([unitId, entry], index) => {
-    const level = Math.min(
-      MAX_DEPARTMENT_LEVEL,
-      Math.floor(entry.completed / DEPARTMENT_COMPLETIONS_PER_LEVEL) + 1,
-    );
+    const level = departmentLevel(entry.completed);
     return {
       room: rooms[index]!,
       unitId,

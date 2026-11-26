@@ -15,6 +15,7 @@ import {
   findPath,
   isWalkableWorld,
   stepTowards,
+  TILE,
   type OfficeLayout,
   type RoomId,
 } from "./layout";
@@ -35,6 +36,7 @@ import {
   pickOfficeEvent,
 } from "../game/events";
 import type { PlayerEmoteId } from "../game/emotes";
+import type { DeskZone } from "../game/zones";
 
 const FRAME_INTERVAL_MS = 1000 / 30;
 const WALK_SPEED = 96;
@@ -224,6 +226,7 @@ export class OfficeScene {
   private confettiUntil = 0;
   private traces: Container | null = null;
   private badges: Container | null = null;
+  private zones: Container | null = null;
   private localEmoteKind: PlayerEmoteId | null = null;
   private localEmoteUntil = 0;
   private readonly weather: OfficeWeather;
@@ -545,6 +548,30 @@ export class OfficeScene {
     this.traces = layer;
   }
 
+  /** A name-and-level plate, used for room and desk-zone plaques. */
+  private createPlaque(label: string, level: number): Container {
+    const plate = new this.pixi.Container();
+    const text = new this.pixi.Text({
+      text: `${label} · Lv ${level}`,
+      style: {
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+        fontSize: 7,
+        fontWeight: "600",
+        fill: 0xe8f4fb,
+      },
+    });
+    text.resolution = 4;
+    text.position.set(4, 1);
+    const width = Math.ceil(text.width) + 8;
+    const background = new this.pixi.Graphics();
+    background
+      .roundRect(0, 0, width, Math.ceil(text.height) + 3, 2)
+      .fill({ color: 0x5aa8a2, alpha: 0.82 });
+    plate.addChild(background, text);
+    plate.eventMode = "none";
+    return plate;
+  }
+
   /** Department name and level on each room's wall. */
   setRoomBadges(badges: readonly RoomBadge[]) {
     if (this.destroyed) return;
@@ -555,35 +582,32 @@ export class OfficeScene {
     for (const badge of badges) {
       const room = this.layout.rooms.find((entry) => entry.id === badge.room);
       if (!room) continue;
-      const plate = new this.pixi.Container();
-      const text = new this.pixi.Text({
-        text: `${badge.label} · Lv ${badge.level}`,
-        style: {
-          fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
-          fontSize: 7,
-          fontWeight: "600",
-          fill: 0xe8f4fb,
-        },
-      });
-      text.resolution = 4;
-      text.position.set(4, 1);
-      const width = Math.ceil(text.width) + 8;
-      const background = new this.pixi.Graphics();
-      background
-        .roundRect(0, 0, width, Math.ceil(text.height) + 3, 2)
-        .fill({ color: 0x5aa8a2, alpha: 0.82 });
-      plate.addChild(background, text);
-      plate.position.set(
-        room.rect.x * 16 + 3,
-        room.rect.y * 16 + 16,
-      );
-      plate.eventMode = "none";
+      const plate = this.createPlaque(badge.label, badge.level);
+      plate.position.set(room.rect.x * TILE + 3, room.rect.y * TILE + 16);
       layer.addChild(plate);
     }
     layer.sortableChildren = true;
     layer.zIndex = ROOM_LABEL_Z + 1;
     this.world.addChild(layer);
     this.badges = layer;
+  }
+
+  /** Department name and level over each desk cluster. */
+  setDeskZones(zones: readonly DeskZone[]) {
+    if (this.destroyed) return;
+    this.zones?.destroy({ children: true });
+    this.zones = null;
+    if (zones.length === 0) return;
+    const layer = new this.pixi.Container();
+    for (const zone of zones) {
+      const plate = this.createPlaque(zone.label, zone.level);
+      plate.position.set(zone.anchor.tx * TILE, zone.anchor.ty * TILE);
+      layer.addChild(plate);
+    }
+    layer.sortableChildren = true;
+    layer.zIndex = ROOM_LABEL_Z + 1;
+    this.world.addChild(layer);
+    this.zones = layer;
   }
 
   /** The player waves, acknowledges, asks for help, or raises a coffee cup. */
