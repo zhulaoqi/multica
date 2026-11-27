@@ -138,10 +138,10 @@ func TestOrgBotCardFieldsAlignOnAFixedLabelColumn(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	elements := cardBodyElements(t, card)
-	if len(elements) != 5 {
-		t.Fatalf("elements = %d, want four fields plus one action row", len(elements))
+	if len(elements) != 6 {
+		t.Fatalf("elements = %d, want title, four fields and one action row", len(elements))
 	}
-	for _, row := range elements[:4] {
+	for _, row := range elements[1:5] {
 		columns, _ := row["columns"].([]any)
 		if len(columns) != 2 {
 			t.Fatalf("field columns = %#v", row["columns"])
@@ -225,17 +225,12 @@ func TestOrgDispatchWorkerNamesAnotherPersonsSquad(t *testing.T) {
 
 func cardTitle(t *testing.T, card string) string {
 	t.Helper()
-	var doc struct {
-		Header struct {
-			Title struct {
-				Content string `json:"content"`
-			} `json:"title"`
-		} `json:"header"`
+	elements := cardBodyElements(t, card)
+	if len(elements) == 0 || elements[0]["tag"] != "markdown" {
+		t.Fatalf("card has no markdown title: %s", card)
 	}
-	if err := json.Unmarshal([]byte(card), &doc); err != nil {
-		t.Fatalf("card json: %v", err)
-	}
-	return doc.Header.Title.Content
+	content, _ := elements[0]["content"].(string)
+	return strings.TrimSuffix(strings.TrimPrefix(content, "**"), "**")
 }
 
 // cardFields reads the label/value rows of a notice card.

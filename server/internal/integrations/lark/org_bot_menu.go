@@ -231,7 +231,7 @@ func (b *OrgBot) rememberMenu(openID, fingerprint string) {
 }
 
 func (b *OrgBot) sendPersonalText(ctx context.Context, msg InboundMessage, text string) error {
-	card, err := orgBotNoticeCard("blue", "易研", []orgBotCardField{{Label: "说明", Value: text}}, nil, "", "")
+	card, err := orgBotNoticeCard("易研", []orgBotCardField{{Label: "说明", Value: text}}, nil, "", "")
 	if err != nil || card == "" {
 		return err
 	}

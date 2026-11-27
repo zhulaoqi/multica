@@ -7,7 +7,7 @@ import (
 )
 
 func TestIntakeCard_HidesExecutorFromRequester(t *testing.T) {
-	raw, err := IntakeCard("blue", "做到这里", "做到：退款接口\n还剩：对账", "打开对话", "https://example.test/intake/1")
+	raw, err := IntakeCard("做到这里", "做到：退款接口\n还剩：对账", "打开对话", "https://example.test/intake/1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestIntakeCard_HidesExecutorFromRequester(t *testing.T) {
 // Markdown element that renders them instead of the legacy lark_md text.
 func TestIntakeCard_RendersMarkdownBody(t *testing.T) {
 	body := "## 已接模型的渠道\n\n| 渠道 | 模型数 |\n|---|---|\n| QWEN | 100 |"
-	raw, err := IntakeCard("blue", "有新评论", body, "打开", "https://example.test/inbox")
+	raw, err := IntakeCard("有新评论", body, "打开", "https://example.test/inbox")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestIntakeCard_RendersMarkdownBody(t *testing.T) {
 		t.Fatalf("schema = %v, want 2.0", doc["schema"])
 	}
 	content := doc["body"].(map[string]any)["elements"].([]any)[0].(map[string]any)
-	if content["tag"] != "markdown" || content["content"] != body {
+	if content["tag"] != "markdown" || content["content"] != "**有新评论**\n\n"+body {
 		t.Fatalf("body element = %#v", content)
 	}
 }

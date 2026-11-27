@@ -190,15 +190,14 @@ type orgBotCardField struct {
 	Value string
 }
 
-// orgBotChoiceCard is the tap list. The header is the only title; the numbered
-// text reply stays outside the card for clients that cannot click buttons.
-// The options are the content, so each one spans the card.
+// orgBotChoiceCard is the tap list. Its Markdown title stays inside the
+// headerless card body, followed by full-width options.
 func orgBotChoiceCard(title string, buttons []orgBotCardButton) (string, error) {
 	elements := make([]any, 0, len(buttons))
 	for _, button := range buttons {
 		elements = append(elements, orgBotCallbackButton(button, "fill"))
 	}
-	return orgBotCardJSON("blue", title, elements)
+	return orgBotCardJSON(title, elements)
 }
 
 func orgBotSelectedCard(state OrgBotChatContext, allowSwitch bool) (string, error) {
@@ -213,7 +212,7 @@ func orgBotSelectedCard(state OrgBotChatContext, allowSwitch bool) (string, erro
 			fields = append([]orgBotCardField{{Label: "交给", Value: path}}, fields...)
 		}
 	}
-	return orgBotNoticeCard("blue", title, fields, orgBotSwitchButtons(allowSwitch), "", "")
+	return orgBotNoticeCard(title, fields, orgBotSwitchButtons(allowSwitch), "", "")
 }
 
 func orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attachment string, allowSwitch bool) (string, error) {
@@ -233,7 +232,7 @@ func orgBotDispatchedCard(label, requirement, identifier, handedTo, link, attach
 	if note := strings.TrimSpace(attachment); note != "" {
 		fields = append(fields, orgBotCardField{Label: "附件", Value: note})
 	}
-	return orgBotNoticeCard("green", title, fields, orgBotSwitchButtons(allowSwitch), "打开任务", link)
+	return orgBotNoticeCard(title, fields, orgBotSwitchButtons(allowSwitch), "打开任务", link)
 }
 
 // OrgDispatchWorker is who is doing a dispatched task, as the receipt cards
@@ -307,7 +306,7 @@ func OrgDispatchStartCard(identifier, title string, worker OrgDispatchWorker, li
 		{Label: "需求", Value: title},
 		{Label: "编号", Value: identifier},
 	}, worker.fields()...)
-	return orgBotNoticeCard("blue", orgDispatchStartTitle(worker.Kind), fields, orgBotSwitchButtons(true), "打开任务", link)
+	return orgBotNoticeCard(orgDispatchStartTitle(worker.Kind), fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
 // OrgDispatchDoneCard is the notice sent when that work is finished.
@@ -317,7 +316,7 @@ func OrgDispatchDoneCard(identifier, title, status string, worker OrgDispatchWor
 		{Label: "编号", Value: identifier},
 	}, worker.fields()...)
 	fields = append(fields, orgBotCardField{Label: "状态", Value: orgBotStatusLabel(status)})
-	return orgBotNoticeCard("green", "已完成", fields, orgBotSwitchButtons(true), "打开任务", link)
+	return orgBotNoticeCard("已完成", fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
 // OrgDispatchFailedCard is the notice sent when the leader run failed for good.
@@ -327,7 +326,7 @@ func OrgDispatchFailedCard(identifier, title string, worker OrgDispatchWorker, r
 		{Label: "编号", Value: identifier},
 	}, worker.fields()...)
 	fields = append(fields, orgBotCardField{Label: "原因", Value: reason})
-	return orgBotNoticeCard("red", "派活失败", fields, orgBotSwitchButtons(true), "打开任务", link)
+	return orgBotNoticeCard("派活失败", fields, orgBotSwitchButtons(true), "打开任务", link)
 }
 
 func orgBotSwitchButtons(allow bool) []orgBotCardButton {
@@ -360,7 +359,7 @@ func orgBotStatusLabel(status string) string {
 // line down the card whatever the label length.
 const orgBotFieldLabelWidth = "56px"
 
-func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons []orgBotCardButton, openLabel, openURL string) (string, error) {
+func orgBotNoticeCard(title string, fields []orgBotCardField, buttons []orgBotCardButton, openLabel, openURL string) (string, error) {
 	elements := make([]any, 0, len(fields)+1)
 	for _, field := range fields {
 		value := cardPlain(field.Value)
@@ -372,20 +371,19 @@ func orgBotNoticeCard(template, title string, fields []orgBotCardField, buttons 
 	if actions := orgBotActionRow(buttons, openLabel, openURL, len(elements) > 0); actions != nil {
 		elements = append(elements, actions)
 	}
-	return orgBotCardJSON(template, title, elements)
+	return orgBotCardJSON(title, elements)
 }
 
-func orgBotCardJSON(template, title string, elements []any) (string, error) {
+func orgBotCardJSON(title string, elements []any) (string, error) {
 	if len(elements) == 0 {
 		return "", nil
 	}
+	elements = append([]any{
+		map[string]any{"tag": "markdown", "content": cardMarkdownWithTitle(title, "")},
+	}, elements...)
 	doc := map[string]any{
 		"schema": "2.0",
 		"config": map[string]any{"update_multi": true},
-		"header": map[string]any{
-			"template": template,
-			"title":    map[string]any{"tag": "plain_text", "content": trimCardTitle(title)},
-		},
 		"body": map[string]any{
 			"vertical_spacing": "8px",
 			"elements":         elements,
@@ -488,18 +486,6 @@ func orgBotButtonColumn(button map[string]any) map[string]any {
 		"vertical_align": "center",
 		"elements":       []any{button},
 	}
-}
-
-func trimCardTitle(title string) string {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return "易研"
-	}
-	runes := []rune(title)
-	if len(runes) > 80 {
-		return string(runes[:80])
-	}
-	return title
 }
 
 func cardPlain(value string) string {

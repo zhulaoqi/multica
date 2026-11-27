@@ -647,13 +647,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					if err != nil {
 						return err
 					}
-					template, button := "blue", "打开对话"
-					switch title {
-					case "Agent 不在线", "还没开始", "需要维护", "还没做完", "等你补充":
-						template = "orange"
-					case "待验收":
-						template = "green"
-					}
+					button := "打开对话"
 					if title == "Agent 不在线" || title == "需要维护" || (title == "已恢复" && strings.Contains(text, "机器")) {
 						button = "去维护"
 					}
@@ -671,7 +665,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					if button == "去维护" && slug != "" {
 						link = strings.TrimRight(appURLFromEnv(), "/") + "/" + slug + "/intake?mode=manage"
 					}
-					card, err := lark.IntakeCard(template, title, text, button, link)
+					card, err := lark.IntakeCard(title, text, button, link)
 					if err != nil {
 						return err
 					}

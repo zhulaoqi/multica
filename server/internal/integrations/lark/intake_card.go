@@ -10,20 +10,13 @@ import "encoding/json"
 // The body is Markdown: inbox cards mirror agent comments, which carry headings
 // and tables. Schema 2.0's `markdown` element renders those; the legacy
 // `lark_md` text shows them as raw characters (see SendMarkdownCard).
-func IntakeCard(template, title, body, button, url string) (string, error) {
-	if template == "" {
-		template = "blue"
-	}
+func IntakeCard(title, body, button, url string) (string, error) {
 	doc := map[string]any{
 		"schema": "2.0",
 		"config": map[string]any{"update_multi": true},
-		"header": map[string]any{
-			"template": template,
-			"title":    map[string]any{"tag": "plain_text", "content": title},
-		},
 		"body": map[string]any{
 			"elements": []any{
-				map[string]any{"tag": "markdown", "content": markdownImageLinks(body)},
+				map[string]any{"tag": "markdown", "content": markdownImageLinks(cardMarkdownWithTitle(title, body))},
 				map[string]any{
 					"tag":  "button",
 					"text": map[string]any{"tag": "plain_text", "content": button},
