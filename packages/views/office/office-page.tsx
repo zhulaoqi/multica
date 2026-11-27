@@ -953,7 +953,6 @@ export function OfficePage({
                 onOpenDetail={() => push(p.agentDetail(panelAgent.id))}
                 onTaskCreated={handleTaskCreated}
                 onMoreOptionsTask={handleMoreOptionsTask}
-                showActions={!home}
                 activity={activityById.get(panelAgent.id) ?? null}
               />
             )}

@@ -25,9 +25,7 @@ export interface AgentInteractPanelProps {
   onTaskCreated: () => void;
   /** Hand the typed brief to the full create dialog. */
   onMoreOptionsTask: (prompt: string) => void;
-  /** The C-end shows what the agent is doing but offers no admin actions. */
-  showActions?: boolean;
-  /** What the agent is working on, shown when actions are hidden. */
+  /** The task the agent is running right now, when there is one. */
   activity?: string | null;
   /** The member this agent belongs to, when it has one. */
   ownerName?: string | null;
@@ -52,7 +50,6 @@ export function AgentInteractPanel({
   onOpenDetail,
   onTaskCreated,
   onMoreOptionsTask,
-  showActions = true,
   activity,
   ownerName,
   unitPath,
@@ -84,10 +81,10 @@ export function AgentInteractPanel({
         return;
       }
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-      if (showActions && key === "t") {
+      if (key === "t") {
         event.preventDefault();
         onOpenChat();
-      } else if (showActions && key === "q" && canAssign) {
+      } else if (key === "q" && canAssign) {
         event.preventDefault();
         setComposing((open) => !open);
       } else if (event.key === "Escape") {
@@ -99,7 +96,7 @@ export function AgentInteractPanel({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canAssign, composing, onClose, onOpenChat, showActions]);
+  }, [canAssign, composing, onClose, onOpenChat]);
 
   return (
     <div
@@ -158,11 +155,11 @@ export function AgentInteractPanel({
         </div>
       )}
 
-      {!showActions ? (
-        activity ? (
-          <p className="text-caption text-muted-foreground">{activity}</p>
-        ) : null
-      ) : composing ? (
+      {activity && (
+        <p className="text-caption text-muted-foreground">{activity}</p>
+      )}
+
+      {composing ? (
         <AgentTaskComposer
           agent={agent}
           onCreated={() => {

@@ -153,6 +153,7 @@ vi.mock("./components/office-canvas", () => ({
       deskZones,
       minimapVisible,
       receptionPapers,
+      onAgentActivate,
       onFocusAgentChange,
       onPlaceFocusChange,
       onRandomEvent,
@@ -179,6 +180,7 @@ vi.mock("./components/office-canvas", () => ({
       }[];
       minimapVisible?: boolean;
       receptionPapers: number;
+      onAgentActivate?: (agentId: string) => void;
       onFocusAgentChange: (agentId: string | null) => void;
       onPlaceFocusChange?: (place: string | null) => void;
       onRandomEvent?: (event: string) => void;
@@ -218,6 +220,9 @@ vi.mock("./components/office-canvas", () => ({
         ))}
         <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
           focus-agent
+        </button>
+        <button type="button" onClick={() => onAgentActivate?.("agent-1")}>
+          activate-agent
         </button>
         <button
           type="button"
@@ -637,6 +642,23 @@ describe("OfficePage", () => {
 
     await user.click(within(panel).getByRole("button", { name: /Details/ }));
     expect(push).toHaveBeenCalledWith("/workspace-test/agents/agent-1");
+  });
+
+  it("lets the C-end interact with an agent it walks up to", async () => {
+    const user = userEvent.setup();
+    renderPage({ variant: "home", members: [makeMember({ role: "owner" })] });
+
+    await user.click(screen.getByRole("button", { name: "activate-agent" }));
+    const panel = screen.getByRole("dialog");
+
+    expect(within(panel).getByText("Atlas")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Chat/ })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Assign task/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Details/ }),
+    ).toBeInTheDocument();
   });
 
   it("hints at T when the player stands next to an agent", async () => {
