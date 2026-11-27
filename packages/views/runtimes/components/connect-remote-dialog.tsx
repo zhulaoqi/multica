@@ -33,7 +33,10 @@ import {
   UI_MOTION_DURATION,
 } from "@multica/ui/lib/motion";
 import { cn } from "@multica/ui/lib/utils";
-import { CliInstallCommand } from "../../common/cli-install-command";
+import {
+  CliInstallCommand,
+  type CliInstallPlatform,
+} from "../../common/cli-install-command";
 import { DaemonSetupNotice } from "../../common/daemon-setup-notice";
 import { useNavigation } from "../../navigation";
 import { useT } from "../../i18n";
@@ -273,6 +276,8 @@ function CommandStep({
 function InstructionsStep({ onClose }: { onClose: () => void }) {
   const { t } = useT("runtimes");
   const commands = useDaemonSetupCommands();
+  const [platform, setPlatform] = useState<CliInstallPlatform>("macos");
+  const usesDeviceCode = platform === "linux";
   return (
     <>
       <DialogHeader className="px-6 pt-6 pb-2">
@@ -286,16 +291,17 @@ function InstructionsStep({ onClose }: { onClose: () => void }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div className="space-y-4">
-          {/* Step 1 owns the platform switch: the install command differs by
-              OS, so the user picks instead of us guessing. Step 2's
-              `multica setup` is platform-independent. */}
           <CommandStep n={1} label={t(($) => $.connect.step1_label)}>
             <CliInstallCommand
               labels={{
                 group: t(($) => $.connect.platform_group),
                 macosLinux: t(($) => $.connect.platform_macos_linux),
+                macos: t(($) => $.connect.platform_macos),
+                linux: t(($) => $.connect.platform_linux),
                 windows: t(($) => $.connect.platform_windows),
               }}
+              separateUnix
+              onPlatformChange={setPlatform}
             >
               {(cmd) => (
                 <CommandRow
@@ -310,7 +316,11 @@ function InstructionsStep({ onClose }: { onClose: () => void }) {
             <CommandStep n={2} label={t(($) => $.connect.step2_label)}>
               {commands.status === "ready" ? (
                 <CommandRow
-                  cmd={commands.setupCmd}
+                  cmd={
+                    usesDeviceCode
+                      ? `${commands.setupCmd} --device`
+                      : commands.setupCmd
+                  }
                   copyAria={t(($) => $.connect.copy_aria)}
                 />
               ) : (
@@ -319,7 +329,9 @@ function InstructionsStep({ onClose }: { onClose: () => void }) {
             </CommandStep>
             {commands.status === "ready" && (
               <p className="mt-1.5 text-micro leading-[1.55] text-muted-foreground">
-                {t(($) => $.connect.step2_hint)}
+                {usesDeviceCode
+                  ? t(($) => $.connect.step2_device_hint)
+                  : t(($) => $.connect.step2_hint)}
               </p>
             )}
           </div>
@@ -355,12 +367,6 @@ function TroubleshootingDetails({ tokenCmd }: { tokenCmd: string }) {
       </summary>
       <div className="space-y-2 border-t px-3 pt-2.5 pb-3 text-micro leading-[1.55] text-muted-foreground">
         <p>{t(($) => $.connect.trouble_intro)}</p>
-        <CommandStep n={2} label={t(($) => $.connect.step2_label)}>
-          <CommandRow
-            cmd={tokenCmd}
-            copyAria={t(($) => $.connect.copy_aria)}
-          />
-        </CommandStep>
         <p>
           {t(($) => $.connect.trouble_token_hint_prefix)}
           <span className="font-medium text-foreground">
@@ -368,6 +374,17 @@ function TroubleshootingDetails({ tokenCmd }: { tokenCmd: string }) {
           </span>
           {t(($) => $.connect.trouble_token_hint_suffix)}
         </p>
+        <CommandStep n={2} label={t(($) => $.connect.step2_label)}>
+          <div className="space-y-2">
+            {tokenCmd.split("\n").map((cmd) => (
+              <CommandRow
+                key={cmd}
+                cmd={cmd}
+                copyAria={t(($) => $.connect.copy_aria)}
+              />
+            ))}
+          </div>
+        </CommandStep>
         <ul className="space-y-1">
           <li className="flex items-center gap-1.5">
             <span>{t(($) => $.connect.trouble_check_status)}</span>

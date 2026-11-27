@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@multica/core/i18n/react";
@@ -248,6 +248,58 @@ describe("ConnectRemoteDialog", () => {
     await waitFor(() => {
       expect(clipboard.copyText).toHaveBeenCalledWith(WINDOWS_CMD);
     });
+  });
+
+  it("uses device-code setup for Linux while keeping browser setup for macOS and Windows", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    expect(screen.getByRole("tab", { name: "macOS" })).toBeInTheDocument();
+    expect(screen.getByText("multica setup")).toBeInTheDocument();
+    expect(screen.queryByText("multica setup --device")).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "Linux" }));
+    expect(screen.getByText("multica setup --device")).toBeInTheDocument();
+    expect(
+      screen.getByText(/verification code.*another device/i),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Windows" }));
+    expect(screen.getByText("multica setup")).toBeInTheDocument();
+    expect(screen.queryByText("multica setup --device")).toBeNull();
+  });
+
+  it("shows token preparation before individually copyable fallback commands", async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(
+      screen.getByText("Can't open a browser on that machine?"),
+    );
+
+    const tokenPreparation = screen.getByText(/Create a token in/);
+    const serverCommand = screen.getByText(
+      "multica config set server_url https://api.multica.ai",
+    );
+    expect(
+      tokenPreparation.compareDocumentPosition(serverCommand) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const fallbackCommands = [
+      "multica config set server_url https://api.multica.ai",
+      "multica config set app_url https://multica.ai",
+      "multica login --token <YOUR_TOKEN>",
+      "multica daemon start",
+    ];
+    for (const command of fallbackCommands) {
+      const row = screen.getByText(command).closest("div");
+      expect(row).not.toBeNull();
+      await user.click(
+        within(row as HTMLElement).getByRole("button", { name: "Copy" }),
+      );
+      expect(clipboard.copyText).toHaveBeenLastCalledWith(command);
+    }
   });
 
   it("confirms a newly registered own machine and opens its verified runtime", async () => {

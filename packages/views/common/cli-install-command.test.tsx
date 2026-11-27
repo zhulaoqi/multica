@@ -11,6 +11,12 @@ const LABELS = {
   windows: "Windows",
 };
 
+const SPLIT_LABELS = {
+  ...LABELS,
+  macos: "macOS",
+  linux: "Linux",
+};
+
 function renderSwitch() {
   return render(
     <CliInstallCommand labels={LABELS}>
@@ -75,5 +81,30 @@ describe("CliInstallCommand", () => {
     await user.keyboard("{ArrowRight}");
 
     expect(screen.getByText(COMMANDS.windows)).toBeInTheDocument();
+  });
+
+  it("can present macOS and Linux as separate platform choices", async () => {
+    const user = userEvent.setup();
+    const selections: string[] = [];
+    render(
+      <CliInstallCommand
+        labels={SPLIT_LABELS}
+        separateUnix
+        onPlatformChange={(platform) => selections.push(platform)}
+      >
+        {(command) => <code>{command}</code>}
+      </CliInstallCommand>,
+    );
+
+    expect(screen.getByRole("tab", { name: "macOS" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "Linux" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Windows" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Linux" }));
+    expect(selections).toEqual(["linux"]);
+    expect(screen.getByText(COMMANDS.macosLinux)).toBeInTheDocument();
   });
 });

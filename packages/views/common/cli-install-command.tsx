@@ -24,12 +24,12 @@ const INSTALL_PATHS = {
   windows: "/install/install.ps1",
 } as const;
 
-export type CliInstallPlatform = keyof typeof INSTALL_PATHS;
+export type CliInstallPlatform = "macosLinux" | "macos" | "linux" | "windows";
 
 /** Shell command that installs the CLI from the given deployment origin. */
 export function cliInstallCommands(
   origin: string,
-): Record<CliInstallPlatform, string> {
+): Record<keyof typeof INSTALL_PATHS, string> {
   const base = origin.replace(/\/+$/, "");
   return {
     macosLinux: `curl -fsSL ${base}${INSTALL_PATHS.macosLinux} | bash`,
@@ -59,11 +59,18 @@ const PLATFORMS = [
   "macosLinux",
   "windows",
 ] as const satisfies readonly CliInstallPlatform[];
+const SPLIT_UNIX_PLATFORMS = [
+  "macos",
+  "linux",
+  "windows",
+] as const satisfies readonly CliInstallPlatform[];
 
 export interface CliInstallCommandLabels {
   /** Accessible name for the platform switch. */
   group: string;
   macosLinux: string;
+  macos?: string;
+  linux?: string;
   windows: string;
 }
 
@@ -79,11 +86,16 @@ export interface CliInstallCommandLabels {
 export function CliInstallCommand({
   labels,
   classNames,
+  separateUnix = false,
+  onPlatformChange,
   children,
 }: {
   labels: CliInstallCommandLabels;
   /** Palette overrides for surfaces that do not use the product tokens. */
   classNames?: { list?: string; trigger?: string };
+  /** Shows macOS and Linux separately when their setup flows differ. */
+  separateUnix?: boolean;
+  onPlatformChange?: (platform: CliInstallPlatform) => void;
   children: (command: string) => ReactNode;
 }) {
   const appOrigin = useAppOrigin();
@@ -93,27 +105,37 @@ export function CliInstallCommand({
     () => "",
   );
   const commands = cliInstallCommands(origin);
+  const platforms = separateUnix ? SPLIT_UNIX_PLATFORMS : PLATFORMS;
 
   return (
-    <Tabs defaultValue={PLATFORMS[0]}>
+    <Tabs
+      defaultValue={platforms[0]}
+      onValueChange={(value) => {
+        onPlatformChange?.(value as CliInstallPlatform);
+      }}
+    >
       <TabsList
         aria-label={labels.group}
         activateOnFocus
         className={classNames?.list}
       >
-        {PLATFORMS.map((platform) => (
+        {platforms.map((platform) => (
           <TabsTrigger
             key={platform}
             value={platform}
             className={classNames?.trigger}
           >
-            {labels[platform]}
+            {labels[platform] ?? platform}
           </TabsTrigger>
         ))}
       </TabsList>
-      {PLATFORMS.map((platform) => (
+      {platforms.map((platform) => (
         <TabsContent key={platform} value={platform}>
-          {children(commands[platform])}
+          {children(
+            commands[
+              platform === "windows" ? "windows" : "macosLinux"
+            ],
+          )}
         </TabsContent>
       ))}
     </Tabs>
