@@ -41,3 +41,30 @@ func IntakeCard(template, title, body, button, url string) (string, error) {
 	}
 	return string(raw), nil
 }
+
+// InboxCard uses the same headerless Markdown surface as rich private-chat
+// replies, with one action appended for opening the related Multica page.
+func InboxCard(body, button, url string) (string, error) {
+	doc := map[string]any{
+		"schema": "2.0",
+		"config": map[string]any{"update_multi": true},
+		"body": map[string]any{
+			"elements": []any{
+				map[string]any{"tag": "markdown", "content": markdownImageLinks(body)},
+				map[string]any{
+					"tag":  "button",
+					"text": map[string]any{"tag": "plain_text", "content": button},
+					"type": "primary_filled",
+					"behaviors": []any{
+						map[string]any{"type": "open_url", "default_url": url},
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}

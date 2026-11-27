@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -43,6 +44,22 @@ func TestFeishuInboxCardUsesChineseLabel(t *testing.T) {
 		if !strings.Contains(card, want) {
 			t.Fatalf("card missing %q:\n%s", want, card)
 		}
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(card), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc["header"]; ok {
+		t.Fatalf("inbox reply should use the headerless private-chat card style:\n%s", card)
+	}
+	body, _ := doc["body"].(map[string]any)
+	elements, _ := body["elements"].([]any)
+	if len(elements) != 2 {
+		t.Fatalf("body elements = %d, want markdown plus open button", len(elements))
+	}
+	markdown, _ := elements[0].(map[string]any)
+	if markdown["tag"] != "markdown" || !strings.HasPrefix(markdown["content"].(string), "**有人提到你**\n\n") {
+		t.Fatalf("first element should preserve the notification label in markdown: %#v", markdown)
 	}
 }
 

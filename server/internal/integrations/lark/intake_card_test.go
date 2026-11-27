@@ -46,3 +46,26 @@ func TestIntakeCard_RendersMarkdownBody(t *testing.T) {
 		t.Fatalf("body element = %#v", content)
 	}
 }
+
+func TestInboxCardMatchesHeaderlessPrivateChatStyle(t *testing.T) {
+	raw, err := InboxCard("**有新评论**\n\n任务内容", "打开任务", "https://example.test/inbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := doc["header"]; ok {
+		t.Fatalf("inbox card should not have a header: %s", raw)
+	}
+	body, _ := doc["body"].(map[string]any)
+	elements, _ := body["elements"].([]any)
+	if len(elements) != 2 {
+		t.Fatalf("body elements = %d, want markdown plus open button", len(elements))
+	}
+	markdown, _ := elements[0].(map[string]any)
+	if markdown["tag"] != "markdown" || markdown["content"] != "**有新评论**\n\n任务内容" {
+		t.Fatalf("markdown element = %#v", markdown)
+	}
+}

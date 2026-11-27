@@ -188,13 +188,11 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 	}
 	text := strings.Join(lines, "\n")
 	if text == "" {
-		text = title
+		text = "**" + title + "**"
+	} else {
+		text = "**" + title + "**\n\n" + text
 	}
 	link := feishuInboxLink(ctx, queries, item)
-	template := "blue"
-	if mapString(item, "severity") == "action_required" || mapString(item, "severity") == "action" {
-		template = "orange"
-	}
 	button := "打开"
 	if mapString(item, "issue_id") != "" {
 		button = "打开任务"
@@ -206,7 +204,7 @@ func feishuInboxCard(ctx context.Context, queries *db.Queries, item map[string]a
 	if link == "" {
 		link = "https://open.feishu.cn"
 	}
-	return lark.IntakeCard(template, title, text, button, link)
+	return lark.InboxCard(text, button, link)
 }
 
 func feishuInboxChange(ctx context.Context, queries *db.Queries, kind string, item map[string]any) string {
