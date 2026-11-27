@@ -99,11 +99,17 @@ describe("desk zones", () => {
     expect(columns.get("west")).toEqual([4, 7, 4, 7]);
     expect(columns.get("center")).toEqual([22, 25, 22, 25]);
     expect(columns.get("east")).toEqual([40, 43, 40, 43]);
+    // Signs stand on the aisle in front of the desks, clear of the name and
+    // activity labels that float above seated agents.
+    const frontAisle = Math.max(
+      ...layout.agents.map((slot) => slot.desk.y + slot.desk.h),
+    );
     for (const zone of OFFICE_DESK_ZONES) {
       expect(zone.anchor.tx).toBeGreaterThanOrEqual(office.rect.x);
       expect(zone.anchor.tx).toBeLessThan(office.rect.x + office.rect.w);
       expect(zone.anchor.ty).toBeGreaterThanOrEqual(office.rect.y);
       expect(zone.anchor.ty).toBeLessThan(office.rect.y + office.rect.h);
+      expect(zone.anchor.ty).toBeGreaterThan(frontAisle);
     }
   });
 });

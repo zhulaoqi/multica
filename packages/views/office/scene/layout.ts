@@ -226,12 +226,14 @@ export interface DeskZoneSpec {
 // 16-row columns 4/7 are 0/1 and the 20-row ones 6/7, and so on. Overflow
 // slots 12-17 run down the right wall, 18-19 are the two left-wall spots.
 export const OFFICE_DESK_ZONES: readonly DeskZoneSpec[] = [
-  { key: "west", homes: [0, 1, 6, 7, 18, 19], anchor: { tx: 5, ty: 14 } },
-  { key: "center", homes: [2, 3, 8, 9], anchor: { tx: 22, ty: 14 } },
+  // Signs stand on the aisle in front of each cluster, not over the desks,
+  // so they never cover an agent's name or activity bubble.
+  { key: "west", homes: [0, 1, 6, 7, 18, 19], anchor: { tx: 4, ty: 24 } },
+  { key: "center", homes: [2, 3, 8, 9], anchor: { tx: 22, ty: 24 } },
   {
     key: "east",
     homes: [4, 5, 10, 11, 12, 13, 14, 15, 16, 17],
-    anchor: { tx: 40, ty: 14 },
+    anchor: { tx: 40, ty: 24 },
   },
 ];
 

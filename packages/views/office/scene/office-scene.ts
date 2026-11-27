@@ -548,7 +548,11 @@ export class OfficeScene {
   }
 
   /** A name-and-level plate, used for room and desk-zone plaques. */
-  private createPlaque(label: string, level: number): Container {
+  private createPlaque(
+    label: string,
+    level: number,
+    standing = false,
+  ): Container {
     const plate = new this.pixi.Container();
     const text = new this.pixi.Text({
       text: `${fitPlaqueLabel(label)} · Lv ${level}`,
@@ -562,10 +566,20 @@ export class OfficeScene {
     text.resolution = 4;
     text.position.set(4, 1);
     const width = Math.ceil(text.width) + 8;
+    const height = Math.ceil(text.height) + 3;
     const background = new this.pixi.Graphics();
     background
-      .roundRect(0, 0, width, Math.ceil(text.height) + 3, 2)
+      .roundRect(0, 0, width, height, 2)
       .fill({ color: 0x5aa8a2, alpha: 0.82 });
+    if (standing) {
+      // Desk-zone signs are physical: a short post stands them on the aisle
+      // instead of leaving a label floating over the agents' heads.
+      const postX = Math.round(width / 2);
+      const stand = new this.pixi.Graphics();
+      stand.rect(postX - 1, height, 2, 18).fill(0x4b938e);
+      stand.rect(postX - 7, height + 16, 14, 2).fill(0x3c7a76);
+      plate.addChild(stand);
+    }
     plate.addChild(background, text);
     plate.eventMode = "none";
     return plate;
@@ -599,12 +613,15 @@ export class OfficeScene {
     if (zones.length === 0) return;
     const layer = new this.pixi.Container();
     for (const zone of zones) {
-      const plate = this.createPlaque(zone.pathLabel, zone.level);
-      plate.position.set(zone.anchor.tx * TILE, zone.anchor.ty * TILE);
+      const plate = this.createPlaque(zone.pathLabel, zone.level, true);
+      // Lift the board off the floor so its feet land on the aisle tile.
+      plate.position.set(zone.anchor.tx * TILE, zone.anchor.ty * TILE - 16);
       layer.addChild(plate);
     }
     layer.sortableChildren = true;
-    layer.zIndex = ROOM_LABEL_Z + 1;
+    // A standing sign belongs to the floor plane: agents north of it pass
+    // behind, and anyone walking south of it passes in front.
+    layer.zIndex = Math.max(...zones.map((zone) => (zone.anchor.ty + 1) * TILE));
     this.world.addChild(layer);
     this.zones = layer;
   }
