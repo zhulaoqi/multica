@@ -17,23 +17,43 @@ export interface SocialPair {
 /**
  * The closest pair of agents within `radius`. Ties keep the earlier pair in
  * the input order, so a stable agent list produces the same visit each time.
+ *
+ * When `visitorIds` is supplied, only pairs with at least one eligible
+ * visitor are considered; if just the second candidate is eligible the pair
+ * is flipped so the idle agent is the one who walks over.
  */
 export function pickVisitPair(
   candidates: readonly SocialCandidate[],
   radius: number,
+  visitorIds?: ReadonlySet<string>,
 ): SocialPair | null {
   let best: SocialPair | null = null;
   let bestDistance = radius;
 
   for (let first = 0; first < candidates.length; first++) {
-    const visitor = candidates[first]!;
+    const firstCandidate = candidates[first]!;
     for (let second = first + 1; second < candidates.length; second++) {
-      const host = candidates[second]!;
-      const distance = Math.hypot(host.x - visitor.x, host.y - visitor.y);
-      if (distance < bestDistance) {
-        best = { visitor, host };
-        bestDistance = distance;
+      const secondCandidate = candidates[second]!;
+      const distance = Math.hypot(
+        secondCandidate.x - firstCandidate.x,
+        secondCandidate.y - firstCandidate.y,
+      );
+      if (distance >= bestDistance) continue;
+
+      let visitor = firstCandidate;
+      let host = secondCandidate;
+      if (visitorIds) {
+        const firstCanVisit = visitorIds.has(visitor.id);
+        const secondCanVisit = visitorIds.has(host.id);
+        if (!firstCanVisit && !secondCanVisit) continue;
+        if (!firstCanVisit) {
+          visitor = secondCandidate;
+          host = firstCandidate;
+        }
       }
+
+      best = { visitor, host };
+      bestDistance = distance;
     }
   }
 

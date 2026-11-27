@@ -29,6 +29,12 @@ export interface AgentInteractPanelProps {
   showActions?: boolean;
   /** What the agent is working on, shown when actions are hidden. */
   activity?: string | null;
+  /** The member this agent belongs to, when it has one. */
+  ownerName?: string | null;
+  /** Full department path (`研发部/研发二组`), when the org chart knows it. */
+  unitPath?: string | null;
+  /** This agent's completed tasks today. */
+  agentTodayCompleted?: number;
   className?: string;
 }
 
@@ -48,6 +54,9 @@ export function AgentInteractPanel({
   onMoreOptionsTask,
   showActions = true,
   activity,
+  ownerName,
+  unitPath,
+  agentTodayCompleted,
   className,
 }: AgentInteractPanelProps) {
   const { t } = useT("office");
@@ -126,6 +135,28 @@ export function AgentInteractPanel({
           <X />
         </Button>
       </div>
+
+      {(ownerName || unitPath || agentTodayCompleted !== undefined) && (
+        <div className="flex flex-col gap-0.5 text-caption text-muted-foreground">
+          {ownerName && (
+            <p className="truncate">
+              {t(($) => $.page.interact.owner, { name: ownerName })}
+            </p>
+          )}
+          {unitPath && (
+            <p className="truncate">
+              {t(($) => $.page.interact.department, { path: unitPath })}
+            </p>
+          )}
+          {agentTodayCompleted !== undefined && (
+            <p>
+              {t(($) => $.page.interact.today, {
+                count: agentTodayCompleted,
+              })}
+            </p>
+          )}
+        </div>
+      )}
 
       {!showActions ? (
         activity ? (

@@ -9,6 +9,7 @@ import { issueDetailOptions } from "@multica/core/issues/queries";
 import {
   agentListOptions,
   memberListOptions,
+  orgTreeOptions,
   squadListOptions,
 } from "@multica/core/workspace/queries";
 import type { Agent, MemberWithUser } from "@multica/core/types";
@@ -31,10 +32,8 @@ const canvas = vi.hoisted(() => ({
   playEmote: vi.fn(),
   deliverToReception: vi.fn(),
   celebrate: vi.fn(),
-  playLocalEmote: vi.fn(),
   archiveRitual: vi.fn(),
   setMinimapVisible: vi.fn(),
-  capturePhoto: vi.fn(() => "data:image/png;base64,AAAA"),
 }));
 const review = vi.hoisted(() => ({
   updateIssue: vi.fn(),
@@ -151,19 +150,33 @@ vi.mock("./components/office-canvas", () => ({
       season,
       deskTraces,
       roomBadges,
+      deskZones,
       minimapVisible,
       receptionPapers,
       onFocusAgentChange,
       onPlaceFocusChange,
       onRandomEvent,
     }: {
-      agents: { id: string; activity?: string | null; alert?: boolean }[];
+      agents: {
+        id: string;
+        home?: number;
+        activity?: string | null;
+        alert?: boolean;
+        ownerName?: string | null;
+        unitPath?: string | null;
+      }[];
       peers: unknown[];
       companyName: string;
       companyLevel: number;
       season: { id: string };
       deskTraces?: unknown[];
       roomBadges?: unknown[];
+      deskZones?: {
+        label: string;
+        pathLabel?: string;
+        children?: string[];
+        level: number;
+      }[];
       minimapVisible?: boolean;
       receptionPapers: number;
       onFocusAgentChange: (agentId: string | null) => void;
@@ -181,13 +194,26 @@ vi.mock("./components/office-canvas", () => ({
         <span data-testid="office-season">{season.id}</span>
         <span data-testid="desk-traces">{(deskTraces ?? []).length}</span>
         <span data-testid="room-badges">{(roomBadges ?? []).length}</span>
+        <span data-testid="desk-zones">
+          {(deskZones ?? [])
+            .map((zone) => zone.pathLabel ?? zone.label)
+            .join(",")}
+        </span>
+        <span data-testid="desk-zone-children">
+          {(deskZones ?? [])
+            .flatMap((zone) => zone.children ?? [])
+            .join(",")}
+        </span>
         <span data-testid="minimap-visible">{String(minimapVisible)}</span>
         {agents.map((agent) => (
           <span
             key={agent.id}
             data-testid={`activity-${agent.id}`}
+            data-home={agent.home ?? ""}
             data-activity={agent.activity ?? ""}
             data-alert={agent.alert ? "true" : ""}
+            data-owner={agent.ownerName ?? ""}
+            data-unit={agent.unitPath ?? ""}
           />
         ))}
         <button type="button" onClick={() => onFocusAgentChange("agent-1")}>
@@ -303,15 +329,56 @@ function makeDispatch({
 
 const SQUAD = { id: "squad-1", leader_id: "agent-1", archived_at: null };
 
+function makeOrgTree({
+  units = [
+    { id: "unit-aihub", name: "AIHUB", position: 0, can_manage: true },
+  ],
+  members = [
+    { user_id: "user-1", unit_id: "unit-aihub" },
+    { user_id: "user-2", unit_id: "unit-aihub" },
+  ],
+  agents = [
+    { id: "agent-1", unit_id: "unit-aihub" },
+    { id: "agent-2", unit_id: "unit-aihub" },
+  ],
+}: {
+  units?: {
+    id: string;
+    name: string;
+    parent_id?: string;
+    position?: number;
+    can_manage: boolean;
+  }[];
+  members?: { user_id: string; unit_id: string }[];
+  agents?: { id: string; unit_id: string }[];
+} = {}) {
+  return {
+    units: units.map((unit) => ({
+      parent_id: "",
+      lead_user_id: "",
+      description: "",
+      intake_sources: [],
+      ...unit,
+    })),
+    agents,
+    members,
+    squads: [],
+    can_manage: true,
+    my_unit_id: "unit-aihub",
+  };
+}
+
 function renderPage({
   members = [makeMember(), makeMember({ id: "member-2", user_id: "user-2", name: "Jamie Chen" })],
   agents = [makeAgent()],
   squads = [],
+  orgTree,
   variant = "workspace",
 }: {
   members?: MemberWithUser[];
   agents?: Agent[];
   squads?: unknown[];
+  orgTree?: unknown;
   variant?: "workspace" | "home";
 } = {}) {
   const qc = new QueryClient({
@@ -319,6 +386,7 @@ function renderPage({
   });
   qc.setQueryData(memberListOptions(WS).queryKey, members);
   qc.setQueryData(agentListOptions(WS).queryKey, agents);
+  if (orgTree) qc.setQueryData(orgTreeOptions(WS).queryKey, orgTree as never);
   qc.setQueryData(["agent-task-snapshot", WS], snapshot.tasks);
   qc.setQueryData(squadListOptions(WS).queryKey, squads as never);
   qc.setQueryData(issueDetailOptions(WS, "issue-11").queryKey, {
@@ -363,10 +431,8 @@ describe("OfficePage", () => {
     canvas.playEmote.mockClear();
     canvas.deliverToReception.mockClear();
     canvas.celebrate.mockClear();
-    canvas.playLocalEmote.mockClear();
     canvas.archiveRitual.mockClear();
     canvas.setMinimapVisible.mockClear();
-    canvas.capturePhoto.mockClear();
     apiState.listOrgUnits.mockClear();
     review.updateIssue.mockReset().mockResolvedValue({});
     review.createComment.mockReset().mockResolvedValue({});
@@ -411,6 +477,123 @@ describe("OfficePage", () => {
     // Only the squad leader on the caller's dispatch is in the room.
     expect(screen.getByTestId("activity-agent-1")).toBeInTheDocument();
     expect(screen.queryByTestId("activity-agent-2")).not.toBeInTheDocument();
+  });
+
+  it("shows a department lead their whole team, seated by department", () => {
+    renderPage({
+      variant: "home",
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+        makeAgent({ id: "agent-3", name: "Orion", owner_id: "user-3" }),
+      ],
+      orgTree: makeOrgTree({
+        agents: [
+          { id: "agent-1", unit_id: "unit-aihub" },
+          { id: "agent-2", unit_id: "unit-aihub" },
+          { id: "agent-3", unit_id: "unit-aihub" },
+        ],
+      }),
+    });
+
+    // Team members' agents show up even though the lead sent no dispatch.
+    expect(screen.getByTestId("activity-agent-1")).toBeInTheDocument();
+    expect(screen.getByTestId("activity-agent-2")).toBeInTheDocument();
+    expect(screen.queryByTestId("activity-agent-3")).not.toBeInTheDocument();
+
+    // AIHUB owns the west cluster and gets its plaque.
+    expect(screen.getByTestId("desk-zones")).toHaveTextContent("AIHUB");
+    expect(screen.getByTestId("activity-agent-1")).toHaveAttribute("data-home", "0");
+    expect(screen.getByTestId("activity-agent-2")).toHaveAttribute("data-home", "1");
+  });
+
+  it("shows who each agent belongs to and its full department path", () => {
+    renderPage({
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+      ],
+      orgTree: makeOrgTree({
+        units: [
+          { id: "unit-rd", name: "研发部", position: 0, can_manage: true },
+          {
+            id: "unit-aihub",
+            name: "AIHUB",
+            parent_id: "unit-rd",
+            position: 0,
+            can_manage: false,
+          },
+        ],
+        agents: [
+          { id: "agent-1", unit_id: "unit-aihub" },
+          { id: "agent-2", unit_id: "unit-aihub" },
+        ],
+      }),
+    });
+
+    expect(screen.getByTestId("activity-agent-1")).toHaveAttribute(
+      "data-owner",
+      "Alex Doe",
+    );
+    expect(screen.getByTestId("activity-agent-1")).toHaveAttribute(
+      "data-unit",
+      "研发部/AIHUB",
+    );
+    expect(screen.getByTestId("activity-agent-2")).toHaveAttribute(
+      "data-owner",
+      "Jamie Chen",
+    );
+    expect(screen.getByTestId("desk-zones")).toHaveTextContent("研发部 › AIHUB");
+  });
+
+  it("keeps a plain member on their own dispatches despite the org chart", () => {
+    dispatchState.items = [makeDispatch()];
+    renderPage({
+      variant: "home",
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+      ],
+      squads: [SQUAD],
+      orgTree: makeOrgTree({
+        units: [
+          { id: "unit-aihub", name: "AIHUB", position: 0, can_manage: false },
+        ],
+      }),
+    });
+
+    expect(screen.getByTestId("activity-agent-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("activity-agent-2")).not.toBeInTheDocument();
+  });
+
+  it("shows workspace admins every agent on the C-end", () => {
+    renderPage({
+      variant: "home",
+      members: [makeMember({ role: "owner" })],
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+        makeAgent({ id: "agent-3", name: "Orion", owner_id: "user-3" }),
+      ],
+    });
+
+    expect(screen.getByTestId("activity-agent-1")).toBeInTheDocument();
+    expect(screen.getByTestId("activity-agent-2")).toBeInTheDocument();
+    expect(screen.getByTestId("activity-agent-3")).toBeInTheDocument();
+  });
+
+  it("zones desks and keeps room plaques in the workspace office", () => {
+    renderPage({
+      variant: "workspace",
+      agents: [
+        makeAgent(),
+        makeAgent({ id: "agent-2", name: "Nova", owner_id: "user-2" }),
+      ],
+      orgTree: makeOrgTree(),
+    });
+
+    expect(screen.getByTestId("desk-zones")).toHaveTextContent("AIHUB");
+    expect(screen.getByTestId("room-badges")).toHaveTextContent("1");
   });
 
   it("explains an empty C-end office instead of showing a blank room", () => {
@@ -569,6 +752,23 @@ describe("OfficePage", () => {
     expect(screen.getByLabelText("Top contributor this month")).toBeInTheDocument();
   });
 
+  it("summarises today's work for the C-end", () => {
+    activityState.byAgent = new Map([["agent-1", activityWithCompleted(4)]]);
+    renderPage({ variant: "home", members: [makeMember({ role: "owner" })] });
+
+    const brief = screen.getByTestId("office-brief");
+    expect(brief).toHaveTextContent("Done today 4");
+    expect(brief).toHaveTextContent("Running 1");
+    expect(brief).toHaveTextContent("Busiest Atlas");
+  });
+
+  it("hides the C-end brief when nothing has happened today", () => {
+    presenceState.byAgent = new Map();
+    renderPage({ variant: "home" });
+
+    expect(screen.queryByTestId("office-brief")).not.toBeInTheDocument();
+  });
+
   it("unlocks office decorations once the company levels up", () => {
     activityState.byAgent = new Map([
       ["agent-1", activityWithCompleted(10)],
@@ -712,15 +912,6 @@ describe("OfficePage", () => {
     expect(screen.getByTestId("desk-traces")).toHaveTextContent("1");
   });
 
-  it("greets the office with an emote from the number row", async () => {
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.keyboard("1");
-
-    expect(canvas.playLocalEmote).toHaveBeenCalledWith("wave");
-  });
-
   it("opens the kitchen chat and the meeting board on the floor", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -752,22 +943,13 @@ describe("OfficePage", () => {
     expect(screen.getByText("Season")).toBeInTheDocument();
   });
 
-  it("hides the minimap and enters photo mode from the toolbar", async () => {
-    const download = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+  it("hides the minimap from the toolbar", async () => {
     const user = userEvent.setup();
     renderPage();
     expect(screen.getByTestId("minimap-visible")).toHaveTextContent("true");
 
     await user.click(screen.getByRole("button", { name: "Hide minimap" }));
     expect(screen.getByTestId("minimap-visible")).toHaveTextContent("false");
-
-    await user.click(screen.getByRole("button", { name: "Photo mode" }));
-    expect(screen.queryByRole("heading", { name: "Office" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save PNG" }));
-    expect(canvas.capturePhoto).toHaveBeenCalled();
-    download.mockRestore();
   });
 
   it("shows a toast when a random office event fires", async () => {

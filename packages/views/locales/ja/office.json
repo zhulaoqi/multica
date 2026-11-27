@@ -15,7 +15,8 @@
       "count_other": "{{count}} 人",
       "level": "Lv {{level}}",
       "company_level": "会社レベル {{level}}",
-      "mvp": "今月のベスト貢献者"
+      "mvp": "今月のベスト貢献者",
+      "owner": "所有者：{{name}}"
     },
     "status": {
       "working": "作業中",
@@ -53,7 +54,10 @@
       "cancel": "キャンセル",
       "task_error": "タスクを作成できませんでした。もう一度お試しください。",
       "task_error_agent_unavailable": "このエージェントは現在タスクを受け付けられません。",
-      "task_error_issue_limit": "このワークスペースはタスク数の上限に達しています。"
+      "task_error_issue_limit": "このワークスペースはタスク数の上限に達しています。",
+      "owner": "所有者：{{name}}",
+      "department": "部署：{{path}}",
+      "today": "本日の完了：{{count}}"
     },
     "reception": {
       "title": "受付",
@@ -89,11 +93,9 @@
     "company_name": "eclicktech",
     "toolbar": {
       "season": "季節：{{season}}",
-      "emotes": "エモート",
       "trophies": "トロフィーウォール",
       "minimap_show": "ミニマップを表示",
       "minimap_hide": "ミニマップを隠す",
-      "photo": "フォトモード",
       "sound_on": "サウンドをオン",
       "sound_off": "サウンドをオフ"
     },
@@ -102,19 +104,6 @@
       "summer": "夏",
       "autumn": "秋",
       "winter": "冬"
-    },
-    "emotes": {
-      "title": "エモート",
-      "wave": "手を振る",
-      "check": "いいね",
-      "alert": "助けて",
-      "coffee": "コーヒー"
-    },
-    "photo": {
-      "hint": "自由に構図を決めてください。",
-      "save": "PNG で保存",
-      "saved": "ダウンロードに保存しました。",
-      "exit": "フォトモードを終了"
     },
     "events": {
       "cat": "オフィスの猫が通りかかりました。",
@@ -191,6 +180,11 @@
         "progress": "進行中",
         "in_review": "レビュー中"
       }
+    },
+    "brief": {
+      "completed": "本日の完了 {{count}}",
+      "running": "進行中 {{count}}",
+      "busiest": "最も多忙 {{name}}"
     }
   }
 }

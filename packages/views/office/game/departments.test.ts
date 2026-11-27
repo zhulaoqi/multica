@@ -51,6 +51,38 @@ describe("departmentRooms", () => {
     expect(capped[0]?.level).toBe(MAX_DEPARTMENT_LEVEL);
   });
 
+  it("rolls sub-department work up into its top-level department", () => {
+    const tree = [
+      { id: "u-rd", name: "研发部", position: 0 },
+      { id: "u-aihub", name: "AIHUB", parent_id: "u-rd", position: 0 },
+      { id: "u-bi", name: "BI中台", parent_id: "u-rd", position: 1 },
+    ];
+    const team = [
+      { id: "r-1", unit_id: "u-rd" },
+      { id: "a-1", unit_id: "u-aihub" },
+      { id: "a-2", unit_id: "u-aihub" },
+      { id: "b-1", unit_id: "u-bi" },
+    ];
+    const rooms = departmentRooms(
+      tree,
+      team,
+      new Map([
+        ["r-1", 10],
+        ["a-1", 10],
+        ["a-2", 10],
+        ["b-1", 10],
+      ]),
+    );
+
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0]).toMatchObject({
+      unitId: "u-rd",
+      name: "研发部",
+      completed: 40,
+      agentCount: 4,
+    });
+  });
+
   it("never assigns more departments than rooms", () => {
     const rooms = departmentRooms(units, agents, new Map(), ["office", "meeting"]);
     expect(rooms).toHaveLength(2);

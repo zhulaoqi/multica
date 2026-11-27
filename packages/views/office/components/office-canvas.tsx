@@ -20,7 +20,7 @@ import {
   type RoomBadge,
 } from "../scene/office-scene";
 import type { OfficeEventId } from "../game/events";
-import type { PlayerEmoteId } from "../game/emotes";
+import type { DeskZone } from "../game/zones";
 import type { SeasonTheme } from "../game/season";
 
 export interface OfficeCanvasProps {
@@ -49,6 +49,8 @@ export interface OfficeCanvasProps {
   deskTraces?: DeskTrace[];
   /** Department name and level per room. */
   roomBadges?: RoomBadge[];
+  /** Department name and level over each seated desk cluster. */
+  deskZones?: DeskZone[];
   /** Whether the corner floor plan is shown. */
   minimapVisible?: boolean;
   /** Agent whose panel is open; it pauses and faces the player. */
@@ -64,13 +66,9 @@ export interface OfficeCanvasHandle {
   deliverToReception: (agentId: string) => void;
   /** Confetti plus a check from every agent. */
   celebrate: () => void;
-  /** Player emote above the local avatar. */
-  playLocalEmote: (kind: PlayerEmoteId) => void;
   /** Stamped folder, confetti, and a check from every agent. */
   archiveRitual: () => void;
   setMinimapVisible: (visible: boolean) => void;
-  /** PNG data URL of the current view. */
-  capturePhoto: () => string | null;
 }
 
 /**
@@ -99,6 +97,7 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
       receptionPapers = 0,
       deskTraces = [],
       roomBadges = [],
+      deskZones = [],
       minimapVisible = false,
       engagedAgentId,
       className,
@@ -145,10 +144,8 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
         deliverToReception: (agentId) =>
           sceneRef.current?.deliverToReception(agentId),
         celebrate: () => sceneRef.current?.celebrate(),
-        playLocalEmote: (kind) => sceneRef.current?.playLocalEmote(kind),
         archiveRitual: () => sceneRef.current?.archiveRitual(),
         setMinimapVisible: (visible) => sceneRef.current?.setMinimapVisible(visible),
-        capturePhoto: () => sceneRef.current?.capturePhoto() ?? null,
       }),
       [],
     );
@@ -243,6 +240,10 @@ export const OfficeCanvas = forwardRef<OfficeCanvasHandle, OfficeCanvasProps>(
     useEffect(() => {
       sceneRef.current?.setRoomBadges(roomBadges);
     }, [roomBadges, ready]);
+
+    useEffect(() => {
+      sceneRef.current?.setDeskZones(deskZones);
+    }, [deskZones, ready]);
 
     useEffect(() => {
       sceneRef.current?.setSeason(season);

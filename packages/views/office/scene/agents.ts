@@ -44,17 +44,17 @@ const WALK_SPEED = 84;
 const CHAT_RADIUS = 26;
 const AGENT_CHAT_RADIUS = 20;
 const CHAT_MS = 1200;
-const CHAT_COOLDOWN_MS = 3500;
-const CHAT_COOLDOWN_SPREAD_MS = 4500;
+const AGENT_CHAT_COOLDOWN_MS = 10_000;
+const AGENT_CHAT_COOLDOWN_SPREAD_MS = 10_000;
 const SPAWN_STAGGER_MS = 320;
 const EMOTE_MS = 1800;
 /** Long enough for a check to read across the room during a celebration. */
 const CELEBRATE_MS = 3_200;
 /** How far apart two agents may be to consider a walk-over chat. */
 const SOCIAL_RADIUS = 260;
-const SOCIAL_COOLDOWN_MS = 13_000;
-const SOCIAL_COOLDOWN_SPREAD_MS = 12_000;
-const FIRST_SOCIAL_DELAY_MS = 9_000;
+const SOCIAL_COOLDOWN_MS = 45_000;
+const SOCIAL_COOLDOWN_SPREAD_MS = 30_000;
+const FIRST_SOCIAL_DELAY_MS = 30_000;
 const TALK_MS_MIN = 3_800;
 const TALK_MS_SPREAD = 2_600;
 const BUBBLE_MS_MIN = 1_300;
@@ -67,11 +67,18 @@ const DELIVER_MS = 1_400;
 export interface OfficeAgentView {
   id: string;
   name: string;
+  /** The member this agent belongs to, when it has a registered owner. */
+  ownerName?: string | null;
   status: AgentDeskStatus;
   /** What the agent is doing right now, shown in a bubble over its head. */
   activity?: string | null;
   /** Waiting on a runtime that is offline; the head bubble shows an alert. */
   alert?: boolean;
+  /**
+   * Stable home slot assigned by the department zoning: 0-11 are desks, then
+   * the overflow standing spots. Falls back to the array index.
+   */
+  home?: number;
 }
 
 /** A human avatar the agents can react to (the local player and peers). */
@@ -105,6 +112,8 @@ interface Avatar {
   id: string;
   view: CharacterView;
   label: PixiText;
+  /** Owner line under the name; hidden when the agent has no owner. */
+  ownerLabel: PixiText;
   status: AgentDeskStatus;
   /** Stuck on an offline runtime; keeps an alert balloon up. */
   alert: boolean;
@@ -217,12 +226,17 @@ export class OfficeAgents {
   setAgents(agents: OfficeAgentView[]) {
     const present = new Set<string>();
     agents.forEach((agent, index) => {
-      const home = this.homes[index];
+      const homeIndex = agent.home ?? index;
+      const home = this.homes[homeIndex];
       if (!home) return;
       present.add(agent.id);
       const existing = this.avatars.get(agent.id);
       if (existing) {
+        if (existing.home.key !== home.key) {
+          this.reassignHome(existing, home, homeIndex);
+        }
         if (existing.label.text !== agent.name) existing.label.text = agent.name;
+        this.setOwnerLabel(existing, agent.ownerName);
         existing.view.setCaption(agent.activity ?? null);
         existing.alert = agent.alert ?? false;
         if (existing.status !== agent.status) {
@@ -243,7 +257,7 @@ export class OfficeAgents {
         }
         return;
       }
-      this.avatars.set(agent.id, this.createAvatar(agent, home, index));
+      this.avatars.set(agent.id, this.createAvatar(agent, home, homeIndex));
     });
 
     for (const [id, avatar] of this.avatars) {
@@ -442,7 +456,9 @@ export class OfficeAgents {
     this.stepAgentChat(nowMs);
 
     for (const avatar of this.avatars.values()) {
-      avatar.label.visible = this.isVisible(avatar);
+      const visible = this.isVisible(avatar);
+      avatar.label.visible = visible;
+      avatar.ownerLabel.visible = visible && avatar.ownerLabel.text.length > 0;
       avatar.view.setBubble(this.bubbleFor(avatar, nowMs));
     }
   }
@@ -454,7 +470,29 @@ export class OfficeAgents {
 
   // -- avatar lifecycle ---------------------------------------------------
 
-  private createAvatar(agent: OfficeAgentView, home: Station, index: number): Avatar {
+  /**
+   * Department zoning moved the agent to another desk. Agents mid-delivery,
+   * mid-visit, or held by an open panel keep the moment going and settle into
+   * the new home when they return; everyone else walks over right away.
+   */
+  private reassignHome(avatar: Avatar, home: Station, homeIndex: number) {
+    avatar.home = home;
+    avatar.env.home = home.key;
+    avatar.deskIndex = homeIndex;
+    avatar.screen = this.desksFor(homeIndex);
+    if (avatar.errand || avatar.visit || avatar.chatPartnerId) return;
+    if (!avatar.active || avatar.id === this.engagedId) return;
+    this.cancelSocial(avatar, false);
+    this.rebuildRoot(avatar);
+  }
+
+  private setOwnerLabel(avatar: Avatar, ownerName: string | null | undefined) {
+    const text = ownerName ?? "";
+    if (avatar.ownerLabel.text !== text) avatar.ownerLabel.text = text;
+    avatar.ownerLabel.visible = text.length > 0 && this.isVisible(avatar);
+  }
+
+  private createAvatar(agent: OfficeAgentView, home: Station, homeIndex: number): Avatar {
     const view = createCharacter(this.pixi, {
       kind: "agent",
       seed: agent.id,
@@ -476,10 +514,17 @@ export class OfficeAgents {
     const label = this.createLabel(agent.name);
     label.position.set(0, -42);
     view.container.addChild(label);
+    const ownerLabel = this.createLabel(agent.ownerName ?? "");
+    ownerLabel.position.set(0, -33);
+    ownerLabel.style.fontSize = 7;
+    ownerLabel.style.fontWeight = "500";
+    ownerLabel.style.fill = 0x94a3b8;
+    ownerLabel.visible = !!agent.ownerName;
+    view.container.addChild(ownerLabel);
 
     const env: RoutineEnv = {
       home: home.key,
-      rng: createRng(`${agent.id}:${index}`),
+      rng: createRng(`${agent.id}:${homeIndex}`),
       stations: this.stations,
       isFree: (key) => this.reservations.isFree(key),
     };
@@ -494,6 +539,7 @@ export class OfficeAgents {
       id: agent.id,
       view,
       label,
+      ownerLabel,
       status: agent.status,
       alert: agent.alert ?? false,
       home,
@@ -511,8 +557,8 @@ export class OfficeAgents {
       active: false,
       spawnAt: null,
       hidden: false,
-      deskIndex: index,
-      screen: this.desksFor(index),
+      deskIndex: homeIndex,
+      screen: this.desksFor(homeIndex),
       visit: null,
       errand: null,
       chatPartnerId: null,
@@ -534,7 +580,9 @@ export class OfficeAgents {
       if (nowMs < avatar.spawnAt) continue;
       avatar.active = true;
       avatar.nextVisitAt =
-        nowMs + FIRST_SOCIAL_DELAY_MS + (hashSeed(avatar.id) % 9_000);
+        nowMs + FIRST_SOCIAL_DELAY_MS + (hashSeed(avatar.id) % 20_000);
+      avatar.nextChatAt =
+        nowMs + 10_000 + (hashSeed(`${avatar.id}:chat`) % 10_000);
       this.rebuildRoot(avatar);
     }
     if (waiting === 0) this.spawnQueue = 0;
@@ -794,17 +842,21 @@ export class OfficeAgents {
    * neither restarts its current task.
    */
   private stepSocialScheduler(nowMs: number) {
-    if (this.nextSocialAt === 0) this.nextSocialAt = nowMs + 6_000;
+    if (this.nextSocialAt === 0) this.nextSocialAt = nowMs + 30_000;
     if (nowMs < this.nextSocialAt) return;
 
     const ready = [...this.avatars.values()].filter((avatar) =>
       this.canSocialize(avatar, nowMs),
     );
-    const pair = pickVisitPair(ready, SOCIAL_RADIUS);
+    // Working agents stay at their desks; only idle agents go visiting.
+    const visitorIds = new Set(
+      ready.filter((avatar) => avatar.status === "idle").map((avatar) => avatar.id),
+    );
+    const pair = pickVisitPair(ready, SOCIAL_RADIUS, visitorIds);
     const visitor = pair ? this.avatars.get(pair.visitor.id) : null;
     const host = pair ? this.avatars.get(pair.host.id) : null;
     if (!visitor || !host) {
-      this.nextSocialAt = nowMs + 4_000;
+      this.nextSocialAt = nowMs + 8_000;
       return;
     }
 
@@ -817,7 +869,7 @@ export class OfficeAgents {
       ? findPath(this.layout, { x: visitor.x, y: visitor.y }, slot)
       : [];
     if (!slot || path.length === 0) {
-      this.nextSocialAt = nowMs + 4_000;
+      this.nextSocialAt = nowMs + 8_000;
       return;
     }
 
@@ -836,8 +888,8 @@ export class OfficeAgents {
       nowMs +
       SOCIAL_COOLDOWN_MS +
       (hashSeed(visitor.id + host.id) % SOCIAL_COOLDOWN_SPREAD_MS);
-    visitor.nextVisitAt = nowMs + 35_000 + (hashSeed(visitor.id) % 30_000);
-    host.nextVisitAt = nowMs + 35_000 + (hashSeed(host.id) % 30_000);
+    visitor.nextVisitAt = nowMs + 90_000 + (hashSeed(visitor.id) % 60_000);
+    host.nextVisitAt = nowMs + 90_000 + (hashSeed(host.id) % 60_000);
   }
 
   private canSocialize(avatar: Avatar, nowMs: number): boolean {
@@ -939,7 +991,10 @@ export class OfficeAgents {
   }
 
   private chatCooldown(seed: string): number {
-    return CHAT_COOLDOWN_MS + (hashSeed(seed) % CHAT_COOLDOWN_SPREAD_MS);
+    return (
+      AGENT_CHAT_COOLDOWN_MS +
+      (hashSeed(seed) % AGENT_CHAT_COOLDOWN_SPREAD_MS)
+    );
   }
 
   private dispose(avatar: Avatar) {

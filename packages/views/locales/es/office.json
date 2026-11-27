@@ -16,7 +16,8 @@
       "member": "Miembro",
       "level": "Niv. {{level}}",
       "company_level": "Nivel de empresa {{level}}",
-      "mvp": "Mayor contribución del mes"
+      "mvp": "Mayor contribución del mes",
+      "owner": "Responsable: {{name}}"
     },
     "status": {
       "working": "Trabajando",
@@ -56,7 +57,10 @@
       "cancel": "Cancelar",
       "task_error": "No se pudo crear la tarea. Inténtalo de nuevo.",
       "task_error_agent_unavailable": "Este agente no puede aceptar trabajo ahora mismo.",
-      "task_error_issue_limit": "Este espacio de trabajo alcanzó su límite de tareas."
+      "task_error_issue_limit": "Este espacio de trabajo alcanzó su límite de tareas.",
+      "owner": "Responsable: {{name}}",
+      "department": "Departamento: {{path}}",
+      "today": "Completados hoy: {{count}}"
     },
     "reception": {
       "title": "Recepción",
@@ -95,11 +99,9 @@
     "company_name": "eclicktech",
     "toolbar": {
       "season": "Estación: {{season}}",
-      "emotes": "Emotes",
       "trophies": "Muro de trofeos",
       "minimap_show": "Mostrar minimapa",
       "minimap_hide": "Ocultar minimapa",
-      "photo": "Modo foto",
       "sound_on": "Activar sonido",
       "sound_off": "Desactivar sonido"
     },
@@ -108,19 +110,6 @@
       "summer": "Verano",
       "autumn": "Otoño",
       "winter": "Invierno"
-    },
-    "emotes": {
-      "title": "Emotes",
-      "wave": "Saludar",
-      "check": "Bien hecho",
-      "alert": "Ayuda",
-      "coffee": "Café"
-    },
-    "photo": {
-      "hint": "El encuadre es tuyo.",
-      "save": "Guardar PNG",
-      "saved": "Guardado en tus descargas.",
-      "exit": "Salir del modo foto"
     },
     "events": {
       "cat": "El gato de la oficina pasó de largo.",
@@ -198,6 +187,11 @@
         "progress": "En curso",
         "in_review": "En revisión"
       }
+    },
+    "brief": {
+      "completed": "Hoy {{count}}",
+      "running": "En curso {{count}}",
+      "busiest": "Más activo {{name}}"
     }
   }
 }

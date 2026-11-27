@@ -15,7 +15,8 @@
       "count_other": "{{count}} 人",
       "level": "Lv {{level}}",
       "company_level": "公司等級 {{level}}",
-      "mvp": "本月最佳貢獻者"
+      "mvp": "本月最佳貢獻者",
+      "owner": "歸屬：{{name}}"
     },
     "status": {
       "working": "工作中",
@@ -53,7 +54,10 @@
       "cancel": "取消",
       "task_error": "任務建立失敗，請重試。",
       "task_error_agent_unavailable": "這個智能體暫時無法接任務。",
-      "task_error_issue_limit": "這個工作區的任務數已達上限。"
+      "task_error_issue_limit": "這個工作區的任務數已達上限。",
+      "owner": "歸屬：{{name}}",
+      "department": "部門：{{path}}",
+      "today": "今日完成：{{count}}"
     },
     "reception": {
       "title": "前台",
@@ -89,11 +93,9 @@
     "company_name": "易點天下 eclicktech",
     "toolbar": {
       "season": "季節：{{season}}",
-      "emotes": "表情",
       "trophies": "獎盃牆",
       "minimap_show": "顯示小地圖",
       "minimap_hide": "隱藏小地圖",
-      "photo": "拍照模式",
       "sound_on": "開啟聲音",
       "sound_off": "關閉聲音"
     },
@@ -102,19 +104,6 @@
       "summer": "夏",
       "autumn": "秋",
       "winter": "冬"
-    },
-    "emotes": {
-      "title": "表情",
-      "wave": "招手",
-      "check": "做得好",
-      "alert": "需要幫忙",
-      "coffee": "喝咖啡"
-    },
-    "photo": {
-      "hint": "介面已隱藏，取好景後儲存。",
-      "save": "儲存圖片",
-      "saved": "已儲存到下載目錄。",
-      "exit": "退出拍照"
     },
     "events": {
       "cat": "辦公室的貓經過了。",
@@ -191,6 +180,11 @@
         "progress": "進行中",
         "in_review": "待驗收"
       }
+    },
+    "brief": {
+      "completed": "今日完成 {{count}}",
+      "running": "進行中 {{count}}",
+      "busiest": "最忙 {{name}}"
     }
   }
 }

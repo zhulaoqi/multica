@@ -5,6 +5,8 @@ import {
   COLS,
   findPath,
   isWalkableTile,
+  OFFICE_DESK_ZONES,
+  OFFICE_HOME_COUNT,
   ROWS,
   spawnFor,
   stepTowards,
@@ -71,6 +73,38 @@ describe("office layout", () => {
     const entrance = tileOf(layout.door);
     expect(entrance.tx).toBeGreaterThanOrEqual(27);
     expect(entrance.tx).toBeLessThanOrEqual(29);
+  });
+});
+
+describe("desk zones", () => {
+  it("covers every home slot exactly once", () => {
+    const homes = OFFICE_DESK_ZONES.flatMap((zone) => zone.homes);
+    expect(new Set(homes).size).toBe(homes.length);
+    expect([...homes].sort((left, right) => left - right)).toEqual(
+      [...Array(OFFICE_HOME_COUNT).keys()],
+    );
+  });
+
+  it("clusters desks by column and keeps plaques inside the open office", () => {
+    const office = layout.rooms.find((room) => room.id === "office")!;
+    const columns = new Map<string, number[]>();
+    for (const zone of OFFICE_DESK_ZONES) {
+      columns.set(
+        zone.key,
+        zone.homes
+          .filter((home) => home < layout.agents.length)
+          .map((home) => layout.agents[home]!.desk.x),
+      );
+    }
+    expect(columns.get("west")).toEqual([4, 7, 4, 7]);
+    expect(columns.get("center")).toEqual([22, 25, 22, 25]);
+    expect(columns.get("east")).toEqual([40, 43, 40, 43]);
+    for (const zone of OFFICE_DESK_ZONES) {
+      expect(zone.anchor.tx).toBeGreaterThanOrEqual(office.rect.x);
+      expect(zone.anchor.tx).toBeLessThan(office.rect.x + office.rect.w);
+      expect(zone.anchor.ty).toBeGreaterThanOrEqual(office.rect.y);
+      expect(zone.anchor.ty).toBeLessThan(office.rect.y + office.rect.h);
+    }
   });
 });
 

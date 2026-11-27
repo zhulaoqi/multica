@@ -206,6 +206,35 @@ const DESKS: AgentSlot[] = DESK_ROWS.flatMap((row) =>
   DESK_COLUMNS.map((col) => deskAt(col, row)),
 );
 
+/** Home slots agents can occupy: 0-11 are desks, then the overflow spots. */
+export const OFFICE_DESK_COUNT = DESKS.length;
+export const OFFICE_HOME_COUNT = OFFICE_DESK_COUNT + OVERFLOW_TILES.length;
+
+/**
+ * The office floor groups its desks into three clusters (x = 4/7, 22/25,
+ * 40/43). Each cluster is a zone a department can call its own; the anchor is
+ * where its plaque is drawn (tiles, top-left).
+ */
+export interface DeskZoneSpec {
+  key: string;
+  /** Home slots in this cluster, in seating order. */
+  homes: readonly number[];
+  anchor: { tx: number; ty: number };
+}
+
+// Desk indexes are row-major (`row * DESK_COLUMNS.length + column`): the
+// 16-row columns 4/7 are 0/1 and the 20-row ones 6/7, and so on. Overflow
+// slots 12-17 run down the right wall, 18-19 are the two left-wall spots.
+export const OFFICE_DESK_ZONES: readonly DeskZoneSpec[] = [
+  { key: "west", homes: [0, 1, 6, 7, 18, 19], anchor: { tx: 5, ty: 14 } },
+  { key: "center", homes: [2, 3, 8, 9], anchor: { tx: 22, ty: 14 } },
+  {
+    key: "east",
+    homes: [4, 5, 10, 11, 12, 13, 14, 15, 16, 17],
+    anchor: { tx: 40, ty: 14 },
+  },
+];
+
 function seat(
   key: string,
   kind: StationKind,
